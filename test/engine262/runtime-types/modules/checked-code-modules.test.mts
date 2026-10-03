@@ -1,56 +1,82 @@
 import { test, expect } from 'vitest';
 import {
   Agent, ManagedRealm, ModuleCache, setSurroundingAgent, Throw,
-  composeModuleLoaders, createBuiltinModuleLoader,
+  composeModuleLoaders, createBuiltinModuleLoader, EnsureCompletion, Get, Value, X,
+  TypeDiagnosticOf, type ObjectValue, type JSStringValue, type TypeDiagnosticRecord,
 } from '#self';
 
-// #sec-checked-code: a Module is a unit. One using none of the proposal's syntax
-// keeps its behaviour, even when it imports from a typed module; proposal syntax
-// at its top level makes the whole Module checked.
+interface Outcome { status: 'ok' | 'rejected'; bodyRan: boolean; dependencyRan: boolean; errorClass?: string; diagnostic?: TypeDiagnosticRecord }
 
-function settle(c: { Type?: string, PromiseState?: string, Value?: { PromiseState?: string } }): string {
-  if (c?.Type === 'throw') return 'threw';
-  const state = c?.PromiseState ?? c?.Value?.PromiseState;
-  return state === 'rejected' ? 'threw' : state === 'fulfilled' ? 'ok' : `unsettled(${state})`;
-}
-
-function runWith(specifier: string, source: string, body: string): Promise<string> {
+function runWith(specifier: string, source: string, body: string): Promise<Outcome> {
   const agent = new Agent({ features: ['runtime-types'] });
   setSurroundingAgent(agent);
   const realm = new ManagedRealm({ resolverCache: new ModuleCache() });
+  realm.evaluateScriptSkipDebugger('globalThis.__moduleBodyRan = false; globalThis.__dependencyRan = false;');
   agent.hostDefinedOptions.hostHooks ??= {};
   agent.hostDefinedOptions.hostHooks.HostLoadImportedModule = composeModuleLoaders([
     createBuiltinModuleLoader({
       loadBuiltinModule: (request: { Specifier: string }, _realm: unknown, callback: (v: unknown) => void) => {
-        callback(request.Specifier === specifier ? source : Throw.Error(`no module ${request.Specifier}`) as never);
+        callback(request.Specifier === specifier ? `globalThis.__dependencyRan = true; ${source}` : Throw.Error(`no module ${request.Specifier}`) as never);
       },
     } as never),
   ]) as never;
-  const parsed = realm.compileModule(body, { specifier: 'main' } as never);
-  if ((parsed as { Type?: string }).Type === 'throw') return Promise.resolve('compile threw');
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve('NEVER SETTLED'), 15000);
-    realm.evaluateModule((parsed as { Value: unknown }).Value as never, undefined, (c: unknown) => {
+  const outcome = (error?: ObjectValue): Outcome => {
+    const ran = EnsureCompletion(realm.evaluateScriptSkipDebugger('String(globalThis.__moduleBodyRan);'));
+    expect(ran.Type).toBe('normal');
+    const bodyRan = (ran.Value as JSStringValue).stringValue() === 'true';
+    const dependency = EnsureCompletion(realm.evaluateScriptSkipDebugger('String(globalThis.__dependencyRan);'));
+    expect(dependency.Type).toBe('normal');
+    const dependencyRan = (dependency.Value as JSStringValue).stringValue() === 'true';
+    if (!error) return { status: 'ok', bodyRan, dependencyRan };
+    const pop = realm.pushTopContext();
+    try {
+      const constructor = X(Get(error, Value('constructor'))) as ObjectValue;
+      const errorClass = (X(Get(constructor, Value('name'))) as JSStringValue).stringValue();
+      return { status: 'rejected', bodyRan, dependencyRan, errorClass, diagnostic: TypeDiagnosticOf(error) };
+    } finally { pop?.(); }
+  };
+  const parsed = EnsureCompletion(realm.compileModule(`globalThis.__moduleBodyRan = true; ${body}`, { specifier: 'main' } as never));
+  if (parsed.Type === 'throw') return Promise.resolve(outcome(parsed.Value as ObjectValue));
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Module evaluation did not settle')), 15000);
+    realm.evaluateModule(parsed.Value as never, undefined, (completion: unknown) => {
       clearTimeout(timer);
-      resolve(settle(c as Parameters<typeof settle>[0]));
+      try {
+        const c = completion as { Type?: string, Value?: ObjectValue, PromiseState?: string, PromiseResult?: ObjectValue };
+        if (c.Type === 'throw') { resolve(outcome(c.Value)); return; }
+        const promise = (c.PromiseState ? c : c.Value) as { PromiseState?: string, PromiseResult?: ObjectValue };
+        expect(['fulfilled', 'rejected']).toContain(promise?.PromiseState);
+        resolve(outcome(promise.PromiseState === 'rejected' ? promise.PromiseResult : undefined));
+      } catch (error) { reject(error); }
     });
   });
 }
 
 const TYPED = 'export let x: uint8 = 1;';
 
-test('a module without proposal syntax keeps its behaviour', () => runWith('typed', TYPED,
-  'if ([]) {} for (const v of []) {}')
-  .then((r) => expect(r).toBe('ok')));
+test('a module without proposal syntax keeps its behaviour', async () => {
+  expect(await runWith('typed', TYPED, 'if ([]) {} for (const v of []) {}'))
+    .toMatchObject({ status: 'ok', bodyRan: true });
+});
 
-test('and so does one importing a typed binding', () => runWith('typed', TYPED,
-  'import { x } from "typed"; if (x === 300) {} if ([]) {}')
-  .then((r) => expect(r).toBe('ok')));
+test('and so does one importing a typed binding', async () => {
+  expect(await runWith('typed', TYPED, 'import { x } from "typed"; if (x === 300) {} if ([]) {}'))
+    .toMatchObject({ status: 'ok', bodyRan: true });
+});
 
-test('top-level proposal syntax checks the whole module', () => runWith('typed', TYPED,
-  'let checked: number = 0; function u() { if ([]) {} }')
-  .then((r) => expect(r).not.toBe('ok')));
+test.each([
+  'let checked: number = 0; function u() { if ([]) {} }',
+  'import { x } from "typed"; let checked: number = 0; function u() { if ([]) {} }',
+])('checked module rejection precedes its body: %s', async (body) => {
+  expect(await runWith('typed', TYPED, body)).toMatchObject({
+    status: 'rejected', bodyRan: false, errorClass: 'StaticTypeError',
+    diagnostic: { code: 'RT_CONSTANT_CONDITION' },
+  });
+});
 
-test('a typed importer is checked', () => runWith('typed', TYPED,
-  'import { x } from "typed"; let checked: number = 0; function u() { if ([]) {} }')
-  .then((r) => expect(r).not.toBe('ok')));
+test.each(['', 'await 0;'])('a module performs deferred checking after its dependency and before its body: %s', async (suspension) => {
+  expect(await runWith('typed', TYPED, `import { x } from 'typed'; ${suspension} type Invalid = float32.<{ unknownKey: 1 }>;`)).toMatchObject({
+    status: 'rejected', bodyRan: false, dependencyRan: true, errorClass: 'StaticTypeError',
+    diagnostic: { code: 'RT_UNCLAIMED_METADATA', phase: 'pre-evaluation' },
+  });
+});

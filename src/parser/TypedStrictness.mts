@@ -8,7 +8,7 @@ export const FunctionLikeUnits: ReadonlySet<string> = new Set([
   'FunctionDeclaration', 'FunctionExpression', 'GeneratorDeclaration', 'GeneratorExpression',
   'AsyncFunctionDeclaration', 'AsyncFunctionExpression', 'AsyncGeneratorDeclaration', 'AsyncGeneratorExpression',
   'ArrowFunction', 'AsyncArrowFunction', 'MethodDefinition', 'GeneratorMethod', 'AsyncMethod', 'AsyncGeneratorMethod',
-  'OperatorDeclaration',
+  'OperatorDefinition',
 ]);
 
 /** Classify syntax only. Nested function signatures belong to the nested unit. */

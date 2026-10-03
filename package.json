@@ -70,7 +70,9 @@
     "test:inspector:watch": "vitest test/inspector",
     "coverage": "c8 --reporter=lcov npm run test",
     "prepublishOnly": "node scripts/tag_version_with_git_hash.mts",
-    "postpublish": "git reset --hard HEAD"
+    "postpublish": "git reset --hard HEAD",
+    "check:diagnostics": "node scripts/check-type-diagnostics.mjs",
+    "prebuild:engine": "npm run check:diagnostics"
   },
   "bin": {
     "engine262": "lib/node/bin.mjs"

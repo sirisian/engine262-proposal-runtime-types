@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
-import { expectThrown, ok } from '../harness.mts';
+import { ok } from '../harness.mts';
+import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, Get, Value, X, TypeDiagnosticOf, type ObjectValue, type JSStringValue } from '#self';
 
 // #sec-checked-code: direct eval code inherits its caller's classification, as
 // it inherits the caller's strictness, since it sees the caller's typed
@@ -21,5 +22,28 @@ test.each([
   "new Function('let z: number = 1; if ([]) {}');",
   "new Function('function g(q: number) { if ([]) {} }');",
 ])("checked eval or function code is refused when it runs: %s", (source) => {
-  expectThrown(source, 'so the branch it guards is dead code');
+  setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
+  const realm = new ManagedRealm();
+  realm.evaluateScriptSkipDebugger('globalThis.outerRan = false; globalThis.innerRan = false;');
+  const marked = source.replaceAll("'if ([]) {}'", "'globalThis.innerRan = true; if ([]) {}'");
+  const completion = EnsureCompletion(realm.evaluateScriptSkipDebugger(`globalThis.outerRan = true; ${marked}`));
+  expect(completion.Type).toBe('throw');
+  const flags = EnsureCompletion(realm.evaluateScriptSkipDebugger('String(outerRan) + ":" + String(innerRan);'));
+  expect((flags.Value as JSStringValue).stringValue()).toBe('true:false');
+  expect(TypeDiagnosticOf(completion.Value)?.code).toBe('RT_CONSTANT_CONDITION');
+  const pop = realm.pushTopContext();
+  try {
+    const ctor = X(Get(completion.Value as ObjectValue, Value('constructor'))) as ObjectValue;
+    expect((X(Get(ctor, Value('name'))) as JSStringValue).stringValue()).toBe('StaticTypeError');
+  } finally { pop?.(); }
+});
+
+test.each([
+  'Function', '(function* () {}).constructor', '(async function () {}).constructor', '(async function* () {}).constructor',
+])('dynamic %s completes deferred checking during construction', (constructor) => {
+  setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
+  const realm = new ManagedRealm();
+  const completion = EnsureCompletion(realm.evaluateScriptSkipDebugger(`${constructor}('x: float32.<{ unknownKey: 1 }>', 'void x;');`));
+  expect(completion.Type).toBe('throw');
+  expect(TypeDiagnosticOf(completion.Value)).toMatchObject({ code: 'RT_UNCLAIMED_METADATA', phase: 'pre-evaluation' });
 });

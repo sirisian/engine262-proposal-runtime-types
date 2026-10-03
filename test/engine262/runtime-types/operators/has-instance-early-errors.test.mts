@@ -103,7 +103,7 @@ test.each([
 test.each([
   [
     "typed return target",
-    "function target():{[Symbol.hasInstance]:number}{return {[Symbol.hasInstance]:1};}function f(){({}) instanceof target();}"
+    "function target():{[Symbol.hasInstance]:number}{return {[Symbol.hasInstance]:1};}function f():void{({}) instanceof target();}"
   ],
   [
     "getter contract",

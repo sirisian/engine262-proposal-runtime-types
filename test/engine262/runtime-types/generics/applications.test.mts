@@ -1,4 +1,5 @@
 import { test, expect } from 'vitest';
+import { TypeDiagnosticOf } from '#self';
 import { evaluated, expectThrown, run, ok, expectStaticTypeError } from '../harness.mts';
 
 // -- A deferred application as a binding's type (#sec-deferred-applications) --
@@ -204,6 +205,10 @@ test('a violated alias where clause reports against the clause', () => {
   // single assertion would be more surface than the assertion is worth.
   const completion = run(alias) as unknown as { Type: string, Value: unknown };
   expect(completion.Type).toBe('throw');
+  expect(TypeDiagnosticOf(completion.Value)).toMatchObject({
+    code: 'RT_WHERE_UNSATISFIED', phase: 'pre-evaluation',
+    location: { nodeType: 'WhereClause', start: alias.indexOf('where') },
+  });
   const stack = String((completion.Value as { stack?: string })?.stack ?? '');
   expect(stack === '' || /:1:/.test(stack)).toBe(true);
   // And the message matches the function form's, because it is ONE rule -

@@ -1,3 +1,6 @@
+import { CreateTypeDiagnostic, ReportTypeDiagnostic } from './diagnostics.mts';
+import type { TypeDiagnosticRule } from './diagnostic-catalog.mts';
+import type { Formattable } from '../host-defined/error-messages.mts';
 import { SelectCase, ValueArityAdmits, CaseParameters, CaseArgumentsAdmit, PlaceCaseArguments } from '../abstract-ops/callable-selection.mts';
 import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
 import type { ThrowCompletion } from '../completion.mts';
@@ -15,7 +18,7 @@ import { refineLeftHandSideExpression } from '../runtime-semantics/AssignmentExp
 import { firstUnreadableControl, readClassControls, readFieldControls } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
 import { isRangeObject, endpointOf, type RangeObject } from '../intrinsics/Range.mts';
-import { ClassifyDynamicFunction, IsCheckedCode, IsGatedMessage } from './checked-code.mts';
+import { ClassifyDynamicFunction, IsCheckedCode } from './checked-code.mts';
 import { ProvenArrayMembers } from './array-intrinsics.mts';
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
 import { BlockCapturesOf, MatchSpecializationList, SpecializationPatternError, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf, ValidateSpecializationList } from './specialization-patterns.mts';
@@ -97,7 +100,7 @@ import { prepareFamilyPattern, finishFamilyPattern, FamilyPatternError, hasDefer
 import { bindIntrinsicArguments, intrinsicParameters, isHigherKindedArgument } from './intrinsic-generics.mts';
 import { rememberDeclaredConstraint } from './records.mts';
 import {
-  Get, R, Throw, X, wellKnownSymbols,
+  R, Throw, wellKnownSymbols,
 } from '#self';
 
 /**
@@ -592,6 +595,7 @@ function weakCollectionLacksHook(t: TypeRecord | null | undefined, key: string |
  * text's pairs.
  */
 export interface DeferredMetadataCheck {
+  readonly node: ParseNode;
   readonly source: TypeRecord & { readonly Kind: 'parameterized' };
   readonly target: TypeRecord & { readonly Kind: 'parameterized' };
 }
@@ -613,6 +617,7 @@ export interface DeferredMetadataCheck {
  * #sec-type-errors lists among what it processes first.
  */
 export interface DeferredCrossingCheck {
+  readonly node: ParseNode;
   readonly value: Value;
   // A parameterization, or an intersection of parameterizations of one base -
   // which the pass decides against what it reduces to.
@@ -640,6 +645,7 @@ export function TakeDeferredMetadataChecks(root: object): readonly DeferredMetad
  * the meta type can answer, and it is asked where the checking pass can call it.
  */
 export interface DeferredMeetCheck {
+  readonly node: ParseNode;
   readonly left: TypeRecord & { readonly Kind: 'parameterized' };
   readonly right: TypeRecord & { readonly Kind: 'parameterized' };
   /** The member the pair was written at, where it was, so the report can name it. */
@@ -799,7 +805,6 @@ export interface NarrowingRequest {
   /** Alternative incoming facts; a source without a prior comparison holds its type. */
   readonly inputs: readonly NarrowingInput[];
   /** False where the test is outside checked code (#sec-checked-code). */
-  readonly checked?: boolean;
 }
 
 const narrowingRequests = new WeakMap<object, readonly NarrowingRequest[]>();
@@ -2697,10 +2702,19 @@ export function HasDeferredGuardChecks(root: object): boolean {
  * a script's later checking pass is what reports; a dynamic function has no
  * such pass, so it stays silent rather than report what may not hold.
  */
+const dynamicFunctionRoots = new WeakMap<object, ParseNode.Script>();
+
+export function DynamicFunctionCheckRoot(expression: ParseNode): ParseNode.Script {
+  const root = dynamicFunctionRoots.get(expression);
+  if (!root) throw new Error('Dynamic function checking has not been prepared');
+  return root;
+}
+
 export function CheckDynamicFunction(expression: ParseNode): ObjectValue[] {
   ClassifyDynamicFunction(expression);
   const statement = { type: 'ExpressionStatement', Expression: expression } as unknown as ParseNode;
   const root = { type: 'Script', ScriptBody: { type: 'ScriptBody', StatementList: [statement] } } as unknown as ParseNode.Script;
+  dynamicFunctionRoots.set(expression, root);
   const errors = checkInTwoPasses([statement] as never, root, CreateCheckSession());
   return errors.length > 0 && TakeNarrowingRequests(root).length > 0 ? [] : errors;
 }
@@ -2891,25 +2905,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // ---- outputs and the pre-scan -------------------------------------
 
   const errors: ObjectValue[] = [];
-  // The innermost node being walked. It places a report in its unit, so the
-  // checking boundary can withhold the inference family outside checked code
-  // (#sec-checked-code). A node of no parse, or no walk yet, keeps every check.
+  // Context for existing built-in signature production. Diagnostic obligations
+  // carry their own source nodes and never use this contextual-typing cursor.
   let gateNode: ParseNode | undefined;
   const inCheckedCode = (): boolean => !gateNode || IsCheckedCode(gateNode);
-  const messageOf = (error: ObjectValue): string => {
-    const message = X(Get(error, Value('message')));
-    return message instanceof JSStringValue ? message.stringValue() : '';
+  const diagnosticPhase = afterTypeEvaluation ? 'pre-evaluation' : 'static';
+  const reportType = (code: TypeDiagnosticRule, source: unknown, message: string, ...args: readonly Formattable[]): void => {
+    const node = source && typeof source === 'object' && 'type' in source ? source as ParseNode : root;
+    ReportTypeDiagnostic(errors, code, node, diagnosticPhase, message, ...args);
   };
-  {
-    const push = errors.push.bind(errors);
-    errors.push = (...items: ObjectValue[]): number => {
-      for (const item of items) {
-        if (!inCheckedCode() && IsGatedMessage(messageOf(item))) continue;
-        push(item);
-      }
-      return errors.length;
-    };
-  }
   // The signatures this proposal gives the existing Array methods are contracts
   // on existing JavaScript (#sec-checked-code). Outside checked code their
   // parameters accept anything, as the methods do today; results keep their types.
@@ -3848,7 +3852,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if ([...a, ...b].some((p) => mentionsTypeParameter(p.Type)) || a.length !== b.length
           || !a.every((p, i) => sameConstructParameter(p.Type, b[i].Type))) continue;
       if (!OverrideParametersSubtype(actual, promised)) {
-        errors.push(Throw.StaticTypeError('$1 cannot bind every argument list admitted by the inherited signature', Value(String(key))).Value as ObjectValue);
+        reportType('rt-inherited-contract', declaration, '$1 cannot bind every argument list admitted by the inherited signature', Value(String(key)));
       }
     }
   };
@@ -3959,15 +3963,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (read === own) {
             if (part === 'constraint' && !withinEvaluatedTypeForm(reference, root)) continue;
             errors.push((part === 'constraint'
-              ? Throw.StaticTypeError('the constraint of type parameter $1 reads its own name, which is not bound until its constraint has been evaluated', Value(own))
-              : Throw.StaticTypeError('the default of type parameter $1 reads its own name, which has no binding when its default is substituted', Value(own))
+              ? CreateTypeDiagnostic('rt-generic-binding-order', declaration, diagnosticPhase, 'the constraint of type parameter $1 reads its own name, which is not bound until its constraint has been evaluated', Value(own))
+              : CreateTypeDiagnostic('rt-generic-binding-order', declaration, diagnosticPhase, 'the default of type parameter $1 reads its own name, which has no binding when its default is substituted', Value(own))
             ).Value as ObjectValue);
             break;
           }
           if (names.indexOf(read, index + 1) !== -1) {
             errors.push((part === 'constraint'
-              ? Throw.StaticTypeError('the constraint of type parameter $1 reads $2, which is declared after it; type parameters bind left to right, so declare it first', Value(own), Value(read))
-              : Throw.StaticTypeError('the default of type parameter $1 reads $2, which is declared after it; type parameters bind left to right, so declare it first', Value(own), Value(read))
+              ? CreateTypeDiagnostic('rt-generic-binding-order', declaration, diagnosticPhase, 'the constraint of type parameter $1 reads $2, which is declared after it; type parameters bind left to right, so declare it first', Value(own), Value(read))
+              : CreateTypeDiagnostic('rt-generic-binding-order', declaration, diagnosticPhase, 'the default of type parameter $1 reads $2, which is declared after it; type parameters bind left to right, so declare it first', Value(own), Value(read))
             ).Value as ObjectValue);
             break;
           }
@@ -3990,7 +3994,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     checkedHigherKindedLists.add(list);
     for (const tp of list) {
       if (tp.HigherKindedDomainWritten === false) {
-        errors.push(Throw.StaticTypeError('$1', 'a higher-kinded parameter\'s domain is `type`, which is what an application of it yields').Value as ObjectValue);
+        reportType('rt-parameter-kind', declaration, '$1', 'a higher-kinded parameter\'s domain is `type`, which is what an application of it yields');
       }
     }
   };
@@ -4121,14 +4125,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (aliasOfKind) {
             const written = (tp as { TypeParameterDomain?: { sourceText?: string } }).TypeParameterDomain?.sourceText ?? 'type';
             const spelling = variadic ? `...${name}: [].<type>` : `${name}: type`;
-            errors.push(Throw.StaticTypeError('$1', `\`${variadic ? '...' : ''}${name}: ${written}\` writes the type kind through an alias; a parameter's kind is read from how its domain is written, so declare it as \`${spelling}\``).Value as ObjectValue);
+            reportType('rt-parameter-kind', declaration, '$1', `\`${variadic ? '...' : ''}${name}: ${written}\` writes the type kind through an alias; a parameter's kind is read from how its domain is written, so declare it as \`${spelling}\``);
           } else if (mixed(domain)) {
             const written = (tp as { TypeParameterDomain?: { sourceText?: string } }).TypeParameterDomain?.sourceText ?? 'any';
-            errors.push(Throw.StaticTypeError('$1', `\`${name}: ${written}\` admits Type Objects alongside other values, so an argument could not bind it unambiguously; write \`${name}: type\` for a type, or a value domain such as a union of value types`).Value as ObjectValue);
+            reportType('rt-parameter-kind', declaration, '$1', `\`${name}: ${written}\` admits Type Objects alongside other values, so an argument could not bind it unambiguously; write \`${name}: type\` for a type, or a value domain such as a union of value types`);
           }
           if (objectDomain) {
             const written = (tp as { TypeParameterDomain?: { sourceText?: string } }).TypeParameterDomain?.sourceText ?? 'B';
-            errors.push(Throw.StaticTypeError('$1', `\`${name}: ${written}\` declares a value parameter, and \`${written}\` is not a value domain; did you mean \`${name}: type extends ${written}\`?`).Value as ObjectValue);
+            reportType('rt-parameter-kind', declaration, '$1', `\`${name}: ${written}\` declares a value parameter, and \`${written}\` is not a value domain; did you mean \`${name}: type extends ${written}\`?`);
           }
         }
         scope.set(name, resolvedConstraint);
@@ -4154,7 +4158,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         variadicObligations.set(declaration, pending);
       }
       if (judged && !mentionsTypeParameter(judged) && judged.Kind !== 'array' && judged.Kind !== 'tuple') {
-        errors.push(Throw.StaticTypeError('a variadic constraint must be an array or tuple type').Value as ObjectValue);
+        reportType('rt-variadic-contract', declaration, 'a variadic constraint must be an array or tuple type');
       }
       if (tp.TypeParameterDefault) {
         const value = resolveType(tp.TypeParameterDefault);
@@ -4164,7 +4168,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           variadicObligations.set(declaration, pending);
         }
         if (value && !mentionsTypeParameter(value) && value.Kind !== 'tuple') {
-          errors.push(Throw.StaticTypeError('a variadic default must be a tuple type').Value as ObjectValue);
+          reportType('rt-variadic-contract', declaration, 'a variadic default must be a tuple type');
         }
       }
       const next = list[i + 1];
@@ -4179,7 +4183,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           : tp.TypeParameterConstraint ? null : anyTypeRecord;
         const rightDomain = right && !mentionsTypeParameter(right) ? restElementType(right) : null;
         if (leftDomain?.Kind === 'any' || rightDomain?.Kind === 'any') {
-          errors.push(Throw.StaticTypeError('adjacent variadic parameters must not have any element types').Value as ObjectValue);
+          reportType('rt-variadic-contract', declaration, 'adjacent variadic parameters must not have any element types');
         }
       }
     }
@@ -4238,8 +4242,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
               const constraint = q.TypeParameterConstraint ? resolveType(q.TypeParameterConstraint) : null;
               if (constraint && !mentionsTypeParameter(constraint) && !IsAssignable(argument, constraint)) {
-                errors.push(Throw.StaticTypeError('$1 is not assignable to $2, the constraint of $3',
-                  Value(displayType(argument)), Value(displayType(constraint)), Value(q.BindingIdentifier.name)).Value as ObjectValue);
+                reportType('rt-generic-constraint', owner, '$1 is not assignable to $2, the constraint of $3', Value(displayType(argument)), Value(displayType(constraint)), Value(q.BindingIdentifier.name));
               }
             });
           }
@@ -4277,7 +4280,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const specialized = substituteTypeParameters(resolveType(node), scoped);
           checkTypeFormation(specialized);
           const invalidRest = invalidTupleRest(specialized);
-          if (invalidRest) errors.push(Throw.StaticTypeError('$1', Value(`a tuple rest operand must be an array or tuple type, got ${displayType(invalidRest)}`)).Value as ObjectValue);
+          if (invalidRest) reportType('rt-variadic-contract', node, '$1', Value(`a tuple rest operand must be an array or tuple type, got ${displayType(invalidRest)}`));
         } finally {
           specializedDefaultBindings.pop();
           typeParameterScopes.pop();
@@ -4301,11 +4304,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const type = substituteTypeParameters(obligation.type, scoped);
         if (!type || mentionsTypeParameter(type)) continue;
         if (obligation.kind === 'constraint' && type.Kind !== 'array' && type.Kind !== 'tuple') {
-          errors.push(Throw.StaticTypeError('a variadic constraint must be an array or tuple type').Value as ObjectValue);
+          reportType('rt-variadic-contract', node, 'a variadic constraint must be an array or tuple type');
         } else if (obligation.kind === 'default' && type.Kind !== 'tuple') {
-          errors.push(Throw.StaticTypeError('a variadic default must be a tuple type').Value as ObjectValue);
+          reportType('rt-variadic-contract', node, 'a variadic default must be a tuple type');
         } else if (obligation.kind === 'adjacent' && restElementType(type).Kind === 'any') {
-          errors.push(Throw.StaticTypeError('adjacent variadic parameters must not have any element types').Value as ObjectValue);
+          reportType('rt-variadic-contract', node, 'adjacent variadic parameters must not have any element types');
         }
       }
       for (const [key, child] of Object.entries(node)) {
@@ -4330,7 +4333,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             variadicObligations.set(declaration, pending);
           }
         } else if (restElementType(type).Kind === 'any') {
-          errors.push(Throw.StaticTypeError('adjacent rest parameters must not have any element types').Value as ObjectValue);
+          reportType('rt-variadic-contract', declaration, 'adjacent rest parameters must not have any element types');
         }
       }
     }
@@ -4526,7 +4529,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return null;
   };
 
-  const report = (source: TypeRecord, target: TypeRecord) => {
+  const report = (source: TypeRecord, target: TypeRecord, at: ParseNode = root) => {
     // #sec-published-return-types, the diagnostic: where a published UNION is
     // refused, name the member that does not fit and the return it came from.
     if (provenanceNote && originNotes && source.Kind === 'union') {
@@ -4535,7 +4538,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (offending.length === 1) {
         const origin = originNotes.find((o) => SameType(o.type, offending[0]!));
         if (origin) {
-          const completion = Throw.StaticTypeError('$1 is not assignable to $2, and it is the inferred return type of $3, whose $4 comes from $5', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote), Value(displayType(offending[0]!)), Value(origin.from)) as ThrowCompletion;
+          const completion = CreateTypeDiagnostic('rt-return-contract', at, diagnosticPhase, '$1 is not assignable to $2, and it is the inferred return type of $3, whose $4 comes from $5', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote), Value(displayType(offending[0]!)), Value(origin.from)) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
           return;
         }
@@ -4543,11 +4546,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     let completion: ThrowCompletion;
     if (provenanceNote && anchorNote) {
-      completion = Throw.StaticTypeError('$1 is not assignable to $2, and it is the inferred return type of $3, which is what $4 declares', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote), Value(anchorNote)) as ThrowCompletion;
+      completion = CreateTypeDiagnostic('rt-return-contract', at, diagnosticPhase, '$1 is not assignable to $2, and it is the inferred return type of $3, which is what $4 declares', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote), Value(anchorNote)) as ThrowCompletion;
     } else if (provenanceNote) {
-      completion = Throw.StaticTypeError('$1 is not assignable to $2, and it is the inferred return type of $3', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote)) as ThrowCompletion;
+      completion = CreateTypeDiagnostic('rt-return-contract', at, diagnosticPhase, '$1 is not assignable to $2, and it is the inferred return type of $3', Value(displayType(source)), Value(displayType(target)), Value(provenanceNote)) as ThrowCompletion;
     } else {
-      completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(source)), Value(displayType(target))) as ThrowCompletion;
+      completion = CreateTypeDiagnostic('rt-assignability', at, diagnosticPhase, '$1 is not assignable to $2', Value(displayType(source)), Value(displayType(target))) as ThrowCompletion;
     }
     errors.push(completion.Value as ObjectValue);
   };
@@ -4827,14 +4830,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // A pair of parameterizations over one base, met only by their governing meta
   // type's `meet` in the checking pass, is recorded so a *null* answer reports
   // the test (#table-meta-hooks).
-  const recordNarrowingMeet = (s: TypeRecord, t: TypeRecord, display: string, negated: boolean): void => {
+  const recordNarrowingMeet = (s: TypeRecord, t: TypeRecord, display: string, negated: boolean, node: ParseNode): void => {
     if (t.Kind === 'any' || mentionsTypeParameter(s) || mentionsTypeParameter(t)) return;
     const left = expandClosed(s);
     if (left.Kind !== 'parameterized' || t.Kind !== 'parameterized' || !primitiveBased(left)) return;
     const a = eraseMetadata(left) as TypeRecord;
     const b = eraseMetadata(t) as TypeRecord;
     if (!IsSubtype(a, b, []) || !IsSubtype(b, a, [])) return;
-    meets.push({ left, right: t, narrowing: display, negated } as unknown as DeferredMeetCheck);
+    meets.push({ node, left, right: t, narrowing: display, negated } as unknown as DeferredMeetCheck);
   };
 
   /**
@@ -5006,7 +5009,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return staticType(core)?.Kind === 'void';
   };
   const pushVoidUse = (how: 'tested' | 'computed with'): void => {
-    errors.push(Throw.StaticTypeError('a result of type void cannot be $1, since a program must not depend on it', Value(how)).Value as ObjectValue);
+    reportType('rt-void-use', root, 'a result of type void cannot be $1, since a program must not depend on it', Value(how));
   };
   const voidOperatorTypes = new Set(['AdditiveExpression', 'MultiplicativeExpression', 'ExponentiationExpression', 'ShiftExpression',
     'RelationalExpression', 'EqualityExpression', 'BitwiseANDExpression', 'BitwiseXORExpression', 'BitwiseORExpression']);
@@ -5041,13 +5044,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  const pushImpossibleTest = (verdict: 'never-succeeds' | 'never-fails', form: string): void => {
-    errors.push(Throw.StaticTypeError(verdict === 'never-succeeds'
+  const pushImpossibleTest = (verdict: 'never-succeeds' | 'never-fails', form: string, site: ParseNode): void => {
+    reportType('rt-impossible-test', site, verdict === 'never-succeeds'
       ? 'the $1 test can never succeed, so the branch it guards is dead code'
-      : 'the $1 test can never fail, so the branch it guards is dead code', Value(form)).Value as ObjectValue);
+      : 'the $1 test can never fail, so the branch it guards is dead code', Value(form));
   };
 
-  const reportImpossibleTest = (s: TypeRecord, t: TypeRecord, form: string, isGuard: boolean) => {
+  const reportImpossibleTest = (s: TypeRecord, t: TypeRecord, form: string, isGuard: boolean, site: ParseNode) => {
     // The specification states this rule about the BRANCHES a narrowing form
     // decides: a test that can never succeed, or can never fail, leaves a branch
     // that can never be taken, and that is dead code the program did not intend.
@@ -5057,7 +5060,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     const verdict = impossibleVerdict(s, t);
-    if (verdict) pushImpossibleTest(verdict, form);
+    if (verdict) pushImpossibleTest(verdict, form, site);
   };
 
   /** The class name for a diagnostic, or *undefined* for an anonymous one. */
@@ -5250,7 +5253,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return { kind: 'none' };
   };
 
-  const requireAssignable = (source: Known, target: Known) => {
+  const requireAssignable = (source: Known, target: Known, at: ParseNode = root) => {
     if (!source || !target) {
       return;
     }
@@ -5266,9 +5269,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // a parameter have no store to hang it on, and accepting them produced a
     // value whose declared type no store would take.
     if (SubclassAddsStorageOver(source as TypeRecord, target as TypeRecord)) {
-      errors.push(Throw.StaticTypeError('$1 is not assignable to $2',
-        Value(displayType(source as TypeRecord)),
-        Value(displayType(target as TypeRecord))).Value as ObjectValue);
+      reportType('rt-assignability', at, '$1 is not assignable to $2', Value(displayType(source as TypeRecord)), Value(displayType(target as TypeRecord)));
       return;
     }
     if (target.Kind === 'function') {
@@ -5297,7 +5298,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // ran, and the same line inside a function nothing called raised nothing.
     if (target.Kind === 'parameterized' && source.Kind === 'literal'
       && !mentionsTypeParameter(target)) {
-      crossingChecks.push({ value: (source as { Value: Value }).Value, target } as DeferredCrossingCheck);
+      crossingChecks.push({ node: at, value: (source as { Value: Value }).Value, target } as DeferredCrossingCheck);
       return;
     }
     // A LITERAL crossing into an INTERSECTION of parameterizations of one base.
@@ -5314,14 +5315,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const members = (target as { Members?: readonly TypeRecord[] }).Members ?? [];
       if (members.length >= 2 && members.every((m) => m.Kind === 'parameterized')
         && new Set(members.map((m) => displayType((m as { Base: TypeRecord }).Base))).size === 1) {
-        crossingChecks.push({ value: (source as { Value: Value }).Value, target } as DeferredCrossingCheck);
+        crossingChecks.push({ node: at, value: (source as { Value: Value }).Value, target } as DeferredCrossingCheck);
         return;
       }
     }
     if (source.Kind === 'parameterized' && target.Kind === 'parameterized'
         && displayType(source.Base) === displayType(target.Base)) {
       if (!IsAssignable(source, target)) {
-        deferred.push({ source, target } as DeferredMetadataCheck);
+        deferred.push({ node: at, source, target } as DeferredMetadataCheck);
       }
       return;
     }
@@ -5336,14 +5337,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // arguments constrains only the shape.
       if (target.LibraryName !== 'RangeBounds') {
         if (source.LibraryName !== target.LibraryName) {
-          report(source, target);
+          report(source, target, at);
           return;
         }
         for (let i = 1; i < target.Arguments.length; i += 1) {
           const want = boundOrdinalOf(target.Arguments[i]);
           const got = boundOrdinalOf(source.Arguments[i]);
           if (want !== null && got !== null && want !== got) {
-            report(source, target);
+            report(source, target, at);
             return;
           }
         }
@@ -5354,7 +5355,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const te = target.Arguments[0];
       if (typeof se !== 'number' && typeof te !== 'number' && se && te && !IsAssignable(se, te)
           && !literalFitsNumericType(se, te) && !SameType(se, te)) {
-        report(source, target);
+        report(source, target, at);
       }
       return;
     }
@@ -5432,7 +5433,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return;
         }
       }
-      report(erasedSource, erasedTarget);
+      report(erasedSource, erasedTarget, at);
       return;
     }
     // The reverse bit-vector conversion, admitted for the same reason as the
@@ -5462,13 +5463,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // the run time's "ambiguous between overloads" instead.
       if (conversion.kind === 'ambiguous') {
         errors.push(((conversion.form === 'constructor'
-          ? Throw.StaticTypeError('the conversion from $1 to $2 is ambiguous: more than one declared constructor applies and none is more specific',
-            Value(displayType(erasedSource)), Value(displayType(erasedTarget)))
-          : Throw.StaticTypeError('the conversion from $1 to $2 is ambiguous: more than one declared conversion operator applies and none is more specific',
-            Value(displayType(erasedSource)), Value(displayType(erasedTarget)))) as ThrowCompletion).Value as ObjectValue);
+          ? CreateTypeDiagnostic('rt-ambiguous-conversion', at, diagnosticPhase, 'the conversion from $1 to $2 is ambiguous: more than one declared constructor applies and none is more specific', Value(displayType(erasedSource)), Value(displayType(erasedTarget)))
+          : CreateTypeDiagnostic('rt-ambiguous-conversion', at, diagnosticPhase, 'the conversion from $1 to $2 is ambiguous: more than one declared conversion operator applies and none is more specific', Value(displayType(erasedSource)), Value(displayType(erasedTarget)))) as ThrowCompletion).Value as ObjectValue);
         return;
       }
-      report(erasedSource, erasedTarget);
+      report(erasedSource, erasedTarget, at);
     }
   };
 
@@ -5570,7 +5569,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Checked before the String-key and type-argument gates: the absence is a
     // fact of WeakMap and WeakSet themselves, and `@@iterator` is in the table.
     if (weakCollectionRefusesRead(receiver, key)) {
-      errors.push(Throw.StaticTypeError('$1 is not declared by $2', typeof key === 'string' ? Value(key) : key, Value(displayType(receiver!))).Value as ObjectValue);
+      reportType('rt-undeclared-member', root, '$1 is not declared by $2', typeof key === 'string' ? Value(key) : key, Value(displayType(receiver!)));
       return null;
     }
     if (typeof key !== 'string' || receiver?.Kind !== 'nominal' || receiver.Arguments.length === 0
@@ -5652,10 +5651,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // operand still runs - a nullish receiver is still refused, since a delete
       // still needs an object to delete from.
       if (types.some((type) => type !== null) && !forDelete) {
-        errors.push(Throw.StaticTypeError(
-          '$1 is not declared by every member of $2; narrow the receiver first, or read it with `?.`',
-          typeof key === 'string' ? Value(key) : key, Value(displayType(receiver)),
-        ).Value as ObjectValue);
+        reportType('rt-undeclared-member', root, '$1 is not declared by every member of $2; narrow the receiver first, or read it with `?.`', typeof key === 'string' ? Value(key) : key, Value(displayType(receiver)));
       }
       return null;
     }
@@ -5813,7 +5809,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (let i = frames.length - 1; i >= 0; i -= 1) {
         if (frames[i].declaredNames.has(lhs.name)) {
           if (patternBindingFrames.get(frames[i])?.has(lhs.name)) {
-            errors.push(Throw.StaticTypeError('$1 is an immutable pattern binding', Value(lhs.name)).Value as ObjectValue);
+            reportType('rt-immutable-pattern-binding', expression, '$1 is an immutable pattern binding', Value(lhs.name));
           }
           break;
         }
@@ -5822,14 +5818,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (lhs?.type === 'SuperProperty') {
       if (superMember(lhs)?.readonly) {
-        errors.push(Throw.StaticTypeError('a readonly member cannot be assigned').Value as ObjectValue);
+        reportType('rt-readonly-store', expression, 'a readonly member cannot be assigned');
       }
       return;
     }
     if (lhs?.type !== 'MemberExpression') return;
     const layout = fixedLayoutProperty(lhs);
     if (layout && operator !== '??=' && (operator !== '&&=' || layout.value !== 0) && (operator !== '||=' || layout.value === 0)) {
-      errors.push(Throw.StaticTypeError('$1 is a fixed readonly type layout member', Value(layout.key)).Value as ObjectValue);
+      reportType('rt-readonly-layout', expression, '$1 is a fixed readonly type layout member', Value(layout.key));
       return;
     }
     const descriptor = libraryOperations().members.get(lhs);
@@ -5839,7 +5835,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         && (operator !== '&&=' || count! > 0) && (operator !== '||=' || count === 0)) {
       const receiver = descriptorReceiver;
       if (descriptor.name !== 'capacity' || receiver?.Kind === 'array' || receiver?.Kind === 'tuple') {
-        errors.push(Throw.StaticTypeError('$1 has no setter', Value(descriptor.name)).Value as ObjectValue);
+        reportType('rt-missing-setter', expression, '$1 has no setter', Value(descriptor.name));
         return;
       }
     }
@@ -5862,13 +5858,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return true;
       };
       if (noLocation(result) && storeMayRun(result)) {
-        errors.push(Throw.StaticTypeError('this index accessor has no set operator[] and does not return a ref location').Value as ObjectValue);
+        reportType('rt-index-store', expression, 'this index accessor has no set operator[] and does not return a ref location');
         return;
       }
     }
     const keys = memberKeys(m);
     if (keys?.some((key) => fixedStringProperty(sealedReceiver, key, operator))) {
-      errors.push(Throw.StaticTypeError('a fixed String property cannot be assigned').Value as ObjectValue);
+      reportType('rt-string-store', expression, 'a fixed String property cannot be assigned');
       return;
     }
     // #sec-vector-component-accessors: "An accessor whose key names a lane twice
@@ -5891,9 +5887,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }) ?? false;
     };
     if (repeatsVectorLane(sealedReceiver)) {
-      errors.push(Throw.StaticTypeError(
-        '$1 names a lane twice and cannot be assigned to', Value(keys!.map(String).join(' | ')),
-      ).Value as ObjectValue);
+      reportType('rt-vector-lane-store', expression, '$1 names a lane twice and cannot be assigned to', Value(keys!.map(String).join(' | ')));
       return;
     }
     const requireDeclaredMember = (receiver: Known, named: string | SymbolValue): void => {
@@ -5916,15 +5910,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           && !sealedStructure.Properties.some((property) => property.key === named)
           && !declaresName(receiver)
           && sealedStructure.IndexSignatures.length === 0) {
-        errors.push(Throw.StaticTypeError('$1 is not a member of $2',
-          typeof named === 'string' ? Value(named) : named, Value(displayType(receiver))).Value as ObjectValue);
+        reportType('rt-undeclared-member', expression, '$1 is not a member of $2', typeof named === 'string' ? Value(named) : named, Value(displayType(receiver)));
       }
     };
     if (!m.PrivateIdentifier && keys) keys.forEach((key) => requireDeclaredMember(sealedReceiver, key));
     if (constructorMayWrite(lhs)) return;
     if (lhs.PrivateIdentifier) {
       if (privateMember(lhs)?.readonly) {
-        errors.push(Throw.StaticTypeError('$1 is a readonly member and cannot be assigned', Value(lhs.PrivateIdentifier.name)).Value as ObjectValue);
+        reportType('rt-readonly-store', expression, '$1 is a readonly member and cannot be assigned', Value(lhs.PrivateIdentifier.name));
       }
       return;
     }
@@ -5937,9 +5930,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return shape?.Kind === 'object' && shape.Properties.some((property) => keys.includes(property.key) && property.readonly);
     };
     if (hasReadonlyMember(sealedReceiver)) {
-      errors.push(Throw.StaticTypeError('$1 is a readonly member and cannot be assigned',
-        keys.length === 1 && typeof keys[0] !== 'string' ? keys[0] : Value(keys.map((key) => typeof key === 'string'
-          ? key : key.Description instanceof JSStringValue ? `[${key.Description.stringValue()}]` : '[symbol]').join(' | '))).Value as ObjectValue);
+      reportType('rt-readonly-store', expression, '$1 is a readonly member and cannot be assigned', keys.length === 1 && typeof keys[0] !== 'string' ? keys[0] : Value(keys.map((key) => typeof key === 'string'
+          ? key : key.Description instanceof JSStringValue ? `[${key.Description.stringValue()}]` : '[symbol]').join(' | ')));
     }
   };
 
@@ -6146,7 +6138,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     partialStructuresInProgress.add(type.Declaration);
     try {
       return MergePartialStructures(type, [...published, ...local.map((part) => partialContribution(part, staticMembers))], (key) => {
-        errors.push(Throw.StaticTypeError('$1 is already declared on this type', Value(key)).Value as ObjectValue);
+        reportType('rt-duplicate-member', root, '$1 is already declared on this type', Value(key));
       });
     } finally {
       partialStructuresInProgress.delete(type.Declaration);
@@ -6282,10 +6274,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     };
     for (const signature of signatures) {
       if (!admissibleKey(signature.Key)) {
-        errors.push((Throw.StaticTypeError(
-          'an index signature key must be string, symbol, or uint32, and $1 is none of them',
-          Value(displayType(signature.Key)),
-        ) as ThrowCompletion).Value as ObjectValue);
+        reportType('rt-index-signature', root, 'an index signature key must be string, symbol, or uint32, and $1 is none of them', Value(displayType(signature.Key)));
       }
     }
   };
@@ -6407,7 +6396,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return false;
     };
     if (name && nonClassTarget(declaration, name)) {
-      errors.push(Throw.StaticTypeError('$1 is not a class, so a partial class cannot extend it', Value(name)).Value as ObjectValue);
+      reportType('rt-partial-class', declaration, '$1 is not a class, so a partial class cannot extend it', Value(name));
     }
     const body = (declaration as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null }).ClassTail?.ClassBody ?? [];
     for (const member of body) {
@@ -6417,10 +6406,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         : member.type === 'ClassStaticBlock' ? 'a static block'
           : isConstructor ? 'a constructor' : null;
       if (what !== null) {
-        errors.push((Throw.StaticTypeError(
-          'a partial class adds methods and operators only; $1 declares $2',
-          Value(name ?? 'this partial class'), Value(what),
-        ) as ThrowCompletion).Value as ObjectValue);
+        reportType('rt-partial-class', declaration, 'a partial class adds methods and operators only; $1 declares $2', Value(name ?? 'this partial class'), Value(what));
       }
     }
   };
@@ -6522,10 +6508,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const printed = displayType(shape as TypeRecord);
       const prior = metaDeclarationsByShape.find((m) => SameType(m.shape, shape as TypeRecord) && displayType(m.shape) === printed);
       if (prior) {
-        errors.push((Throw.StaticTypeError(
-          'a second meta declaration for one type: $1 names the type $2 already declared a meta type for',
-          Value(name), Value(prior.name),
-        ) as ThrowCompletion).Value as ObjectValue);
+        reportType('rt-meta-declaration', declaration, 'a second meta declaration for one type: $1 names the type $2 already declared a meta type for', Value(name), Value(prior.name));
       } else {
         metaDeclarationsByShape.push({ shape: shape as TypeRecord, name });
       }
@@ -6545,10 +6528,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (!sawDefault) {
       // Worded as the run time's diagnostic is, which a test matches by text.
-      errors.push((Throw.StaticTypeError('a meta declaration for $1 without a default hook', Value(name)) as ThrowCompletion).Value as ObjectValue);
+      reportType('rt-meta-declaration', declaration, 'a meta declaration for $1 without a default hook', Value(name));
     }
     if (!sawSubtype) {
-      errors.push((Throw.StaticTypeError('a meta declaration requires a $1 hook, and $2 has none', Value('subtype'), Value(name)) as ThrowCompletion).Value as ObjectValue);
+      reportType('rt-meta-declaration', declaration, 'a meta declaration requires a $1 hook, and $2 has none', Value('subtype'), Value(name));
     }
   };
 
@@ -6893,10 +6876,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // override", and a duplicate is a mistake wherever it is written.
         const declaredAt = declaredIn.get(key);
         if (declaredAt !== undefined) {
-          errors.push((Throw.StaticTypeError(
-            '$1 is already declared on this interface',
-            Value(key),
-          ) as { Value: ObjectValue }).Value);
+          reportType('rt-duplicate-member', node, '$1 is already declared on this interface', Value(key));
           continue;
         }
         declaredIn.set(key, declarationIndex);
@@ -6945,7 +6925,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // through brackets.
         const isWrittenLiteral = computed?.type === 'StringLiteral' || computed?.type === 'NumericLiteral';
         if (computed && !isWrittenLiteral) {
-          const completion = Throw.StaticTypeError('a computed member name must be a literal or a `const` bound to a Symbol') as ThrowCompletion;
+          const completion = CreateTypeDiagnostic('rt-computed-member-name', node, diagnosticPhase, 'a computed member name must be a literal or a `const` bound to a Symbol') as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
         }
         continue;
@@ -7046,7 +7026,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const target = (annotation as { NarrowsTarget?: string } | null | undefined)?.NarrowsTarget;
     if (target === undefined) return {};
     if (!Parameters.some((parameter) => parameter.Name === target)) {
-      errors.push(Throw.StaticTypeError('$1 is not a parameter of this method', Value(target)).Value as ObjectValue);
+      reportType('rt-narrowing-declaration', annotation, '$1 is not a parameter of this method', Value(target));
       return {};
     }
     return declared ? { Return: makePrimitive('boolean'), Narrows: [{ Target: target, Type: declared }] } : {};
@@ -7207,8 +7187,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const layout = staticClassLayoutOf(cls);
     if (layout !== null && 'overflow' in layout) {
       const className = (cls as unknown as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name ?? '(anonymous class)';
-      errors.push(Throw.StaticTypeError('$1 declares size $2 but its fields need $3 bytes',
-        Value(className), Value(String(layout.overflow.size)), Value(String(layout.overflow.need))).Value as ObjectValue);
+      reportType('rt-layout', cls, '$1 declares size $2 but its fields need $3 bytes', Value(className), Value(String(layout.overflow.size)), Value(String(layout.overflow.need)));
     }
   };
   // #sec-typed-classes: repeated own fields share one storage contract.
@@ -7228,8 +7207,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             controls: firstUnreadableControl(element.Decorators) === null ? readFieldControls(element.Decorators) : undefined } : null;
           if (type && prior && !mentionsTypeParameter(type) && !mentionsTypeParameter(prior.type)
               && !sameFieldContract(contract!, prior)) {
-            errors.push(Throw.StaticTypeError('repeated field $1 has incompatible storage contracts',
-              typeof key === 'string' ? Value(key) : key).Value as ObjectValue);
+            reportType('rt-duplicate-member', cls, 'repeated field $1 has incompatible storage contracts', typeof key === 'string' ? Value(key) : key);
           }
           if (prior && element.Initializer) requireAssignable(staticTypeIn(element.Initializer, prior.type), prior.type);
           if (contract && !prior) slots.set(key, contract);
@@ -7262,10 +7240,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const name = fieldNameOf(element);
       const from = name === null ? undefined : inherited.get(name);
       if (from !== undefined) {
-        errors.push(Throw.StaticTypeError(
-          '$1 redeclares $2, a typed field it inherits from $3; a field is declared once along a class chain, so assign a different value in the constructor',
-          Value(className), Value(name!), Value(from),
-        ).Value as ObjectValue);
+        reportType('rt-duplicate-member', cls, '$1 redeclares $2, a typed field it inherits from $3; a field is declared once along a class chain, so assign a different value in the constructor', Value(className), Value(name!), Value(from));
       }
     }
   };
@@ -7598,7 +7573,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       if (!overlap && ap.length === 0 && bp.length === 0) overlap = ambiguousForSomeArguments(pa, pb);
       if (overlap) {
-        errors.push(Throw.StaticTypeError('$1 is declared twice with overlapping parameter types and return type', Value(name)).Value as ObjectValue);
+        reportType('rt-overload-declaration', root, '$1 is declared twice with overlapping parameter types and return type', Value(name));
         return;
       }
     }
@@ -8258,7 +8233,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     });
     const label = `\`${name}${(caseNode as unknown as { TypeParameters?: { sourceText?: string } }).TypeParameters?.sourceText ?? ''}\``;
     const fail = (message: string) => {
-      errors.push((Throw.StaticTypeError('$1', Value(`${label} does not keep \`${name}\`'s public contract: ${message}`)) as ThrowCompletion).Value as ObjectValue);
+      reportType('rt-specialization-contract', caseNode, '$1', Value(`${label} does not keep \`${name}\`'s public contract: ${message}`));
     };
     const primary = classMemberWalk(primaryNode, 'instance');
     const kase = classMemberWalk(caseNode, 'instance');
@@ -8367,11 +8342,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     } catch (e) {
       // A pattern the host cannot expose is a diagnostic, never a host crash.
       if (!(e instanceof SpecializationPatternError)) throw e;
-      errors.push((Throw.StaticTypeError('$1', Value(e.message)) as ThrowCompletion).Value as ObjectValue);
+      reportType('rt-specialization-contract', primary, '$1', Value(e.message));
       return undefined;
     }
     if (result.Kind === 'ambiguous') {
-      errors.push((Throw.StaticTypeError('$1', Value(`${(result.Cases ?? []).map((c) => c.Label).join(' and ')} both apply to this application of \`${name}\`, and neither is more specific; declare a case for it`)) as ThrowCompletion).Value as ObjectValue);
+      reportType('rt-specialization-contract', primary, '$1', Value(`${(result.Cases ?? []).map((c) => c.Label).join(' and ')} both apply to this application of \`${name}\`, and neither is more specific; declare a case for it`));
       return undefined;
     }
     if (result.Kind !== 'selected' || !result.Case) return undefined;
@@ -8462,13 +8437,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (typeof member.key !== 'string') continue;
       const own = refined?.Structure?.Properties?.find((m) => m.key === member.key);
       if (!own) {
-        errors.push((Throw.StaticTypeError('$1', Value(`${label} does not refine \`${name}\`: it has no \`${member.key}\``)) as ThrowCompletion).Value as ObjectValue);
+        reportType('rt-specialization-contract', caseNode, '$1', Value(`${label} does not refine \`${name}\`: it has no \`${member.key}\``));
         continue;
       }
       const wanted = substituteTypeParameters(member.type, bindings) ?? member.type;
       if (mentionsTypeParameter(wanted) || mentionsTypeParameter(own.type)) continue;
       if (!IsAssignable(own.type, wanted)) {
-        errors.push((Throw.StaticTypeError('$1', Value(`${label} does not refine \`${name}\`: its \`${member.key}\` is ${displayType(own.type)}, not assignable to ${displayType(wanted)}`)) as ThrowCompletion).Value as ObjectValue);
+        reportType('rt-specialization-contract', caseNode, '$1', Value(`${label} does not refine \`${name}\`: its \`${member.key}\` is ${displayType(own.type)}, not assignable to ${displayType(wanted)}`));
       }
     }
   };
@@ -8608,7 +8583,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       if (it?.Kind !== 'nominal' || it.Declaration.type !== 'InterfaceDeclaration') {
         if (it && it.Kind !== 'any' && !mentionsTypeParameter(it)) {
-          errors.push(Throw.StaticTypeError('an implements target must denote an interface').Value as ObjectValue);
+          reportType('rt-implements-contract', n, 'an implements target must denote an interface');
         }
         continue;
       }
@@ -8628,8 +8603,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (istruct?.Kind === 'function') {
         const capability = classCallCapability(n);
         if (capability === 'noncallable') {
-          errors.push(Throw.StaticTypeError('a non-callable class instance cannot implement $1', Value(nm)).Value as ObjectValue);
-        } else if (capability) requireAssignable(capability, istruct);
+          reportType('rt-implements-contract', n, 'a non-callable class instance cannot implement $1', Value(nm));
+        } else if (capability) requireAssignable(capability, istruct, n as ParseNode);
       }
       if (istruct && istruct.Kind === 'object') {
         // `implements` is VERIFIED, not merely declared. Every member the
@@ -8648,7 +8623,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               : undefined);
           if (!own) {
             if (!p.optional) {
-              const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(`${className}, which declares no member ${p.key},`), Value(displayType(it))) as ThrowCompletion;
+              const completion = CreateTypeDiagnostic('rt-assignability', n, diagnosticPhase, '$1 is not assignable to $2', Value(`${className}, which declares no member ${p.key},`), Value(displayType(it))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
             continue;
@@ -8671,7 +8646,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             ?? (baseStructure?.Kind === 'object' ? baseStructure.Properties.find((property) => property.key === key) : undefined);
           if (!field) continue;
           for (const signature of istruct.IndexSignatures) {
-            if (keyAdmittedBy(key, signature.Key)) requireAssignable(field.type, signature.Value);
+            if (keyAdmittedBy(key, signature.Key)) requireAssignable(field.type, signature.Value, n as ParseNode);
           }
         }
         for (const p of istruct.Properties) {
@@ -8748,11 +8723,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const key = operatorTableKey(member as ParseNode.OperatorDefinition);
           const declared = operatorInChain(key);
           if (!declared) {
-            errors.push((Throw.StaticTypeError(
-              '$1 is not assignable to $2',
-              Value(`${implementor}, which declares no ${key} operator,`),
-              Value(`${nm}`),
-            ) as ThrowCompletion).Value as ObjectValue);
+            reportType('rt-assignability', n, '$1 is not assignable to $2', Value(`${implementor}, which declares no ${key} operator,`), Value(`${nm}`));
             continue;
           }
           // The member's own signature, built as `declaredOperator` builds the
@@ -8909,10 +8880,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               continue;
             }
             if (a.some((q, k) => !!q.Ref !== !!b[k].Ref) || !SignatureNarrowingsSubtype(sig, base)) {
-              errors.push(Throw.StaticTypeError('$1 changes an inherited reference or narrowing contract', Value(String(own.key))).Value as ObjectValue);
+              reportType('rt-inherited-contract', n, '$1 changes an inherited reference or narrowing contract', Value(String(own.key)));
             }
             if (![...a, ...b].some((p) => mentionsTypeParameter(p.Type)) && !OverrideParametersSubtype(sig, base)) {
-              errors.push(Throw.StaticTypeError('$1 cannot bind every argument list admitted by the inherited signature', Value(String(own.key))).Value as ObjectValue);
+              reportType('rt-inherited-contract', n, '$1 cannot bind every argument list admitted by the inherited signature', Value(String(own.key)));
             }
             // #sec-inferred-return-types: publication supplies the return
             // contract wherever an explicit annotation would be consulted.
@@ -8931,10 +8902,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               ? bareBase as TypeRecord
               : returned;
             if (!IsSubtype(derivedReturn, inheritedReturn, [])) {
-              errors.push((Throw.StaticTypeError(
-                '$1 changes the return type of an inherited signature from $2 to $3; an override may narrow a return but not change it',
-                Value(String(own.key)), Value(displayType(inheritedReturn)), Value(displayType(returned)),
-              ) as ThrowCompletion).Value as ObjectValue);
+              reportType('rt-inherited-contract', n, '$1 changes the return type of an inherited signature from $2 to $3; an override may narrow a return but not change it', Value(String(own.key)), Value(displayType(inheritedReturn)), Value(displayType(returned)));
             }
           }
         }
@@ -8977,10 +8945,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const a = construct[j]!.Parameters;
           const b = construct[i]!.Parameters;
           if (a.length === b.length && a.every((q, k) => sameConstructParameter(q.Type ?? null, b[k]?.Type ?? null))) {
-            const completion = Throw.StaticTypeError(
-              '$1 is declared twice with the same parameter types',
-              Value(classNameForDiagnostics(n) ?? 'the constructor'),
-            );
+            const completion = CreateTypeDiagnostic('rt-overload-declaration', n, diagnosticPhase, '$1 is declared twice with the same parameter types', Value(classNameForDiagnostics(n) ?? 'the constructor'));
             errors.push(completion.Value as ObjectValue);
             break;
           }
@@ -8989,7 +8954,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // partial overlap is ambiguous for its witnesses just as a duplicate
           // is for every argument list (#sec-resolveoverload).
           if (ambiguousForSomeArguments(a, b)) {
-            errors.push(Throw.StaticTypeError('$1 declares two constructors that are ambiguous for some argument list', Value(classNameForDiagnostics(n) ?? 'the class')).Value as ObjectValue);
+            reportType('rt-overload-declaration', n, '$1 declares two constructors that are ambiguous for some argument list', Value(classNameForDiagnostics(n) ?? 'the class'));
             break;
           }
         }
@@ -9059,7 +9024,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (supplied.Kind === 'parameter' || supplied.Kind === 'deferred' || supplied.Kind === 'any'
       || (supplied as { Opaque?: boolean }).Opaque || mentionsTypeParameter(supplied)) return;
     if (supplied.Kind !== 'literal') {
-      errors.push(Throw.StaticTypeError('$1 requires a value argument', Value(q.BindingIdentifier.name)).Value as ObjectValue);
+      reportType('rt-generic-argument', q, '$1 requires a value argument', Value(q.BindingIdentifier.name));
       return;
     }
     const domain = resolveType(q.TypeParameterDomain);
@@ -9086,7 +9051,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       : order.kind === 'supplied-twice' ? `${order.name} is supplied twice to ${className}`
       : order.kind === 'positional-after-named' ? 'a positional type argument follows a named argument'
       : `${className} takes ${params.length} type arguments`;
-    errors.push(Throw.StaticTypeError('$1', Value(message)).Value as ObjectValue);
+    reportType('rt-generic-argument', root, '$1', Value(message));
     return true;
   };
 
@@ -9098,7 +9063,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const params = (decl as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null } | undefined)
       ?.TypeParameters?.TypeParameterList ?? [];
     if (params.length > 0 && args.length > params.length && !params.some((q) => (q as ParseNode.TypeParameter).IsVariadic)) {
-      errors.push(Throw.StaticTypeError('$1', Value(`this declaration takes ${params.length} type arguments`)).Value as ObjectValue);
+      reportType('rt-generic-argument', root, '$1', Value(`this declaration takes ${params.length} type arguments`));
     }
     if (params.length === 0 || (args.length >= params.length && args.every((arg) => arg !== undefined))
         || params.some((q) => (q as unknown as { IsVariadic?: boolean }).IsVariadic === true)) {
@@ -9132,7 +9097,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
       if (!resolved) {
-        const completion = Throw.StaticTypeError('the type parameter $1 of $2 has no argument and no default', Value(name), Value(className)) as ThrowCompletion;
+        const completion = CreateTypeDiagnostic('rt-generic-argument', root, diagnosticPhase, 'the type parameter $1 of $2 has no argument and no default', Value(name), Value(className)) as ThrowCompletion;
         errors.push(completion.Value as ObjectValue);
         out.push(anyTypeRecord);
         bindings.set(name, anyTypeRecord);
@@ -9263,18 +9228,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const supplied = new Set([...paramNames.slice(0, firstNamed), ...named]);
       const missing = params.find((p) => !p.DefaultNode && p.Name !== undefined && !supplied.has(p.Name));
       if (missing) {
-        errors.push(Throw.StaticTypeError('the type parameter $1 of $2 has no argument and no default', Value(missing.Name!), Value(subject)).Value as ObjectValue);
+        reportType('rt-generic-argument', root, 'the type parameter $1 of $2 has no argument and no default', Value(missing.Name!), Value(subject));
       }
       return;
     }
     const firstDefaulted = params.findIndex((p) => p.DefaultNode);
     const least = firstDefaulted === -1 ? params.length : firstDefaulted;
     if (writtenArgs.length < least || writtenArgs.length > params.length) {
-      const completion = Throw.StaticTypeError(
-        '$1 takes $2 type arguments; $3 expects one taking $4',
-        Value(subject), Value(String(writtenArgs.length)),
-        Value(params[0]!.Name ?? 'the declaration'), Value(String(params.length)),
-      ) as ThrowCompletion;
+      const completion = CreateTypeDiagnostic('rt-generic-argument', root, diagnosticPhase, '$1 takes $2 type arguments; $3 expects one taking $4', Value(subject), Value(String(writtenArgs.length)), Value(params[0]!.Name ?? 'the declaration'), Value(String(params.length))) as ThrowCompletion;
       errors.push(completion.Value as ObjectValue);
     }
   };
@@ -9388,7 +9349,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         bound = { Kind: 'parameter', Name: name };
       }
       if (bound === undefined) {
-        const completion = Throw.StaticTypeError('the type parameter $1 of $2 is not determined by the arguments and has no default; supply it explicitly with $2.<...>', Value(name ?? '?'), Value(className)) as ThrowCompletion;
+        const completion = CreateTypeDiagnostic('rt-generic-argument', node, diagnosticPhase, 'the type parameter $1 of $2 is not determined by the arguments and has no default; supply it explicitly with $2.<...>', Value(name ?? '?'), Value(className)) as ThrowCompletion;
         errors.push(completion.Value as ObjectValue);
         bound = anyTypeRecord;
       }
@@ -9477,8 +9438,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (!keys.includes(property.key) || !property.protected || !property.protectedOwner
           || permitted(property.protectedOwner) || reported.has(property.key)) continue;
         reported.add(property.key);
-        errors.push(Throw.StaticTypeError('$1 is protected', typeof property.key === 'string'
-          ? Value(property.key) : property.key).Value as ObjectValue);
+        reportType('rt-protected-member', root, '$1 is protected', typeof property.key === 'string'
+          ? Value(property.key) : property.key);
       }
     };
     inspect(receiverType);
@@ -9521,10 +9482,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (!declaration || !immutable) continue;
       const prior = enumeratorBindings.get(declaration.node);
       if (prior && prior.enumNode !== n) {
-        errors.push(Throw.StaticTypeError(
-          '$1 of $2 reads $3, which is already enumerator $4 of $5; a value may be an enumerator of at most one enum',
-          Value(member.IdentifierName.name), Value(n.BindingIdentifier.name), Value(read.name), Value(prior.member), Value(prior.enumName),
-        ).Value as ObjectValue);
+        reportType('rt-enum-initializer', n, '$1 of $2 reads $3, which is already enumerator $4 of $5; a value may be an enumerator of at most one enum', Value(member.IdentifierName.name), Value(n.BindingIdentifier.name), Value(read.name), Value(prior.member), Value(prior.enumName));
         continue;
       }
       if (!prior) enumeratorBindings.set(declaration.node, { enumName: n.BindingIdentifier.name, member: member.IdentifierName.name, enumNode: n });
@@ -9828,7 +9786,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const dominated = taken.some((u) => IsSubtype(t as TypeRecord, u, []));
       const left: TypeRecord | typeof empty = remaining === empty ? empty : NarrowTo(remaining, t as TypeRecord);
       if (dominated || (left === empty && (remaining === empty || stablyDisjoint(remaining, t as TypeRecord)))) {
-        pushImpossibleTest('never-succeeds', name);
+        pushImpossibleTest('never-succeeds', name, n);
       }
       taken.push(t as TypeRecord);
       if (remaining !== empty) remaining = NarrowFrom(remaining, t as TypeRecord);
@@ -10517,9 +10475,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return substituteTypeParameters(shape, bindings) ?? shape;
   };
 
-  const hasInstanceFails = (type: Known, argument: Known, ordinaryObject: boolean): boolean => everyProtocolAlternative(type, (arm) =>
-    everyProtocolAlternative(protocolMember(arm, wellKnownSymbols.hasInstance), (hook) =>
-      nullishOnly(hook) ? ordinaryObject : protocolCallFails(hook, () => false, [argument], arm)));
+  const hasInstanceFails = (type: Known, argument: Known, ordinaryObject: boolean, declaredCallOnly = false): boolean => everyProtocolAlternative(type, (arm) =>
+    everyProtocolAlternative(protocolMember(arm, wellKnownSymbols.hasInstance), (hook) => {
+      if (!declaredCallOnly) return nullishOnly(hook) ? ordinaryObject : protocolCallFails(hook, () => false, [argument], arm);
+      // A declared callable's receiver/parameter boundary applies even where
+      // an added non-callability error on the existing operator is suppressed.
+      const fn = effectiveFunctionType(callableForm(hook));
+      return fn?.Kind === 'function' && fn.Signatures.length > 0
+        && fn.Signatures.every((signature) => protocolReceiverFails(signature, arm)
+          || protocolArgumentsFail(signature.Parameters, [argument]));
+    }));
 
   // Await's assimilation call supplies two ordinary function values. Their
   // callable/Object category is known, but they do not publish the arbitrary
@@ -10548,7 +10513,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const checkAwaitAssimilation = (operand: ParseNode | null | undefined): void => {
     if (operand && operandParticipates(operand) && awaitAssimilationFails(staticType(operand))) {
-      errors.push(Throw.StaticTypeError('the selected then contract cannot accept the resolving callbacks of promise assimilation').Value as ObjectValue);
+      reportType('rt-promise-protocol', operand, 'the selected then contract cannot accept the resolving callbacks of promise assimilation');
     }
   };
 
@@ -10650,10 +10615,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const spreadArg = (arg as unknown as { AssignmentExpression?: ParseNode }).AssignmentExpression;
       const spreadArgType = spreadArg ? staticType(spreadArg) : null;
       if (spreadArgType && notIterable(spreadArgType, false, true)) {
-        const completion = Throw.StaticTypeError(
-          'a value of $1 is not iterable',
-          Value(displayType(spreadArgType as TypeRecord)),
-        ) as ThrowCompletion;
+        const completion = CreateTypeDiagnostic('rt-iterable-required', root, diagnosticPhase, 'a value of $1 is not iterable', Value(displayType(spreadArgType as TypeRecord))) as ThrowCompletion;
         errors.push(completion.Value as ObjectValue);
       }
     }
@@ -10735,9 +10697,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const checkDefaultEvaluability = (initializer: ParseNode): void => {
     const outside = evaluabilityViolation(initializer);
-    if (outside !== undefined) errors.push(Throw.StaticTypeError(
-      'a type default must be compile-time evaluable, and $1 is not', Value(outside),
-    ).Value as ObjectValue);
+    if (outside !== undefined) reportType('rt-compile-time-evaluability', initializer, 'a type default must be compile-time evaluable, and $1 is not', Value(outside));
   };
 
   /**
@@ -10770,7 +10730,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (!declaration || !['let', 'var', 'const', 'function'].includes(declaration.kind)) continue;
       const outside = evaluabilityViolation(reference);
       if (outside !== undefined) {
-        errors.push(Throw.StaticTypeError('a type must be compile-time evaluable, and $1 is not', Value(outside)).Value as ObjectValue);
+        reportType('rt-compile-time-evaluability', root, 'a type must be compile-time evaluable, and $1 is not', Value(outside));
         return;
       }
     }
@@ -10799,7 +10759,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         continue;
       }
       if (sawDefault && !p.Optional && !p.BindingIdentifier) {
-        errors.push(Throw.StaticTypeError('an unnamed required parameter may not follow a parameter with a default in a function type, since no call can fill it without also filling the default; name it, give it a default, or mark it optional').Value as ObjectValue);
+        reportType('rt-parameter-order', root, 'an unnamed required parameter may not follow a parameter with a default in a function type, since no call can fill it without also filling the default; name it, give it a default, or mark it optional');
         return;
       }
     }
@@ -10866,9 +10826,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const list = ref.TypeArguments.TypeArgumentList ?? [];
             if (tp?.Arity && tp.Arity > 0 && !list.some((a) => (a as { IsSpread?: boolean }).IsSpread)) {
               if (list.some((a) => typeArgumentNameOfShared(a) !== undefined)) {
-                errors.push(Throw.StaticTypeError('$1', Value(`\`${name}\` is a higher-kinded parameter, whose holes have no names; supply its ${tp.Arity} type arguments positionally`)).Value as ObjectValue);
+                reportType('rt-generic-argument', root, '$1', Value(`\`${name}\` is a higher-kinded parameter, whose holes have no names; supply its ${tp.Arity} type arguments positionally`));
               } else if (list.length !== tp.Arity) {
-                errors.push(Throw.StaticTypeError('$1', Value(`\`${name}\` takes ${tp.Arity} type arguments, and this application supplies ${list.length}; an application of a higher-kinded parameter supplies exactly its arity`)).Value as ObjectValue);
+                reportType('rt-generic-argument', root, '$1', Value(`\`${name}\` takes ${tp.Arity} type arguments, and this application supplies ${list.length}; an application of a higher-kinded parameter supplies exactly its arity`));
               }
             }
           }
@@ -10880,8 +10840,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const tp = ((declaration.node as unknown as { TypeParameters?: { TypeParameterList?: readonly { BindingIdentifier?: { name?: string }, Arity?: number }[] } })
               .TypeParameters?.TypeParameterList ?? []).find((t) => t.BindingIdentifier?.name === name);
             if (tp?.Arity && tp.Arity > 0 && !forwarded(n)) {
-              errors.push(Throw.StaticTypeError('$1 takes $2 type arguments and cannot be used unapplied',
-                Value(name), Value(String(tp.Arity))).Value as ObjectValue);
+              reportType('rt-generic-argument', root, '$1 takes $2 type arguments and cannot be used unapplied', Value(name), Value(String(tp.Arity)));
               return;
             }
           }
@@ -10925,7 +10884,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (declaration?.kind === 'function') {
             const violation = FirstEvaluabilityViolation(declaration.node);
             if (violation !== undefined) {
-              errors.push(Throw.StaticTypeError('a builder is not compile-time evaluable: it names $1 ($2)', Value(violation.name), Value(violation.why)).Value as ObjectValue);
+              reportType('rt-compile-time-evaluability', root, 'a builder is not compile-time evaluable: it names $1 ($2)', Value(violation.name), Value(violation.why));
             }
           }
         }
@@ -11015,7 +10974,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return returns.length > 0 && returns.every((r) => allocatingForm(r));
     };
     if (allocatingForm(initializer) || returnsOnlyAllocations(patternExpression(initializer)!)) {
-      errors.push(Throw.StaticTypeError('$1', Value(`a type default is shared by every use of its type, so its value must copy - a value type, a string or an enumerator - and \`${initializer.sourceText}\` allocates an Object; build it where the value is constructed`)).Value as ObjectValue);
+      reportType('rt-type-default-identity', initializer, '$1', Value(`a type default is shared by every use of its type, so its value must copy - a value type, a string or an enumerator - and \`${initializer.sourceText}\` allocates an Object; build it where the value is constructed`));
       return;
     }
     const value = staticType(initializer);
@@ -11024,13 +10983,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       || (value.Kind === 'primitive' && (value as { Name?: string }).Name === 'object')
       || (value.Kind === 'nominal' && !IsValueType(value as TypeRecord));
     if (allocates) {
-      errors.push(Throw.StaticTypeError('$1', Value(`a type default is shared by every use of its type, so its value must copy - a value type, a string or an enumerator - and ${displayType(value as TypeRecord)} is an Object; build it where the value is constructed`)).Value as ObjectValue);
+      reportType('rt-type-default-identity', initializer, '$1', Value(`a type default is shared by every use of its type, so its value must copy - a value type, a string or an enumerator - and ${displayType(value as TypeRecord)} is an Object; build it where the value is constructed`));
     }
   };
 
   const checkMemberDefault = (member: ParseNode.TypeMember): void => {
     if (!member.Initializer) return;
-    if (!member.Optional) errors.push(Throw.StaticTypeError('a member with a default must be optional').Value as ObjectValue);
+    if (!member.Optional) reportType('rt-member-default', member, 'a member with a default must be optional');
     checkDefaultEvaluability(member.Initializer);
     checkCopyingDefault(member.Initializer, member.TypeAnnotation ? resolveType(member.TypeAnnotation.Type) : null);
   };
@@ -11086,7 +11045,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     };
     if (Target.Kind === 'shared' || Target.Kind === 'reference'
         || (!pendingLayout(Target) && !IsSharableValueType(Target))) {
-      errors.push(Throw.StaticTypeError('$1 is not a valid type', Value(`shared ${displayType(Target)}`)).Value as ObjectValue);
+      reportType('rt-type-required', root, '$1 is not a valid type', Value(`shared ${displayType(Target)}`));
     }
   };
 
@@ -11102,8 +11061,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // obligation after substitution, not an unknown annotation.
       if (type.Operator === 'indexed' && operands.length === 2 && !operands.some((operand) => mentionsTypeParameter(operand))
           && !IndexedAccessTypeRecord(operands[0], operands[1])) {
-        errors.push(Throw.StaticTypeError('the indexed access $1 has no declared property for $2',
-          Value(displayType(operands[0])), Value(displayType(operands[1]))).Value as ObjectValue);
+        reportType('rt-index-signature', root, 'the indexed access $1 has no declared property for $2', Value(displayType(operands[0])), Value(displayType(operands[1])));
       }
     } else if (type.Kind === 'primitive') {
       // #sec-library-type-parameters: closed specializations retain family formation obligations.
@@ -11268,7 +11226,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
   const refuseClassWithoutDefault = (declared: TypeRecord): boolean => {
     if (staticDefaultOf(declared) !== 'none') return false;
-    errors.push(Throw.StaticTypeError('$1 has no default value, so a declaration of it needs an initializer', Value(displayType(declared))).Value as ObjectValue);
+    reportType('rt-missing-default', root, '$1 has no default value, so a declaration of it needs an initializer', Value(displayType(declared)));
     return true;
   };
 
@@ -11385,7 +11343,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return undefined;
     }
     if (sigs.length !== members.length) {
-      const completion = Throw.StaticTypeError('$1', Value('call signatures do not mix with named members in one object type')) as ThrowCompletion;
+      const completion = CreateTypeDiagnostic('rt-type-required', root, diagnosticPhase, '$1', Value('call signatures do not mix with named members in one object type')) as ThrowCompletion;
       errors.push(completion.Value as ObjectValue);
       return null;
     }
@@ -11442,7 +11400,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     } catch (error) {
       if (!(error instanceof FamilyPatternError)) throw error;
-      errors.push(Throw.StaticTypeError('$1', Value(error.message)).Value as ObjectValue);
+      reportType('rt-type-required', node, '$1', Value(error.message));
       return null;
     }
     // A generic class's bare name in its own body is the class over its own
@@ -11476,7 +11434,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const invalidRest = invalidTupleRest(result)
       ?? (result?.Kind === 'nominal' ? invalidTupleRest(structureOf(result)) : null);
     if (invalidRest) {
-      errors.push(Throw.StaticTypeError('$1', Value(`a tuple rest operand must be an array or tuple type, got ${displayType(invalidRest)}`)).Value as ObjectValue);
+      reportType('rt-variadic-contract', node, '$1', Value(`a tuple rest operand must be an array or tuple type, got ${displayType(invalidRest)}`));
       return null;
     }
     if (result && node.type !== 'ComputedType') {
@@ -11607,7 +11565,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           const bound = bindIntrinsicArguments(intrinsicName, arguments_, written.map(typeArgumentNameOfShared))!;
           if ('Error' in bound) {
-            errors.push(Throw.StaticTypeError('$1', Value(bound.Error)).Value as ObjectValue);
+            reportType('rt-generic-argument', node, '$1', Value(bound.Error));
             return null;
           }
           return builtinTypeRecord(intrinsicName, bound.Arguments) ?? libraryTypeRecord(intrinsicName, bound.Arguments);
@@ -11739,7 +11697,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (!(a as { IsSpread?: boolean }).IsSpread) continue;
             const spread = resolveType(a as ParseNode.Type);
             if (spread?.Kind === 'array' && typeof (spread as { Extent?: unknown }).Extent !== 'number') {
-              errors.push(Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(spread)), Value('a tuple or an array of stated extent, as a spread type argument')).Value as ObjectValue);
+              reportType('rt-assignability', node, '$1 is not assignable to $2', Value(displayType(spread)), Value('a tuple or an array of stated extent, as a spread type argument'));
               return null;
             }
           }
@@ -11770,14 +11728,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 : order.kind === 'supplied-twice' ? `${order.name} is supplied twice to ${namedBase}`
                 : order.kind === 'positional-after-named' ? 'a positional type argument follows a named argument'
                 : `${namedBase} takes ${libNames.length} type arguments`;
-              errors.push(Throw.StaticTypeError('$1', Value(message)).Value as ObjectValue);
+              reportType('rt-generic-argument', node, '$1', Value(message));
               return null;
             }
             const userParams = (classNodes.get(namedBase) as ParseNode.ClassDeclaration | undefined)?.TypeParameters?.TypeParameterList;
             const filled = order.ordered.map((arg, index) => arg ?? userParams?.[index]?.TypeParameterDefault);
             const missing = filled.findIndex((arg) => !arg);
             if (missing !== -1) {
-              errors.push(Throw.StaticTypeError('the type parameter $1 of $2 has no argument and no default', Value(libNames[missing]), Value(namedBase)).Value as ObjectValue);
+              reportType('rt-generic-argument', node, 'the type parameter $1 of $2 has no argument and no default', Value(libNames[missing]), Value(namedBase));
               return null;
             }
             orderedArgList = filled as readonly ParseNode.Type[];
@@ -11814,7 +11772,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const baseName = node.TypeName.IdentifierReference.name;
           if ((baseName === 'int' || baseName === 'uint') && args.every((arg) => typeof arg === 'number')
               && (args.length !== 1 || !Number.isInteger(args[0]) || (args[0] as number) < 1 || (args[0] as number) > 65536)) {
-            errors.push(Throw.StaticTypeError('an integer width must be an integer from 1 through 65536').Value as ObjectValue);
+            reportType('rt-integer-width', node, 'an integer width must be an integer from 1 through 65536');
             return null;
           }
           const appliedBuiltin = builtinTypeRecord(baseName, args);
@@ -11850,14 +11808,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               && !PrimitiveDeclaresParameters(baseName) && (bareBuiltin as { Name?: string }).Name !== 'type';
             if (nominalBase || aliasBase || primitiveBase) {
               if (rawArgList.length === 0) {
-                errors.push(Throw.StaticTypeError('$1', Value(`\`${baseName}\` declares no type parameters, so \`.<>\` after it supplies neither arguments nor a metadata record; remove it`)).Value as ObjectValue);
+                reportType('rt-generic-argument', node, '$1', Value(`\`${baseName}\` declares no type parameters, so \`.<>\` after it supplies neither arguments nor a metadata record; remove it`));
                 return null;
               }
               const only = args.length === 1 && typeof args[0] !== 'number' ? args[0] as TypeRecord : null;
               const open = !!only && (only.Kind === 'any' || only.Kind === 'parameter' || only.Kind === 'deferred' || mentionsTypeParameter(only));
               if (nominalBase && !open) {
                 if (!only || only.Kind !== 'object') {
-                  errors.push(Throw.StaticTypeError('$1', Value(`\`${baseName}\` declares no type parameters, so its \`.<...>\` is one metadata record written as an object type, such as \`${baseName}.<{ brand: 'B' }>\``)).Value as ObjectValue);
+                  reportType('rt-unclaimed-metadata', node, '$1', Value(`\`${baseName}\` declares no type parameters, so its \`.<...>\` is one metadata record written as an object type, such as \`${baseName}.<{ brand: 'B' }>\``));
                   return null;
                 }
                 const metadata = MetadataObjectFromType(only, nominalBase);
@@ -11866,7 +11824,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   unclaimed.push({ node, display: displayType({ Kind: 'parameterized', Base: nominalBase, Metadata: metadata as unknown as MetadataRecord } as TypeRecord), base: nominalBase, keys });
                 }
               } else if (only && !open && ['primitive', 'array', 'tuple', 'union', 'function'].includes(only.Kind)) {
-                errors.push(Throw.StaticTypeError('$1', Value(`\`${displayType(only)}\` is a type, and \`${baseName}\` declares no type parameters, so its \`.<...>\` is metadata, which a type is not`)).Value as ObjectValue);
+                reportType('rt-unclaimed-metadata', node, '$1', Value(`\`${displayType(only)}\` is a type, and \`${baseName}\` declares no type parameters, so its \`.<...>\` is metadata, which a type is not`));
                 return null;
               }
             }
@@ -12155,12 +12113,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
               const constraint = resolveType(q.TypeParameterConstraint);
               if (constraint && !IsAssignable(argument, constraint)) {
-                const completion = Throw.StaticTypeError(
-                  '$1 is not assignable to $2, the constraint of $3',
-                  Value(displayType(argument)),
-                  Value(displayType(constraint)),
-                  Value(q.BindingIdentifier?.name ?? '?'),
-                ) as ThrowCompletion;
+                const completion = CreateTypeDiagnostic('rt-generic-constraint', node, diagnosticPhase, '$1 is not assignable to $2, the constraint of $3', Value(displayType(argument)), Value(displayType(constraint)), Value(q.BindingIdentifier?.name ?? '?')) as ThrowCompletion;
                 errors.push(completion.Value as ObjectValue);
               }
             }
@@ -12172,15 +12125,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // that is not a declaration, or one of the wrong arity, and a
               // reader needs to be told which.
               const completion = (bad.kind === 'not-generic'
-                ? Throw.StaticTypeError(
-                  '$1 is not a generic declaration; $2 expects one taking $3 type arguments',
-                  Value(displayType(bad.argument)), Value(bad.parameter), Value(String(bad.wanted)),
-                )
-                : Throw.StaticTypeError(
-                  '$1 takes $2 type arguments; $3 expects one taking $4',
-                  Value(displayType(bad.argument)), Value(String(bad.supplied)),
-                  Value(bad.parameter), Value(String(bad.wanted)),
-                )) as ThrowCompletion;
+                ? CreateTypeDiagnostic('rt-generic-argument', node, diagnosticPhase, '$1 is not a generic declaration; $2 expects one taking $3 type arguments', Value(displayType(bad.argument)), Value(bad.parameter), Value(String(bad.wanted)))
+                : CreateTypeDiagnostic('rt-generic-argument', node, diagnosticPhase, '$1 takes $2 type arguments; $3 expects one taking $4', Value(displayType(bad.argument)), Value(String(bad.supplied)), Value(bad.parameter), Value(String(bad.wanted)))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
               return null;
             }
@@ -12395,7 +12341,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         const indexed = classDeclarationOf(objectType) === undefined ? IndexedAccessTypeRecord(objectType, indexType) : null;
         if (!indexed && !mentionsTypeParameter(objectType) && !mentionsTypeParameter(indexType)) {
-          errors.push(Throw.StaticTypeError('the indexed access $1 has no declared property for $2', Value(displayType(objectType)), Value(displayType(indexType))).Value as ObjectValue);
+          reportType('rt-index-signature', node, 'the indexed access $1 has no declared property for $2', Value(displayType(objectType)), Value(displayType(indexType)));
         }
         return indexed as Known | null;
       }
@@ -12497,16 +12443,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 if (lp.Kind === 'parameterized' && rp.Kind === 'parameterized'
                   && lp.Base !== undefined && rp.Base !== undefined
                   && displayType(lp.Base) === displayType(rp.Base)) {
-                  meets.push({ left: lp, right: rp, member: left.key } as unknown as DeferredMeetCheck);
+                  meets.push({ node, left: lp, right: rp, member: left.key } as unknown as DeferredMeetCheck);
                 }
                 if (AreDisjoint(left.type, right.type)) {
                   reportedEmptyIntersections.add(node);
-                  const completion = Throw.StaticTypeError(
-                    'no value is of both $1 and $2 at member $3, so their intersection is never',
-                    Value(displayType(left.type)),
-                    Value(displayType(right.type)),
-                    Value(left.key),
-                  ) as ThrowCompletion;
+                  const completion = CreateTypeDiagnostic('rt-empty-intersection', node, diagnosticPhase, 'no value is of both $1 and $2 at member $3, so their intersection is never', Value(displayType(left.type)), Value(displayType(right.type)), Value(left.key)) as ThrowCompletion;
                   errors.push(completion.Value as ObjectValue);
                   break;
                 }
@@ -12548,11 +12489,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 continue;
               }
               reportedEmptyIntersections.add(node);
-              const completion = Throw.StaticTypeError(
-                'no value is an instance of both $1 and $2, so their intersection is never',
-                Value(displayType(Members[i])),
-                Value(displayType(Members[j])),
-              ) as ThrowCompletion;
+              const completion = CreateTypeDiagnostic('rt-empty-intersection', node, diagnosticPhase, 'no value is an instance of both $1 and $2, so their intersection is never', Value(displayType(Members[i])), Value(displayType(Members[j]))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
           }
@@ -12568,7 +12505,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (a.Kind === 'parameterized' && b.Kind === 'parameterized'
                 && a.Base !== undefined && b.Base !== undefined
                 && displayType(a.Base) === displayType(b.Base)) {
-                meets.push({ left: a, right: b } as DeferredMeetCheck);
+                meets.push({ node, left: a, right: b } as DeferredMeetCheck);
               }
             }
           }
@@ -12576,11 +12513,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             for (let j = i + 1; j < Members.length; j += 1) {
               if (AreDisjoint(Members[i], Members[j])) {
                 reportedEmptyIntersections.add(node);
-                const completion = Throw.StaticTypeError(
-                  'no value is of both $1 and $2, so their intersection is never',
-                  Value(displayType(Members[i])),
-                  Value(displayType(Members[j])),
-                ) as ThrowCompletion;
+                const completion = CreateTypeDiagnostic('rt-empty-intersection', node, diagnosticPhase, 'no value is of both $1 and $2, so their intersection is never', Value(displayType(Members[i])), Value(displayType(Members[j]))) as ThrowCompletion;
                 errors.push(completion.Value as ObjectValue);
                 i = Members.length;
                 break;
@@ -12660,7 +12593,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               return null;
             }
             if (exact < 0n || exact > 18446744073709551615n) {
-              errors.push(Throw.StaticTypeError('$1 is not a valid array extent', Value(String(exact))).Value as ObjectValue);
+              reportType('rt-array-extent', node, '$1 is not a valid array extent', Value(String(exact)));
               return null;
             }
             constantExtent = Number(exact);
@@ -12669,7 +12602,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // #sec-array-and-tuple-types: an array takes one type argument, its
         // element. The index type is fixed, so reject extra type arguments.
         if (node.TypeArguments && node.TypeArguments.TypeArgumentList.length > 1) {
-          const completion = Throw.StaticTypeError('an array type takes a single type argument') as ThrowCompletion;
+          const completion = CreateTypeDiagnostic('rt-array-extent', node, diagnosticPhase, 'an array type takes a single type argument') as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
           return null;
         }
@@ -12699,17 +12632,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // every use rather than at its declaration - even a literal of the
           // right length with correctly typed elements.
           if (sawDefault && !e.Initializer && !e.Rest) {
-            errors.push((Throw.StaticTypeError(
-              '$1 is not a type',
-              Value('a tuple position without a default may not follow one with a default'),
-            ) as ThrowCompletion).Value as ObjectValue);
+            reportType('rt-type-required', node, '$1 is not a type', Value('a tuple position without a default may not follow one with a default'));
             return null;
           }
           if (sawRest && e.Initializer) {
-            errors.push((Throw.StaticTypeError(
-              '$1 is not a type',
-              Value('a tuple position with a default may not follow a rest'),
-            ) as ThrowCompletion).Value as ObjectValue);
+            reportType('rt-type-required', node, '$1 is not a type', Value('a tuple position with a default may not follow a rest'));
             return null;
           }
           if (e.Initializer) {
@@ -12811,10 +12738,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // string }` would be statically ordinary and dynamically
           // UNINHABITABLE.
           if (objectTypeKeys.has(key)) {
-            errors.push((Throw.StaticTypeError(
-              '$1 is already declared on this type',
-              typeof key === 'string' ? Value(key) : key,
-            ) as { Value: ObjectValue }).Value);
+            reportType('rt-duplicate-member', node, '$1 is already declared on this type', typeof key === 'string' ? Value(key) : key);
             continue;
           }
           objectTypeKeys.add(key);
@@ -13102,7 +13026,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const supplied = into.get(tp.Name);
         if (!supplied) {
           if (validation.complete && !tp.DefaultNode && !validation.mayInfer?.(tp.Name)) {
-            errors.push(Throw.StaticTypeError('the type parameter $1 is not determined by the arguments and has no default', Value(tp.Name)).Value as ObjectValue);
+            reportType('rt-generic-argument', root, 'the type parameter $1 is not determined by the arguments and has no default', Value(tp.Name));
           }
           continue;
         }
@@ -13141,7 +13065,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         scope.set(tp.Name, supplied);
         if (tp.Kind === 'value' && !tp.Variadic && !constrainedToType && supplied.Kind !== 'literal' && supplied.Kind !== 'parameter') {
-          errors.push(Throw.StaticTypeError('$1 requires a value argument', Value(tp.Name)).Value as ObjectValue);
+          reportType('rt-generic-argument', root, '$1 requires a value argument', Value(tp.Name));
         }
       }
     } finally {
@@ -13164,7 +13088,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const ref = a as { type?: string, TypeName?: { IdentifierReference?: { name?: string }, MemberNames?: readonly unknown[] }, TypeArguments?: unknown };
           const head = ref.type === 'TypeReference' && (ref.TypeName?.MemberNames?.length ?? 0) === 0 && !ref.TypeArguments ? ref.TypeName?.IdentifierReference?.name : undefined;
           if (head && !typeParameterInScope(head) && lookup(head) !== null) {
-            const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(`the value ${head}`), Value('a tuple or an array of stated extent, as a spread type argument')) as ThrowCompletion;
+            const completion = CreateTypeDiagnostic('rt-assignability', root, diagnosticPhase, '$1 is not assignable to $2', Value(`the value ${head}`), Value('a tuple or an array of stated extent, as a spread type argument')) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           }
           return;
@@ -13182,7 +13106,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // #sec-type-references: a spread of a DYNAMIC array cannot
           // say how many parameters it fills - a STATIC refusal, reported here
           // without the program running it.
-          const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(t)), Value('a tuple or an array of stated extent, as a spread type argument')) as ThrowCompletion;
+          const completion = CreateTypeDiagnostic('rt-assignability', root, diagnosticPhase, '$1 is not assignable to $2', Value(displayType(t)), Value('a tuple or an array of stated extent, as a spread type argument')) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
           return;
         } else {
@@ -13226,7 +13150,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // which for an imported or computed callee is past the point a Syntax
         // Error could be. The purely syntactic ones - one name twice in a list,
         // a name on an array type - are the parser's.
-        errors.push(Throw.StaticTypeError('$1', Value(messages[assigned.kind])).Value as ObjectValue);
+        reportType('rt-generic-argument', root, '$1', Value(messages[assigned.kind]));
       }
       return;
     }
@@ -13255,10 +13179,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           } as unknown as TypeRecord, [argument]);
           if (bad) {
             errors.push((bad.kind === 'not-generic'
-              ? Throw.StaticTypeError('$1 is not a generic declaration; $2 expects one taking $3 type arguments',
-                Value(displayType(bad.argument)), Value(bad.parameter), Value(String(bad.wanted)))
-              : Throw.StaticTypeError('$1 takes $2 type arguments; $3 expects one taking $4',
-                Value(displayType(bad.argument)), Value(String(bad.supplied)), Value(bad.parameter), Value(String(bad.wanted)))
+              ? CreateTypeDiagnostic('rt-generic-argument', root, diagnosticPhase, '$1 is not a generic declaration; $2 expects one taking $3 type arguments', Value(displayType(bad.argument)), Value(bad.parameter), Value(String(bad.wanted)))
+              : CreateTypeDiagnostic('rt-generic-argument', root, diagnosticPhase, '$1 takes $2 type arguments; $3 expects one taking $4', Value(displayType(bad.argument)), Value(String(bad.supplied)), Value(bad.parameter), Value(String(bad.wanted)))
             ).Value as ObjectValue);
             return;
           }
@@ -14203,8 +14125,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       problem = { field: '(a field)', type: 'a type with no layout' };
     }
     if (problem && problem !== 'unknown') {
-      errors.push(Throw.StaticTypeError('$1 cannot be split into columns: its field $2 has $3, and a field of no layout has nothing to split',
-        Value(displayType(element)), Value(problem.field), Value(problem.type === 'no annotation' ? 'no annotation' : `type ${problem.type}`)).Value as ObjectValue);
+      reportType('rt-layout', root, '$1 cannot be split into columns: its field $2 has $3, and a field of no layout has nothing to split', Value(displayType(element)), Value(problem.field), Value(problem.type === 'no annotation' ? 'no annotation' : `type ${problem.type}`));
     }
   };
 
@@ -14212,7 +14133,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (args.length !== 1) return;
     const argument = args[0]!;
     if (typeof argument === 'number') {
-      errors.push(Throw.StaticTypeError('the argument of Composite must be an object, tuple, array or interface type, and $1 is not', Value(`a literal type of number`)).Value as ObjectValue);
+      reportType('rt-composite-type', root, 'the argument of Composite must be an object, tuple, array or interface type, and $1 is not', Value(`a literal type of number`));
       return;
     }
     if (argument.Kind === 'any' || argument.Kind === 'parameter' || mentionsTypeParameter(argument)) return;
@@ -14221,7 +14142,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const shape = isInterface ? structureOf(argument) : argument;
     if (!shape || shape.Kind === 'any') return;
     if (shape.Kind !== 'object' && shape.Kind !== 'tuple' && shape.Kind !== 'array') {
-      errors.push(Throw.StaticTypeError('the argument of Composite must be an object, tuple, array or interface type, and $1 is not', Value(displayType(argument))).Value as ObjectValue);
+      reportType('rt-composite-type', root, 'the argument of Composite must be an object, tuple, array or interface type, and $1 is not', Value(displayType(argument)));
       return;
     }
     if (shape.Kind === 'object') {
@@ -14229,7 +14150,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (symbolKeyed) {
         const description = (symbolKeyed.key as SymbolValue).Description;
         const shown = description && description !== Value.undefined ? (description as JSStringValue).stringValue() : 'a symbol';
-        errors.push(Throw.StaticTypeError('the argument of Composite has the Symbol-keyed member $1, and a composite\'s keys are Strings', Value(`[${shown}]`)).Value as ObjectValue);
+        reportType('rt-composite-type', root, 'the argument of Composite has the Symbol-keyed member $1, and a composite\'s keys are Strings', Value(`[${shown}]`));
       }
     }
   };
@@ -14248,7 +14169,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const held = libraryName === 'WeakMap' ? 'keys' : libraryName === 'WeakSet' ? 'values' : 'target';
     const shown = typeof key === 'number' ? `a literal type of number` : displayType(key);
-    const completion = Throw.StaticTypeError('$1 cannot be held weakly, and $2 holds its $3 weakly', Value(shown), Value(libraryName), Value(held)) as ThrowCompletion;
+    const completion = CreateTypeDiagnostic('rt-weak-target', root, diagnosticPhase, '$1 cannot be held weakly, and $2 holds its $3 weakly', Value(shown), Value(libraryName), Value(held)) as ThrowCompletion;
     errors.push(completion.Value as ObjectValue);
   };
 
@@ -14362,13 +14283,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const base = source.Kind === 'literal' ? source.Base : source;
     if (base.Kind === 'primitive' && base.Name === 'string' && target.Kind === 'primitive'
       && isNumericTargetName(target.Name)) {
-      errors.push(Throw.StaticTypeError(
-        'a string is not a conversion source for $1; use its parse form', Value(displayType(target)),
-      ).Value as ObjectValue);
+      reportType('rt-explicit-conversion', root, 'a string is not a conversion source for $1; use its parse form', Value(displayType(target)));
     } else {
-      errors.push(Throw.StaticTypeError(
-        '$1 has no explicit conversion to $2', Value(displayType(source)), Value(displayType(target)),
-      ).Value as ObjectValue);
+      reportType('rt-explicit-conversion', root, '$1 has no explicit conversion to $2', Value(displayType(source)), Value(displayType(target)));
     }
   };
 
@@ -14380,7 +14297,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (problem === null) {
       return true;
     }
-    errors.push((Throw.StaticTypeError('$1', Value(problem)) as ThrowCompletion).Value as ObjectValue);
+    reportType('rt-vector-argument', root, '$1', Value(problem));
     return false;
   };
 
@@ -15129,7 +15046,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const asRecord = contextual as unknown as { Kind?: string, Name?: string, Arguments?: readonly unknown[] };
       const isVector = asRecord.Kind === 'primitive' && asRecord.Name === 'vector' && asRecord.Arguments?.length === 2;
       if (contextual.Kind !== 'nominal' && contextual.Kind !== 'array' && !isVector) {
-        errors.push((Throw.StaticTypeError('$1 is not constructible', Value(displayType(contextual))) as ThrowCompletion).Value as ObjectValue);
+        reportType('rt-constructor-required', node, '$1 is not constructible', Value(displayType(contextual)));
         return null;
       }
       targetTypedNewTypes.set(node as object, contextual);
@@ -15375,10 +15292,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const startOpen = r.RangeStartBound === 'open' ? 1n : 0n;
         const endOpen = r.RangeEndBound === 'open' ? 1n : 0n;
         const unbounded = !r.RangeEnd || isInfinity(r.RangeEnd);
-        const noUpperBound = () => report(Throw.StaticTypeError(
-          'this range has no upper bound, so it produces values that are not values of $1', shown) as ThrowCompletion);
-        const produces = (v: bigint) => report(Throw.StaticTypeError(
-          '$1 is not a value of $2, and this range produces it', Value(String(v)), shown) as ThrowCompletion);
+        const noUpperBound = () => report(CreateTypeDiagnostic('rt-range-value', node, diagnosticPhase, 'this range has no upper bound, so it produces values that are not values of $1', shown) as ThrowCompletion);
+        const produces = (v: bigint) => report(CreateTypeDiagnostic('rt-range-value', node, diagnosticPhase, '$1 is not a value of $2, and this range produces it', Value(String(v)), shown) as ThrowCompletion);
         if (fitIsInteger) {
           const bounds = (t: TypeRecord): [bigint, bigint] | null => {
             const w = (t as { Arguments: readonly (TypeRecord | number)[] }).Arguments[0];
@@ -15489,8 +15404,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
               const v = literalNumber(n);
               if (v !== null && Number.isFinite(v) && !Number.isFinite(wrapToType(v, fitElement) as number)) {
-                report(Throw.StaticTypeError('$1 overflows $2, so this range cannot hold it',
-                  Value(String(v)), shown) as ThrowCompletion);
+                report(CreateTypeDiagnostic('rt-range-value', node, diagnosticPhase, '$1 overflows $2, so this range cannot hold it', Value(String(v)), shown) as ThrowCompletion);
                 break;
               }
             }
@@ -15585,11 +15499,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         || (targetKind === 'nominal'
           && (contextual as { Declaration?: { type?: string } }).Declaration?.type === 'InterfaceDeclaration');
       if (noArraySatisfies) {
-        errors.push((Throw.StaticTypeError(
-          '$1 is not assignable to $2',
-          Value('an empty array'),
-          Value(displayType(contextual as TypeRecord)),
-        ) as { Value: ObjectValue }).Value);
+        reportType('rt-assignability', node, '$1 is not assignable to $2', Value('an empty array'), Value(displayType(contextual as TypeRecord)));
         return null;
       }
     }
@@ -15798,11 +15708,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               || (armObject?.IndexSignatures ?? []).some((ix) => keyAdmittedBy(key, ix.Key));
           });
           if (!declaredByAnyArm) {
-            errors.push((Throw.StaticTypeError(
-              '$1 is not declared by $2',
-              Value(key),
-              Value(displayType(contextual as TypeRecord)),
-            ) as { Value: ObjectValue }).Value);
+            reportType('rt-undeclared-member', node, '$1 is not declared by $2', Value(key), Value(displayType(contextual as TypeRecord)));
           }
         }
       }
@@ -15873,11 +15779,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const targetIsClass = contextual.Kind === 'nominal'
           && (contextual as { Declaration?: { type?: string } }).Declaration?.type === 'ClassDeclaration';
         if (targetIsClass) {
-          errors.push((Throw.StaticTypeError(
-            '$1 is not assignable to $2',
-            Value('an object literal'),
-            Value(displayType(contextual as TypeRecord)),
-          ) as { Value: ObjectValue }).Value);
+          reportType('rt-assignability', node, '$1 is not assignable to $2', Value('an object literal'), Value(displayType(contextual as TypeRecord)));
           return contextual;
         }
         // An INTERSECTION names itself and the member that rejected.
@@ -15922,16 +15824,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (literalHere) {
             const offending = intersectionArms.find((arm) => !IsAssignable(literalHere as TypeRecord, arm));
             if (offending) {
-              errors.push((Throw.StaticTypeError(
-                '$1 is not assignable to $2: it does not satisfy $3',
-                Value('an object literal'),
-                // The CANONICAL form, which is what `(type C)` and the run-time
-                // message both print - the arms are ordered by canonicalization,
-                // not by source, and a diagnostic that disagreed with the type's
-                // own display would be a third spelling of one type.
-                Value(displayType(CanonicalizeType(contextual as TypeRecord) as TypeRecord)),
-                Value(displayType(offending)),
-              ) as { Value: ObjectValue }).Value);
+              reportType('rt-assignability', node, '$1 is not assignable to $2: it does not satisfy $3', Value('an object literal'), Value(displayType(CanonicalizeType(contextual as TypeRecord) as TypeRecord)), Value(displayType(offending)));
               return contextual;
             }
           }
@@ -15992,7 +15885,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const num = digits.exponent >= 0 ? digits.significand * 10n ** BigInt(digits.exponent) : digits.significand;
           const den = digits.exponent >= 0 ? 1n : 10n ** BigInt(-digits.exponent);
           if (!rationalFitsType(num, den, contextual)) {
-            const completion = Throw.StaticTypeError('$1 is not in the range of $2', Value(text), Value(displayType(contextual))) as ThrowCompletion;
+            const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(text), Value(displayType(contextual))) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           }
           return contextual;
@@ -16129,7 +16022,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           folded = BigInt(wrapToType(folded, prim));
         }
         if (!foldedBigint && !fitsNumericType(folded, prim.Name, prim.Arguments)) {
-          const completion = Throw.StaticTypeError('$1 is not in the range of $2', Value(String(folded)), Value(displayType(contextual as TypeRecord))) as ThrowCompletion;
+          const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(String(folded)), Value(displayType(contextual as TypeRecord))) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
           return contextual;
         }
@@ -16166,7 +16059,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         foldedRationals.set(node, { ...rat, type: contextual as TypeRecord });
         // A folded constant is a literal of the type as much as a bare one is.
         if (!rationalFitsType(rat.num, rat.den, contextual as TypeRecord)) {
-          const completion = Throw.StaticTypeError('$1 is not in the range of $2', Value(`${rat.num}/${rat.den}`), Value(displayType(contextual as TypeRecord))) as ThrowCompletion;
+          const completion = CreateTypeDiagnostic('rt-numeric-range', node, diagnosticPhase, '$1 is not in the range of $2', Value(`${rat.num}/${rat.den}`), Value(displayType(contextual as TypeRecord))) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
         }
         return contextual;
@@ -16281,7 +16174,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const holder = group ? (group[0] as { parent?: object }).parent : undefined;
     if (!group || !holder || deferredCaseOperators.get(holder)?.has(key)) return;
     deferredCaseOperators.set(holder, new Set([...(deferredCaseOperators.get(holder) ?? []), key]));
-    const completion = Throw.StaticTypeError('$1', Value(`selecting a specialized case of \`operator ${key}\` is not supported yet; only a binary operator's right operand selects`)) as ThrowCompletion;
+    const completion = CreateTypeDiagnostic('rt-specialization-contract', root, diagnosticPhase, '$1', Value(`selecting a specialized case of \`operator ${key}\` is not supported yet; only a binary operator's right operand selects`)) as ThrowCompletion;
     errors.push(completion.Value as ObjectValue);
   };
   const operatorCalls = new WeakMap<object, ParseNode>();
@@ -16363,8 +16256,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (numericOperationUnavailable(operator, type)) {
       const at = erasedForJudgment(type)!;
       const error = at.Kind === 'primitive' && /^float(16|32|64|128)$/.test(at.Name)
-        ? Throw.StaticTypeError('this operator is not defined for a binary floating-point type')
-        : Throw.StaticTypeError('$1 is not defined for $2', Value(operator!), Value(displayType(type!)));
+        ? CreateTypeDiagnostic('rt-numeric-operator', root, diagnosticPhase, 'this operator is not defined for a binary floating-point type')
+        : CreateTypeDiagnostic('rt-numeric-operator', root, diagnosticPhase, '$1 is not defined for $2', Value(operator!), Value(displayType(type!)));
       errors.push(error.Value as ObjectValue);
     }
   };
@@ -16430,7 +16323,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const reportNumericUnion = (operator: string, left: Known, right?: Known, leftLiteral?: ParseNode | null, rightLiteral?: ParseNode | null): boolean => {
     if (!invalidNumericUnion(operator, left, right, leftLiteral, rightLiteral)) return false;
-    errors.push(Throw.StaticTypeError('numeric alternatives either use different numeric types and do not mix or do not define $1', Value(operator)).Value as ObjectValue);
+    reportType('rt-numeric-operator', leftLiteral, 'numeric alternatives either use different numeric types and do not mix or do not define $1', Value(operator));
     return true;
   };
 
@@ -16721,7 +16614,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const report = (message: string) => {
       if (reportedSelections.has(node)) return;
       reportedSelections.add(node);
-      errors.push((Throw.StaticTypeError('$1', Value(message)) as ThrowCompletion).Value as ObjectValue);
+      reportType('rt-parameter-kind', node, '$1', Value(message));
     };
     const valueArguments = ((node as { Arguments?: readonly { type?: string }[] }).Arguments ?? []);
     // A stored application has no call, so no count to filter by.
@@ -17090,7 +16983,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       step = advance(admitted);
     }
     if (patternError) {
-      errors.push((Throw.StaticTypeError('$1', Value(patternError.message)) as ThrowCompletion).Value as ObjectValue);
+      reportType('rt-specialization-contract', node, '$1', Value(patternError.message));
       return undefined;
     }
     const choice = step.value;
@@ -17223,7 +17116,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const bound = bindLibraryTypeArguments(name, arguments_, names);
     if (!bound) return null;
     if ('Error' in bound) {
-      errors.push(Throw.StaticTypeError('$1', Value(bound.Error)).Value as ObjectValue);
+      reportType('rt-generic-argument', root, '$1', Value(bound.Error));
       return null;
     }
     return bound.Arguments;
@@ -17265,7 +17158,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const elements = spreadElementsOf(type);
         if (!elements) {
           if (diagnose && vectorSpecialization(vector, specialized.method, [])) {
-            errors.push(Throw.StaticTypeError('$1', Value('a spread lane argument must be a tuple or an array of stated extent')).Value as ObjectValue);
+            reportType('rt-vector-argument', node, '$1', Value('a spread lane argument must be a tuple or an array of stated extent'));
           }
           return null;
         }
@@ -17277,10 +17170,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const resolved = vectorSpecialization(vector, specialized.method, indices);
     if (!resolved) return null;
     if (diagnose) {
-      if (resolved.error) errors.push(Throw.StaticTypeError('$1', Value(resolved.error)).Value as ObjectValue);
+      if (resolved.error) reportType('rt-vector-argument', node, '$1', Value(resolved.error));
       if (resolved.argument) {
         const args = expandValueSpreads(node.Arguments ?? []);
-        if (args[0]?.type !== 'AssignmentRestElement') requireAssignable(args[0] ? staticTypeIn(args[0], resolved.argument) : undefinedType, resolved.argument);
+        if (args[0]?.type !== 'AssignmentRestElement') requireAssignable(args[0] ? staticTypeIn(args[0], resolved.argument) : undefinedType, resolved.argument, node as ParseNode);
       }
     }
     return resolved.result;
@@ -17460,8 +17353,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // Name the operator and the type, as TypeScript's "Operator '+' cannot
           // be applied to type 'bigint'" and mypy's "Unsupported operand type
           // for unary +" do; the shared message named neither.
-          () => Throw.StaticTypeError('unary $1 cannot be applied to a value of type $2',
-            Value(unary.operator as string), Value(displayType(operand as TypeRecord))) as ThrowCompletion)) return neverType;
+          () => CreateTypeDiagnostic('rt-numeric-operator', node, diagnosticPhase, 'unary $1 cannot be applied to a value of type $2', Value(unary.operator as string), Value(displayType(operand as TypeRecord))) as ThrowCompletion)) return neverType;
         if (unary.operator === '!') return operand && operand.Kind !== 'any' && operand.Kind !== 'union'
           && operand.Kind !== 'intersection' && operand.Kind !== 'object' ? makePrimitive('boolean') : null;
         if (unary.operator && reportNumericUnion(unary.operator, operand)) return neverType;
@@ -17516,7 +17408,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (base?.Kind === 'primitive' && base.Name === 'complex') {
           if (!undefinedUpdateReported.has(node)) {
             undefinedUpdateReported.add(node);
-            errors.push(Throw.StaticTypeError('$1 is not defined for $2', Value(node.operator), Value(displayType(operand as TypeRecord))).Value as ObjectValue);
+            reportType('rt-numeric-operator', node, '$1 is not defined for $2', Value(node.operator), Value(displayType(operand as TypeRecord)));
           }
           return numeric;
         }
@@ -17597,7 +17489,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const lengthRead = isObjectOf && parent!.Expression == null && parent!.IdentifierName?.name === 'length';
             const forwarded = parent?.type === 'AssignmentRestElement';
             if (!constantIndex && !lengthRead && !forwarded) {
-              const completion = Throw.StaticTypeError('$1', Value(`a ref rest binds no array: ${referenced} is usable only as ${referenced}[k] with a constant k, ${referenced}.length, or ...${referenced} forwarded to another ref rest`)) as ThrowCompletion;
+              const completion = CreateTypeDiagnostic('rt-reference-permission', node, diagnosticPhase, '$1', Value(`a ref rest binds no array: ${referenced} is usable only as ${referenced}[k] with a constant k, ${referenced}.length, or ...${referenced} forwarded to another ref rest`)) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
             break;
@@ -17707,7 +17599,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // checker cannot see. Only once every argument resolves: an
             // argument that names nothing is reported as that, and reported
             // first, since it is the nearer mistake.
-            errors.push(Throw.StaticTypeError('$1 is not generic and takes no type arguments', Value((bare as { name: string }).name)).Value as ObjectValue);
+            reportType('rt-generic-argument', node, '$1 is not generic and takes no type arguments', Value((bare as { name: string }).name));
           }
           return base;
         }
@@ -17725,14 +17617,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           && base.Kind !== 'function' && base.Kind !== 'any' && base.Kind !== 'parameter' && base.Kind !== 'deferred'
           && !(base.Kind === 'primitive' && (base as { Name?: string }).Name === 'type')
           && !mentionsTypeParameter(base)) {
-          errors.push(Throw.StaticTypeError('$1 is not generic and takes no type arguments', Value(displayType(base))).Value as ObjectValue);
+          reportType('rt-generic-argument', node, '$1 is not generic and takes no type arguments', Value(displayType(base)));
           return base;
         }
         if (base?.Kind !== 'function') return base;
         if (base.Signatures.every((signature) => !signature.TypeParameters?.length)) {
           // Library applications and type constructors have their own resolver.
           const named = bare?.type === 'IdentifierReference' ? bare.name : null;
-          if (!named || lookup(named) !== null) errors.push(Throw.StaticTypeError('type arguments require a generic function').Value as ObjectValue);
+          if (!named || lookup(named) !== null) reportType('rt-generic-argument', node, 'type arguments require a generic function');
           return base;
         }
         let parent = node.parent;
@@ -17824,10 +17716,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // "`for`-`of`, SPREAD, and array destructuring" alike), and a record
             // composite throws one step later from the operation that can tell.
             if (notIterable(spread)) {
-              const completion = Throw.StaticTypeError(
-                'a value of $1 is not iterable',
-                Value(displayType(spread as TypeRecord)),
-              ) as ThrowCompletion;
+              const completion = CreateTypeDiagnostic('rt-iterable-required', node, diagnosticPhase, 'a value of $1 is not iterable', Value(displayType(spread as TypeRecord))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
             t = StaticIterationContribution(spread, structureOf).element;
@@ -17943,7 +17832,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const argType = staticType(a);
               if (argType && argType.Kind !== 'any' && !typeCanBeHeldWeakly(argType as TypeRecord)) {
                 const held = lib === 'WeakMap' ? 'keys' : lib === 'WeakSet' ? 'values' : 'target';
-                const completion = Throw.StaticTypeError('$1 cannot be held weakly, and $2 holds its $3 weakly', Value(displayType(argType as TypeRecord)), Value(lib!), Value(held)) as ThrowCompletion;
+                const completion = CreateTypeDiagnostic('rt-weak-target', node, diagnosticPhase, '$1 cannot be held weakly, and $2 holds its $3 weakly', Value(displayType(argType as TypeRecord)), Value(lib!), Value(held)) as ThrowCompletion;
                 errors.push(completion.Value as ObjectValue);
               }
             }
@@ -18232,7 +18121,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                       const spreadType = staticType((a as unknown as { AssignmentExpression: ParseNode }).AssignmentExpression);
                       const ext = (spreadType as { Extent?: number | string } | null)?.Extent;
                       if (spreadType && spreadType.Kind === 'array' && typeof ext !== 'number') {
-                        const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(spreadType)), Value(`a spread of statically known length, which binding the pack ${restType.Name} requires`)) as ThrowCompletion;
+                        const completion = CreateTypeDiagnostic('rt-assignability', node, diagnosticPhase, '$1 is not assignable to $2', Value(displayType(spreadType)), Value(`a spread of statically known length, which binding the pack ${restType.Name} requires`)) as ThrowCompletion;
                         errors.push(completion.Value as ObjectValue);
                       }
                     }
@@ -18730,11 +18619,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 return indexTypeRecord();
               }
               if (spanForbiddenMembers.has(name)) {
-                const completion = Throw.StaticTypeError(
-                  '$1 is not declared by $2',
-                  Value(name),
-                  Value(displayType(receiver!)),
-                ) as ThrowCompletion;
+                const completion = CreateTypeDiagnostic('rt-undeclared-member', node, diagnosticPhase, '$1 is not declared by $2', Value(name), Value(displayType(receiver!))) as ThrowCompletion;
                 errors.push(completion.Value as ObjectValue);
                 return null;
               }
@@ -18910,11 +18795,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const spanIndex = singletonTupleIndex(m.Expression);
             if (spanExtent !== undefined && spanIndex !== null
                 && ((typeof spanIndex === 'number' && !Number.isInteger(spanIndex)) || spanIndex < 0 || Number(spanIndex) >= spanExtent)) {
-              const completion = Throw.StaticTypeError(
-                '$1 is not an index of $2',
-                Value(String(spanIndex)),
-                Value(displayType(receiver!)),
-              ) as ThrowCompletion;
+              const completion = CreateTypeDiagnostic('rt-index-signature', node, diagnosticPhase, '$1 is not an index of $2', Value(String(spanIndex)), Value(displayType(receiver!))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
             return spanElement;
@@ -18935,11 +18816,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const index = singletonTupleIndex(m.Expression);
             if (!isDeleteOperand && index !== null && typeof receiver.Extent === 'number'
                 && ((typeof index === 'number' && !Number.isInteger(index)) || index < 0 || Number(index) >= receiver.Extent)) {
-              const completion = Throw.StaticTypeError(
-                '$1 is not an index of $2',
-                Value(String(index)),
-                Value(displayType(receiver)),
-              ) as ThrowCompletion;
+              const completion = CreateTypeDiagnostic('rt-index-signature', node, diagnosticPhase, '$1 is not an index of $2', Value(String(index)), Value(displayType(receiver))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
             return receiver.Element;
@@ -18957,9 +18834,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (!isDeleteOperand && index !== null) {
               if ((typeof index === 'number' && !Number.isInteger(index)) || index < 0
                   || (restAt === -1 && index >= fixed)) {
-                const completion = Throw.StaticTypeError(
-                  '$1 is not an index of $2', Value(String(index)), Value(displayType(receiver)),
-                ) as ThrowCompletion;
+                const completion = CreateTypeDiagnostic('rt-index-signature', node, diagnosticPhase, '$1 is not an index of $2', Value(String(index)), Value(displayType(receiver))) as ThrowCompletion;
                 errors.push(completion.Value as ObjectValue);
                 return null;
               }
@@ -19047,7 +18922,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // is known here; a value type, a literal, or a typed class is
               // refused at the `new` rather than when it runs.
               if (referent && !typeCanBeHeldWeakly(widen(referent) as TypeRecord)) {
-                const completion = Throw.StaticTypeError('$1 cannot be held weakly, and $2 holds its $3 weakly', Value(displayType(widen(referent) as TypeRecord)), Value('WeakRef'), Value('target')) as ThrowCompletion;
+                const completion = CreateTypeDiagnostic('rt-weak-target', node, diagnosticPhase, '$1 cannot be held weakly, and $2 holds its $3 weakly', Value(displayType(widen(referent) as TypeRecord)), Value('WeakRef'), Value('target')) as ThrowCompletion;
                 errors.push(completion.Value as ObjectValue);
               }
               return referent
@@ -19227,12 +19102,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   }
                   const constraint = resolveType(q.TypeParameterConstraint);
                   if (constraint && !IsAssignable(argument, constraint)) {
-                    errors.push((Throw.StaticTypeError(
-                      '$1 is not assignable to $2, the constraint of $3',
-                      Value(displayType(argument)),
-                      Value(displayType(constraint)),
-                      Value(q.BindingIdentifier?.name ?? '?'),
-                    ) as ThrowCompletion).Value as ObjectValue);
+                    reportType('rt-generic-constraint', node, '$1 is not assignable to $2, the constraint of $3', Value(displayType(argument)), Value(displayType(constraint)), Value(q.BindingIdentifier?.name ?? '?'));
                   }
                 }
                 // A NUMERIC argument is a value, not a literal type. The
@@ -19296,7 +19166,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                     };
                     const checked = keyOfPair(element);
                     if (checked && checked.Kind !== 'any' && !typeCanBeHeldWeakly(checked as TypeRecord)) {
-                      const completion = Throw.StaticTypeError('$1 cannot be held weakly, and $2 holds its $3 weakly', Value(displayType(checked as TypeRecord)), Value(specName), Value(specName === 'WeakMap' ? 'keys' : 'values')) as ThrowCompletion;
+                      const completion = CreateTypeDiagnostic('rt-weak-target', node, diagnosticPhase, '$1 cannot be held weakly, and $2 holds its $3 weakly', Value(displayType(checked as TypeRecord)), Value(specName), Value(specName === 'WeakMap' ? 'keys' : 'values')) as ThrowCompletion;
                       errors.push(completion.Value as ObjectValue);
                     }
                   }
@@ -19482,8 +19352,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             && !literalOperandType(operandTypes[0]) && !literalOperandType(operandTypes[1])
             && (classPair || AreDisjoint(operandTypes[0] as TypeRecord, operandTypes[1] as TypeRecord)
               || closedSetsDisjoint(operandTypes[0] as TypeRecord, operandTypes[1] as TypeRecord))) {
-          const completion = Throw.StaticTypeError('$1 and $2 are disjoint, so this comparison is always $3', Value(displayType(operandTypes[0] as TypeRecord)), Value(displayType(operandTypes[1] as TypeRecord)), Value(strictOperator === '===' ? 'false' : 'true')) as ThrowCompletion;
-          errors.push(completion.Value as ObjectValue);
+          reportType('rt-disjoint-comparison', node, '$1 and $2 are disjoint, so this comparison is always $3', Value(displayType(operandTypes[0] as TypeRecord)), Value(displayType(operandTypes[1] as TypeRecord)), Value(strictOperator === '===' ? 'false' : 'true'));
         }
         // TWO DIFFERENT NUMERIC TYPES DO NOT COMPARE. Spec 3149 makes it a type
         // error when the operands of "an arithmetic, bitwise, shift, or
@@ -19533,20 +19402,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             && (operandTypes[1] as { Name?: string }).Name === 'vector'
             ? operandTypes[1] as TypeRecord : null;
           if (lvv && rvv && !SameType(lvv, rvv)) {
-            const completion = Throw.StaticTypeError(
-              '$1 and $2 are different numeric types and do not mix',
-              Value(displayType(lvv)), Value(displayType(rvv)),
-            ) as ThrowCompletion;
+            const completion = CreateTypeDiagnostic('rt-numeric-operator', node, diagnosticPhase, '$1 and $2 are different numeric types and do not mix', Value(displayType(lvv)), Value(displayType(rvv))) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           }
           if (lvc && rvc && !ordinaryNumericOrdering(strictOperator, lvc, rvc) && !SameType(lvc, rvc)
               // A block's comparison for the pair is its meaning, and the run
               // time dispatches it as it dispatches arithmetic.
               && bodylessResult(strictOperator, lvc, rvc, true, node) === undefined) {
-            const completion = Throw.StaticTypeError(
-              '$1 and $2 are different numeric types and do not mix',
-              Value(displayType(lvc)), Value(displayType(rvc)),
-            ) as ThrowCompletion;
+            const completion = CreateTypeDiagnostic('rt-numeric-operator', node, diagnosticPhase, '$1 and $2 are different numeric types and do not mix', Value(displayType(lvc)), Value(displayType(rvc))) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           }
         }
@@ -19655,14 +19518,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // `uint8(256)` is the distance 0 it is at run time and not 256.
             const distance = exactIntegerOperand(rightNode);
             if (distance !== null && (op === '/' || op === '%') && distance === 0n) {
-              errors.push((Throw.StaticTypeError('a literal zero divisor is not a division at $1', Value(displayType(operandType!))) as ThrowCompletion).Value as ObjectValue);
+              reportType('rt-zero-divisor', node, 'a literal zero divisor is not a division at $1', Value(displayType(operandType!)));
             }
             if (distance !== null && node.type === 'ShiftExpression') {
               const bits = (operandType as { Arguments?: readonly (TypeRecord | number)[] }).Arguments?.[0];
               if (distance < 0n) {
-                errors.push((Throw.StaticTypeError('a shift distance of $1 is negative', Value(String(distance))) as ThrowCompletion).Value as ObjectValue);
+                reportType('rt-shift-distance', node, 'a shift distance of $1 is negative', Value(String(distance)));
               } else if (typeof bits === 'number' && distance >= BigInt(bits)) {
-                errors.push((Throw.StaticTypeError('a shift distance of $1 shifts every bit out of $2', Value(String(distance)), Value(displayType(operandType!))) as ThrowCompletion).Value as ObjectValue);
+                reportType('rt-shift-distance', node, 'a shift distance of $1 shifts every bit out of $2', Value(String(distance)), Value(displayType(operandType!)));
               }
             }
           }
@@ -19768,10 +19631,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             && (t as { Name?: string }).Name === 'vector';
           if (isVector(leftT) && isVector(rightT)
             && !SameType(leftT as TypeRecord, rightT as TypeRecord)) {
-            const completion = Throw.StaticTypeError(
-              '$1 and $2 are different numeric types and do not mix',
-              Value(displayType(leftT as TypeRecord)), Value(displayType(rightT as TypeRecord)),
-            ) as ThrowCompletion;
+            const completion = CreateTypeDiagnostic('rt-numeric-operator', node, diagnosticPhase, '$1 and $2 are different numeric types and do not mix', Value(displayType(leftT as TypeRecord)), Value(displayType(rightT as TypeRecord))) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           }
           // A vector block's bodyless definition gives the lane-wise result its
@@ -19802,10 +19662,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const scalar = numericBaseOf(scalarSide);
             if (lane && scalar && !SameType(lane, scalar)
                 && bodylessResult(token, leftT as TypeRecord, rightT as TypeRecord, false, node) === undefined) {
-              errors.push((Throw.StaticTypeError(
-                '$1 and $2 are different numeric types and do not mix',
-                Value(displayType(leftT as TypeRecord)), Value(displayType(rightT as TypeRecord)),
-              ) as ThrowCompletion).Value as ObjectValue);
+              reportType('rt-numeric-operator', node, '$1 and $2 are different numeric types and do not mix', Value(displayType(leftT as TypeRecord)), Value(displayType(rightT as TypeRecord)));
             }
           }
         }
@@ -19833,7 +19690,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const fraction = exact === null ? fractionalLiteralValue(lit) : null;
             const prim = t as TypeRecord & { Name: string, Arguments: readonly (TypeRecord | number)[] };
             if ((exact !== null && !fitsNumericType(exact, prim.Name, prim.Arguments)) || fraction !== null) {
-              const completion = Throw.StaticTypeError('$1 is not in the range of $2', Value(String(exact ?? fraction)), Value(displayType(t))) as ThrowCompletion;
+              const completion = CreateTypeDiagnostic('rt-numeric-range', lit, diagnosticPhase, '$1 is not in the range of $2', Value(String(exact ?? fraction)), Value(displayType(t))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
           }
@@ -19929,8 +19786,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           const metadata = MetadataMismatchDescription(lv, rv);
           const completion = (metadata === undefined
-            ? Throw.StaticTypeError('$1 and $2 are different numeric types and do not mix', Value(displayType(lv)), Value(displayType(rv)))
-            : Throw.StaticTypeError('$1', metadata)) as ThrowCompletion;
+            ? CreateTypeDiagnostic('rt-numeric-operator', node, diagnosticPhase, '$1 and $2 are different numeric types and do not mix', Value(displayType(lv)), Value(displayType(rv)))
+            : CreateTypeDiagnostic('rt-unclaimed-metadata', node, diagnosticPhase, '$1', metadata)) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
           return lv;
         }
@@ -20021,12 +19878,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const wanted = candidates.reduce<Known>((joined, type) => joined ? joinTypes(joined, type) : type, null);
         if (spread) {
           const contribution = StaticIterationContribution(staticType(element.AssignmentExpression), structureOf);
-          requireAssignable(contribution.element, wanted);
+          requireAssignable(contribution.element, wanted, node as ParseNode);
           uncertain = true;
         } else {
           const fixedPosition = target.Elements[minimumPosition];
           const position = uncertain ? wanted : fixedPosition?.Rest ? restElementType(fixedPosition.Type) : fixedPosition?.Type ?? wanted;
-          requireAssignable(element.type === 'Elision' ? undefinedType : staticTypeIn(element, position), position);
+          requireAssignable(element.type === 'Elision' ? undefinedType : staticTypeIn(element, position), position, node as ParseNode);
           minimumPosition += 1;
         }
       }
@@ -20089,7 +19946,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ? fixed[i]!.Type as Known
         : (restIndex === -1 ? null : restElementType(target.Elements[restIndex]!.Type) as Known);
       if (position) {
-        requireAssignable(el.type === 'Elision' ? undefinedType : staticTypeIn(el as ParseNode, position), position);
+        requireAssignable(el.type === 'Elision' ? undefinedType : staticTypeIn(el as ParseNode, position), position, node as ParseNode);
       }
     });
     for (const position of fixed.slice(elements.length)) {
@@ -20134,17 +19991,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const operand = (el as ParseNode.SpreadElement).AssignmentExpression;
         checkRangeAtElement(operand, target.Element);
         const contribution = StaticIterationContribution(staticType(operand), structureOf);
-        requireAssignable(contribution.element, target.Element);
+        requireAssignable(contribution.element, target.Element, node as ParseNode);
         walk(el as ParseNode);
         continue;
       }
       if ((el as ParseNode).type === 'Elision') {
         count += 1;
-        requireAssignable(undefinedType, target.Element);
+        requireAssignable(undefinedType, target.Element, node as ParseNode);
         continue;
       }
       count += 1;
-      requireAssignable(staticTypeIn(el as ParseNode, target.Element), target.Element);
+      requireAssignable(staticTypeIn(el as ParseNode, target.Element), target.Element, node as ParseNode);
       walk(el as ParseNode);
     }
     // "A fixed extent `[N].<T>` requires the literal to have length N", which
@@ -20205,8 +20062,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (typeof wanted.key !== 'string' && !MissingLiteralSymbol(root, node, wanted.key, surroundingAgent.currentRealmRecord)) continue;
           const shown = typeof wanted.key === 'string' ? wanted.key
             : `[${wanted.key.Description === Value.undefined ? 'Symbol' : (wanted.key.Description as JSStringValue).stringValue()}]`;
-          errors.push(Throw.StaticTypeError('$1 is required by $2 and is not supplied',
-            Value(shown), Value(displayType(target))).Value as ObjectValue);
+          reportType('rt-required-member', node, '$1 is required by $2 and is not supplied', Value(shown), Value(displayType(target)));
           break;
         }
       }
@@ -20268,7 +20124,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const wantedForMethod = propertyContract(methodKey);
           const sourceShape = objectLiteralShape(node);
           const sourceMethod = sourceShape?.Kind === 'object' ? sourceShape.Properties.find((prop) => prop.key === methodKey)?.type : null;
-          if (wantedForMethod && sourceMethod) requireAssignable(sourceMethod, wantedForMethod.type);
+          if (wantedForMethod && sourceMethod) requireAssignable(sourceMethod, wantedForMethod.type, node as ParseNode);
           // FRESHNESS, which this branch compared signatures without ever
           // applying. #sec-literal-freshness makes "an own PROPERTY the expected
           // type neither declares nor admits through an index signature" an
@@ -20280,9 +20136,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // The same two tests the data case below makes, in the same order.
           if (fresh && wantedForMethod === undefined
               && !target.IndexSignatures.some((ix) => keyAdmittedBy(methodKey, ix.Key))) {
-            errors.push((Throw.StaticTypeError(
-              '$1 is not declared by $2', Value(methodKey), Value(displayType(target)),
-            ) as ThrowCompletion).Value as ObjectValue);
+            reportType('rt-undeclared-member', node, '$1 is not declared by $2', Value(methodKey), Value(displayType(target)));
           }
           const wantedKind = (wantedForMethod?.type as { Kind?: string, Members?: readonly unknown[] } | undefined);
           const wantedIsNever = wantedKind?.Kind === 'union' && (wantedKind.Members ?? []).length === 0;
@@ -20303,11 +20157,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const wantedIsIntersection = wantedKind?.Kind === 'intersection'
             && (wantedKind.Members ?? []).length > 1;
           if (wantedForMethod && (wantedIsNever || wantedIsIntersection)) {
-            errors.push((Throw.StaticTypeError(
-              '$1 is not assignable to $2',
-              Value('a method'),
-              Value(displayType(wantedForMethod.type)),
-            ) as { Value: ObjectValue }).Value);
+            reportType('rt-assignability', node, '$1 is not assignable to $2', Value('a method'), Value(displayType(wantedForMethod.type)));
           }
         }
         walk(member as ParseNode);
@@ -20315,7 +20165,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       if (member.type === 'IdentifierReference') {
         const wanted = propertyContract(member.name);
-        if (wanted) requireAssignable(staticType(member), wanted.type);
+        if (wanted) requireAssignable(staticType(member), wanted.type, node as ParseNode);
       }
       if (!member || (member as ParseNode).type !== 'PropertyDefinition') {
         walk(member as ParseNode);
@@ -20352,11 +20202,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             const declaredHere = propertyContract(sp.key);
             if (declaredHere?.type && !IsAssignable(sp.type, declaredHere.type)) {
-              errors.push((Throw.StaticTypeError(
-                '$1 is not assignable to $2',
-                Value(displayType(sp.type)),
-                Value(displayType(declaredHere.type)),
-              ) as { Value: ObjectValue }).Value);
+              reportType('rt-assignability', node, '$1 is not assignable to $2', Value(displayType(sp.type)), Value(displayType(declaredHere.type)));
               break;
             }
           }
@@ -20368,9 +20214,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             );
             if (declaredForSpread === undefined
               && !target.IndexSignatures.some((ix) => keyAdmittedBy(sp.key, ix.Key))) {
-              errors.push((Throw.StaticTypeError(
-                '$1 is not declared by $2', Value(sp.key), Value(displayType(target as TypeRecord)),
-              ) as { Value: ObjectValue }).Value);
+              reportType('rt-undeclared-member', node, '$1 is not declared by $2', Value(sp.key), Value(displayType(target as TypeRecord)));
               break;
             }
           }
@@ -20412,7 +20256,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // marker stays the marker for every comparison; only the reading site
         // sees a structure.
         contextualThisOwners.set(def.AssignmentExpression, target as Known);
-        requireAssignable(staticTypeIn(def.AssignmentExpression, declared.type), declared.type);
+        requireAssignable(staticTypeIn(def.AssignmentExpression, declared.type), declared.type, node as ParseNode);
       }
       // #sec-literal-freshness: "an own property the expected type neither
       // declares nor admits through an index signature is a type error,
@@ -20429,7 +20273,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (fresh && declared === undefined && key !== undefined
           && !target.IndexSignatures.some((ix) => keyAdmittedBy(key, ix.Key))) {
         const shown = typeof key === 'string' ? Value(key) : key;
-        const completion = Throw.StaticTypeError('$1 is not declared by $2', shown, Value(displayType(target))) as ThrowCompletion;
+        const completion = CreateTypeDiagnostic('rt-undeclared-member', node, diagnosticPhase, '$1 is not declared by $2', shown, Value(displayType(target))) as ThrowCompletion;
         errors.push(completion.Value as ObjectValue);
       }
       if (def.AssignmentExpression) {
@@ -21087,7 +20931,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           inferenceDepth -= 1;
         }
       }
-      if (read && write && !mentionsTypeParameter(read) && !mentionsTypeParameter(write)) requireAssignable(read, write);
+      if (read && write && !mentionsTypeParameter(read) && !mentionsTypeParameter(write)) requireAssignable(read, write, node as ParseNode);
     }
   };
 
@@ -22112,8 +21956,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // it is always truthy, even where #sec-static-iteration-contribution gives
     // it no Static Type.
     if (!t && core.type === 'ArrayLiteral') {
-      errors.push(Throw.StaticTypeError('a value of $1 is always $2, so the branch it guards is dead code',
-        Value('an array literal'), Value('truthy')).Value as ObjectValue);
+      reportType('rt-constant-condition', test, 'a value of $1 is always $2, so the branch it guards is dead code', Value('an array literal'), Value('truthy'));
       return;
     }
     // #sec-narrowfrom: an untagged template literal with non-empty text is a
@@ -22123,13 +21966,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const lengths = exactLengthsOf(core);
     if (lengths && (lengths.every((l) => l !== 0) || lengths.every((l) => l === 0))) {
       const truthy = lengths[0] !== 0;
-      errors.push(Throw.StaticTypeError('a value of $1 is always $2, so the branch it guards is dead code',
-        Value(`a length of ${lengths.join(' or ')}`), Value(truthy ? 'truthy' : 'falsy')).Value as ObjectValue);
+      reportType('rt-constant-condition', test, 'a value of $1 is always $2, so the branch it guards is dead code', Value(`a length of ${lengths.join(' or ')}`), Value(truthy ? 'truthy' : 'falsy'));
       return;
     }
     if (core.type === 'TemplateLiteral' && templateAlwaysTruthy(core)) {
-      errors.push(Throw.StaticTypeError('a value of $1 is always $2, so the branch it guards is dead code',
-        Value('a template with text'), Value('truthy')).Value as ObjectValue);
+      reportType('rt-constant-condition', test, 'a value of $1 is always $2, so the branch it guards is dead code', Value('a template with text'), Value('truthy'));
       return;
     }
     if (!t || t.Kind === 'any') return;
@@ -22137,8 +21978,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!judged) return;
     const settled = scalarTruth(narrowableName(core) ?? NON_PATH, judged);
     if (settled === undefined) return;
-    errors.push(Throw.StaticTypeError('a value of $1 is always $2, so the branch it guards is dead code',
-      Value(displayType(t)), Value(settled ? 'truthy' : 'falsy')).Value as ObjectValue);
+    reportType('rt-constant-condition', test, 'a value of $1 is always $2, so the branch it guards is dead code', Value(displayType(t)), Value(settled ? 'truthy' : 'falsy'));
   };
 
   /**
@@ -22146,18 +21986,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * test can never succeed or can never fail. Compound tests judge their
    * operands under the corresponding incoming facts.
    */
-  const judgeFact = (fact: NarrowingFact): void => {
+  const judgeFact = (fact: NarrowingFact, site: ParseNode): void => {
     // A parameterization is met by its meta type's hook, which runs after type
     // evaluation; the test is judged again then (#table-meta-hooks).
     if (!afterTypeEvaluation && fact.type?.Kind === 'parameterized') deferredGuardChecks.add(root);
     const { source } = branchTypes(fact);
     if (source.Kind === 'any') return;
     if (scalarFactExcluded(fact)) {
-      pushImpossibleTest(excludedByFact(fact).negated ? 'never-fails' : 'never-succeeds', fact.display ?? displayType(fact.type));
+      pushImpossibleTest(excludedByFact(fact).negated ? 'never-fails' : 'never-succeeds', fact.display ?? displayType(fact.type), site);
       return;
     }
     if (fact.verdict) {
-      pushImpossibleTest(fact.verdict, fact.display ?? displayType(fact.type));
+      pushImpossibleTest(fact.verdict, fact.display ?? displayType(fact.type), site);
       return;
     }
     let verdict: 'never-succeeds' | 'never-fails' | null;
@@ -22174,13 +22014,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       verdict = impossibleVerdict(source, fact.type, fact.excluded ?? fact.type);
     }
     if (!verdict) {
-      if (!fact.pattern) recordNarrowingMeet(source as TypeRecord, fact.type, fact.display ?? displayType(fact.type), !!fact.negated);
+      if (!fact.pattern) recordNarrowingMeet(source as TypeRecord, fact.type, fact.display ?? displayType(fact.type), !!fact.negated, site);
       return;
     }
     // The verdict is about the test as written: `!` and `!==` swap which
     // branch is the dead one.
     const written = fact.negated ? (verdict === 'never-succeeds' ? 'never-fails' : 'never-succeeds') : verdict;
-    pushImpossibleTest(written, fact.display ?? displayType(fact.type));
+    pushImpossibleTest(written, fact.display ?? displayType(fact.type), site);
   };
 
   const unparenthesized = (node: ParseNode): ParseNode => {
@@ -23306,8 +23146,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const narrowed = NarrowTo(source, fact.type);
       if (narrowed === empty) {
         if (impossibleVerdict(source, fact.type) === 'never-succeeds') {
-          errors.push(Throw.StaticTypeError('the $1 assertion can never succeed, so the code it dominates is dead',
-            Value(displayType(fact.type))).Value as ObjectValue);
+          reportType('rt-impossible-assertion', expression, 'the $1 assertion can never succeed, so the code it dominates is dead', Value(displayType(fact.type)));
         }
         continue;
       }
@@ -23790,7 +23629,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const origins: CapturedPlace[] = [];
     if (visit) {
       const receiver = staticType(node.MemberExpression);
-      if (receiver) reportImpossibleTest(receiver, nullishType(), '?.', true);
+      if (receiver) reportImpossibleTest(receiver, nullishType(), '?.', true, node);
     }
     const view = optionalChainView(node, visit, skipped, true, origins);
     const clearAccessors = () => {
@@ -23861,7 +23700,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!live) return { whenTrue: undefined, whenFalse: undefined };
     if (!canon) return result;
     if (repeated !== undefined && errors.length === errorsBefore) {
-      pushImpossibleTest(repeated ? 'never-fails' : 'never-succeeds', canon.key);
+      pushImpossibleTest(repeated ? 'never-fails' : 'never-succeeds', canon.key, test);
     }
     const resume = flowLive ? captureFlow() : undefined;
     const record = (facts: FlowFacts | undefined, outcome: boolean): FlowFacts | undefined => {
@@ -24019,7 +23858,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const origins: CapturedPlace[] = [];
       if (visit) {
         const receiver = staticType(test.MemberExpression);
-        if (receiver) reportImpossibleTest(receiver, nullishType(), '?.', true);
+        if (receiver) reportImpossibleTest(receiver, nullishType(), '?.', true, test);
       }
       const view = optionalChainView(test, visit, skipped, true, origins);
       // The chain has already visited its callee, arguments and keys. Judge
@@ -24068,9 +23907,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const arrayLiteral = !type && unparenthesized(left)?.type === 'ArrayLiteral';
       const templateLiteral = unparenthesized(left)?.type === 'TemplateLiteral' && templateAlwaysTruthy(unparenthesized(left));
       const judgedLeft = type ? judgedType(type) : null;
-      if (visit && ((judgedLeft && scalarTruth(narrowableName(left) ?? NON_PATH, judgedLeft) === isOr) || ((arrayLiteral || templateLiteral) && isOr))) errors.push(Throw.StaticTypeError(
-        'the right operand of $1 can never be evaluated, so it is dead code', Value(isOr ? '||' : '&&'),
-      ).Value as ObjectValue);
+      if (visit && ((judgedLeft && scalarTruth(narrowableName(left) ?? NON_PATH, judgedLeft) === isOr) || ((arrayLiteral || templateLiteral) && isOr))) reportType('rt-unreachable-operand', test, 'the right operand of $1 can never be evaluated, so it is dead code', Value(isOr ? '||' : '&&'));
       const first = walkTest(left, visit, false, visit);
       resumeFlow(isOr ? first.whenFalse : first.whenTrue);
       const second = walkTest(right, deciding, truthiness, visit);
@@ -24082,7 +23919,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const left = test.CoalesceExpressionHead;
       const right = test.BitwiseORExpression;
       const source = staticType(left);
-      if (visit && source) reportImpossibleTest(source, nullishType(), '??', true);
+      if (visit && source) reportImpossibleTest(source, nullishType(), '??', true, test);
       if (visit) walk(left);
       else previewFlowEffects(left);
       const selected = nullishFlow(left);
@@ -24121,13 +23958,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return saved;
     }
     const request = narrowingRequestOf(test);
-    if (visit && request) narrowingRequestsHere.push(inCheckedCode() ? request : { ...request, checked: false });
+    if (visit && request) narrowingRequestsHere.push(request);
     if (visit) walk(test);
     else previewFlowEffects(test);
     if (!flowLive) return { whenTrue: undefined, whenFalse: undefined };
     const fact = narrowingFactOf(test, true);
     if (visit && deciding) {
-      if (fact) judgeFact(fact);
+      if (fact) judgeFact(fact, test);
       if (truthiness) judgeTruthiness(test);
     }
     const entry = captureFlow();
@@ -24137,8 +23974,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // can never succeed, or never fail (#sec-narrowfrom).
       if (visit && deciding && primitiveBased(request!.subject as TypeRecord)) {
         const shown = `${request!.operator} comparison`;
-        if (isUninhabited(resolved.whenTrue as TypeRecord)) pushImpossibleTest('never-succeeds', shown);
-        else if (isUninhabited(resolved.whenFalse as TypeRecord)) pushImpossibleTest('never-fails', shown);
+        if (isUninhabited(resolved.whenTrue as TypeRecord)) pushImpossibleTest('never-succeeds', shown, test);
+        else if (isUninhabited(resolved.whenFalse as TypeRecord)) pushImpossibleTest('never-fails', shown, test);
       }
       declareNarrowed(request!.name, resolved.whenTrue);
       const whenTrue = captureFlow();
@@ -24194,7 +24031,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (saved) return saved;
     const entry = captureFlow();
     const fact = narrowingFactOf(test, true);
-    if (deciding && fact) judgeFact(fact);
+    if (deciding && fact) judgeFact(fact, test);
     const type = staticType(test);
     if (truthiness) judgeTruthiness(test);
     else if (deciding && type?.Kind === 'void') pushVoidUse('tested');
@@ -24448,7 +24285,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const declareMatchPatternBindings = (pattern: ParseNode.MatchPattern | null, positionType: Known = null, subPattern = false): Known => {
     if (!pattern) return positionType;
     if ((pattern.type === 'MatchObjectPattern' || pattern.type === 'MatchArrayPattern') && structurallyUnmatchable(pattern, positionType)) {
-      errors.push(Throw.StaticTypeError('the pattern cannot match a position of type $1', Value(displayType(positionType as TypeRecord))).Value as ObjectValue);
+      reportType('rt-pattern-domain', pattern, 'the pattern cannot match a position of type $1', Value(displayType(positionType as TypeRecord)));
       // The sub-patterns still declare their bindings, at a position no value
       // reaches.
       if (pattern.type === 'MatchObjectPattern') {
@@ -24470,7 +24307,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // #sec-narrowfrom: an ~empty~ that rests on an object's members is not a
       // fact about the value, so it neither narrows nor is reported.
       if (!stablyDisjoint(positionType, target)) return positionType;
-      if (diagnose) errors.push(Throw.StaticTypeError('the pattern cannot match a position of type $1', Value(displayType(positionType))).Value as ObjectValue);
+      if (diagnose) reportType('rt-pattern-domain', pattern, 'the pattern cannot match a position of type $1', Value(displayType(positionType)));
       return neverType;
     };
     switch (pattern.type) {
@@ -24479,8 +24316,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // value; it does not adopt the position's numeric literal type.
         const compared = staticType(pattern.Expression);
         if (positionType && compared && AreDisjoint(positionType, compared)) {
-          errors.push(Throw.StaticTypeError('the interpolation cannot match a position of type $1',
-            Value(displayType(positionType))).Value as ObjectValue);
+          reportType('rt-pattern-domain', pattern, 'the interpolation cannot match a position of type $1', Value(displayType(positionType)));
         }
         break;
       }
@@ -24512,7 +24348,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const rightDead = right.type === neverType;
         if (leftDead && rightDead) return neverType;
         if (!subPattern && leftDead !== rightDead && positionType) {
-          errors.push(Throw.StaticTypeError('the pattern cannot match a position of type $1', Value(displayType(positionType))).Value as ObjectValue);
+          reportType('rt-pattern-domain', pattern, 'the pattern cannot match a position of type $1', Value(displayType(positionType)));
         }
         return left.type && right.type ? CanonicalizeType({ Kind: 'union', Members: [left.type, right.type] }) : null;
       }
@@ -24559,10 +24395,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (subPattern && numeric === null && positionType && positionType.Kind !== 'any' && positionType.Kind !== 'literal' && !mentionsTypeParameter(positionType)) {
           const literalType = staticType(pattern.Literal);
           if (literalType && literalType.Kind !== 'any' && NarrowTo(positionType, literalType) === empty) {
-            errors.push((Throw.StaticTypeError(
-              'the pattern cannot match a position of type $1',
-              Value(displayType(positionType)),
-            ) as ThrowCompletion).Value as ObjectValue);
+            reportType('rt-pattern-domain', pattern, 'the pattern cannot match a position of type $1', Value(displayType(positionType)));
           }
         }
         // A numeric literal against a union of literals - `1 | 2` - adopts no
@@ -24575,15 +24408,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             && positionType.Kind === 'union' && positionType.Members.length > 0 && positionType.Members.every((m) => m.Kind === 'literal')) {
           const literalType = staticType(pattern.Literal);
           if (literalType && literalType.Kind === 'literal' && NarrowTo(positionType, literalType) === empty) {
-            errors.push((Throw.StaticTypeError(
-              'the pattern cannot match a position of type $1',
-              Value(displayType(positionType)),
-            ) as ThrowCompletion).Value as ObjectValue);
+            reportType('rt-pattern-domain', pattern, 'the pattern cannot match a position of type $1', Value(displayType(positionType)));
           }
         }
         if (numeric !== null && positionType && !admitsNumericLiteral(positionType)) {
           if (subPattern) {
-            errors.push(Throw.StaticTypeError('the pattern cannot match a position of type $1', Value(displayType(positionType))).Value as ObjectValue);
+            reportType('rt-pattern-domain', pattern, 'the pattern cannot match a position of type $1', Value(displayType(positionType)));
           }
           return neverType;
         }
@@ -24597,7 +24427,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const numericFamilies = ['uint', 'int', 'float16', 'float32', 'float64', 'float128'];
           if (positionType.Kind === 'primitive' && numericFamilies.includes(positionType.Name)
               && !fitsNumericType(numeric, positionType.Name, positionType.Arguments)) {
-            const completion = Throw.StaticTypeError('$1 is not a value of $2', Value(String(numeric)), Value(displayType(positionType))) as ThrowCompletion;
+            const completion = CreateTypeDiagnostic('rt-numeric-range', pattern, diagnosticPhase, '$1 is not a value of $2', Value(String(numeric)), Value(displayType(positionType))) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           } else if (positionType.Kind === 'union') {
             // "A numeric literal against a union of NUMERIC types is a type
@@ -24611,7 +24441,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const numericNames = ['uint', 'int', 'float16', 'float32', 'float64', 'float128', 'decimal32', 'decimal64', 'decimal128'];
             const numericMembers = positionType.Members.filter((m) => m.Kind === 'primitive' && numericNames.includes(m.Name));
             if (numericMembers.length > 1) {
-              const completion = Throw.StaticTypeError('$1 is ambiguous against $2', Value(String(numeric)), Value(displayType(positionType))) as ThrowCompletion;
+              const completion = CreateTypeDiagnostic('rt-pattern-domain', pattern, diagnosticPhase, '$1 is ambiguous against $2', Value(String(numeric)), Value(displayType(positionType))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
           }
@@ -24669,7 +24499,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (frames[i].declaredNames.has(name)) break;
           }
           if (literalConst || (valueType && valueType.Kind !== 'any' && !mentionsTypeParameter(valueType) && knownNonObject(valueType))) {
-            errors.push(Throw.StaticTypeError('a juxtaposed head must denote a type').Value as ObjectValue);
+            reportType('rt-pattern-domain', pattern, 'a juxtaposed head must denote a type');
           }
         }
         // The shape is checked against the HEAD's type, not the subject's: the
@@ -24727,10 +24557,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // reads a parameter that is not bound, so whether it carries a matcher
         // is not known until the declaration is applied.
         if (!matcher && headType && headType.Kind !== 'any' && !mentionsTypeParameter(headType)) {
-          errors.push(Throw.StaticTypeError('$1 has no custom matcher', Value(displayType(headType))).Value as ObjectValue);
+          reportType('rt-matcher-contract', pattern, '$1 has no custom matcher', Value(displayType(headType)));
         }
         if (matcher && notCallable(matcher)) {
-          errors.push(Throw.StaticTypeError('the custom matcher must be callable').Value as ObjectValue);
+          reportType('rt-matcher-contract', pattern, 'the custom matcher must be callable');
         }
         let result: Known = null;
         if (matcher?.Kind === 'function') {
@@ -24753,7 +24583,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         });
         if (candidates.length && !fits.length && candidates.every((type) => type.Kind === 'tuple'
           || type.Kind === 'primitive' || type.Kind === 'literal' || type.Kind === 'void')) {
-          errors.push(Throw.StaticTypeError('the custom matcher must return a tuple matching the pattern\'s length').Value as ObjectValue);
+          reportType('rt-matcher-contract', pattern, 'the custom matcher must return a tuple matching the pattern\'s length');
         }
         pattern.Elements.forEach((element, index) => {
           const types = fits.map((tuple) => tuple.Elements[index]?.Type ?? tuple.Elements.find((slot) => slot.Rest)?.Type)
@@ -24765,7 +24595,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'MatchRangePattern':
         if (rangePatternUnmatchable(pattern, positionType)) {
           if (subPattern) {
-            errors.push(Throw.StaticTypeError('the pattern cannot match a position of type $1', Value(displayType(positionType as TypeRecord))).Value as ObjectValue);
+            reportType('rt-pattern-domain', pattern, 'the pattern cannot match a position of type $1', Value(displayType(positionType as TypeRecord)));
           }
           return neverType;
         }
@@ -24977,7 +24807,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // subject can never contribute (#sec-narrowfrom).
         if (me.All && clause.Pattern !== null && subjectType && subjectType.Kind !== 'any' && (boundType === neverType || patternDead)
             && clause.Pattern.type !== 'MatchObjectPattern' && clause.Pattern.type !== 'MatchArrayPattern') {
-          errors.push(Throw.StaticTypeError('the pattern cannot match a position of type $1', Value(displayType(subjectType))).Value as ObjectValue);
+          reportType('rt-pattern-domain', me, 'the pattern cannot match a position of type $1', Value(displayType(subjectType)));
         }
         if (!me.All && before && before.Kind !== 'any') {
           const impossible = patternDead || (clause.Pattern !== null
@@ -25001,15 +24831,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // here - after an irrefutable `when let x` the remaining type is
           // empty, and the `default` can match nothing that clause has left.
           if (isEmptyRecord(before)) {
-            errors.push((Throw.StaticTypeError(
-              'the $1 clause can match nothing the preceding clauses have left',
-              Value(clause.Pattern === null ? 'default' : 'when'),
-            ) as ThrowCompletion).Value as ObjectValue);
+            reportType('rt-unreachable-pattern', me, 'the $1 clause can match nothing the preceding clauses have left', Value(clause.Pattern === null ? 'default' : 'when'));
           } else if (impossible) {
-            errors.push((Throw.StaticTypeError(
-              'the pattern cannot match a position of type $1',
-              Value(displayType(before as TypeRecord)),
-            ) as ThrowCompletion).Value as ObjectValue);
+            reportType('rt-pattern-domain', me, 'the pattern cannot match a position of type $1', Value(displayType(before as TypeRecord)));
           }
         }
         let failedGuard: FlowFacts | undefined;
@@ -25075,10 +24899,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const keys = valueKeys(clause.Pattern);
           if (!keys || keys.length === 0) continue;
           if (keys.every((key) => coveredValues.has(key))) {
-            errors.push((Throw.StaticTypeError(
-              'the $1 clause can match nothing the preceding clauses have left',
-              Value('when'),
-            ) as ThrowCompletion).Value as ObjectValue);
+            reportType('rt-unreachable-pattern', me, 'the $1 clause can match nothing the preceding clauses have left', Value('when'));
           }
           if (!clause.Guard) keys.forEach((key) => coveredValues.add(key));
         }
@@ -25121,11 +24942,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const uncovered = unionSubject.Members.filter((member) => !me.Clauses.some((clause) => clause.Pattern !== null
           && !clause.Guard && (structuralPatternCovers(clause.Pattern, member) || literalPatternCovers(clause.Pattern, member))));
         if (uncovered.length > 0) {
-          errors.push((Throw.StaticTypeError(
-            'match over $1 is missing $2 and has no default',
-            Value(displayType(subjectType!)),
-            Value(uncovered.map((member) => displayType(member)).join(', ')),
-          ) as ThrowCompletion).Value as ObjectValue);
+          reportType('rt-nonexhaustive-match', me, 'match over $1 is missing $2 and has no default', Value(displayType(subjectType!)), Value(uncovered.map((member) => displayType(member)).join(', ')));
         }
       }
       if (!me.All && chainAtoms.length > 0 && !overEnumerators) {
@@ -25148,11 +24965,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const missing = chainAtoms.filter((a) => !coveredAtoms.has(a.key));
         if (!chainDefault) {
           if (missing.length > 0) {
-            const completion = Throw.StaticTypeError(
-              'match over $1 is missing $2 and has no default',
-              Value(displayType(subjectType!)),
-              Value(missing.map((a) => a.key).join(', ')),
-            ) as ThrowCompletion;
+            const completion = CreateTypeDiagnostic('rt-nonexhaustive-match', me, diagnosticPhase, 'match over $1 is missing $2 and has no default', Value(displayType(subjectType!)), Value(missing.map((a) => a.key).join(', '))) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           }
         } else if (missing.length === 0 && coveredAtoms.size > 0
@@ -25169,10 +24982,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // belt-and-braces shape left undecided (see the note at the
           // clause loop); `boolean` is the case the clause names, and the
           // decision on the rest is not made here by the back door.
-          errors.push((Throw.StaticTypeError(
-            'every case of $1 is covered, so the default can never be taken',
-            Value(displayType(subjectType!)),
-          ) as ThrowCompletion).Value as ObjectValue);
+          reportType('rt-unreachable-default', me, 'every case of $1 is covered, so the default can never be taken', Value(displayType(subjectType!)));
         }
       }
       const matchEnumName = enumAtoms.length > 0 ? enumAtoms[0].owner ?? null : null;
@@ -25208,7 +25018,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const missing = enumeratorsNotCovered(enumTypeOf(matchEnumName!), matchInfo.names, covered);
         if (!hasDefault) {
           if (missing.length > 0) {
-            const completion = Throw.StaticTypeError('match over enum $1 is missing $2 and has no default', Value(matchEnumName!), Value(missing.join(', '))) as ThrowCompletion;
+            const completion = CreateTypeDiagnostic('rt-nonexhaustive-match', me, diagnosticPhase, 'match over enum $1 is missing $2 and has no default', Value(matchEnumName!), Value(missing.join(', '))) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           }
         } else if (missing.length === 0 && covered.size > 0) {
@@ -25218,10 +25028,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // This is what lets the clause pair with exhaustiveness into the one
           // sentence it claims - "exactly one of 'this match needs a catch-all'
           // and 'this match must not have one' holds of it".
-          errors.push((Throw.StaticTypeError(
-            'every case of $1 is covered, so the default can never be taken',
-            Value(matchEnumName!),
-          ) as ThrowCompletion).Value as ObjectValue);
+          reportType('rt-unreachable-default', me, 'every case of $1 is covered, so the default can never be taken', Value(matchEnumName!));
         }
       }
       const sealedDecl = (subjectType as { Kind?: string, Declaration?: ParseNode } | null | undefined);
@@ -25256,10 +25063,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const missingClasses = atomDecls.filter((c) => !coveredClasses.has(c));
         if (sealedDefault && missingClasses.length === 0 && coveredClasses.size > 0) {
           const sealedName = (sealedDecl!.Declaration as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name ?? '?';
-          errors.push((Throw.StaticTypeError(
-            'every case of $1 is covered, so the default can never be taken',
-            Value(sealedName),
-          ) as ThrowCompletion).Value as ObjectValue);
+          reportType('rt-unreachable-default', me, 'every case of $1 is covered, so the default can never be taken', Value(sealedName));
         }
         if (!sealedDefault) {
           if (missingClasses.length > 0) {
@@ -25267,7 +25071,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               .map((c) => (c as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name ?? '?')
               .join(', ');
             const sealedName = (sealedDecl!.Declaration as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name ?? '?';
-            const completion = Throw.StaticTypeError('match over sealed class $1 is missing $2 and has no default', Value(sealedName), Value(shown)) as ThrowCompletion;
+            const completion = CreateTypeDiagnostic('rt-nonexhaustive-match', me, diagnosticPhase, 'match over sealed class $1 is missing $2 and has no default', Value(sealedName), Value(shown)) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           }
         }
@@ -25319,10 +25123,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           || (subjectType.Kind === 'literal' && me.Clauses.some((clause) => clause.Pattern !== null && !clause.Guard
             && literalPatternCovers(clause.Pattern, subjectType)));
         if (!catchAll && !exhaustedByNarrowing) {
-          errors.push((Throw.StaticTypeError(
-            'match over $1 needs a catch-all: the type has no cases to cover, so add a default or an unguarded binding or wildcard clause',
-            Value(displayType(subjectType)),
-          ) as ThrowCompletion).Value as ObjectValue);
+          reportType('rt-nonexhaustive-match', me, 'match over $1 needs a catch-all: the type has no cases to cover, so add a default or an unguarded binding or wildcard clause', Value(displayType(subjectType)));
         }
       }
       const adapt = (type: TypeRecord): TypeRecord => {
@@ -25472,7 +25273,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         patternNamesByScope.set(scope, names);
       }
       if (names.has(node.name)) {
-        errors.push(Throw.StaticTypeError('$1 is outside its pattern binding\'s scope', Value(node.name)).Value as ObjectValue);
+        reportType('rt-pattern-scope', node, '$1 is outside its pattern binding\'s scope', Value(node.name));
         return;
       }
     }
@@ -25896,7 +25697,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // rather than leaving the function silently untyped.
         for (const item of queue) {
           if (item.signature.InferredReturn || item.signature.ProvisionalReturn) {
-            const completion = Throw.StaticTypeError('the return type of $1 grows at every step and cannot be inferred; write it', Value(nameOfDeclaration(item.fn) ?? 'this function')) as ThrowCompletion;
+            const completion = CreateTypeDiagnostic('rt-return-inference', root, diagnosticPhase, 'the return type of $1 grows at every step and cannot be inferred; write it', Value(nameOfDeclaration(item.fn) ?? 'this function')) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
             item.signature.InferredReturn = undefined;
             item.signature.ProvisionalReturn = undefined;
@@ -26707,7 +26508,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // ANNOTATION can name the wrong one - an unannotated generator now
           // leaves this field null deliberately, since its shape is published
           // rather than declared.
-          const completion = Throw.StaticTypeError('a $1 annotation is not a $2', Value(isAsyncGenerator ? 'Generator' : 'AsyncGenerator'), Value(isAsyncGenerator ? 'AsyncGenerator' : 'Generator')) as ThrowCompletion;
+          const completion = CreateTypeDiagnostic('rt-type-required', root, diagnosticPhase, 'a $1 annotation is not a $2', Value(isAsyncGenerator ? 'Generator' : 'AsyncGenerator'), Value(isAsyncGenerator ? 'AsyncGenerator' : 'Generator')) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
           declared = Return;
         }
@@ -26728,10 +26529,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const predicateName = (fn.TypeAnnotation as unknown as { NarrowsTarget?: string } | null | undefined)?.NarrowsTarget;
       const predicateNames = (Parameters as readonly { Name?: string }[]).map((prm) => prm.Name);
       if (predicateName !== undefined && !predicateNames.includes(predicateName)) {
-        errors.push((Throw.StaticTypeError(
-          '$1 is not a parameter of this function, so a return predicate cannot narrow it',
-          Value(predicateName),
-        ) as ThrowCompletion).Value as ObjectValue);
+        reportType('rt-narrowing-declaration', root, '$1 is not a parameter of this function, so a return predicate cannot narrow it', Value(predicateName));
       }
       const predicateNarrows = predicateName !== undefined && predicateNames.includes(predicateName) && declared
         ? [{ Target: predicateName, Type: declared as TypeRecord }]
@@ -26801,7 +26599,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (rejected.has(name)) {
         continue;
       }
-      declare(name, { Kind: 'function', Signatures } as unknown as Known);
+      // #sec-checked-code: only a checked declaration forms an overload set.
+      // Ordinary var-scoped declarations retain the last declaration's value.
+      const overloads = Signatures.some((signature) => {
+        const declaration = signatureDeclarations.get(signature as SignatureRecord);
+        return declaration !== undefined && IsCheckedCode(declaration);
+      });
+      declare(name, { Kind: 'function', Signatures: overloads ? Signatures : Signatures.slice(-1) } as unknown as Known);
     }
     // The fixpoint is NOT run here when the caller will run it after the list's
     // own declarations are walked.
@@ -26940,7 +26744,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const layoutRoots = [...classNodes.values(), ...classExpressionNodes].filter((node) => !classLayoutsChecked.has(node));
     const cycle = FirstClassInlineCycle(layoutRoots.map((node) => instanceTypeOf(node)).filter((type): type is TypeRecord => type !== null), inlineFieldsOf);
     layoutRoots.forEach((node) => classLayoutsChecked.add(node));
-    if (cycle) errors.push(Throw.StaticTypeError('$1 contains itself through field $2, so it has no finite layout', Value(displayType(cycle.type)), Value(cycle.field)).Value as ObjectValue);
+    if (cycle) reportType('rt-layout', root, '$1 contains itself through field $2, so it has no finite layout', Value(displayType(cycle.type)), Value(cycle.field));
     // #sec-type-alias-declarations states the same rule for an ALIAS: "It is a
     // type error if a cycle never [passes through a reference position], since
     // the type would demand an infinite inline layout, which is the same rule
@@ -26986,7 +26790,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         for (let next = bareTarget(aliasName); next !== undefined && aliasNodes.has(next); next = bareTarget(next)) {
           if (next === aliasName) {
             chain.forEach((member) => inReportedCycle.add(member));
-            errors.push(Throw.StaticTypeError('$1 is defined as itself, so it denotes no type', Value(aliasName)).Value as ObjectValue);
+            reportType('rt-unproductive-type', root, '$1 is defined as itself, so it denotes no type', Value(aliasName));
             break;
           }
           if (chain.includes(next)) break; // a cycle that does not include this alias is reported from its own members
@@ -27016,11 +26820,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const aliasCycle = FirstInlineCycle(resolved);
       if (aliasCycle !== null) {
-        errors.push(Throw.StaticTypeError(
-          '$1 contains itself through field $2, so it has no finite layout',
-          Value(aliasName),
-          Value(aliasCycle),
-        ).Value as ObjectValue);
+        reportType('rt-layout', root, '$1 contains itself through field $2, so it has no finite layout', Value(aliasName), Value(aliasCycle));
         break;
       }
     }
@@ -27140,7 +26940,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!type || type.Kind === 'any') return null;
     const targets = returnedLocationTypes(type);
     if (targets) return CanonicalizeType({ Kind: 'union', Members: targets });
-    errors.push(Throw.StaticTypeError('a call in a location-consuming context must return a ref, and $1 does not', Value(displayType(type))).Value as ObjectValue);
+    reportType('rt-reference-location', expression, 'a call in a location-consuming context must return a ref, and $1 does not', Value(displayType(type)));
     return null;
   };
 
@@ -27197,11 +26997,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     if (target.type === 'SuperProperty' || (target.type === 'MemberExpression' && target.PrivateIdentifier)) {
-      errors.push(Throw.StaticTypeError('cannot take a ref of a private member or a super property').Value as ObjectValue);
+      reportType('rt-reference-location', expression, 'cannot take a ref of a private member or a super property');
       return;
     }
     if (target.type !== 'MemberExpression') {
-      errors.push(Throw.StaticTypeError('cannot take a ref of a value; a ref needs a variable, a property, or an array element').Value as ObjectValue);
+      reportType('rt-reference-location', expression, 'cannot take a ref of a value; a ref needs a variable, a property, or an array element');
       return;
     }
     const receiver = staticType(target.MemberExpression);
@@ -27211,7 +27011,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return base?.Kind === 'primitive' && (isNumericOperandName(base.Name)
         || ['string', 'boolean', 'symbol', 'undefined', 'null', 'vector', 'Composite'].includes(base.Name));
     };
-    if (primitive(receiver)) errors.push(Throw.StaticTypeError('cannot take a ref of a property of a primitive').Value as ObjectValue);
+    if (primitive(receiver)) reportType('rt-reference-location', expression, 'cannot take a ref of a property of a primitive');
     const keys = memberKeys(target);
     const isBitField = (type: Known, key: string | SymbolValue): boolean => {
       if (type?.Kind === 'union') return type.Members.length > 0 && type.Members.every((arm) => isBitField(arm, key));
@@ -27222,9 +27022,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     };
     // Borrow formation rejects a proved impossibility. Unlike a store, a
     // mixed eligible/ineligible selection keeps its runtime layout check.
-    if (keys?.length && keys.every((key) => isBitField(receiver, key))) errors.push(Throw.StaticTypeError(
-      'cannot take a ref of $1, which is a bit-field and has no byte address', Value(keys.map(String).join(' | ')),
-    ).Value as ObjectValue);
+    if (keys?.length && keys.every((key) => isBitField(receiver, key))) reportType('rt-reference-location', expression, 'cannot take a ref of $1, which is a bit-field and has no byte address', Value(keys.map(String).join(' | ')));
   };
 
   const cannotRefIterate = (type: Known): boolean => {
@@ -27248,13 +27046,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const checkKnownLength = (receiver: Known, length: bigint): void => {
     if (receiver?.Kind === 'array' && typeof receiver.Extent === 'number' && length !== BigInt(receiver.Extent)) {
-      errors.push(Throw.StaticTypeError('a fixed-extent array cannot be grown').Value as ObjectValue);
+      reportType('rt-fixed-extent-store', root, 'a fixed-extent array cannot be grown');
     } else if (receiver?.Kind === 'tuple') {
       const rest = receiver.Elements.findIndex((element) => element.Rest);
       const fixed = rest < 0 ? receiver.Elements.length : rest;
-      if (rest < 0 ? length !== BigInt(fixed) : length < BigInt(fixed)) errors.push(Throw.StaticTypeError(
-        'a tuple of $1 positions cannot be given a length of $2', Value(String(fixed)), Value(String(length)),
-      ).Value as ObjectValue);
+      if (rest < 0 ? length !== BigInt(fixed) : length < BigInt(fixed)) reportType('rt-fixed-extent-store', root, 'a tuple of $1 positions cannot be given a length of $2', Value(String(fixed)), Value(String(length)));
     }
   };
 
@@ -27430,9 +27226,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!impossiblePrivate && !nullishOnly(type)) return false;
     if (!memberReceiverFailures.has(node)) {
       memberReceiverFailures.add(node);
-      errors.push(Throw.StaticTypeError(impossiblePrivate
+      reportType('rt-property-receiver', node, impossiblePrivate
         ? 'a non-object receiver cannot support a private member operation'
-        : 'an all-nullish receiver cannot support an ordinary property operation').Value as ObjectValue);
+        : 'an all-nullish receiver cannot support an ordinary property operation');
     }
     return true;
   };
@@ -27445,7 +27241,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!primitiveConversionFailures.has(expression)) {
       primitiveConversionFailures.add(expression);
       errors.push((describe ? describe()
-        : Throw.StaticTypeError('the selected primitive conversion contract cannot satisfy this operation')).Value as ObjectValue);
+        : CreateTypeDiagnostic('rt-conversion-protocol', expression, diagnosticPhase, 'the selected primitive conversion contract cannot satisfy this operation')).Value as ObjectValue);
     }
     return true;
   };
@@ -27548,7 +27344,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (!undeclaredOperatorFailures.has(node)) {
       undeclaredOperatorFailures.add(node);
-      errors.push(Throw.StaticTypeError('$1 is not defined for $2', Value(operator), Value(displayType((leftClass ? leftType : rightType) as TypeRecord))).Value as ObjectValue);
+      reportType('rt-numeric-operator', node, '$1 is not defined for $2', Value(operator), Value(displayType((leftClass ? leftType : rightType) as TypeRecord)));
     }
     return true;
   };
@@ -27616,7 +27412,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!invalid) return false;
     if (!binaryConversionFailures.has(node)) {
       binaryConversionFailures.add(node);
-      errors.push(Throw.StaticTypeError('the typed operands cannot satisfy the built-in conversion for $1', Value(operator)).Value as ObjectValue);
+      reportType('rt-conversion-protocol', node, 'the typed operands cannot satisfy the built-in conversion for $1', Value(operator));
     }
     return true;
   };
@@ -27682,7 +27478,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // missing-key rule for patterns in general - the collection rule already
     // states the absence - so only the weak collections' table reaches here.
     if (weakCollectionRefusesRead(erasedForJudgment(source.type), key)) {
-      errors.push(Throw.StaticTypeError('$1 is not declared by $2', typeof key === 'string' ? Value(key) : key, Value(displayType(source.type!))).Value as ObjectValue);
+      reportType('rt-undeclared-member', root, '$1 is not declared by $2', typeof key === 'string' ? Value(key) : key, Value(displayType(source.type!)));
       return { type: null };
     }
     // #sec-typed-classes: a pattern property with a statically established
@@ -27758,7 +27554,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (access?.get) {
       const result = operatorResult(access.get, access.arguments, member);
       if (result?.Kind === 'reference') {
-        requireAssignable(staticTypeIn(value, result.Target), result.Target);
+        requireAssignable(staticTypeIn(value, result.Target), result.Target, target as ParseNode);
         return true;
       }
     }
@@ -27788,13 +27584,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const alternatives = type?.Kind === 'union' ? type.Members : type ? [type] : [];
     const pairs = alternatives.map((arm) => [vectorWriteType(arm, left), vectorWriteType(arm, right)] as const);
     if (!pairs.length || pairs.some(([to, from]) => !to || !from)) return false;
-    for (const [to, from] of pairs) requireAssignable(from, to);
+    for (const [to, from] of pairs) requireAssignable(from, to, target as ParseNode);
     return true;
   };
 
   const checkStoreResult = (target: ParseNode, value: ParseNode): void => {
     if (checkIndexStore(target, value) || checkVectorSelfStore(target, value)) return;
-    for (const type of locationWriteTypes(target)) requireAssignable(staticTypeIn(value, type), type);
+    for (const type of locationWriteTypes(target)) requireAssignable(staticTypeIn(value, type), type, target as ParseNode);
   };
 
   const builtinUpdateFailures = new WeakSet<ParseNode>();
@@ -27880,7 +27676,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!invalidReferenceStore && !fails(source)) return false;
     if (!builtinUpdateFailures.has(node)) {
       builtinUpdateFailures.add(node);
-      errors.push(Throw.StaticTypeError('the built-in update cannot convert or store its result in this typed location').Value as ObjectValue);
+      reportType('rt-conversion-protocol', node, 'the built-in update cannot convert or store its result in this typed location');
     }
     return true;
   };
@@ -27896,7 +27692,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const requireBindingType = (type: Known): void => {
-    if (type?.Kind === 'void') errors.push(Throw.StaticTypeError('a binding cannot have type void').Value as ObjectValue);
+    if (type?.Kind === 'void') reportType('rt-void-use', root, 'a binding cannot have type void');
   };
 
   const checkPattern = (node: PatternNode, incoming: PatternSource, declaring: boolean,
@@ -27983,10 +27779,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const steps = (node.BindingElementList ?? node.AssignmentElementList ?? []).length > 0
         || !!(node.BindingRestElement ?? node.AssignmentRestElement);
       if (notIterable(source.type, false, false, steps)) {
-        errors.push(Throw.StaticTypeError('a value of $1 is not iterable', Value(displayType(source.type!))).Value as ObjectValue);
+        reportType('rt-iterable-required', node, 'a value of $1 is not iterable', Value(displayType(source.type!)));
       }
       if (!steps && source.typed && iteratorCloseFails(source.type, false, false)) {
-        errors.push(Throw.StaticTypeError('the iterator cannot satisfy the closing contract of this empty pattern').Value as ObjectValue);
+        reportType('rt-iterator-close', node, 'the iterator cannot satisfy the closing contract of this empty pattern');
       }
       const elements = node.BindingElementList ?? node.AssignmentElementList ?? [];
       // #sec-iteration-types: a pattern with no rest whose elements are plain
@@ -28005,7 +27801,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       };
       if (steps && !(node.BindingRestElement ?? node.AssignmentRestElement) && (elements as readonly Parameters<typeof plainTarget>[0][]).every(plainTarget)
         && source.typed && iteratorCloseFails(source.type, false, true)) {
-        errors.push(Throw.StaticTypeError('the iterator cannot satisfy the closing contract of this pattern').Value as ObjectValue);
+        reportType('rt-iterator-close', node, 'the iterator cannot satisfy the closing contract of this pattern');
       }
       const protocol = StaticIterationContribution(source.type, structureOf);
       const literal = patternExpression(source.expression);
@@ -28037,7 +27833,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (node.type === 'ObjectBindingPattern' || node.type === 'ObjectAssignmentPattern') {
       if (source.typed && nullishOnly(source.type)) {
-        errors.push(Throw.StaticTypeError('an object pattern cannot destructure a nullish source').Value as ObjectValue);
+        reportType('rt-property-receiver', node, 'an object pattern cannot destructure a nullish source');
       }
       const properties = node.BindingPropertyList ?? node.AssignmentPropertyList ?? [];
       const consumed = new Set<string | SymbolValue>();
@@ -28208,7 +28004,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (node.BindingIdentifier) return;
     if (node.BindingPattern) return checkFormalPattern(node.BindingPattern, source, site, bindings);
     if (node.type === 'ObjectBindingPattern') {
-      if (nullishOnly(source.type)) errors.push(Throw.StaticTypeError('an object pattern cannot destructure a nullish source').Value as ObjectValue);
+      if (nullishOnly(source.type)) reportType('rt-property-receiver', site, 'an object pattern cannot destructure a nullish source');
       const consumed = new Set<string | SymbolValue>();
       let knownExclusions = true;
       for (const property of node.BindingPropertyList ?? []) {
@@ -28240,7 +28036,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     if (node.type === 'ArrayBindingPattern') {
-      if (notIterable(source.type)) errors.push(Throw.StaticTypeError('a formal array pattern requires an iterable source').Value as ObjectValue);
+      if (notIterable(source.type)) reportType('rt-iterable-required', site, 'a formal array pattern requires an iterable source');
       const contribution = StaticIterationContribution(source.type, structureOf);
       const literal = patternExpression(source.expression);
       const positional = patternIterationStable(site);
@@ -28716,11 +28512,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     });
     const { groups } = placed;
     if (placed.error === 'unknown-name') {
-      errors.push(Throw.StaticTypeError('no parameter named $1 for this call', Value(placed.name!)).Value as ObjectValue);
+      reportType('rt-named-argument', root, 'no parameter named $1 for this call', Value(placed.name!));
     } else if (placed.error === 'position-after-name') {
-      errors.push(Throw.StaticTypeError('a positional argument after a named argument must continue a named rest').Value as ObjectValue);
+      reportType('rt-named-argument', root, 'a positional argument after a named argument must continue a named rest');
     } else if (placed.error === 'unmatched' && named && !spread) {
-      errors.push(Throw.StaticTypeError('the named arguments do not satisfy the signature in view').Value as ObjectValue);
+      reportType('rt-named-argument', root, 'the named arguments do not satisfy the signature in view');
     }
     const entries: MappedArgument[] = [];
     groups.forEach((nodes, slot) => nodes.forEach((node, offset) => entries.push({ node, slot, offset })));
@@ -28839,7 +28635,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return !!armType && armType.Kind !== 'any' && flatteningResultFails(armType);
       });
       if (protocolCallFails(callback, flatteningResultFails, [element, indexTypeRecord()], undefinedType) || everyArmFails) {
-        errors.push(Throw.StaticTypeError('an iterator flatMap callback must return a flattenable object').Value as ObjectValue);
+        reportType('rt-builtin-argument', member, 'an iterator flatMap callback must return a flattenable object');
       }
     }
     return signature;
@@ -28931,7 +28727,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (operation.kind === 'prototype') {
       if (operandParticipates(operation.operand) && everyProtocolAlternative(staticType(operation.operand),
         (type) => knownNonObject(type) && !SameType(type, makePrimitive('null')))) {
-        errors.push(Throw.StaticTypeError('an intrinsic prototype argument must be an Object or null').Value as ObjectValue);
+        reportType('rt-builtin-argument', call, 'an intrinsic prototype argument must be an Object or null');
       }
     } else if (operation.kind === 'stringConversion') {
       checkImplicitString(operation.operand);
@@ -28954,7 +28750,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           ? [receiverType.Element]
           : null;
       if (elements && elements.length > 0 && elements.every(onlySymbols)) {
-        errors.push(Throw.StaticTypeError('$1', Value(`every element of ${displayType(receiverType as TypeRecord)} is a Symbol, and \`${operation.method}\` converts each element with ToString, which a Symbol cannot undergo`)).Value as ObjectValue);
+        reportType('rt-builtin-argument', call, '$1', Value(`every element of ${displayType(receiverType as TypeRecord)} is a Symbol, and \`${operation.method}\` converts each element with ToString, which a Symbol cannot undergo`));
       }
     } else if (operation.kind === 'sameValueTest') {
       // #sec-proved-library-operations: `Object.is` is a search-style test,
@@ -28971,7 +28767,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             : tb.Kind === 'literal' ? cannotHoldValue(ta, tb)
             : !mentionsTypeParameter(ta) && !mentionsTypeParameter(tb) && AreDisjoint(ta, tb));
         if (never) {
-          errors.push(Throw.StaticTypeError('$1', Value(`\`Object.is\` can never be true here: ${displayType(ta!)} and ${displayType(tb!)} share no value, so the test is dead code`)).Value as ObjectValue);
+          reportType('rt-disjoint-comparison', call, '$1', Value(`\`Object.is\` can never be true here: ${displayType(ta!)} and ${displayType(tb!)} share no value, so the test is dead code`));
         }
       }
     } else if (operation.kind === 'replacement') {
@@ -28979,7 +28775,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const callback = staticType(operation.callback);
       if (protocolCallFails(callback, () => false, [literal(operation.match),
         { Kind: 'literal', Base: makePrimitive('number'), Value: Value(operation.position) }, literal(operation.whole)], undefinedType)) {
-        errors.push(Throw.StaticTypeError('the replacement callback cannot bind the supplied match arguments').Value as ObjectValue);
+        reportType('rt-builtin-argument', call, 'the replacement callback cannot bind the supplied match arguments');
       }
     } else if (operation.kind === 'copy') {
       for (const entry of operation.entries) requireAssignable(argumentStaticType(entry, operation.element), operation.element);
@@ -29065,7 +28861,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const args = call.Arguments;
     if (operation.owner === 'Promise') {
       if (args[0] && operandParticipates(args[0]) && notIterable(staticType(args[0]))) {
-        errors.push(Throw.StaticTypeError('a Promise aggregate requires an iterable input').Value as ObjectValue);
+        reportType('rt-builtin-argument', call, 'a Promise aggregate requires an iterable input');
       }
       return;
     }
@@ -29093,7 +28889,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }));
     };
     if (supplied.length && supplied.every(fails)) {
-      errors.push(Throw.StaticTypeError('the iterable callback cannot bind the arguments supplied by this operation').Value as ObjectValue);
+      reportType('rt-builtin-argument', call, 'the iterable callback cannot bind the arguments supplied by this operation');
     }
   };
 
@@ -29152,7 +28948,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (operation.kind === 'adapter' || operation.kind === 'reflectApply') {
       if (operation.kind === 'reflectApply') {
         checkInvocation(operation.target, false);
-        checkCallable(callableForm(staticType(operation.target)));
+        checkCallable(callableForm(staticType(operation.target)), call);
       }
       const projected = adapterProjection(call);
       if (!projected) return;
@@ -29169,7 +28965,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const checkTarget = (expression: ParseNode): void => {
         checkInvocation(expression, true);
         if (operandParticipates(expression) && knownNonObject(staticType(expression))) {
-          errors.push(Throw.StaticTypeError('a Reflect.construct target must be a constructor').Value as ObjectValue);
+          reportType('rt-builtin-argument', expression, 'a Reflect.construct target must be a constructor');
         }
       };
       checkTarget(operation.target);
@@ -29210,7 +29006,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         target = typedProperty(first, args[1].value);
         operand = 2;
       } else if (knownNonObject(staticType(first))) {
-        errors.push(Throw.StaticTypeError('Atomics requires a reference or typed own data property').Value as ObjectValue);
+        reportType('rt-atomic-argument', call, 'Atomics requires a reference or typed own data property');
         return;
       }
       if (target?.Kind === 'shared') target = target.Target;
@@ -29219,8 +29015,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const invalid = everyProtocolAlternative(target, (arm) => arm.Kind === 'primitive'
         && !(isIntegerTypeName(arm.Name) || (!integerOnly && isFloatTypeName(arm.Name))));
       if (invalid) {
-        errors.push(Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(target)),
-          Value(integerOnly ? 'an integer atomic target' : 'a numeric atomic target')).Value as ObjectValue);
+        reportType('rt-assignability', call, '$1 is not assignable to $2', Value(displayType(target)), Value(integerOnly ? 'an integer atomic target' : 'a numeric atomic target'));
         return;
       }
       if (['store', 'exchange', 'compareExchange'].includes(operation.name)) {
@@ -29231,7 +29026,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const value = args[operand] ? staticType(args[operand]) : undefinedType;
         if (everyProtocolAlternative(value, (arm) => knownNonObject(arm)
           && !(arm.Kind === 'primitive' && (isIntegerTypeName(arm.Name) || isFloatTypeName(arm.Name) || arm.Name === 'number')))) {
-          errors.push(Throw.StaticTypeError('an atomic arithmetic operand must be numeric').Value as ObjectValue);
+          reportType('rt-atomic-argument', call, 'an atomic arithmetic operand must be numeric');
         }
       }
       return;
@@ -29328,8 +29123,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (resulting === length) return;
     errors.push((tuple
-      ? Throw.StaticTypeError('a tuple of $1 positions cannot be given a length of $2', Value(String(length)), Value(String(resulting)))
-      : Throw.StaticTypeError('this intrinsic mutation changes a fixed array extent')).Value as ObjectValue);
+      ? CreateTypeDiagnostic('rt-fixed-extent-store', call, diagnosticPhase, 'a tuple of $1 positions cannot be given a length of $2', Value(String(length)), Value(String(resulting)))
+      : CreateTypeDiagnostic('rt-fixed-extent-store', call, diagnosticPhase, 'this intrinsic mutation changes a fixed array extent')).Value as ObjectValue);
   };
 
   /** #sec-intrinsic-array-contracts: simulate only established destination stores. */
@@ -29360,8 +29155,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const store = (index: number, source: Known): boolean => {
       if (!source || !slots[index]) return false;
       if (conversionImpossible(source, receiver.Elements[index].Type)) {
-        errors.push(Throw.StaticTypeError('an intrinsic array store cannot convert $1 to slot type $2',
-          Value(displayType(source)), Value(displayType(receiver.Elements[index].Type))).Value as ObjectValue);
+        reportType('rt-typed-array-store', call, 'an intrinsic array store cannot convert $1 to slot type $2', Value(displayType(source)), Value(displayType(receiver.Elements[index].Type)));
         return true;
       }
       // A successful write has the destination's contract, including any
@@ -29576,12 +29370,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         );
         if (diagnose && resolution.Kind === 'none') {
           // "It is a type error if ResolveOverload returns ~none~."
-          const completion = Throw.StaticTypeError('no declared signature accepts an argument of type $1', Value(argTypes.length ? displayType(argTypes[0] as TypeRecord) : '()')) as ThrowCompletion;
+          const completion = CreateTypeDiagnostic('rt-call-argument', n, diagnosticPhase, 'no declared signature accepts an argument of type $1', Value(argTypes.length ? displayType(argTypes[0] as TypeRecord) : '()')) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
         } else if (diagnose && resolution.Kind === 'ambiguous') {
           // "and it is a type error if it returns ~ambiguous~."
-          const completion = Throw.StaticTypeError('the call is ambiguous between two declared signatures') as ThrowCompletion;
-          errors.push(completion.Value as ObjectValue);
+          reportType('rt-ambiguous-call', n, 'the call is ambiguous between two declared signatures');
         } else if (resolution.Kind === 'resolved') {
           const index = candidates.indexOf(resolution.Signature as never);
           sig = index >= 0 ? callee.Signatures[index] : null;
@@ -29743,11 +29536,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     } else {
       walk(expr);
       if (knownNonObject(callableForm(callee))) {
-        errors.push(Throw.StaticTypeError('a value of $1 is not callable', Value(displayType(callee!))).Value as ObjectValue);
+        reportType('rt-not-callable', decorator, 'a value of $1 is not callable', Value(displayType(callee!)));
       }
     }
     if (decoratorApplicationFails(callee, call?.Arguments ?? [])) {
-      errors.push(Throw.StaticTypeError('no declared decorator signature accepts the written arguments and by-value Object context').Value as ObjectValue);
+      reportType('rt-decorator-argument', decorator, 'no declared decorator signature accepts the written arguments and by-value Object context');
     }
   };
 
@@ -29766,7 +29559,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (decoratorCalls.has(c)) decoratorCalls.add(view);
         const context = contextualCallTypes.get(n) ?? (n as unknown as { ContextualType?: Known }).ContextualType;
         if (context) contextualCallTypes.set(view, context);
-        checkCallable(type);
+        checkCallable(type, n);
         checkCallArguments(view, type, view);
         // Contextual callbacks are checked under each possible signature. The
         // ordinary walk still visits the original arguments for their effects.
@@ -29784,7 +29577,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const supplied = expandValueSpreads(c.Arguments);
     if (!decoratorCalls.has(c) && callee.Signatures.length > 0
       && callee.Signatures.every((signature) => trailingSpreadCannotBind(signature.Parameters, supplied))) {
-      errors.push(Throw.StaticTypeError('no argument count for this spread can satisfy the required parameter contracts').Value as ObjectValue);
+      reportType('rt-call-argument', n, 'no argument count for this spread can satisfy the required parameter contracts');
     }
     checkedCallSignatures.delete(c);
     const sig = selectCallSignature(c, supplied, callee, n, true);
@@ -29820,7 +29613,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         deferredCaseCalls.add(n);
         const named = declared as { BindingIdentifier?: { name?: string }, ClassElementName?: { name?: string } };
         const name = named.BindingIdentifier?.name ?? named.ClassElementName?.name ?? 'this function';
-        const completion = Throw.StaticTypeError('$1', Value(`selecting a specialized case of \`${name}\` is not supported yet`)) as ThrowCompletion;
+        const completion = CreateTypeDiagnostic('rt-specialization-contract', n, diagnosticPhase, '$1', Value(`selecting a specialized case of \`${name}\` is not supported yet`)) as ThrowCompletion;
         errors.push(completion.Value as ObjectValue);
       }
     }
@@ -29843,9 +29636,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (!wanted || !mentionsTypeParameter(wanted)) {
               if (spread) {
                 checkRangeAtElement(argument.AssignmentExpression, wanted);
-                requireAssignable(StaticIterationContribution(staticType(argument.AssignmentExpression), structureOf).element, wanted);
+                requireAssignable(StaticIterationContribution(staticType(argument.AssignmentExpression), structureOf).element, wanted, n as ParseNode);
               } else {
-                requireAssignable(argumentStaticType(argument, wanted), wanted);
+                requireAssignable(argumentStaticType(argument, wanted), wanted, n as ParseNode);
               }
             }
           }
@@ -29894,10 +29687,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // its value, the callee gets the value and cannot write
           // through, and the caller is unchanged.
           if (pr.Ref === true && (arg as { type?: string }).type !== 'RefExpression') {
-            const completion = Throw.StaticTypeError(
-              'parameter $1 requires a ref argument',
-              Value(pr.Name || `parameter ${i + 1}`),
-            ) as ThrowCompletion;
+            const completion = CreateTypeDiagnostic('rt-reference-argument', n, diagnosticPhase, 'parameter $1 requires a ref argument', Value(pr.Name || `parameter ${i + 1}`)) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
             return;
           }
@@ -29920,10 +29710,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (borrowed && wantedRef && borrowed.Kind !== 'any' && wantedRef.Kind !== 'any'
               && !mentionsTypeParameter(wantedRef)
               && !SameType(borrowed as TypeRecord, wantedRef as TypeRecord)) {
-              const completion = Throw.StaticTypeError(
-                'the argument bound by ref to $1 does not satisfy its type annotation',
-                Value(pr.Name || `parameter ${i + 1}`),
-              ) as ThrowCompletion;
+              const completion = CreateTypeDiagnostic('rt-reference-argument', n, diagnosticPhase, 'the argument bound by ref to $1 does not satisfy its type annotation', Value(pr.Name || `parameter ${i + 1}`)) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
           }
@@ -29943,11 +29730,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               || NarrowFrom(wanted as TypeRecord, undefinedType) !== wanted) {
               return;
             }
-            const completion = Throw.StaticTypeError(
-              '$1 is required by $2 and is not supplied',
-              Value(pr.Name || `parameter ${i + 1}`),
-              Value(displayType(wanted as TypeRecord)),
-            ) as ThrowCompletion;
+            const completion = CreateTypeDiagnostic('rt-required-member', n, diagnosticPhase, '$1 is required by $2 and is not supplied', Value(pr.Name || `parameter ${i + 1}`), Value(displayType(wanted as TypeRecord))) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           });
         }
@@ -29990,12 +29773,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             (s as unknown as { Untyped?: boolean }).Untyped === true,
           )));
           if (supplied.length > most) {
-            const completion = Throw.StaticTypeError(
-              '$1 takes at most $2 arguments, and $3 were supplied',
-              Value(namedCallee(c) ?? displayType(callee as TypeRecord)),
-              Value(String(most)),
-              Value(String(supplied.length)),
-            ) as ThrowCompletion;
+            const completion = CreateTypeDiagnostic('rt-call-argument', n, diagnosticPhase, '$1 takes at most $2 arguments, and $3 were supplied', Value(namedCallee(c) ?? displayType(callee as TypeRecord)), Value(String(most)), Value(String(supplied.length))) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           }
         }
@@ -30021,7 +29799,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // array, and a value typed by a pack (`...xs` with `xs: Ts`,
               // the forwarding idiom) all have the length the pack needs.
               if (spreadType && spreadType.Kind === 'array' && typeof ext !== 'number') {
-                const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(spreadType)), Value(`a spread of statically known length, which binding the pack ${restType.Name} requires`)) as ThrowCompletion;
+                const completion = CreateTypeDiagnostic('rt-assignability', n, diagnosticPhase, '$1 is not assignable to $2', Value(displayType(spreadType)), Value(`a spread of statically known length, which binding the pack ${restType.Name} requires`)) as ThrowCompletion;
                 errors.push(completion.Value as ObjectValue);
               }
             }
@@ -30346,7 +30124,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   .every((el) => fitsOne(el.Type, element) || IsAssignable(el.Type, element))
                 : arms.length > 0 && arms.every((arm) => fitsOne(arm, closedRecord));
               if (!everyArmFits) {
-                requireAssignable(bound as Known, closed as Known);
+                requireAssignable(bound as Known, closed as Known, n as ParseNode);
               }
 
             }
@@ -30478,7 +30256,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         const optionalHere = slot?.Optional === true;
         if (!(optionalHere && argType && (argType as { Name?: string }).Name === 'undefined')) {
-          requireAssignable(argType, checkedParam);
+          requireAssignable(argType, checkedParam, n as ParseNode);
         }
       });
       const effective = effectiveBindings
@@ -30498,17 +30276,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           && !mentionsTypeParameter(expectedThis)) {
         let target = c.CallExpression;
         while (target?.type === 'ParenthesizedExpression' || target?.type === 'TypeArgumentsExpression') target = target.Expression;
-        if (target?.type === 'MemberExpression') requireAssignable(staticType(target.MemberExpression), expectedThis);
-        else if (target?.type === 'SuperProperty') requireAssignable(thisTypeFrames.at(-1) ?? null, expectedThis);
+        if (target?.type === 'MemberExpression') requireAssignable(staticType(target.MemberExpression), expectedThis, n as ParseNode);
+        else if (target?.type === 'SuperProperty') requireAssignable(thisTypeFrames.at(-1) ?? null, expectedThis, n as ParseNode);
       }
     }
   }
   };
 
-  const checkCallable = (callee: Known): void => {
+  const checkCallable = (callee: Known, site: ParseNode): void => {
     const judged = erasedForJudgment(callee);
     if (judged && notCallable(judged)) {
-      errors.push(Throw.StaticTypeError('a value of $1 is not callable', Value(displayType(judged))).Value as ObjectValue);
+      reportType('rt-not-callable', site, 'a value of $1 is not callable', Value(displayType(judged)));
     }
   };
 
@@ -30758,7 +30536,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         || !intrinsicOrigin(origin, 'Proxy')) return;
     const target = args[0];
     if (operandParticipates(target) && proxyLayoutForbidden(staticType(target))) {
-      errors.push(Throw.StaticTypeError('a Proxy target cannot carry typed array or sealed class storage').Value as ObjectValue);
+      reportType('rt-proxy-storage', callee, 'a Proxy target cannot carry typed array or sealed class storage');
     }
   };
 
@@ -30818,7 +30596,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const family = source.Name === 'boolean' ? 'Boolean' : source.Name === 'symbol' ? 'Symbol'
           : source.Name === 'bigint' ? 'BigInt' : isNumericOperandName(source.Name) ? 'Number' : null;
         if (family && OrdinaryPrototypeLacks(realm.Intrinsics[`%${family}.prototype%`], wellKnownSymbols.iterator)) {
-          errors.push(Throw.StaticTypeError('a collection seed must be iterable, null or undefined').Value as ObjectValue);
+          reportType('rt-builtin-argument', node, 'a collection seed must be iterable, null or undefined');
         }
       }
       return;
@@ -30872,7 +30650,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (const element of elements) {
         if (!mapLike) {
           if (refuse(element, positions[0])) {
-            errors.push(Throw.StaticTypeError('a $1 seed element of type $2 cannot be converted to $3', Value(name), Value(displayType(element)), Value(displayType(positions[0] as TypeRecord))).Value as ObjectValue);
+            reportType('rt-collection-seed', node, 'a $1 seed element of type $2 cannot be converted to $3', Value(name), Value(displayType(element)), Value(displayType(positions[0] as TypeRecord)));
             return;
           }
           continue;
@@ -30881,7 +30659,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (!entry || entry.length < 2) continue;
         for (const [index, wanted] of [[0, positions[0]], [1, positions[1]]] as const) {
           if (refuse(entry[index]!, wanted)) {
-            errors.push(Throw.StaticTypeError('a $1 seed element of type $2 cannot be converted to $3', Value(name), Value(displayType(entry[index]!)), Value(displayType(wanted as TypeRecord))).Value as ObjectValue);
+            reportType('rt-collection-seed', node, 'a $1 seed element of type $2 cannot be converted to $3', Value(name), Value(displayType(entry[index]!)), Value(displayType(wanted as TypeRecord)));
             return;
           }
         }
@@ -30890,9 +30668,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (seed.type !== 'ArrayLiteral') return;
     const reject = (value: ParseNode, wanted: TypeRecord | number | undefined): void => {
-      if (wanted && typeof wanted !== 'number' && refuses(value, wanted)) errors.push(Throw.StaticTypeError(
-        'a final $1 seed entry cannot be converted to $2', Value(name), Value(displayType(wanted)),
-      ).Value as ObjectValue);
+      if (wanted && typeof wanted !== 'number' && refuses(value, wanted)) reportType('rt-collection-seed', value, 'a final $1 seed entry cannot be converted to $2', Value(name), Value(displayType(wanted)));
     };
     if (!mapLike) {
       for (const value of seed.ElementList) reject(value, positions[0]);
@@ -30903,7 +30679,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (!entry) return null;
       if (!currentConstruction() && !(entry.type === 'ArrayLiteral' && entry.ElementList.length === 2)) return null;
       if (knownNonObject(staticType(entry))) {
-        errors.push(Throw.StaticTypeError('a Map seed entry must be an Object').Value as ObjectValue);
+        reportType('rt-builtin-argument', expression, 'a Map seed entry must be an Object');
         return null;
       }
       if (entry.type !== 'ArrayLiteral' && entry.type !== 'ObjectLiteral') return null;
@@ -30944,8 +30720,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (const [keyNode] of pairs) {
         const keyType = staticType(keyNode);
         if (keyType && keyType.Kind !== 'any' && !typeCanBeHeldWeakly(keyType as TypeRecord)) {
-          errors.push(Throw.StaticTypeError('$1 cannot be held weakly, and $2 holds its $3 weakly',
-            Value(displayType(keyType as TypeRecord)), Value('WeakMap'), Value('keys')).Value as ObjectValue);
+          reportType('rt-weak-target', node, '$1 cannot be held weakly, and $2 holds its $3 weakly', Value(displayType(keyType as TypeRecord)), Value('WeakMap'), Value('keys'));
           return;
         }
       }
@@ -31119,7 +30894,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         : fact.constructible
           ? 'a typed class constructor cannot be invoked without new'
           : 'this value is not callable';
-      errors.push(Throw.StaticTypeError(message).Value as ObjectValue);
+      reportType(construct ? 'rt-proposal-construction' : fact.constructible ? 'rt-declared-call' : 'rt-not-callable', expression, message);
     }
   };
 
@@ -31173,7 +30948,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         head = (head as ParseNode.ParenthesizedExpression | ParseNode.TypeArgumentsExpression).Expression as ParseNode;
       }
       if (head.type !== 'MemberExpression' && head.type !== 'SuperProperty' && head.type !== 'OptionalExpression') {
-        errors.push(Throw.StaticTypeError('a method called without its object has no `this`; call it through the object, or bind it first').Value as ObjectValue);
+        reportType('rt-this-required', expression, 'a method called without its object has no `this`; call it through the object, or bind it first');
       }
     }
   };
@@ -31218,7 +30993,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (visit) {
           if (!unreachable) {
             const callee = callableForm(receiver);
-            checkCallable(callee);
+            checkCallable(callee, chain);
             checkCallReceiver(view.expression, callee);
             checkInvocation(view.expression, false);
             checkCallArguments(call, callee, node);
@@ -31333,7 +31108,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (e.FormalParameters.length === 0
           && (node.MetadataParameters?.Captures?.length ?? 0) === 0
           && NestedComponentCapturesOf(node).length === 0) {
-        const completion = Throw.StaticTypeError('$1', `unary operator "${e.OperatorName}" on "${typeName}" redeclares an operation the type already defines; declare it in a block that captures metadata`) as ThrowCompletion;
+        const completion = CreateTypeDiagnostic('rt-duplicate-operator', node, diagnosticPhase, '$1', `unary operator "${e.OperatorName}" on "${typeName}" redeclares an operation the type already defines; declare it in a block that captures metadata`) as ThrowCompletion;
         errors.push(completion.Value as ObjectValue);
         continue;
       }
@@ -31385,7 +31160,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const family = PrimitiveDeclaresParameters(typeName);
           const own = family ? null : builtinTypeRecord(typeName, []);
           if (family ? raw.Name === typeName : (own !== null && SameType(raw, own))) {
-            const completion = Throw.StaticTypeError('$1', `operator "${e.OperatorName}" on "${typeName}" with an operand of "${written}" redeclares an operation the type already defines; declare it for a parameterization carrying metadata, or for another operand type`) as ThrowCompletion;
+            const completion = CreateTypeDiagnostic('rt-duplicate-operator', node, diagnosticPhase, '$1', `operator "${e.OperatorName}" on "${typeName}" with an operand of "${written}" redeclares an operation the type already defines; declare it for a parameterization carrying metadata, or for another operand type`) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
             continue;
           }
@@ -31398,10 +31173,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         || RegisteredPrimitiveOperators(typeName, opText).some((entry) => entry.node !== e && !entry.deferred
           && samePrimitiveOperand(entry.parameterType, operand));
       if (duplicate) {
-        errors.push(Throw.StaticTypeError(
-          'operator $1 on $2 with an operand of $3 is already declared by an earlier primitive block',
-          Value(e.OperatorName), Value(typeName), Value(written),
-        ).Value as ObjectValue);
+        reportType('rt-duplicate-operator', node, 'operator $1 on $2 with an operand of $3 is already declared by an earlier primitive block', Value(e.OperatorName), Value(typeName), Value(written));
         continue;
       }
       earlier.push({ type: operand, node: e, roles });
@@ -31594,7 +31366,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const selection = EnsureCompletion(skipDebugger(MostSpecificPrimitiveOperator(candidates, right)));
         if (selection.Type === 'normal' && selection.Value && selection.Value !== 'ambiguous') return selection.Value.result;
         if (selection.Type === 'normal' && selection.Value === 'ambiguous') {
-          errors.push((Throw.StaticTypeError('$1', `operator ${op} on ${displayType(left)} is ambiguous for an operand of ${displayType(right)}`) as ThrowCompletion).Value as ObjectValue);
+          reportType('rt-ambiguous-operator', site, '$1', `operator ${op} on ${displayType(left)} is ambiguous for an operand of ${displayType(right)}`);
           return null;
         }
       }
@@ -31670,7 +31442,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return f.BindingIdentifier?.name ?? f.BindingElement?.BindingIdentifier?.name;
     });
     if (!names.includes(target)) {
-      errors.push((Throw.StaticTypeError('$1 is not a parameter of this function, so a return predicate cannot narrow it', Value(target)) as ThrowCompletion).Value as ObjectValue);
+      reportType('rt-narrowing-declaration', annotation, '$1 is not a parameter of this function, so a return predicate cannot narrow it', Value(target));
     }
   };
 
@@ -31755,7 +31527,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const fraction = exact === null ? fractionalLiteralValue(lit) : null;
       const prim = base as TypeRecord & { Name: string, Arguments: readonly (TypeRecord | number)[] };
       if ((exact !== null && !fitsNumericType(exact, prim.Name, prim.Arguments)) || fraction !== null) {
-        errors.push(Throw.StaticTypeError('$1 is not in the range of $2', Value(String(exact ?? fraction)), Value(displayType(base as TypeRecord))).Value as ObjectValue);
+        reportType('rt-numeric-range', a, '$1 is not in the range of $2', Value(String(exact ?? fraction)), Value(displayType(base as TypeRecord)));
       }
     }
   };
@@ -31818,8 +31590,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const emptyRange = lo !== undefined && hi !== undefined
           && (lo > hi || (lo === hi && (range!.RangeStartBound === 'open' || range!.RangeEndBound === 'open')));
         if (emptyLiteral || emptyRange) {
-          errors.push(Throw.StaticTypeError('the body of this loop can never run, since $1 has no element',
-            Value(emptyLiteral ? 'an empty array literal' : 'its range')).Value as ObjectValue);
+          reportType('rt-empty-iteration', (node as ParseNode), 'the body of this loop can never run, since $1 has no element', Value(emptyLiteral ? 'an empty array literal' : 'its range'));
         }
       }
       const decl = (f.ForDeclaration ?? f.ForBinding) as unknown as {
@@ -31850,9 +31621,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // the method all reach here as nominals and are untouched.
       if (f.AssignmentExpression) {
         const over = staticType(f.AssignmentExpression);
-        if ((decl?.ForBinding?.Ref || decl?.Ref) && cannotRefIterate(over)) errors.push(Throw.StaticTypeError(
-          'a ref for-of loop requires an array or an SoA whose elements can be referenced',
-        ).Value as ObjectValue);
+        if ((decl?.ForBinding?.Ref || decl?.Ref) && cannotRefIterate(over)) reportType('rt-reference-iteration', (node as ParseNode), 'a ref for-of loop requires an array or an SoA whose elements can be referenced');
         // A TUPLE COMPOSITE iterates, though it is a ~primitive~-kinded record
         // named "Composite" like every composite. #sec-composite-getiterator
         // inserts a step for exactly this: "A tuple composite has a *null*
@@ -31874,10 +31643,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // `iterator-operations.mts` already implements. A record composite still
         // throws, one step later and from the operation that can tell.
         if (notIterable(over, (node as ParseNode).type === 'ForAwaitStatement', !!(decl?.ForBinding?.Ref || decl?.Ref))) {
-          const completion = Throw.StaticTypeError(
-            'a value of $1 is not iterable',
-            Value(displayType(over as TypeRecord)),
-          ) as ThrowCompletion;
+          const completion = CreateTypeDiagnostic('rt-iterable-required', root, diagnosticPhase, 'a value of $1 is not iterable', Value(displayType(over as TypeRecord))) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
         }
         const immediatelyBreaks = (statement: ParseNode): boolean => {
@@ -31888,7 +31654,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         };
         if (name && !(decl?.ForBinding?.Ref || decl?.Ref) && operandParticipates(f.AssignmentExpression)
           && f.Statement && immediatelyBreaks(f.Statement) && iteratorCloseFails(over, (node as ParseNode).type === 'ForAwaitStatement', true)) {
-          errors.push(Throw.StaticTypeError('the iterator cannot satisfy the closing contract of this break').Value as ObjectValue);
+          reportType('rt-iterator-close', (node as ParseNode), 'the iterator cannot satisfy the closing contract of this break');
         }
       }
       // The binding's own ANNOTATION, where it writes one. It is resolved
@@ -32277,7 +32043,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // of arr)` on a `[].<uint8>` is refused rather than run.
       if (loopType && element && element.Kind !== 'any'
           && !IsAssignable(element as TypeRecord, loopType as TypeRecord)) {
-        const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(element as TypeRecord)), Value(displayType(loopType as TypeRecord))) as ThrowCompletion;
+        const completion = CreateTypeDiagnostic('rt-assignability', root, diagnosticPhase, '$1 is not assignable to $2', Value(displayType(element as TypeRecord)), Value(displayType(loopType as TypeRecord))) as ThrowCompletion;
         errors.push(completion.Value as ObjectValue);
       }
       let bindingType = loopType ?? element;
@@ -32429,11 +32195,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'RangeExpression': {
         for (const endpoint of [n.RangeStart, n.RangeEnd]) {
-          if (endpoint && knownRange(staticType(endpoint))) errors.push(Throw.StaticTypeError(
-            'a range endpoint must be an ordered value, not a range',
-          ).Value as ObjectValue);
+          if (endpoint && knownRange(staticType(endpoint))) reportType('rt-range-value', (node as ParseNode), 'a range endpoint must be an ordered value, not a range');
           else if (endpoint && operandParticipates(endpoint) && invalidRangeEndpoint(staticType(endpoint))) {
-            errors.push(Throw.StaticTypeError('a present Symbol or nullish range endpoint has no ordering').Value as ObjectValue);
+            reportType('rt-range-value', (node as ParseNode), 'a present Symbol or nullish range endpoint has no ordering');
           }
           walk(endpoint);
         }
@@ -32445,9 +32209,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       case 'SpreadElement': {
         const over = staticType(n.AssignmentExpression);
-        if (notIterable(over)) errors.push(Throw.StaticTypeError(
-          'a value of $1 is not iterable', Value(displayType(over!)),
-        ).Value as ObjectValue);
+        if (notIterable(over)) reportType('rt-iterable-required', (node as ParseNode), 'a value of $1 is not iterable', Value(displayType(over!)));
         walk(n.AssignmentExpression);
         return;
       }
@@ -32466,7 +32228,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'ImportCall':
         checkImplicitString(n.AssignmentExpression);
         if (n.OptionsExpression && operandParticipates(n.OptionsExpression) && importOptionsFail(staticType(n.OptionsExpression))) {
-          errors.push(Throw.StaticTypeError('import options and their with member must admit Object or undefined').Value as ObjectValue);
+          reportType('rt-builtin-argument', (node as ParseNode), 'import options and their with member must admit Object or undefined');
         }
         walk(n.AssignmentExpression);
         walk(n.OptionsExpression);
@@ -32497,7 +32259,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 ? shape.Properties.find((property) => property.key === wellKnownSymbols.dispose)?.type : null;
               return !disposer || (!notCallable(disposer) && !protocolCallFails(disposer, () => false, [], type));
             })) {
-              const completion = Throw.StaticTypeError('a using resource of type $1 has a disposal contract that cannot be called without arguments', Value(displayType(declared))) as ThrowCompletion;
+              const completion = CreateTypeDiagnostic('rt-disposal-contract', root, diagnosticPhase, 'a using resource of type $1 has a disposal contract that cannot be called without arguments', Value(displayType(declared))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
             walk(binding);
@@ -32514,7 +32276,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // by resolving it here and at the bare cast below.
         const ie = n as ParseNode.IsExpression;
         if (PatternBindingNames(ie.Pattern ?? null).length && !PatternHasGovernedPosition(ie)) {
-          errors.push(Throw.StaticTypeError('a binding-carrying is pattern must govern a position').Value as ObjectValue);
+          reportType('rt-pattern-scope', (node as ParseNode), 'a binding-carrying is pattern must govern a position');
         }
         pushBlock(() => declareMatchPatternBindings(ie.Pattern ?? null, staticType(ie.Expression)));
         walk(ie.Expression as ParseNode);
@@ -32593,21 +32355,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           } else if (rel.operator === 'in') {
             checkPrimitiveConversion(rel.RelationalExpression, 'string');
-          } else if (rel.operator === 'instanceof' && (operandParticipates(rel.ShiftExpression) || !!stableClassOrigin(rel.ShiftExpression))
-            && hasInstanceFails(instanceTestTarget(rel.ShiftExpression), staticType(rel.RelationalExpression),
-              invocationFact(rel.ShiftExpression)?.ordinaryObject === true)) {
-            errors.push(Throw.StaticTypeError('the selected instanceof protocol cannot accept these operands').Value as ObjectValue);
+          } else if (rel.operator === 'instanceof' && (operandParticipates(rel.ShiftExpression) || !!stableClassOrigin(rel.ShiftExpression))) {
+            const target = instanceTestTarget(rel.ShiftExpression);
+            const argument = staticType(rel.RelationalExpression);
+            const ordinaryObject = invocationFact(rel.ShiftExpression)?.ordinaryObject === true;
+            if (hasInstanceFails(target, argument, ordinaryObject, true)) {
+              reportType('rt-instanceof-declared-call', n, 'the selected instanceof protocol cannot accept these operands');
+            } else if (hasInstanceFails(target, argument, ordinaryObject)) {
+              reportType('rt-instanceof-protocol', n, 'the selected instanceof protocol cannot accept these operands');
+            }
           }
         }
         if (['<', '<=', '>', '>='].includes(rel.operator)
           && invalidRangeComparison(rel.RelationalExpression ? staticType(rel.RelationalExpression) : null, staticType(rel.ShiftExpression), rel.operator)) {
-          errors.push(Throw.StaticTypeError('a range is not an ordered value and cannot be compared').Value as ObjectValue);
+          reportType('rt-range-value', (node as ParseNode), 'a range is not an ordered value and cannot be compared');
         }
         if (rel.operator === 'in' || rel.operator === 'instanceof') {
           const right = staticType(rel.ShiftExpression);
           if (knownNonObject(right)) {
-            errors.push(Throw.StaticTypeError('the right operand of $1 must be an object, not $2',
-              Value(rel.operator), Value(displayType(right!))).Value as ObjectValue);
+            reportType('rt-object-operand', (node as ParseNode), 'the right operand of $1 must be an object, not $2', Value(rel.operator), Value(displayType(right!)));
           }
         }
         if (rel.operator === 'instanceof' && rel.RelationalExpression) {
@@ -32619,7 +32385,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // was never reported.
           const t = nominalInstanceTarget(rel.ShiftExpression);
           if (s && t) {
-            reportImpossibleTest(s, t, 'instanceof', guardsABranch(rel as ParseNode));
+            reportImpossibleTest(s, t, 'instanceof', guardsABranch(rel as ParseNode), (node as ParseNode));
           }
         }
         walk(rel.RelationalExpression as ParseNode);
@@ -32643,10 +32409,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const co = n as ParseNode.CoalesceExpression;
         const s = staticType(co.CoalesceExpressionHead as ParseNode);
         if (s) {
-          reportImpossibleTest(s, nullishType(), '??', true);
+          reportImpossibleTest(s, nullishType(), '??', true, (node as ParseNode));
         } else if (unparenthesized(co.CoalesceExpressionHead as ParseNode)?.type === 'ArrayLiteral') {
           // #sec-narrowfrom: an array literal is never nullish.
-          pushImpossibleTest('never-succeeds', '??');
+          pushImpossibleTest('never-succeeds', '??', (node as ParseNode));
         }
         walk(co.CoalesceExpressionHead as ParseNode);
         const branches = nullishFlow(co.CoalesceExpressionHead as ParseNode);
@@ -32869,11 +32635,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (earlier.includes(read)) continue;
             let completion: ThrowCompletion | null = null;
             if (read === own) {
-              completion = Throw.StaticTypeError('the initializer of enumerator $1 names itself; an initializer may name only the enumerators declared before it', Value(own)) as ThrowCompletion;
+              completion = CreateTypeDiagnostic('rt-enum-initializer', root, diagnosticPhase, 'the initializer of enumerator $1 names itself; an initializer may name only the enumerators declared before it', Value(own)) as ThrowCompletion;
             } else if (names.slice(index + 1).includes(read)) {
-              completion = Throw.StaticTypeError('the initializer of enumerator $1 names $2, which is declared after it; an initializer may name only the enumerators declared before it', Value(own), Value(read)) as ThrowCompletion;
+              completion = CreateTypeDiagnostic('rt-enum-initializer', root, diagnosticPhase, 'the initializer of enumerator $1 names $2, which is declared after it; an initializer may name only the enumerators declared before it', Value(own), Value(read)) as ThrowCompletion;
             } else if (read === enumName) {
-              completion = Throw.StaticTypeError('the initializer of enumerator $1 names the enum $2, which is uninitialized until its declaration completes; name an earlier enumerator directly', Value(own), Value(read)) as ThrowCompletion;
+              completion = CreateTypeDiagnostic('rt-enum-initializer', root, diagnosticPhase, 'the initializer of enumerator $1 names the enum $2, which is uninitialized until its declaration completes; name an earlier enumerator directly', Value(own), Value(read)) as ThrowCompletion;
             }
             if (completion) {
               errors.push(completion.Value as ObjectValue);
@@ -32887,7 +32653,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // case, and the rest were reported just above.
           const outside = evaluabilityViolation(member.Initializer, new Set(names));
           if (outside !== undefined) {
-            errors.push(Throw.StaticTypeError('an enumerator initializer must be compile-time evaluable, and $1 is not', Value(outside)).Value as ObjectValue);
+            reportType('rt-enum-initializer', (node as ParseNode), 'an enumerator initializer must be compile-time evaluable, and $1 is not', Value(outside));
           }
         });
         const underlying = n.TypeAnnotation ? resolveType(n.TypeAnnotation.Type) : builtinTypeRecord('int32');
@@ -32897,10 +32663,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             && underlying && underlying.Kind !== 'any' && !mentionsTypeParameter(underlying)) {
           const base = erasedForJudgment(underlying);
           if (base && !(base.Kind === 'primitive' && isNumericOperandName(base.Name))) {
-            errors.push(Throw.StaticTypeError(
-              'the first enumerator of $1 requires an initializer because $2 is not numeric',
-              Value(n.BindingIdentifier.name), Value(displayType(underlying)),
-            ).Value as ObjectValue);
+            reportType('rt-enum-initializer', (node as ParseNode), 'the first enumerator of $1 requires an initializer because $2 is not numeric', Value(n.BindingIdentifier.name), Value(displayType(underlying)));
           }
         }
         checkEnumeratorIdentity(n, underlying);
@@ -32951,7 +32714,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (clauses && clauses.length > 1) {
           for (let i = 0; i < clauses.length - 1; i += 1) {
             if (!(clauses[i] as { TypeAnnotation?: unknown }).TypeAnnotation) {
-              const completion = Throw.StaticTypeError('an untyped catch clause must be last') as ThrowCompletion;
+              const completion = CreateTypeDiagnostic('rt-catch-order', root, diagnosticPhase, 'an untyped catch clause must be last') as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
           }
@@ -32966,16 +32729,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const annotation = (clauses[i] as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
             if (!annotation) {
               if (catchesAll) {
-                errors.push(Throw.StaticTypeError('the catch clause for $1 can never run, since an earlier clause accepts every such value',
-                  Value('any')).Value as ObjectValue);
+                reportType('rt-unreachable-catch', (node as ParseNode), 'the catch clause for $1 can never run, since an earlier clause accepts every such value', Value('any'));
               }
               break;
             }
             const caught = resolveType(annotation.Type);
             if (i > 0 && (catchesAll || (caught && caught.Kind !== 'any' && !mentionsTypeParameter(caught) && earlier.length
                 && IsSubtype(caught, CanonicalizeType({ Kind: 'union', Members: earlier }), [])))) {
-              errors.push(Throw.StaticTypeError('the catch clause for $1 can never run, since an earlier clause accepts every such value',
-                Value(caught ? displayType(caught) : 'any')).Value as ObjectValue);
+              reportType('rt-unreachable-catch', (node as ParseNode), 'the catch clause for $1 can never run, since an earlier clause accepts every such value', Value(caught ? displayType(caught) : 'any'));
             }
             if (!caught || mentionsTypeParameter(caught)) continue;
             if (caught.Kind === 'any') catchesAll = true;
@@ -33063,15 +32824,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // A valid label is `EnumName.Member`. Any other label in an enum
           // switch is not an enumerator of the enum and is a type error.
           for (const { shown } of coverage.invalid) {
-            const completion = Throw.StaticTypeError('$1 is not a case of enum $2', Value(shown), Value(coverage.enumName)) as ThrowCompletion;
+            const completion = CreateTypeDiagnostic('rt-enum-case', root, diagnosticPhase, '$1 is not a case of enum $2', Value(shown), Value(coverage.enumName)) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           }
-          for (const shown of coverage.duplicates) pushImpossibleTest('never-succeeds', shown);
+          for (const shown of coverage.duplicates) pushImpossibleTest('never-succeeds', shown, (node as ParseNode));
           const hasDefault = n.CaseBlock.DefaultClause !== undefined && n.CaseBlock.DefaultClause !== null;
           const missing = enumeratorsNotCovered(coverage.record, coverage.names, coverage.covered);
           if (!hasDefault) {
             if (missing.length > 0) {
-              const completion = Throw.StaticTypeError('switch over enum $1 is missing $2 and has no default', Value(coverage.enumName), Value(missing.join(', '))) as ThrowCompletion;
+              const completion = CreateTypeDiagnostic('rt-enum-case', root, diagnosticPhase, 'switch over enum $1 is missing $2 and has no default', Value(coverage.enumName), Value(missing.join(', '))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
           } else if (missing.length === 0 && coverage.invalid.length === 0) {
@@ -33080,21 +32841,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // every enumerator has a case, so the `default` can never be taken
             // (#sec-narrowfrom). A `default` covering a sentinel or any other
             // enumerator without a case is live.
-            errors.push(Throw.StaticTypeError('every case of $1 is covered, so the default can never be taken',
-              Value(coverage.enumName)).Value as ObjectValue);
+            reportType('rt-unreachable-default', (node as ParseNode), 'every case of $1 is covered, so the default can never be taken', Value(coverage.enumName));
           }
         } else if ((n.CaseBlock as { DefaultClause?: ParseNode | null }).DefaultClause && switchCasesCoverDiscriminant(n)) {
           // A sealed hierarchy is closed as an enum is: a `default` after a
           // case for every atom, the base included where it is instantiable,
           // can never be taken.
-          errors.push(Throw.StaticTypeError('every case of $1 is covered, so the default can never be taken',
-            Value(displayType(staticType(expression) as TypeRecord))).Value as ObjectValue);
+          reportType('rt-unreachable-default', (node as ParseNode), 'every case of $1 is covered, so the default can never be taken', Value(displayType(staticType(expression) as TypeRecord)));
         } else if ((n.CaseBlock as { DefaultClause?: ParseNode | null }).DefaultClause && ownedAtomsCovered(n)) {
           // #sec-narrowfrom: `boolean`, `null` and `undefined` are closed sets the
           // language owns, so a `default` past labels for all of them can never
           // be taken. A written union of literal types stays outside.
-          errors.push(Throw.StaticTypeError('every case of $1 is covered, so the default can never be taken',
-            Value(displayType(staticType(expression) as TypeRecord))).Value as ObjectValue);
+          reportType('rt-unreachable-default', (node as ParseNode), 'every case of $1 is covered, so the default can never be taken', Value(displayType(staticType(expression) as TypeRecord)));
         }
         // #sec-narrowfrom: `case NaN` can never succeed, NaN being strictly
         // equal to nothing, where the discriminant participates.
@@ -33107,23 +32865,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const seenLabels = new Set<string>();
           if (discriminantType && discriminantType.Kind !== 'any') {
             for (const clause of [...(block.CaseClauses_a ?? []), ...(block.CaseClauses_b ?? [])]) {
-              if (isNaNConstant((clause as { Expression?: ParseNode | null }).Expression)) pushImpossibleTest('never-succeeds', 'NaN');
+              if (isNaNConstant((clause as { Expression?: ParseNode | null }).Expression)) pushImpossibleTest('never-succeeds', 'NaN', (node as ParseNode));
               const label = (clause as { Expression?: ParseNode | null }).Expression;
               const k = label && lengths ? constantNumber(label) : null;
-              if (k !== null && lengths && !lengths.includes(k)) pushImpossibleTest('never-succeeds', `case ${String(k)}`);
+              if (k !== null && lengths && !lengths.includes(k)) pushImpossibleTest('never-succeeds', `case ${String(k)}`, (node as ParseNode));
               // #sec-narrowing-flow: a label is a literal test, impossible where
               // its value was excluded before the `switch`.
               const subjectName = narrowableName(expression);
               const labelType = label && subjectName !== null ? singleValueOperandType(label, discriminantType) : null;
-              if (labelType?.Kind === 'literal' && lookup(scalarKey(subjectName!, labelType))) pushImpossibleTest('never-succeeds', displayType(labelType));
+              if (labelType?.Kind === 'literal' && lookup(scalarKey(subjectName!, labelType))) pushImpossibleTest('never-succeeds', displayType(labelType), (node as ParseNode));
               // #sec-narrowing-flow: a label repeating an earlier effect-free label
               // of this `switch` tests what that one already failed.
               const labelCanon = label && labelType?.Kind !== 'literal' ? testCanon(label, true) : null;
               if (labelCanon) {
-                if (seenLabels.has(labelCanon.key)) pushImpossibleTest('never-succeeds', `case ${labelCanon.key}`);
+                if (seenLabels.has(labelCanon.key)) pushImpossibleTest('never-succeeds', `case ${labelCanon.key}`, (node as ParseNode));
                 else seenLabels.add(labelCanon.key);
               }
-              if (isFresh(label)) pushImpossibleTest('never-succeeds', 'a fresh value');
+              if (isFresh(label)) pushImpossibleTest('never-succeeds', 'a fresh value', (node as ParseNode));
             }
           }
         }
@@ -33157,7 +32915,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const tag = tagValue.stringValue();
             const display = `typeof ${JSON.stringify(tag)}`;
             if (tested.includes(tag) || !['undefined', 'object', 'boolean', 'number', 'bigint', 'string', 'symbol', 'function'].includes(tag)) {
-              pushImpossibleTest('never-succeeds', display);
+              pushImpossibleTest('never-succeeds', display, (node as ParseNode));
               continue;
             }
             tested.push(tag);
@@ -33166,7 +32924,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const tags = members.map((member) => typeofTagOfType(member));
             if (tags.some((t) => t === null)) continue;
             if (!tags.includes(tag)) {
-              pushImpossibleTest('never-succeeds', display);
+              pushImpossibleTest('never-succeeds', display, (node as ParseNode));
               continue;
             }
             const rest = members.filter((_, i) => tags[i] !== tag);
@@ -33180,7 +32938,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (!label) continue;
             const range = unparenthesized(label);
             if (range.type === 'RangeExpression' && rangeIntervalMisses({ type: 'MatchRangePattern', Range: range } as ParseNode.MatchRangePattern, subject)) {
-              pushImpossibleTest('never-succeeds', 'range case');
+              pushImpossibleTest('never-succeeds', 'range case', (node as ParseNode));
             }
           }
         }
@@ -33195,7 +32953,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const label = (clause as { Expression?: ParseNode }).Expression;
             const labelType = label ? staticType(label) : null;
             if (labelType?.Kind === 'literal' && cannotHoldValue(subject as TypeRecord, labelType as TypeRecord)) {
-              errors.push(Throw.StaticTypeError('the $1 test can never succeed, so the branch it guards is dead code', Value(displayType(labelType as TypeRecord))).Value as ObjectValue);
+              reportType('rt-impossible-test', (node as ParseNode), 'the $1 test can never succeed, so the branch it guards is dead code', Value(displayType(labelType as TypeRecord)));
             }
           }
         }
@@ -33245,7 +33003,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (labelType && labelType.Kind === 'literal' && !isEnumType(subject as TypeRecord)) {
               const value = (labelType as { Value?: Value }).Value;
               if (value !== undefined && testedLabelValues.some((earlier) => SameValue(earlier, value))) {
-                pushImpossibleTest('never-succeeds', displayType(labelType as TypeRecord));
+                pushImpossibleTest('never-succeeds', displayType(labelType as TypeRecord), (node as ParseNode));
                 continue;
               }
               if (value !== undefined) testedLabelValues.push(value);
@@ -33256,7 +33014,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (!numeric && remainingForLabels && remainingForLabels.Kind !== 'any' && !mentionsTypeParameter(remainingForLabels)
                   && !(base && AreDisjoint(subject as TypeRecord, base))) {
                 if (NarrowTo(remainingForLabels, labelType as TypeRecord) === empty && stablyDisjoint(remainingForLabels, labelType as TypeRecord)) {
-                  pushImpossibleTest('never-succeeds', displayType(labelType as TypeRecord));
+                  pushImpossibleTest('never-succeeds', displayType(labelType as TypeRecord), (node as ParseNode));
                   continue;
                 }
                 const rest = NarrowFrom(remainingForLabels, labelType as TypeRecord);
@@ -33282,7 +33040,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (labelType && numericLiteral
                 && (subject as { Declaration?: { type?: string } }).Declaration?.type !== 'EnumDeclaration'
                 && cannotHoldValue(subject as TypeRecord, labelType as TypeRecord)) {
-              errors.push(Throw.StaticTypeError('the $1 test can never succeed, so the branch it guards is dead code', Value(displayType(labelType as TypeRecord))).Value as ObjectValue);
+              reportType('rt-impossible-test', (node as ParseNode), 'the $1 test can never succeed, so the branch it guards is dead code', Value(displayType(labelType as TypeRecord)));
               continue;
             }
             // A string or boolean literal label is the `v === e` row too. One
@@ -33294,7 +33052,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 && (subject as { Declaration?: { type?: string } }).Declaration?.type !== 'EnumDeclaration') {
               const literalBase = (labelType as { Base?: TypeRecord }).Base;
               if (literalBase && !AreDisjoint(subject as TypeRecord, literalBase) && cannotHoldValue(subject as TypeRecord, labelType as TypeRecord)) {
-                errors.push(Throw.StaticTypeError('the $1 test can never succeed, so the branch it guards is dead code', Value(displayType(labelType as TypeRecord))).Value as ObjectValue);
+                reportType('rt-impossible-test', (node as ParseNode), 'the $1 test can never succeed, so the branch it guards is dead code', Value(displayType(labelType as TypeRecord)));
                 continue;
               }
             }
@@ -33306,8 +33064,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             if (labelType && labelType.Kind !== 'literal' && labelType.Kind !== 'void'
                 && AreDisjoint(subject as TypeRecord, labelType as TypeRecord)) {
-              const completion = Throw.StaticTypeError('$1 and $2 are disjoint, so this comparison is always $3', Value(displayType(subject as TypeRecord)), Value(displayType(labelType as TypeRecord)), Value('false')) as ThrowCompletion;
-              errors.push(completion.Value as ObjectValue);
+              reportType('rt-disjoint-comparison', clause, '$1 and $2 are disjoint, so this comparison is always $3', Value(displayType(subject as TypeRecord)), Value(displayType(labelType as TypeRecord)), Value('false'));
             }
           }
         }
@@ -33354,7 +33111,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const interval = rangePatternInterval({ type: 'MatchRangePattern', Range: rangeLabel } as ParseNode.MatchRangePattern);
               if (interval) {
                 if (coveredRanges.length && uncoveredIntervals(interval, coveredRanges).every((piece) => intervalMisses(piece, subject))) {
-                  errors.push(Throw.StaticTypeError('the range label can match nothing the preceding range labels have left').Value as ObjectValue);
+                  reportType('rt-unreachable-range-case', (node as ParseNode), 'the range label can match nothing the preceding range labels have left');
                 }
                 coveredRanges.push(interval);
               }
@@ -33482,10 +33239,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // one it can give the binding. `let a = ...` remains the spelling
             // for a binding that does not want one.
             if (!inferred || inferred.Kind === 'any') {
-              errors.push((Throw.StaticTypeError(
-                'the initializer of a $1 declaration has no static type; annotate the binding or use $2',
-                Value(':='), Value('='),
-              ) as ThrowCompletion).Value as ObjectValue);
+              reportType('rt-declaration-inference', (node as ParseNode), 'the initializer of a $1 declaration has no static type; annotate the binding or use $2', Value(':='), Value('='));
             }
             requireBindingType(inferred);
             declare(n.BindingIdentifier.name, inferred ? widen(inferred) : null, bindingFrame);
@@ -33716,7 +33470,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const name = rb.BindingIdentifier?.name;
         const kind = name ? bindingKindOf(name) : undefined;
         if (kind && kind !== 'mutable-ref') {
-          errors.push(Throw.StaticTypeError('$1 is not a rebindable ref binding', Value(name!)).Value as ObjectValue);
+          reportType('rt-reference-rebinding', (node as ParseNode), '$1 is not a rebindable ref binding', Value(name!));
         }
         const target = name && kind ? lookupDeclared(name) : null;
         if (rb.Expression) {
@@ -33729,7 +33483,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // Where either side's type is unknown the judgment is the run time's,
         // as it is for the borrow itself.
         if (target && source && !IsAssignable(source as TypeRecord, target as TypeRecord)) {
-          const completion = Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(source as TypeRecord)), Value(displayType(target as TypeRecord))) as ThrowCompletion;
+          const completion = CreateTypeDiagnostic('rt-assignability', root, diagnosticPhase, '$1 is not assignable to $2', Value(displayType(source as TypeRecord)), Value(displayType(target as TypeRecord))) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
         }
         walk(rb.Expression);
@@ -33752,7 +33506,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const operandType = staticType(u.UnaryExpression);
           const operandClass = typedClassDeclarationOf(operandType);
           if (operandClass && !declaredOperator(operandType, `unary ${u.operator}`) && !declaresPrimitiveConversion(operandClass)) {
-            errors.push(Throw.StaticTypeError('$1 is not defined for $2', Value(u.operator), Value(displayType(operandType as TypeRecord))).Value as ObjectValue);
+            reportType('rt-numeric-operator', (node as ParseNode), '$1 is not defined for $2', Value(u.operator), Value(displayType(operandType as TypeRecord)));
           }
         }
         if (u.operator === 'delete' && target?.type === 'MemberExpression') {
@@ -33789,9 +33543,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const storage = keys?.map((key) => protectedStorage(receiver, key));
           if (storage?.length && storage.every((kind) => kind !== null)) {
             const named = keys![0];
-            errors.push(Throw.StaticTypeError(storage[0] === 'property'
-              ? '$1 is a typed property and cannot be deleted' : '$1 is a typed element and cannot be deleted',
-            typeof named === 'string' ? Value(named) : named!).Value as ObjectValue);
+            reportType('rt-typed-delete', (node as ParseNode), storage[0] === 'property'
+              ? '$1 is a typed property and cannot be deleted' : '$1 is a typed element and cannot be deleted', typeof named === 'string' ? Value(named) : named!);
           }
         }
         staticType(n);
@@ -33875,17 +33628,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // what kept an INTERSECTION and a ~void~ out of it while the predicate
           // below already decided them.
           if (base && notCallable(base)) {
-            const completion = Throw.StaticTypeError(
-              'a value of $1 is not callable',
-              Value(displayType(callee as TypeRecord)),
-            ) as ThrowCompletion;
-            errors.push(completion.Value as ObjectValue);
+            reportType('rt-not-callable', node, 'a value of $1 is not callable', Value(displayType(callee as TypeRecord)));
           } else if (base && base.Kind === 'primitive') {
-            const completion = Throw.StaticTypeError(
-              'a value of $1 is not callable',
-              Value(displayType(callee as TypeRecord)),
-            ) as ThrowCompletion;
-            errors.push(completion.Value as ObjectValue);
+            reportType('rt-not-callable', node, 'a value of $1 is not callable', Value(displayType(callee as TypeRecord)));
           }
         }
         if (conversionTarget !== undefined) {
@@ -34001,7 +33746,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'TypeArgumentsExpression':
         if (staticLibraryOperations().get(n)?.generic === false) {
-          errors.push(Throw.StaticTypeError('the selected intrinsic function is not generic').Value as ObjectValue);
+          reportType('rt-generic-argument', (node as ParseNode), 'the selected intrinsic function is not generic');
         }
         staticType(n);
         walk(n.Expression);
@@ -34067,20 +33812,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const constructee = callableForm(staticType(target));
           const cbase = erasedForJudgment(constructee);
           if (cbase && notConstructor(cbase)) {
-            const completion = Throw.StaticTypeError(
-              'a value of $1 is not a constructor',
-              Value(displayType(constructee as TypeRecord)),
-            ) as ThrowCompletion;
-            errors.push(completion.Value as ObjectValue);
+            reportType('rt-constructor-required', node, 'a value of $1 is not a constructor', Value(displayType(constructee as TypeRecord)));
           }
         }
         // Abstract identity follows the same guarded origins as invocation
         // capability, but it is a separate restriction on direct new. An
         // abstract base remains constructible for extends and super().
         const abstractClass = target ? invocationFact(target)?.abstractClass : undefined;
-        if (abstractClass) errors.push(Throw.StaticTypeError(
-          '$1 is an abstract class and cannot be instantiated', Value(abstractClass),
-        ).Value as ObjectValue);
+        if (abstractClass) reportType('rt-abstract-construction', (node as ParseNode), '$1 is an abstract class and cannot be instantiated', Value(abstractClass));
         // A CONSTRUCTION's written type arguments are counted against the
         // class's parameters, as a call's are against the function's.
         if (target && (target as { type?: string }).type === 'TypeArgumentsExpression') {
@@ -34136,8 +33875,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               for (const { node: argument, slot } of mapCallArguments(Parameters, ne.Arguments).certainEntries) {
                 const referent = staticType(argument);
                 if (slot === 0 && referent && !typeCanBeHeldWeakly(widen(referent)!)) {
-                  errors.push(Throw.StaticTypeError('$1 cannot be held weakly, and $2 holds its $3 weakly',
-                    Value(displayType(referent)), Value('WeakRef'), Value('target')).Value as ObjectValue);
+                  reportType('rt-weak-target', (node as ParseNode), '$1 cannot be held weakly, and $2 holds its $3 weakly', Value(displayType(referent)), Value('WeakRef'), Value('target'));
                 }
               }
             }
@@ -34217,7 +33955,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // is dead where the receiver is always nullish (#sec-narrowfrom).
         {
           const receiver = staticType((n as ParseNode.OptionalExpression).MemberExpression as ParseNode);
-          if (receiver) reportImpossibleTest(receiver, nullishType(), '?.', true);
+          if (receiver) reportImpossibleTest(receiver, nullishType(), '?.', true, (node as ParseNode));
         }
         optionalChainView(n, true);
         return;
@@ -34228,7 +33966,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         for (const name of assignedInsideFunction) invalidateNarrowing(name);
         checkInvocation(n.MemberExpression, false);
         const callee = callableForm(staticType(call.CallExpression));
-        checkCallable(callee);
+        checkCallable(callee, (node as ParseNode));
         checkCallArguments(call, callee, call);
         walk(n.MemberExpression);
         walk(n.TemplateLiteral);
@@ -34257,10 +33995,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const owner = ReferenceFunction(n);
           if (yielded && (notIterable(yielded, owner?.type.startsWith('Async') === true, false, true, [undefinedType])
             || (typedAsyncYieldBoundaries.at(-1) && typedAsyncDelegationFails(yielded)))) {
-            const completion = Throw.StaticTypeError(
-              'a value of $1 is not iterable',
-              Value(displayType(yielded as TypeRecord)),
-            ) as ThrowCompletion;
+            const completion = CreateTypeDiagnostic('rt-iterable-required', root, diagnosticPhase, 'a value of $1 is not iterable', Value(displayType(yielded as TypeRecord))) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           }
         }
@@ -34422,7 +34157,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // cannot be nullish, and always assigns to one that is always nullish.
         if (assignment.AssignmentOperator === '??=') {
           const target = staticType(a.LeftHandSideExpression as ParseNode);
-          if (target) reportImpossibleTest(target, nullishType(), '??=', true);
+          if (target) reportImpossibleTest(target, nullishType(), '??=', true, (node as ParseNode));
         }
         // #sec-narrowfrom: `||=` and `&&=` are `||` and `&&` whose right operand
         // is a store. Where the target's type settles the test, the right
@@ -34431,8 +34166,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const target = staticType(a.LeftHandSideExpression as ParseNode);
           const settled = target ? settledTruthiness(target) : undefined;
           if (settled !== undefined && settled === (assignment.AssignmentOperator === '||=')) {
-            errors.push(Throw.StaticTypeError('the right operand of $1 can never be evaluated, so it is dead code',
-              Value(assignment.AssignmentOperator)).Value as ObjectValue);
+            reportType('rt-unreachable-operand', (node as ParseNode), 'the right operand of $1 can never be evaluated, so it is dead code', Value(assignment.AssignmentOperator));
           }
         }
         // #sec-user-defined-operators: a declared compound invokes its method
@@ -34465,7 +34199,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         {
           const lhs = a.LeftHandSideExpression as unknown as { type?: string, name?: string };
           if (lhs?.type === 'IdentifierReference' && typeof lhs.name === 'string' && isRefRestName(lhs.name)) {
-            errors.push(Throw.StaticTypeError('$1', Value(`a ref rest binds no array: ${lhs.name} cannot be stored to`)).Value as ObjectValue);
+            reportType('rt-reference-permission', (node as ParseNode), '$1', Value(`a ref rest binds no array: ${lhs.name} cannot be stored to`));
           }
           const rhs = a.AssignmentExpression as unknown as { type?: string, name?: string };
           // Confined to a `ref` rest name. Visiting every bare right-hand
@@ -34722,10 +34456,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             ? (owner?.type === 'ClassExpression' ? instanceTypeOf(owner) : ownerName ? classTypeOf(ownerName) : null) : null;
           const zero = instance ? staticType(n.Initializer) : null;
           if (instance && zero && zero.Kind !== 'any' && !mentionsTypeParameter(zero) && !IsAssignable(zero, instance)) {
-            errors.push((Throw.StaticTypeError(
-              'the declared zero of $1 is not a value of it: $2',
-              Value(ownerName ?? 'the class'), Value(displayType(zero)),
-            ) as ThrowCompletion).Value as ObjectValue);
+            reportType('rt-declared-zero', (node as ParseNode), 'the declared zero of $1 is not a value of it: $2', Value(ownerName ?? 'the class'), Value(displayType(zero)));
           }
         }
         if (n.TypeAnnotation) {
@@ -34927,7 +34658,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   && (erasedForJudgment(prototype) as { Name?: string }).Name === 'null'));
             };
             if (operandParticipates(heritage) && invalidBase(staticType(heritage))) {
-              errors.push(Throw.StaticTypeError('a typed superclass must be a constructor with an Object-or-null prototype, or null').Value as ObjectValue);
+              reportType('rt-superclass-contract', (node as ParseNode), 'a typed superclass must be a constructor with an Object-or-null prototype, or null');
             }
             // #sec-parameterized-types: a heritage clause is a type position, so
             // the bare name of a generic declaration there binds its defaults,
@@ -34948,8 +34679,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (origin && !origin.arguments && !nested && baseList?.ListKind === 'parameters') {
                 const missing = baseList.TypeParameterList.find((tp) => !tp.IsVariadic && !tp.TypeParameterDefault);
                 if (missing) {
-                  errors.push(Throw.StaticTypeError('the type parameter $1 of $2 has no argument and no default',
-                    Value(missing.BindingIdentifier.name), Value(baseDeclaration!.BindingIdentifier?.name ?? '(anonymous class)')).Value as ObjectValue);
+                  reportType('rt-generic-argument', (node as ParseNode), 'the type parameter $1 of $2 has no argument and no default', Value(missing.BindingIdentifier.name), Value(baseDeclaration!.BindingIdentifier?.name ?? '(anonymous class)'));
                 }
               }
             }
@@ -35114,13 +34844,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           chain.push(members);
         }
         const masked = inheritedFieldViolation(chain, instanceType);
-        if (masked !== null) errors.push(Throw.StaticTypeError('field $1 does not preserve its inherited member contract',
-          typeof masked === 'string' ? Value(masked) : masked).Value as ObjectValue);
+        if (masked !== null) reportType('rt-inherited-contract', (node as ParseNode), 'field $1 does not preserve its inherited member contract', typeof masked === 'string' ? Value(masked) : masked);
         const violation = abstractMemberViolation(chain, n.ClassModifiers?.includes('abstract') ?? false);
-        if (violation) errors.push(Throw.StaticTypeError(violation.kind === 'signature'
+        if (violation) reportType('rt-inherited-contract', (node as ParseNode), violation.kind === 'signature'
           ? '$1 implements an inherited $2 with a signature the declaration does not accept'
-          : '$1 inherits $2 with no body and does not implement it; declare it, or declare the class abstract',
-        Value(named ?? 'the class'), typeof violation.key === 'string' ? Value(violation.key) : violation.key).Value as ObjectValue);
+          : '$1 inherits $2 with no body and does not implement it; declare it, or declare the class abstract', Value(named ?? 'the class'), typeof violation.key === 'string' ? Value(violation.key) : violation.key);
         return;
       }
       case 'MemberExpression': {
@@ -35267,7 +34995,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (owner === origin.constructorOwner) return;
     }
     reportedReferenceWrites.add(write);
-    errors.push(Throw.StaticTypeError('$1 is a readonly member and cannot be assigned', Value(origin.key)).Value as ObjectValue);
+    reportType('rt-readonly-store', root, '$1 is a readonly member and cannot be assigned', Value(origin.key));
   }, (origin, write) => {
     if (!collectedReferenceStores) return;
     const key = referenceWriteKey(write);
@@ -35284,15 +35012,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (comparisonContextual.has(node)) {
       continue;
     }
-    errors.push(Throw.StaticTypeError(
-      'the comparison is ambiguous among its result forms; write the result type: $1 (the wide mask), $2 (the compact mask), or $3 (the compared type)',
-      Value(forms.wide), Value(forms.compact), Value(forms.compared),
-    ).Value as ObjectValue);
+    reportType('rt-ambiguous-result', root, 'the comparison is ambiguous among its result forms; write the result type: $1 (the wide mask), $2 (the compact mask), or $3 (the compared type)', Value(forms.wide), Value(forms.compact), Value(forms.compared));
   }
   for (const diagnostic of operatorFailures.values()) {
     const completion = diagnostic === 'none'
-      ? Throw.StaticTypeError('no declared operator signature accepts these operands')
-      : Throw.StaticTypeError('the operator is ambiguous between two declared signatures');
+      ? CreateTypeDiagnostic('rt-operator-argument', root, diagnosticPhase, 'no declared operator signature accepts these operands')
+      : CreateTypeDiagnostic('rt-ambiguous-operator', root, diagnosticPhase, 'the operator is ambiguous between two declared signatures');
     errors.push(completion.Value as ObjectValue);
   }
   // #sec-callable-overload-contracts: the callable group analysis. Each
@@ -35309,7 +35034,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     };
     const callableHost = CallableGroupHostFor((n) => resolveType(n as ParseNode.Type), (a, b) => IsSubtype(a, b, []));
     const report = (message: string) => {
-      errors.push((Throw.StaticTypeError('$1', Value(message)) as ThrowCompletion).Value as ObjectValue);
+      reportType('rt-specialization-contract', root, '$1', Value(message));
     };
     const listOf = (d: Decl) => d.TypeParameters ?? null;
     const isCase = (d: Decl) => listOf(d)?.ListKind === 'specialization' || listOf(d)?.ListKind === 'mixed';

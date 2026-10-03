@@ -1,4 +1,5 @@
 import { currentTypeParameterFrame } from '../type-system/runtime.mts';
+import { RunPreEvaluationTypeCheck } from '../type-system/check-pass.mts';
 import { EnforceResumableReturn } from './runtime-types.mts';
 import {
   EnsureCompletion, Completion, X, ExecutionContext, surroundingAgent, Evaluate, Value, type ParseNode, Assert, Call, PromiseCapabilityRecord, RunSuspendedContext,
@@ -30,7 +31,10 @@ export function* AsyncBlockStart(promiseCapability: PromiseCapabilityRecord, asy
     if (typeof asyncBody === 'function') {
       result = EnsureCompletion(yield* asyncBody());
     } else {
-      result = EnsureCompletion(yield* Evaluate(asyncBody));
+      if (asyncBody.type === 'Module' && surroundingAgent.feature('runtime-types')) {
+        result = EnsureCompletion(yield* RunPreEvaluationTypeCheck(asyncBody));
+      }
+      if (!result || result.Type === 'normal') result = EnsureCompletion(yield* Evaluate(asyncBody));
     }
     if (surroundingAgent.feature('runtime-types') && (result.Type === 'normal' || result.Type === 'return')
         && acAsyncContext.Function !== Value.null) {

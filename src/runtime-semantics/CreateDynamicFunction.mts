@@ -1,4 +1,4 @@
-import { Q, ThrowCompletion, X } from '../completion.mts';
+import { Q, ThrowCompletion, X, EnsureCompletion } from '../completion.mts';
 import { Parser, wrappedParse } from '../parse.mts';
 import { Token } from '../parser/tokens.mts';
 import {
@@ -8,7 +8,8 @@ import {
 import { __ts_cast__, isArray } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { FunctionKind } from '../parser/FunctionParser.mts';
-import { CheckDynamicFunction } from '../type-system/check.mts';
+import { CheckDynamicFunction, DynamicFunctionCheckRoot } from '../type-system/check.mts';
+import { RunPreEvaluationTypeCheck } from '../type-system/check-pass.mts';
 import {
   HostEnsureCanCompileStrings,
   surroundingAgent,
@@ -145,6 +146,18 @@ export function* CreateDynamicFunction(constructor: FunctionObject, newTarget: F
       if (typeErrors.length > 0) {
         Parser.decorateSyntaxErrorWithScriptId(typeErrors[0], scriptId);
         return ThrowCompletion(typeErrors[0]);
+      }
+      const context = surroundingAgent.runningExecutionContext;
+      const lexical = context.LexicalEnvironment;
+      context.LexicalEnvironment = currentRealm.GlobalEnv;
+      try {
+        const completion = EnsureCompletion(yield* RunPreEvaluationTypeCheck(DynamicFunctionCheckRoot(expr)));
+        if (completion.Type === 'throw') {
+          Parser.decorateSyntaxErrorWithScriptId(completion.Value as Parameters<typeof Parser.decorateSyntaxErrorWithScriptId>[0], scriptId);
+          return completion;
+        }
+      } finally {
+        context.LexicalEnvironment = lexical;
       }
     }
     // The combined parse establishes strictness from annotations in either the

@@ -1049,7 +1049,7 @@ function alreadyVerified(declaration: object, args: readonly TypeRecord[]): bool
 export function* EvaluateAliasApplicationClauses(
   declaration: ParseNode.TypeAliasDeclaration,
   application: ParseNode.TypeReference,
-): PlainEvaluator<void> {
+): PlainEvaluator<ParseNode.WhereClause | undefined> {
   const clauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
   if (!clauses || clauses.length === 0 || mentionsThis(clauses)) {
     return undefined;
@@ -1086,8 +1086,7 @@ export function* EvaluateAliasApplicationClauses(
         return undefined;
       }
       if (holds.Value === false) {
-        surroundingAgent.runningExecutionContext.callSite.setLocation(clause as never);
-        return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
+        return clause;
       }
     }
     markVerified(declaration as object, [...frame.values()]);

@@ -9,7 +9,7 @@ import {
 } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { Evaluate_PrimitiveOperatorDeclaration } from '../runtime-semantics/PrimitiveOperatorDeclaration.mts';
 import { JSStringValue, ObjectValue, Value } from '../value.mts';
-import { IsGatedMessage } from './checked-code.mts';
+import { CreateTypeDiagnostic, TypeDiagnosticApplies, TypeDiagnosticOf } from './diagnostics.mts';
 import type { TypeRecord } from './records.mts';
 import {
   DefaultValueOf, EvaluateAliasApplicationClauses, TypeNodeToTypeRecord, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame,
@@ -18,7 +18,7 @@ import { GenericWhereVerified, MarkGenericWhereVerified } from './generic-where.
 import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
 import { SetMetResolution, CanonicalizeType } from './intern.mts';
 import { GetTypeObject } from './intern.mts';
-import { displayType, builtinTypeRecord, BoundTypeRecordForName } from './records.mts';
+import { displayType, builtinTypeRecord, BoundTypeRecordForName, neverType } from './records.mts';
 import { isIntegerTypeName, isFloatTypeName } from './numeric-signatures.mts';
 import {
   RecheckAfterTypeEvaluation, HasDeferredGuardChecks, DeferredTypeChecksOf, SetEvaluatedTypeNode, SetEvaluatedEnum,
@@ -230,7 +230,18 @@ export function* RunPreEvaluationTypeCheck(root: ParseNode.Script | ParseNode.Mo
   // which is every tool that type-checks a file.
   BeginTypeEvaluation();
   try {
-    return yield* runPreEvaluationTypeCheckMetered(root);
+    const result = EnsureCompletion(yield* runPreEvaluationTypeCheckMetered(root));
+    // Exhaustion takes precedence over incidental completions from an abandoned hook.
+    if (IsBudgetExhausted()) {
+      return CreateTypeDiagnostic('rt-type-evaluation-limit', root, 'pre-evaluation',
+        'the type evaluation budget was exhausted ($1) while checking this source text: $2',
+        Value(BudgetExhaustionKind() ?? 'steps'), result.Type === 'throw' ? inspect(result.Value) : 'evaluation was abandoned');
+    }
+    if (result.Type === 'throw' && !TypeDiagnosticOf(result.Value)) {
+      return CreateTypeDiagnostic('rt-type-evaluation', root, 'pre-evaluation',
+        'type evaluation could not complete: $1', inspect(result.Value));
+    }
+    return result;
   } finally {
     EndTypeEvaluation();
   }
@@ -317,6 +328,12 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       if (verdict.Type === 'throw') {
         return verdict;
       }
+      if (verdict.Value !== undefined) {
+        const clause = verdict.Value as ParseNode.WhereClause;
+        surroundingAgent.runningExecutionContext.callSite.setLocation(clause as never);
+        return CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation',
+          'a $1 clause is not satisfied by this application', Value('where'));
+      }
     }
   }
   // The names this pass is defining, so a recursive reference can be told from a
@@ -399,7 +416,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       }
       if (result.Type !== 'normal') {
         if (IsBudgetExhausted()) return result;
-        return Throw.StaticTypeError('a generic default could not be evaluated: $1', Value(inspect(result.Value)));
+        return CreateTypeDiagnostic('rt-default-evaluation', check.node, 'pre-evaluation', 'a generic default could not be evaluated: $1', Value(inspect(result.Value)));
       }
       SetEvaluatedGenericDefault(check.application, check.node, result.Value);
       resolved = true;
@@ -456,7 +473,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       // already does exactly what this now does, budget check included.
       if (evaluated.Type !== 'normal') {
         if (IsBudgetExhausted()) break;
-        return Throw.StaticTypeError('a default could not be evaluated: $1', Value(evaluated.Value === undefined ? 'undefined' : inspect(evaluated.Value)));
+        return CreateTypeDiagnostic('rt-default-evaluation', check.initializer ?? root, 'pre-evaluation', 'a default could not be evaluated: $1', Value(evaluated.Value === undefined ? 'undefined' : inspect(evaluated.Value)));
       }
       if (evaluated.Value === undefined) continue;
       value = evaluated.Value;
@@ -466,7 +483,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       ? CheckedConvertValue(value, check.type) : ConvertValue(value, check.type)));
     if (converted.Type !== 'normal') {
       if (IsBudgetExhausted()) break;
-      return Throw.StaticTypeError('a default is not convertible to $1', Value(displayType(check.type)));
+      return CreateTypeDiagnostic('rt-default-conversion', check.initializer ?? root, 'pre-evaluation', 'a default is not convertible to $1', Value(displayType(check.type)));
     }
   }
   for (const check of GenericWhereChecksOf(root)) {
@@ -524,7 +541,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         // Layouts and decorated types may not have evaluated yet.
         continue;
       }
-      if (!result.Value) return Throw.StaticTypeError('a $1 clause is not satisfied by this application', Value('where'));
+      if (!result.Value) return CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this application', Value('where'));
       MarkGenericWhereVerified(clause, frame);
     }
   }
@@ -547,7 +564,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     }
     for (const key of check.keys) {
       if (MetaTypeClaiming(key) === undefined) {
-        return Throw.StaticTypeError('$1 is not claimed by any meta type, in $2', Value(key), Value(check.display));
+        return CreateTypeDiagnostic('rt-unclaimed-metadata', check.node, 'pre-evaluation', '$1 is not claimed by any meta type, in $2', Value(key), Value(check.display));
       }
     }
   }
@@ -558,11 +575,6 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   const requests = TakeNarrowingRequests(root);
   const byKey = new Map(requests.map((request) => [request.key, request]));
   const resolving = new Set<object>();
-  const messageOf = (error: Value): string => {
-    if (!(error instanceof ObjectValue)) return '';
-    const message = X(Get(error, Value('message')));
-    return message instanceof JSStringValue ? message.stringValue() : '';
-  };
   function* resolveNarrowing(request: NarrowingRequest): PlainEvaluator<NarrowingResolution> {
     const known = resolutions.get(request.key);
     if (known) return known;
@@ -589,12 +601,6 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   }
   for (const request of requests) {
     const completion = EnsureCompletion(yield* resolveNarrowing(request));
-    // #sec-checked-code: outside checked code a test that can never succeed or
-    // fail is not reported; the binding is simply not narrowed there.
-    if (completion.Type === 'throw' && request.checked === false && IsGatedMessage(messageOf(completion.Value))) {
-      resolving.delete(request.key);
-      continue;
-    }
     const resolved = Q(completion);
     resolutions.set(request.key, resolved);
   }
@@ -681,10 +687,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
           // arrived as the same sentence, which named the enum's shape and not
           // the mistake. The object-member default path states the principle:
           // "WHY it was not evaluable is the useful half of the diagnostic".
-          return Throw.StaticTypeError(
-            'a closed enum initializer does not satisfy its declaration: $1',
-            Value(inspect(attempt.Value)),
-          );
+          return CreateTypeDiagnostic('rt-enum-initializer', item, 'pre-evaluation', 'a closed enum initializer does not satisfy its declaration: $1', Value(inspect(attempt.Value)));
         }
         preEvaluatedTypeDeclarations.add(item);
         const value = Q(yield* surroundingAgent.runningExecutionContext.LexicalEnvironment.GetBindingValue(Value(item.BindingIdentifier.name), Value.true));
@@ -803,7 +806,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
             ? message.Value.stringValue() : inspect(thrown);
           // The run time's message is itself a quoted value; quote it once.
           const text = raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1) : raw;
-          return Throw.StaticTypeError('the call cannot be specialized: $1', Value(text));
+          return CreateTypeDiagnostic('rt-specialization', obligation.node, 'pre-evaluation', 'the call cannot be specialized: $1', Value(text));
         }
         continue;
       }
@@ -820,7 +823,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         EndFragmentEvaluation();
       }
       if (result.Type !== 'normal') {
-        return Throw.StaticTypeError('a closed type annotation could not be evaluated to a type: $1', Value(inspect(result.Value)));
+        return CreateTypeDiagnostic('rt-type-evaluation', obligation.node, 'pre-evaluation', 'a closed type annotation could not be evaluated to a type: $1', Value(inspect(result.Value)));
       }
       SetEvaluatedTypeNode(obligation.computedAt?.site ?? obligation.node, result.Value);
     } finally {
@@ -877,23 +880,17 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         // member rule names it: a reader given two constraints still has to find
         // which of the arms' members they came from.
         if (pair.narrowing !== undefined) {
-          return Throw.StaticTypeError(pair.negated
+          SetMetResolution(pair.left, pair.right, neverType, metaType);
+          recordedAMeet = true;
+          if (!TypeDiagnosticApplies('rt-impossible-test', pair.node)) continue;
+          return CreateTypeDiagnostic('rt-impossible-test', pair.node, 'pre-evaluation', pair.negated
             ? 'the $1 test can never fail, so the branch it guards is dead code'
             : 'the $1 test can never succeed, so the branch it guards is dead code', Value(pair.narrowing));
         }
         if (pair.member !== undefined) {
-          return Throw.StaticTypeError(
-            'no value is of both $1 and $2 at member $3, so their intersection is never',
-            Value(displayType(pair.left)),
-            Value(displayType(pair.right)),
-            Value(pair.member),
-          );
+          return CreateTypeDiagnostic('rt-empty-intersection', pair.node, 'pre-evaluation', 'no value is of both $1 and $2 at member $3, so their intersection is never', Value(displayType(pair.left)), Value(displayType(pair.right)), Value(pair.member));
         }
-        return Throw.StaticTypeError(
-          'no value is of both $1 and $2, so their intersection is never',
-          Value(displayType(pair.left)),
-          Value(displayType(pair.right)),
-        );
+        return CreateTypeDiagnostic('rt-empty-intersection', pair.node, 'pre-evaluation', 'no value is of both $1 and $2, so their intersection is never', Value(displayType(pair.left)), Value(displayType(pair.right)));
       }
     }
   }
@@ -953,8 +950,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       const declared = ['number', name].some((key) => PrimitiveCastsFor(key)
         .some((cast) => CastCoversTarget(cast.target, target)));
       if (!declared) {
-        return Throw.StaticTypeError('$1 is not assignable to $2',
-          Value(inspect(crossing.value)), Value(displayType(target)));
+        return CreateTypeDiagnostic('rt-assignability', crossing.node, 'pre-evaluation', '$1 is not assignable to $2', Value(inspect(crossing.value)), Value(displayType(target)));
       }
       continue;
     }
@@ -987,14 +983,13 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       // The originating error, which says WHY the crossing failed - a meta type
       // that does not admit it, a `validate` that refused the value - rather
       // than a summary that names only the two types.
-      return Throw.StaticTypeError('$1 is not assignable to $2: $3',
-        Value(inspect(crossing.value)), Value(displayType(target)), Value(inspect(attempt.Value)));
+      return CreateTypeDiagnostic('rt-assignability', crossing.node, 'pre-evaluation', '$1 is not assignable to $2: $3', Value(inspect(crossing.value)), Value(displayType(target)), Value(inspect(attempt.Value)));
     }
   }
   for (const pair of TakeDeferredMetadataChecks(root)) {
     const admits = Q(yield* MetadataSubtypeJudgment(pair));
     if (!admits) {
-      return Throw.StaticTypeError('$1 is not assignable to $2', Value(displayType(pair.source)), Value(displayType(pair.target)));
+      return CreateTypeDiagnostic('rt-assignability', pair.node, 'pre-evaluation', '$1 is not assignable to $2', Value(displayType(pair.source)), Value(displayType(pair.target)));
     }
   }
   // #sec-default-values: "It is a type error to
@@ -1046,25 +1041,10 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       // display, which is already canonical here.
       const req = requirement.type as TypeRecord | undefined;
       if (req && req.Kind === 'union' && req.Members.length === 0) {
-        return Throw.StaticTypeError('$1 has no values, so no declaration of it can be initialized', Value(requirement.display));
+        return CreateTypeDiagnostic('rt-uninhabited-declaration', requirement.node, 'pre-evaluation', '$1 has no values, so no declaration of it can be initialized', Value(requirement.display));
       }
-      return Throw.StaticTypeError('$1 has no default value, so a declaration of it needs an initializer', Value(requirement.display));
+      return CreateTypeDiagnostic('rt-missing-default', requirement.node, 'pre-evaluation', '$1 has no default value, so a declaration of it needs an initializer', Value(requirement.display));
     }
-  }
-  // #sec-evaluation-budget: "the evaluation is abandoned, and
-  // EvaluateToTypeObject of the containing type-position expression is
-  // ~empty~, with a diagnostic naming the outermost call". Reported once, HERE,
-  // at the end of the whole pass rather than at the metered point that noticed
-  // - the point that notices is wherever the last step happened to be spent,
-  // which is not the containing evaluation the clause asks to name. It is also
-  // why the check must come after the work and not before it: an earlier
-  // version of this sat above the judgments that spend the budget and could
-  // never observe an exhaustion they caused.
-  if (IsBudgetExhausted()) {
-    return Throw.RangeError(
-      'the type evaluation budget was exhausted ($1) while checking this source text',
-      Value(BudgetExhaustionKind() ?? 'steps'),
-    );
   }
   return undefined;
 }

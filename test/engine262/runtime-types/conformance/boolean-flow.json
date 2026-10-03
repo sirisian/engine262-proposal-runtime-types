@@ -1,0 +1,2730 @@
+{
+  "schemaVersion": 1,
+  "specification": [
+    "sec-checking-state",
+    "sec-checking-transfer-composition"
+  ],
+  "coverage": "Two Boolean bindings; pure short-circuit guards; product-domain joins of guard alternatives; atomic deciding uses in five control forms. No mutation, abrupt completions, metadata, references, module scheduling, or numeric domains are modeled.",
+  "cases": [
+    {
+      "id": "boolean-0-true-0-if",
+      "source": "function f(x: boolean, y: boolean) { if (x) { if (x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x) { if (x) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-0-true-0-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x) { void (x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x) { void (x ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-0-true-0-while",
+      "source": "function f(x: boolean, y: boolean) { if (x) { while (x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x) { while (x) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-0-true-0-for",
+      "source": "function f(x: boolean, y: boolean) { if (x) { for (; x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x) { for (; x;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-0-true-0-do",
+      "source": "function f(x: boolean, y: boolean) { if (x) { do { void 0; } while (x); } }",
+      "uncheckedSource": "function f(x, y) { if (x) { do { void 0; } while (x); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-0-true-1-if",
+      "source": "function f(x: boolean, y: boolean) { if (x) { if (!x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x) { if (!x) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-0-true-1-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x) { void (!x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x) { void (!x ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-0-true-1-while",
+      "source": "function f(x: boolean, y: boolean) { if (x) { while (!x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x) { while (!x) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-0-true-1-for",
+      "source": "function f(x: boolean, y: boolean) { if (x) { for (; !x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x) { for (; !x;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-0-true-1-do",
+      "source": "function f(x: boolean, y: boolean) { if (x) { do { void 0; } while (!x); } }",
+      "uncheckedSource": "function f(x, y) { if (x) { do { void 0; } while (!x); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-0-true-2-if",
+      "source": "function f(x: boolean, y: boolean) { if (x) { if (y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x) { if (y) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-0-true-2-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x) { void (y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x) { void (y ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-0-true-2-while",
+      "source": "function f(x: boolean, y: boolean) { if (x) { while (y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x) { while (y) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-0-true-2-for",
+      "source": "function f(x: boolean, y: boolean) { if (x) { for (; y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x) { for (; y;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-0-true-2-do",
+      "source": "function f(x: boolean, y: boolean) { if (x) { do { void 0; } while (y); } }",
+      "uncheckedSource": "function f(x, y) { if (x) { do { void 0; } while (y); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-0-true-3-if",
+      "source": "function f(x: boolean, y: boolean) { if (x) { if (!y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x) { if (!y) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-0-true-3-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x) { void (!y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x) { void (!y ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-0-true-3-while",
+      "source": "function f(x: boolean, y: boolean) { if (x) { while (!y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x) { while (!y) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-0-true-3-for",
+      "source": "function f(x: boolean, y: boolean) { if (x) { for (; !y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x) { for (; !y;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-0-true-3-do",
+      "source": "function f(x: boolean, y: boolean) { if (x) { do { void 0; } while (!y); } }",
+      "uncheckedSource": "function f(x, y) { if (x) { do { void 0; } while (!y); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-0-false-0-if",
+      "source": "function f(x: boolean, y: boolean) { if (x) {} else { if (x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x) {} else { if (x) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-0-false-0-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x) {} else { void (x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x) {} else { void (x ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-0-false-0-while",
+      "source": "function f(x: boolean, y: boolean) { if (x) {} else { while (x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x) {} else { while (x) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-0-false-0-for",
+      "source": "function f(x: boolean, y: boolean) { if (x) {} else { for (; x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x) {} else { for (; x;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-0-false-0-do",
+      "source": "function f(x: boolean, y: boolean) { if (x) {} else { do { void 0; } while (x); } }",
+      "uncheckedSource": "function f(x, y) { if (x) {} else { do { void 0; } while (x); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-0-false-1-if",
+      "source": "function f(x: boolean, y: boolean) { if (x) {} else { if (!x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x) {} else { if (!x) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-0-false-1-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x) {} else { void (!x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x) {} else { void (!x ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-0-false-1-while",
+      "source": "function f(x: boolean, y: boolean) { if (x) {} else { while (!x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x) {} else { while (!x) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-0-false-1-for",
+      "source": "function f(x: boolean, y: boolean) { if (x) {} else { for (; !x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x) {} else { for (; !x;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-0-false-1-do",
+      "source": "function f(x: boolean, y: boolean) { if (x) {} else { do { void 0; } while (!x); } }",
+      "uncheckedSource": "function f(x, y) { if (x) {} else { do { void 0; } while (!x); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-0-false-2-if",
+      "source": "function f(x: boolean, y: boolean) { if (x) {} else { if (y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x) {} else { if (y) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-0-false-2-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x) {} else { void (y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x) {} else { void (y ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-0-false-2-while",
+      "source": "function f(x: boolean, y: boolean) { if (x) {} else { while (y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x) {} else { while (y) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-0-false-2-for",
+      "source": "function f(x: boolean, y: boolean) { if (x) {} else { for (; y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x) {} else { for (; y;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-0-false-2-do",
+      "source": "function f(x: boolean, y: boolean) { if (x) {} else { do { void 0; } while (y); } }",
+      "uncheckedSource": "function f(x, y) { if (x) {} else { do { void 0; } while (y); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-0-false-3-if",
+      "source": "function f(x: boolean, y: boolean) { if (x) {} else { if (!y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x) {} else { if (!y) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-0-false-3-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x) {} else { void (!y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x) {} else { void (!y ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-0-false-3-while",
+      "source": "function f(x: boolean, y: boolean) { if (x) {} else { while (!y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x) {} else { while (!y) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-0-false-3-for",
+      "source": "function f(x: boolean, y: boolean) { if (x) {} else { for (; !y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x) {} else { for (; !y;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-0-false-3-do",
+      "source": "function f(x: boolean, y: boolean) { if (x) {} else { do { void 0; } while (!y); } }",
+      "uncheckedSource": "function f(x, y) { if (x) {} else { do { void 0; } while (!y); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-1-true-0-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x) { if (x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x) { if (x) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-1-true-0-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x) { void (x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x) { void (x ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-1-true-0-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x) { while (x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x) { while (x) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-1-true-0-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x) { for (; x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x) { for (; x;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-1-true-0-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x) { do { void 0; } while (x); } }",
+      "uncheckedSource": "function f(x, y) { if (!x) { do { void 0; } while (x); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-1-true-1-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x) { if (!x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x) { if (!x) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-1-true-1-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x) { void (!x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x) { void (!x ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-1-true-1-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x) { while (!x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x) { while (!x) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-1-true-1-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x) { for (; !x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x) { for (; !x;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-1-true-1-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x) { do { void 0; } while (!x); } }",
+      "uncheckedSource": "function f(x, y) { if (!x) { do { void 0; } while (!x); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-1-true-2-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x) { if (y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x) { if (y) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-1-true-2-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x) { void (y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x) { void (y ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-1-true-2-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x) { while (y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x) { while (y) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-1-true-2-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x) { for (; y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x) { for (; y;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-1-true-2-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x) { do { void 0; } while (y); } }",
+      "uncheckedSource": "function f(x, y) { if (!x) { do { void 0; } while (y); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-1-true-3-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x) { if (!y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x) { if (!y) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-1-true-3-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x) { void (!y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x) { void (!y ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-1-true-3-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x) { while (!y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x) { while (!y) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-1-true-3-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x) { for (; !y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x) { for (; !y;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-1-true-3-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x) { do { void 0; } while (!y); } }",
+      "uncheckedSource": "function f(x, y) { if (!x) { do { void 0; } while (!y); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-1-false-0-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x) {} else { if (x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x) {} else { if (x) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-1-false-0-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x) {} else { void (x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x) {} else { void (x ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-1-false-0-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x) {} else { while (x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x) {} else { while (x) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-1-false-0-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x) {} else { for (; x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x) {} else { for (; x;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-1-false-0-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x) {} else { do { void 0; } while (x); } }",
+      "uncheckedSource": "function f(x, y) { if (!x) {} else { do { void 0; } while (x); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-1-false-1-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x) {} else { if (!x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x) {} else { if (!x) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-1-false-1-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x) {} else { void (!x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x) {} else { void (!x ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-1-false-1-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x) {} else { while (!x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x) {} else { while (!x) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-1-false-1-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x) {} else { for (; !x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x) {} else { for (; !x;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-1-false-1-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x) {} else { do { void 0; } while (!x); } }",
+      "uncheckedSource": "function f(x, y) { if (!x) {} else { do { void 0; } while (!x); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-1-false-2-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x) {} else { if (y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x) {} else { if (y) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-1-false-2-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x) {} else { void (y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x) {} else { void (y ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-1-false-2-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x) {} else { while (y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x) {} else { while (y) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-1-false-2-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x) {} else { for (; y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x) {} else { for (; y;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-1-false-2-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x) {} else { do { void 0; } while (y); } }",
+      "uncheckedSource": "function f(x, y) { if (!x) {} else { do { void 0; } while (y); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-1-false-3-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x) {} else { if (!y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x) {} else { if (!y) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-1-false-3-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x) {} else { void (!y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x) {} else { void (!y ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-1-false-3-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x) {} else { while (!y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x) {} else { while (!y) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-1-false-3-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x) {} else { for (; !y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x) {} else { for (; !y;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-1-false-3-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x) {} else { do { void 0; } while (!y); } }",
+      "uncheckedSource": "function f(x, y) { if (!x) {} else { do { void 0; } while (!y); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-true-0-if",
+      "source": "function f(x: boolean, y: boolean) { if (y) { if (x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (y) { if (x) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-true-0-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (y) { void (x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (y) { void (x ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-true-0-while",
+      "source": "function f(x: boolean, y: boolean) { if (y) { while (x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (y) { while (x) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-true-0-for",
+      "source": "function f(x: boolean, y: boolean) { if (y) { for (; x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (y) { for (; x;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-true-0-do",
+      "source": "function f(x: boolean, y: boolean) { if (y) { do { void 0; } while (x); } }",
+      "uncheckedSource": "function f(x, y) { if (y) { do { void 0; } while (x); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-true-1-if",
+      "source": "function f(x: boolean, y: boolean) { if (y) { if (!x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (y) { if (!x) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-true-1-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (y) { void (!x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (y) { void (!x ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-true-1-while",
+      "source": "function f(x: boolean, y: boolean) { if (y) { while (!x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (y) { while (!x) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-true-1-for",
+      "source": "function f(x: boolean, y: boolean) { if (y) { for (; !x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (y) { for (; !x;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-true-1-do",
+      "source": "function f(x: boolean, y: boolean) { if (y) { do { void 0; } while (!x); } }",
+      "uncheckedSource": "function f(x, y) { if (y) { do { void 0; } while (!x); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-true-2-if",
+      "source": "function f(x: boolean, y: boolean) { if (y) { if (y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (y) { if (y) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-2-true-2-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (y) { void (y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (y) { void (y ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-2-true-2-while",
+      "source": "function f(x: boolean, y: boolean) { if (y) { while (y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (y) { while (y) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-2-true-2-for",
+      "source": "function f(x: boolean, y: boolean) { if (y) { for (; y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (y) { for (; y;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-2-true-2-do",
+      "source": "function f(x: boolean, y: boolean) { if (y) { do { void 0; } while (y); } }",
+      "uncheckedSource": "function f(x, y) { if (y) { do { void 0; } while (y); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-2-true-3-if",
+      "source": "function f(x: boolean, y: boolean) { if (y) { if (!y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (y) { if (!y) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-2-true-3-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (y) { void (!y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (y) { void (!y ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-2-true-3-while",
+      "source": "function f(x: boolean, y: boolean) { if (y) { while (!y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (y) { while (!y) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-2-true-3-for",
+      "source": "function f(x: boolean, y: boolean) { if (y) { for (; !y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (y) { for (; !y;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-2-true-3-do",
+      "source": "function f(x: boolean, y: boolean) { if (y) { do { void 0; } while (!y); } }",
+      "uncheckedSource": "function f(x, y) { if (y) { do { void 0; } while (!y); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-2-false-0-if",
+      "source": "function f(x: boolean, y: boolean) { if (y) {} else { if (x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (y) {} else { if (x) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-false-0-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (y) {} else { void (x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (y) {} else { void (x ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-false-0-while",
+      "source": "function f(x: boolean, y: boolean) { if (y) {} else { while (x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (y) {} else { while (x) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-false-0-for",
+      "source": "function f(x: boolean, y: boolean) { if (y) {} else { for (; x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (y) {} else { for (; x;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-false-0-do",
+      "source": "function f(x: boolean, y: boolean) { if (y) {} else { do { void 0; } while (x); } }",
+      "uncheckedSource": "function f(x, y) { if (y) {} else { do { void 0; } while (x); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-false-1-if",
+      "source": "function f(x: boolean, y: boolean) { if (y) {} else { if (!x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (y) {} else { if (!x) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-false-1-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (y) {} else { void (!x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (y) {} else { void (!x ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-false-1-while",
+      "source": "function f(x: boolean, y: boolean) { if (y) {} else { while (!x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (y) {} else { while (!x) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-false-1-for",
+      "source": "function f(x: boolean, y: boolean) { if (y) {} else { for (; !x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (y) {} else { for (; !x;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-false-1-do",
+      "source": "function f(x: boolean, y: boolean) { if (y) {} else { do { void 0; } while (!x); } }",
+      "uncheckedSource": "function f(x, y) { if (y) {} else { do { void 0; } while (!x); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-2-false-2-if",
+      "source": "function f(x: boolean, y: boolean) { if (y) {} else { if (y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (y) {} else { if (y) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-2-false-2-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (y) {} else { void (y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (y) {} else { void (y ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-2-false-2-while",
+      "source": "function f(x: boolean, y: boolean) { if (y) {} else { while (y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (y) {} else { while (y) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-2-false-2-for",
+      "source": "function f(x: boolean, y: boolean) { if (y) {} else { for (; y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (y) {} else { for (; y;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-2-false-2-do",
+      "source": "function f(x: boolean, y: boolean) { if (y) {} else { do { void 0; } while (y); } }",
+      "uncheckedSource": "function f(x, y) { if (y) {} else { do { void 0; } while (y); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-2-false-3-if",
+      "source": "function f(x: boolean, y: boolean) { if (y) {} else { if (!y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (y) {} else { if (!y) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-2-false-3-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (y) {} else { void (!y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (y) {} else { void (!y ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-2-false-3-while",
+      "source": "function f(x: boolean, y: boolean) { if (y) {} else { while (!y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (y) {} else { while (!y) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-2-false-3-for",
+      "source": "function f(x: boolean, y: boolean) { if (y) {} else { for (; !y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (y) {} else { for (; !y;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-2-false-3-do",
+      "source": "function f(x: boolean, y: boolean) { if (y) {} else { do { void 0; } while (!y); } }",
+      "uncheckedSource": "function f(x, y) { if (y) {} else { do { void 0; } while (!y); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-3-true-0-if",
+      "source": "function f(x: boolean, y: boolean) { if (!y) { if (x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!y) { if (x) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-3-true-0-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!y) { void (x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!y) { void (x ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-3-true-0-while",
+      "source": "function f(x: boolean, y: boolean) { if (!y) { while (x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!y) { while (x) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-3-true-0-for",
+      "source": "function f(x: boolean, y: boolean) { if (!y) { for (; x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!y) { for (; x;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-3-true-0-do",
+      "source": "function f(x: boolean, y: boolean) { if (!y) { do { void 0; } while (x); } }",
+      "uncheckedSource": "function f(x, y) { if (!y) { do { void 0; } while (x); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-3-true-1-if",
+      "source": "function f(x: boolean, y: boolean) { if (!y) { if (!x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!y) { if (!x) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-3-true-1-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!y) { void (!x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!y) { void (!x ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-3-true-1-while",
+      "source": "function f(x: boolean, y: boolean) { if (!y) { while (!x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!y) { while (!x) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-3-true-1-for",
+      "source": "function f(x: boolean, y: boolean) { if (!y) { for (; !x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!y) { for (; !x;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-3-true-1-do",
+      "source": "function f(x: boolean, y: boolean) { if (!y) { do { void 0; } while (!x); } }",
+      "uncheckedSource": "function f(x, y) { if (!y) { do { void 0; } while (!x); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-3-true-2-if",
+      "source": "function f(x: boolean, y: boolean) { if (!y) { if (y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!y) { if (y) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-3-true-2-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!y) { void (y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!y) { void (y ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-3-true-2-while",
+      "source": "function f(x: boolean, y: boolean) { if (!y) { while (y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!y) { while (y) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-3-true-2-for",
+      "source": "function f(x: boolean, y: boolean) { if (!y) { for (; y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!y) { for (; y;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-3-true-2-do",
+      "source": "function f(x: boolean, y: boolean) { if (!y) { do { void 0; } while (y); } }",
+      "uncheckedSource": "function f(x, y) { if (!y) { do { void 0; } while (y); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-3-true-3-if",
+      "source": "function f(x: boolean, y: boolean) { if (!y) { if (!y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!y) { if (!y) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-3-true-3-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!y) { void (!y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!y) { void (!y ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-3-true-3-while",
+      "source": "function f(x: boolean, y: boolean) { if (!y) { while (!y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!y) { while (!y) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-3-true-3-for",
+      "source": "function f(x: boolean, y: boolean) { if (!y) { for (; !y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!y) { for (; !y;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-3-true-3-do",
+      "source": "function f(x: boolean, y: boolean) { if (!y) { do { void 0; } while (!y); } }",
+      "uncheckedSource": "function f(x, y) { if (!y) { do { void 0; } while (!y); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-3-false-0-if",
+      "source": "function f(x: boolean, y: boolean) { if (!y) {} else { if (x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!y) {} else { if (x) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-3-false-0-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!y) {} else { void (x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!y) {} else { void (x ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-3-false-0-while",
+      "source": "function f(x: boolean, y: boolean) { if (!y) {} else { while (x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!y) {} else { while (x) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-3-false-0-for",
+      "source": "function f(x: boolean, y: boolean) { if (!y) {} else { for (; x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!y) {} else { for (; x;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-3-false-0-do",
+      "source": "function f(x: boolean, y: boolean) { if (!y) {} else { do { void 0; } while (x); } }",
+      "uncheckedSource": "function f(x, y) { if (!y) {} else { do { void 0; } while (x); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-3-false-1-if",
+      "source": "function f(x: boolean, y: boolean) { if (!y) {} else { if (!x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!y) {} else { if (!x) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-3-false-1-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!y) {} else { void (!x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!y) {} else { void (!x ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-3-false-1-while",
+      "source": "function f(x: boolean, y: boolean) { if (!y) {} else { while (!x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!y) {} else { while (!x) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-3-false-1-for",
+      "source": "function f(x: boolean, y: boolean) { if (!y) {} else { for (; !x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!y) {} else { for (; !x;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-3-false-1-do",
+      "source": "function f(x: boolean, y: boolean) { if (!y) {} else { do { void 0; } while (!x); } }",
+      "uncheckedSource": "function f(x, y) { if (!y) {} else { do { void 0; } while (!x); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-3-false-2-if",
+      "source": "function f(x: boolean, y: boolean) { if (!y) {} else { if (y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!y) {} else { if (y) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-3-false-2-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!y) {} else { void (y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!y) {} else { void (y ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-3-false-2-while",
+      "source": "function f(x: boolean, y: boolean) { if (!y) {} else { while (y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!y) {} else { while (y) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-3-false-2-for",
+      "source": "function f(x: boolean, y: boolean) { if (!y) {} else { for (; y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!y) {} else { for (; y;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-3-false-2-do",
+      "source": "function f(x: boolean, y: boolean) { if (!y) {} else { do { void 0; } while (y); } }",
+      "uncheckedSource": "function f(x, y) { if (!y) {} else { do { void 0; } while (y); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-3-false-3-if",
+      "source": "function f(x: boolean, y: boolean) { if (!y) {} else { if (!y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!y) {} else { if (!y) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-3-false-3-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!y) {} else { void (!y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!y) {} else { void (!y ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-3-false-3-while",
+      "source": "function f(x: boolean, y: boolean) { if (!y) {} else { while (!y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!y) {} else { while (!y) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-3-false-3-for",
+      "source": "function f(x: boolean, y: boolean) { if (!y) {} else { for (; !y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!y) {} else { for (; !y;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-3-false-3-do",
+      "source": "function f(x: boolean, y: boolean) { if (!y) {} else { do { void 0; } while (!y); } }",
+      "uncheckedSource": "function f(x, y) { if (!y) {} else { do { void 0; } while (!y); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-true-0-if",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) { if (x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) { if (x) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-true-0-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) { void (x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) { void (x ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-true-0-while",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) { while (x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) { while (x) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-true-0-for",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) { for (; x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) { for (; x;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-true-0-do",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) { do { void 0; } while (x); } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) { do { void 0; } while (x); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-true-1-if",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) { if (!x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) { if (!x) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-true-1-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) { void (!x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) { void (!x ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-true-1-while",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) { while (!x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) { while (!x) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-true-1-for",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) { for (; !x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) { for (; !x;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-true-1-do",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) { do { void 0; } while (!x); } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) { do { void 0; } while (!x); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-true-2-if",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) { if (y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) { if (y) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-true-2-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) { void (y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) { void (y ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-true-2-while",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) { while (y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) { while (y) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-true-2-for",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) { for (; y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) { for (; y;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-true-2-do",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) { do { void 0; } while (y); } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) { do { void 0; } while (y); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-true-3-if",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) { if (!y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) { if (!y) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-true-3-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) { void (!y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) { void (!y ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-true-3-while",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) { while (!y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) { while (!y) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-true-3-for",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) { for (; !y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) { for (; !y;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-true-3-do",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) { do { void 0; } while (!y); } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) { do { void 0; } while (!y); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-4-false-0-if",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) {} else { if (x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) {} else { if (x) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-4-false-0-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) {} else { void (x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) {} else { void (x ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-4-false-0-while",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) {} else { while (x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) {} else { while (x) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-4-false-0-for",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) {} else { for (; x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) {} else { for (; x;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-4-false-0-do",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) {} else { do { void 0; } while (x); } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) {} else { do { void 0; } while (x); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-4-false-1-if",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) {} else { if (!x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) {} else { if (!x) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-4-false-1-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) {} else { void (!x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) {} else { void (!x ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-4-false-1-while",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) {} else { while (!x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) {} else { while (!x) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-4-false-1-for",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) {} else { for (; !x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) {} else { for (; !x;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-4-false-1-do",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) {} else { do { void 0; } while (!x); } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) {} else { do { void 0; } while (!x); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-4-false-2-if",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) {} else { if (y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) {} else { if (y) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-4-false-2-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) {} else { void (y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) {} else { void (y ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-4-false-2-while",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) {} else { while (y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) {} else { while (y) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-4-false-2-for",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) {} else { for (; y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) {} else { for (; y;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-4-false-2-do",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) {} else { do { void 0; } while (y); } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) {} else { do { void 0; } while (y); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-4-false-3-if",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) {} else { if (!y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) {} else { if (!y) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-4-false-3-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) {} else { void (!y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) {} else { void (!y ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-4-false-3-while",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) {} else { while (!y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) {} else { while (!y) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-4-false-3-for",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) {} else { for (; !y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) {} else { for (; !y;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-4-false-3-do",
+      "source": "function f(x: boolean, y: boolean) { if (x && y) {} else { do { void 0; } while (!y); } }",
+      "uncheckedSource": "function f(x, y) { if (x && y) {} else { do { void 0; } while (!y); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-true-0-if",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) { if (x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) { if (x) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-true-0-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) { void (x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) { void (x ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-true-0-while",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) { while (x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) { while (x) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-true-0-for",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) { for (; x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) { for (; x;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-true-0-do",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) { do { void 0; } while (x); } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) { do { void 0; } while (x); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-true-1-if",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) { if (!x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) { if (!x) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-true-1-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) { void (!x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) { void (!x ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-true-1-while",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) { while (!x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) { while (!x) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-true-1-for",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) { for (; !x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) { for (; !x;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-true-1-do",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) { do { void 0; } while (!x); } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) { do { void 0; } while (!x); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-true-2-if",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) { if (y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) { if (y) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-true-2-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) { void (y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) { void (y ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-true-2-while",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) { while (y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) { while (y) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-true-2-for",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) { for (; y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) { for (; y;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-true-2-do",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) { do { void 0; } while (y); } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) { do { void 0; } while (y); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-true-3-if",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) { if (!y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) { if (!y) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-true-3-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) { void (!y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) { void (!y ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-true-3-while",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) { while (!y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) { while (!y) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-true-3-for",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) { for (; !y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) { for (; !y;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-true-3-do",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) { do { void 0; } while (!y); } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) { do { void 0; } while (!y); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-5-false-0-if",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) {} else { if (x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) {} else { if (x) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-5-false-0-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) {} else { void (x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) {} else { void (x ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-5-false-0-while",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) {} else { while (x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) {} else { while (x) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-5-false-0-for",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) {} else { for (; x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) {} else { for (; x;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-5-false-0-do",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) {} else { do { void 0; } while (x); } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) {} else { do { void 0; } while (x); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-5-false-1-if",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) {} else { if (!x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) {} else { if (!x) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-5-false-1-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) {} else { void (!x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) {} else { void (!x ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-5-false-1-while",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) {} else { while (!x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) {} else { while (!x) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-5-false-1-for",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) {} else { for (; !x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) {} else { for (; !x;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-5-false-1-do",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) {} else { do { void 0; } while (!x); } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) {} else { do { void 0; } while (!x); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-5-false-2-if",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) {} else { if (y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) {} else { if (y) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-5-false-2-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) {} else { void (y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) {} else { void (y ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-5-false-2-while",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) {} else { while (y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) {} else { while (y) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-5-false-2-for",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) {} else { for (; y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) {} else { for (; y;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-5-false-2-do",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) {} else { do { void 0; } while (y); } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) {} else { do { void 0; } while (y); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-5-false-3-if",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) {} else { if (!y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) {} else { if (!y) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-5-false-3-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) {} else { void (!y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) {} else { void (!y ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-5-false-3-while",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) {} else { while (!y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) {} else { while (!y) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-5-false-3-for",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) {} else { for (; !y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) {} else { for (; !y;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-5-false-3-do",
+      "source": "function f(x: boolean, y: boolean) { if (x || y) {} else { do { void 0; } while (!y); } }",
+      "uncheckedSource": "function f(x, y) { if (x || y) {} else { do { void 0; } while (!y); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-true-0-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) { if (x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) { if (x) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-true-0-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) { void (x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) { void (x ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-true-0-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) { while (x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) { while (x) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-true-0-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) { for (; x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) { for (; x;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-true-0-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) { do { void 0; } while (x); } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) { do { void 0; } while (x); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-true-1-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) { if (!x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) { if (!x) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-true-1-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) { void (!x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) { void (!x ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-true-1-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) { while (!x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) { while (!x) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-true-1-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) { for (; !x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) { for (; !x;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-true-1-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) { do { void 0; } while (!x); } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) { do { void 0; } while (!x); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-true-2-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) { if (y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) { if (y) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-true-2-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) { void (y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) { void (y ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-true-2-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) { while (y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) { while (y) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-true-2-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) { for (; y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) { for (; y;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-true-2-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) { do { void 0; } while (y); } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) { do { void 0; } while (y); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-true-3-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) { if (!y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) { if (!y) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-true-3-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) { void (!y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) { void (!y ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-true-3-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) { while (!y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) { while (!y) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-true-3-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) { for (; !y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) { for (; !y;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-true-3-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) { do { void 0; } while (!y); } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) { do { void 0; } while (!y); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-6-false-0-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) {} else { if (x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) {} else { if (x) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-6-false-0-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) {} else { void (x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) {} else { void (x ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-6-false-0-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) {} else { while (x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) {} else { while (x) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-6-false-0-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) {} else { for (; x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) {} else { for (; x;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-6-false-0-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) {} else { do { void 0; } while (x); } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) {} else { do { void 0; } while (x); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-6-false-1-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) {} else { if (!x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) {} else { if (!x) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-6-false-1-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) {} else { void (!x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) {} else { void (!x ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-6-false-1-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) {} else { while (!x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) {} else { while (!x) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-6-false-1-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) {} else { for (; !x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) {} else { for (; !x;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-6-false-1-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) {} else { do { void 0; } while (!x); } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) {} else { do { void 0; } while (!x); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-6-false-2-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) {} else { if (y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) {} else { if (y) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-6-false-2-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) {} else { void (y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) {} else { void (y ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-6-false-2-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) {} else { while (y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) {} else { while (y) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-6-false-2-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) {} else { for (; y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) {} else { for (; y;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-6-false-2-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) {} else { do { void 0; } while (y); } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) {} else { do { void 0; } while (y); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-6-false-3-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) {} else { if (!y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) {} else { if (!y) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-6-false-3-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) {} else { void (!y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) {} else { void (!y ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-6-false-3-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) {} else { while (!y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) {} else { while (!y) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-6-false-3-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) {} else { for (; !y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) {} else { for (; !y;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-6-false-3-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x && y) {} else { do { void 0; } while (!y); } }",
+      "uncheckedSource": "function f(x, y) { if (!x && y) {} else { do { void 0; } while (!y); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-true-0-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) { if (x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) { if (x) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-true-0-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) { void (x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) { void (x ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-true-0-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) { while (x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) { while (x) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-true-0-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) { for (; x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) { for (; x;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-true-0-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) { do { void 0; } while (x); } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) { do { void 0; } while (x); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-true-1-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) { if (!x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) { if (!x) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-true-1-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) { void (!x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) { void (!x ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-true-1-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) { while (!x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) { while (!x) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-true-1-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) { for (; !x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) { for (; !x;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-true-1-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) { do { void 0; } while (!x); } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) { do { void 0; } while (!x); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-true-2-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) { if (y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) { if (y) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-true-2-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) { void (y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) { void (y ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-true-2-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) { while (y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) { while (y) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-true-2-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) { for (; y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) { for (; y;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-true-2-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) { do { void 0; } while (y); } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) { do { void 0; } while (y); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-true-3-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) { if (!y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) { if (!y) {} } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-true-3-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) { void (!y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) { void (!y ? 1 : 0); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-true-3-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) { while (!y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) { while (!y) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-true-3-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) { for (; !y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) { for (; !y;) { break; } } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-true-3-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) { do { void 0; } while (!y); } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) { do { void 0; } while (!y); } }",
+      "expected": "accept",
+      "rules": []
+    },
+    {
+      "id": "boolean-7-false-0-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) {} else { if (x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) {} else { if (x) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-7-false-0-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) {} else { void (x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) {} else { void (x ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-7-false-0-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) {} else { while (x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) {} else { while (x) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-7-false-0-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) {} else { for (; x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) {} else { for (; x;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-7-false-0-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) {} else { do { void 0; } while (x); } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) {} else { do { void 0; } while (x); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-7-false-1-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) {} else { if (!x) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) {} else { if (!x) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-7-false-1-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) {} else { void (!x ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) {} else { void (!x ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-7-false-1-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) {} else { while (!x) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) {} else { while (!x) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-7-false-1-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) {} else { for (; !x;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) {} else { for (; !x;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-7-false-1-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) {} else { do { void 0; } while (!x); } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) {} else { do { void 0; } while (!x); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-7-false-2-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) {} else { if (y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) {} else { if (y) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-7-false-2-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) {} else { void (y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) {} else { void (y ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-7-false-2-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) {} else { while (y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) {} else { while (y) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-7-false-2-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) {} else { for (; y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) {} else { for (; y;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-7-false-2-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) {} else { do { void 0; } while (y); } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) {} else { do { void 0; } while (y); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-7-false-3-if",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) {} else { if (!y) {} } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) {} else { if (!y) {} } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-7-false-3-conditional",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) {} else { void (!y ? 1 : 0); } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) {} else { void (!y ? 1 : 0); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-7-false-3-while",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) {} else { while (!y) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) {} else { while (!y) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-7-false-3-for",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) {} else { for (; !y;) { break; } } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) {} else { for (; !y;) { break; } } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    },
+    {
+      "id": "boolean-7-false-3-do",
+      "source": "function f(x: boolean, y: boolean) { if (!x || y) {} else { do { void 0; } while (!y); } }",
+      "uncheckedSource": "function f(x, y) { if (!x || y) {} else { do { void 0; } while (!y); } }",
+      "expected": "reject",
+      "rules": [
+        "rt-constant-condition",
+        "rt-impossible-test"
+      ]
+    }
+  ]
+}

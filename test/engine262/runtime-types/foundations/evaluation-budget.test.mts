@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion } from '#self';
+import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf } from '#self';
 
 /**
  * Spec: #sec-evaluation-budget (The Evaluation Budget).
@@ -52,6 +52,9 @@ test('an exhausted budget abandons the type evaluation', () => {
   // pass reports rather than running on.
   const completion = runWithBudget(crossing, { steps: 0 });
   expect(completion).toMatchObject({ Type: 'throw' });
+  expect(TypeDiagnosticOf(EnsureCompletion(completion).Value)).toMatchObject({
+    code: 'RT_TYPE_EVALUATION_LIMIT', phase: 'pre-evaluation', errorClass: 'StaticTypeError',
+  });
   // The same source with a budget that admits the work completes, which is
   // what makes the failure the BUDGET's rather than the program's.
   expect(runWithBudget(crossing, { steps: 100 })).toMatchObject({ Type: 'normal' });

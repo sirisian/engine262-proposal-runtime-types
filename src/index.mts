@@ -12,6 +12,8 @@ export * from './value.mts';
 // Test hook for the bounds proof (sec-check-elision), which is otherwise
 // unreachable: the elision is unobservable and the set is keyed on a root.
 export { BoundsProvenCountForLastCheck } from './type-system/check.mts';
+export { TypeDiagnosticOf, type TypeDiagnosticRecord, type TypeDiagnosticPhase } from './type-system/diagnostics.mts';
+export { TypeDiagnosticCatalog, TypeDiagnosticCatalogHash, type TypeDiagnosticCode, type TypeDiagnosticRule } from './type-system/diagnostic-catalog.mts';
 // The inspector renders a Type
 // Object, so it needs the predicate that recognises one and the canonical-form
 // function that describes it. Exported here rather than reached through a deep

@@ -11,6 +11,7 @@ test.each([
   "function a(p: number) {} function b() { if ([]) {} }",
   "class K { m() { if ([]) {} } }",
   "class R { m(p: number) {} n() { if ([]) {} } }",
+  "class R { operator +(rhs) { return rhs; } n() { if ([]) {} } }",
 ])("an unchecked unit keeps its behaviour: %s", (source) => {
   expect(ok(`${source} 'ok';`)).toBe(true);
 });
@@ -23,4 +24,5 @@ test.each([
   "class K { a: number = 1; m() { if ([]) {} } }",
   "function m(c) { return c; } @m class D { n() { if ([]) {} } }",
   "class P { @m q() {} r() { if ([]) {} } } function m(v) { return v; }",
+  "class R { operator +(rhs) { if ([]) {} return rhs; } }",
 ])("a checked unit is refused: %s", expectStaticTypeError);

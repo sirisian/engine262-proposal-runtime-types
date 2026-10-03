@@ -963,8 +963,8 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
       // proposal-runtime-types #sec-type-errors: the checking pass runs per
       // module, after its dependencies have evaluated (InnerModuleEvaluation
       // reaches this module in evaluation order) and before its own body. A
-      // rejection rejects the module before its first statement. The TLA
-      // branch below is not yet wired to the pass.
+      // rejection rejects the module before its first statement. AsyncBlockStart
+      // performs the same check in the context of a top-level-await module.
       if (surroundingAgent.feature('runtime-types')) {
         const check = EnsureCompletion(yield* RunPreEvaluationTypeCheck(module.ECMAScriptCode as ParseNode.Module));
         if (check.Type !== 'normal') {
