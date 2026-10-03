@@ -1,0 +1,1051 @@
+{
+  "description": "Cross-form return publication: dependency ordering, protocol components, provenance and checking phase. Sources are observed unchanged.",
+  "specification": [
+    "sec-return-publication-dependencies",
+    "sec-inference-and-function-forms",
+    "sec-anchored-contributions"
+  ],
+  "cases": [
+    {
+      "name": "async: 2 declarations, forward accepts matching protocol",
+      "source": "{async function f0(x:number){return f1(x);}async function f1(x:number){return \"s\";}const q:Promise.<string,any>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async: 2 declarations, forward rejects wrong component",
+      "source": "{async function f0(x:number){return f1(x);}async function f1(x:number){return \"s\";}const q:Promise.<number,any>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async: 2 declarations, reverse accepts matching protocol",
+      "source": "{async function f1(x:number){return \"s\";}async function f0(x:number){return f1(x);}const q:Promise.<string,any>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async: 2 declarations, reverse rejects wrong component",
+      "source": "{async function f1(x:number){return \"s\";}async function f0(x:number){return f1(x);}const q:Promise.<number,any>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async: 12 declarations, forward accepts matching protocol",
+      "source": "{async function f0(x:number){return f1(x);}async function f1(x:number){return f2(x);}async function f2(x:number){return f3(x);}async function f3(x:number){return f4(x);}async function f4(x:number){return f5(x);}async function f5(x:number){return f6(x);}async function f6(x:number){return f7(x);}async function f7(x:number){return f8(x);}async function f8(x:number){return f9(x);}async function f9(x:number){return f10(x);}async function f10(x:number){return f11(x);}async function f11(x:number){return \"s\";}const q:Promise.<string,any>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async: 12 declarations, forward rejects wrong component",
+      "source": "{async function f0(x:number){return f1(x);}async function f1(x:number){return f2(x);}async function f2(x:number){return f3(x);}async function f3(x:number){return f4(x);}async function f4(x:number){return f5(x);}async function f5(x:number){return f6(x);}async function f6(x:number){return f7(x);}async function f7(x:number){return f8(x);}async function f8(x:number){return f9(x);}async function f9(x:number){return f10(x);}async function f10(x:number){return f11(x);}async function f11(x:number){return \"s\";}const q:Promise.<number,any>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async: 12 declarations, reverse accepts matching protocol",
+      "source": "{async function f11(x:number){return \"s\";}async function f10(x:number){return f11(x);}async function f9(x:number){return f10(x);}async function f8(x:number){return f9(x);}async function f7(x:number){return f8(x);}async function f6(x:number){return f7(x);}async function f5(x:number){return f6(x);}async function f4(x:number){return f5(x);}async function f3(x:number){return f4(x);}async function f2(x:number){return f3(x);}async function f1(x:number){return f2(x);}async function f0(x:number){return f1(x);}const q:Promise.<string,any>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async: 12 declarations, reverse rejects wrong component",
+      "source": "{async function f11(x:number){return \"s\";}async function f10(x:number){return f11(x);}async function f9(x:number){return f10(x);}async function f8(x:number){return f9(x);}async function f7(x:number){return f8(x);}async function f6(x:number){return f7(x);}async function f5(x:number){return f6(x);}async function f4(x:number){return f5(x);}async function f3(x:number){return f4(x);}async function f2(x:number){return f3(x);}async function f1(x:number){return f2(x);}async function f0(x:number){return f1(x);}const q:Promise.<number,any>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async: 24 declarations, forward accepts matching protocol",
+      "source": "{async function f0(x:number){return f1(x);}async function f1(x:number){return f2(x);}async function f2(x:number){return f3(x);}async function f3(x:number){return f4(x);}async function f4(x:number){return f5(x);}async function f5(x:number){return f6(x);}async function f6(x:number){return f7(x);}async function f7(x:number){return f8(x);}async function f8(x:number){return f9(x);}async function f9(x:number){return f10(x);}async function f10(x:number){return f11(x);}async function f11(x:number){return f12(x);}async function f12(x:number){return f13(x);}async function f13(x:number){return f14(x);}async function f14(x:number){return f15(x);}async function f15(x:number){return f16(x);}async function f16(x:number){return f17(x);}async function f17(x:number){return f18(x);}async function f18(x:number){return f19(x);}async function f19(x:number){return f20(x);}async function f20(x:number){return f21(x);}async function f21(x:number){return f22(x);}async function f22(x:number){return f23(x);}async function f23(x:number){return \"s\";}const q:Promise.<string,any>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async: 24 declarations, forward rejects wrong component",
+      "source": "{async function f0(x:number){return f1(x);}async function f1(x:number){return f2(x);}async function f2(x:number){return f3(x);}async function f3(x:number){return f4(x);}async function f4(x:number){return f5(x);}async function f5(x:number){return f6(x);}async function f6(x:number){return f7(x);}async function f7(x:number){return f8(x);}async function f8(x:number){return f9(x);}async function f9(x:number){return f10(x);}async function f10(x:number){return f11(x);}async function f11(x:number){return f12(x);}async function f12(x:number){return f13(x);}async function f13(x:number){return f14(x);}async function f14(x:number){return f15(x);}async function f15(x:number){return f16(x);}async function f16(x:number){return f17(x);}async function f17(x:number){return f18(x);}async function f18(x:number){return f19(x);}async function f19(x:number){return f20(x);}async function f20(x:number){return f21(x);}async function f21(x:number){return f22(x);}async function f22(x:number){return f23(x);}async function f23(x:number){return \"s\";}const q:Promise.<number,any>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async: 24 declarations, reverse accepts matching protocol",
+      "source": "{async function f23(x:number){return \"s\";}async function f22(x:number){return f23(x);}async function f21(x:number){return f22(x);}async function f20(x:number){return f21(x);}async function f19(x:number){return f20(x);}async function f18(x:number){return f19(x);}async function f17(x:number){return f18(x);}async function f16(x:number){return f17(x);}async function f15(x:number){return f16(x);}async function f14(x:number){return f15(x);}async function f13(x:number){return f14(x);}async function f12(x:number){return f13(x);}async function f11(x:number){return f12(x);}async function f10(x:number){return f11(x);}async function f9(x:number){return f10(x);}async function f8(x:number){return f9(x);}async function f7(x:number){return f8(x);}async function f6(x:number){return f7(x);}async function f5(x:number){return f6(x);}async function f4(x:number){return f5(x);}async function f3(x:number){return f4(x);}async function f2(x:number){return f3(x);}async function f1(x:number){return f2(x);}async function f0(x:number){return f1(x);}const q:Promise.<string,any>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async: 24 declarations, reverse rejects wrong component",
+      "source": "{async function f23(x:number){return \"s\";}async function f22(x:number){return f23(x);}async function f21(x:number){return f22(x);}async function f20(x:number){return f21(x);}async function f19(x:number){return f20(x);}async function f18(x:number){return f19(x);}async function f17(x:number){return f18(x);}async function f16(x:number){return f17(x);}async function f15(x:number){return f16(x);}async function f14(x:number){return f15(x);}async function f13(x:number){return f14(x);}async function f12(x:number){return f13(x);}async function f11(x:number){return f12(x);}async function f10(x:number){return f11(x);}async function f9(x:number){return f10(x);}async function f8(x:number){return f9(x);}async function f7(x:number){return f8(x);}async function f6(x:number){return f7(x);}async function f5(x:number){return f6(x);}async function f4(x:number){return f5(x);}async function f3(x:number){return f4(x);}async function f2(x:number){return f3(x);}async function f1(x:number){return f2(x);}async function f0(x:number){return f1(x);}const q:Promise.<number,any>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generator: 2 declarations, forward accepts matching protocol",
+      "source": "{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield \"s\";}const q:Generator.<string,void,void>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generator: 2 declarations, forward rejects wrong component",
+      "source": "{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield \"s\";}const q:Generator.<number,void,void>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generator: 2 declarations, reverse accepts matching protocol",
+      "source": "{function* f1(x:number){yield \"s\";}function* f0(x:number){yield* f1(x);}const q:Generator.<string,void,void>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generator: 2 declarations, reverse rejects wrong component",
+      "source": "{function* f1(x:number){yield \"s\";}function* f0(x:number){yield* f1(x);}const q:Generator.<number,void,void>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generator: 12 declarations, forward accepts matching protocol",
+      "source": "{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield \"s\";}const q:Generator.<string,void,void>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generator: 12 declarations, forward rejects wrong component",
+      "source": "{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield \"s\";}const q:Generator.<number,void,void>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generator: 12 declarations, reverse accepts matching protocol",
+      "source": "{function* f11(x:number){yield \"s\";}function* f10(x:number){yield* f11(x);}function* f9(x:number){yield* f10(x);}function* f8(x:number){yield* f9(x);}function* f7(x:number){yield* f8(x);}function* f6(x:number){yield* f7(x);}function* f5(x:number){yield* f6(x);}function* f4(x:number){yield* f5(x);}function* f3(x:number){yield* f4(x);}function* f2(x:number){yield* f3(x);}function* f1(x:number){yield* f2(x);}function* f0(x:number){yield* f1(x);}const q:Generator.<string,void,void>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generator: 12 declarations, reverse rejects wrong component",
+      "source": "{function* f11(x:number){yield \"s\";}function* f10(x:number){yield* f11(x);}function* f9(x:number){yield* f10(x);}function* f8(x:number){yield* f9(x);}function* f7(x:number){yield* f8(x);}function* f6(x:number){yield* f7(x);}function* f5(x:number){yield* f6(x);}function* f4(x:number){yield* f5(x);}function* f3(x:number){yield* f4(x);}function* f2(x:number){yield* f3(x);}function* f1(x:number){yield* f2(x);}function* f0(x:number){yield* f1(x);}const q:Generator.<number,void,void>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generator: 24 declarations, forward accepts matching protocol",
+      "source": "{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield* f12(x);}function* f12(x:number){yield* f13(x);}function* f13(x:number){yield* f14(x);}function* f14(x:number){yield* f15(x);}function* f15(x:number){yield* f16(x);}function* f16(x:number){yield* f17(x);}function* f17(x:number){yield* f18(x);}function* f18(x:number){yield* f19(x);}function* f19(x:number){yield* f20(x);}function* f20(x:number){yield* f21(x);}function* f21(x:number){yield* f22(x);}function* f22(x:number){yield* f23(x);}function* f23(x:number){yield \"s\";}const q:Generator.<string,void,void>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generator: 24 declarations, forward rejects wrong component",
+      "source": "{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield* f12(x);}function* f12(x:number){yield* f13(x);}function* f13(x:number){yield* f14(x);}function* f14(x:number){yield* f15(x);}function* f15(x:number){yield* f16(x);}function* f16(x:number){yield* f17(x);}function* f17(x:number){yield* f18(x);}function* f18(x:number){yield* f19(x);}function* f19(x:number){yield* f20(x);}function* f20(x:number){yield* f21(x);}function* f21(x:number){yield* f22(x);}function* f22(x:number){yield* f23(x);}function* f23(x:number){yield \"s\";}const q:Generator.<number,void,void>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generator: 24 declarations, reverse accepts matching protocol",
+      "source": "{function* f23(x:number){yield \"s\";}function* f22(x:number){yield* f23(x);}function* f21(x:number){yield* f22(x);}function* f20(x:number){yield* f21(x);}function* f19(x:number){yield* f20(x);}function* f18(x:number){yield* f19(x);}function* f17(x:number){yield* f18(x);}function* f16(x:number){yield* f17(x);}function* f15(x:number){yield* f16(x);}function* f14(x:number){yield* f15(x);}function* f13(x:number){yield* f14(x);}function* f12(x:number){yield* f13(x);}function* f11(x:number){yield* f12(x);}function* f10(x:number){yield* f11(x);}function* f9(x:number){yield* f10(x);}function* f8(x:number){yield* f9(x);}function* f7(x:number){yield* f8(x);}function* f6(x:number){yield* f7(x);}function* f5(x:number){yield* f6(x);}function* f4(x:number){yield* f5(x);}function* f3(x:number){yield* f4(x);}function* f2(x:number){yield* f3(x);}function* f1(x:number){yield* f2(x);}function* f0(x:number){yield* f1(x);}const q:Generator.<string,void,void>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generator: 24 declarations, reverse rejects wrong component",
+      "source": "{function* f23(x:number){yield \"s\";}function* f22(x:number){yield* f23(x);}function* f21(x:number){yield* f22(x);}function* f20(x:number){yield* f21(x);}function* f19(x:number){yield* f20(x);}function* f18(x:number){yield* f19(x);}function* f17(x:number){yield* f18(x);}function* f16(x:number){yield* f17(x);}function* f15(x:number){yield* f16(x);}function* f14(x:number){yield* f15(x);}function* f13(x:number){yield* f14(x);}function* f12(x:number){yield* f13(x);}function* f11(x:number){yield* f12(x);}function* f10(x:number){yield* f11(x);}function* f9(x:number){yield* f10(x);}function* f8(x:number){yield* f9(x);}function* f7(x:number){yield* f8(x);}function* f6(x:number){yield* f7(x);}function* f5(x:number){yield* f6(x);}function* f4(x:number){yield* f5(x);}function* f3(x:number){yield* f4(x);}function* f2(x:number){yield* f3(x);}function* f1(x:number){yield* f2(x);}function* f0(x:number){yield* f1(x);}const q:Generator.<number,void,void>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async-generator: 2 declarations, forward accepts matching protocol",
+      "source": "{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield \"s\";}const q:AsyncGenerator.<string,void,void>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-generator: 2 declarations, forward rejects wrong component",
+      "source": "{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield \"s\";}const q:AsyncGenerator.<number,void,void>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async-generator: 2 declarations, reverse accepts matching protocol",
+      "source": "{async function* f1(x:number){yield \"s\";}async function* f0(x:number){yield* f1(x);}const q:AsyncGenerator.<string,void,void>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-generator: 2 declarations, reverse rejects wrong component",
+      "source": "{async function* f1(x:number){yield \"s\";}async function* f0(x:number){yield* f1(x);}const q:AsyncGenerator.<number,void,void>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async-generator: 12 declarations, forward accepts matching protocol",
+      "source": "{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield \"s\";}const q:AsyncGenerator.<string,void,void>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-generator: 12 declarations, forward rejects wrong component",
+      "source": "{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield \"s\";}const q:AsyncGenerator.<number,void,void>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async-generator: 12 declarations, reverse accepts matching protocol",
+      "source": "{async function* f11(x:number){yield \"s\";}async function* f10(x:number){yield* f11(x);}async function* f9(x:number){yield* f10(x);}async function* f8(x:number){yield* f9(x);}async function* f7(x:number){yield* f8(x);}async function* f6(x:number){yield* f7(x);}async function* f5(x:number){yield* f6(x);}async function* f4(x:number){yield* f5(x);}async function* f3(x:number){yield* f4(x);}async function* f2(x:number){yield* f3(x);}async function* f1(x:number){yield* f2(x);}async function* f0(x:number){yield* f1(x);}const q:AsyncGenerator.<string,void,void>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-generator: 12 declarations, reverse rejects wrong component",
+      "source": "{async function* f11(x:number){yield \"s\";}async function* f10(x:number){yield* f11(x);}async function* f9(x:number){yield* f10(x);}async function* f8(x:number){yield* f9(x);}async function* f7(x:number){yield* f8(x);}async function* f6(x:number){yield* f7(x);}async function* f5(x:number){yield* f6(x);}async function* f4(x:number){yield* f5(x);}async function* f3(x:number){yield* f4(x);}async function* f2(x:number){yield* f3(x);}async function* f1(x:number){yield* f2(x);}async function* f0(x:number){yield* f1(x);}const q:AsyncGenerator.<number,void,void>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async-generator: 24 declarations, forward accepts matching protocol",
+      "source": "{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield* f12(x);}async function* f12(x:number){yield* f13(x);}async function* f13(x:number){yield* f14(x);}async function* f14(x:number){yield* f15(x);}async function* f15(x:number){yield* f16(x);}async function* f16(x:number){yield* f17(x);}async function* f17(x:number){yield* f18(x);}async function* f18(x:number){yield* f19(x);}async function* f19(x:number){yield* f20(x);}async function* f20(x:number){yield* f21(x);}async function* f21(x:number){yield* f22(x);}async function* f22(x:number){yield* f23(x);}async function* f23(x:number){yield \"s\";}const q:AsyncGenerator.<string,void,void>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-generator: 24 declarations, forward rejects wrong component",
+      "source": "{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield* f12(x);}async function* f12(x:number){yield* f13(x);}async function* f13(x:number){yield* f14(x);}async function* f14(x:number){yield* f15(x);}async function* f15(x:number){yield* f16(x);}async function* f16(x:number){yield* f17(x);}async function* f17(x:number){yield* f18(x);}async function* f18(x:number){yield* f19(x);}async function* f19(x:number){yield* f20(x);}async function* f20(x:number){yield* f21(x);}async function* f21(x:number){yield* f22(x);}async function* f22(x:number){yield* f23(x);}async function* f23(x:number){yield \"s\";}const q:AsyncGenerator.<number,void,void>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async-generator: 24 declarations, reverse accepts matching protocol",
+      "source": "{async function* f23(x:number){yield \"s\";}async function* f22(x:number){yield* f23(x);}async function* f21(x:number){yield* f22(x);}async function* f20(x:number){yield* f21(x);}async function* f19(x:number){yield* f20(x);}async function* f18(x:number){yield* f19(x);}async function* f17(x:number){yield* f18(x);}async function* f16(x:number){yield* f17(x);}async function* f15(x:number){yield* f16(x);}async function* f14(x:number){yield* f15(x);}async function* f13(x:number){yield* f14(x);}async function* f12(x:number){yield* f13(x);}async function* f11(x:number){yield* f12(x);}async function* f10(x:number){yield* f11(x);}async function* f9(x:number){yield* f10(x);}async function* f8(x:number){yield* f9(x);}async function* f7(x:number){yield* f8(x);}async function* f6(x:number){yield* f7(x);}async function* f5(x:number){yield* f6(x);}async function* f4(x:number){yield* f5(x);}async function* f3(x:number){yield* f4(x);}async function* f2(x:number){yield* f3(x);}async function* f1(x:number){yield* f2(x);}async function* f0(x:number){yield* f1(x);}const q:AsyncGenerator.<string,void,void>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-generator: 24 declarations, reverse rejects wrong component",
+      "source": "{async function* f23(x:number){yield \"s\";}async function* f22(x:number){yield* f23(x);}async function* f21(x:number){yield* f22(x);}async function* f20(x:number){yield* f21(x);}async function* f19(x:number){yield* f20(x);}async function* f18(x:number){yield* f19(x);}async function* f17(x:number){yield* f18(x);}async function* f16(x:number){yield* f17(x);}async function* f15(x:number){yield* f16(x);}async function* f14(x:number){yield* f15(x);}async function* f13(x:number){yield* f14(x);}async function* f12(x:number){yield* f13(x);}async function* f11(x:number){yield* f12(x);}async function* f10(x:number){yield* f11(x);}async function* f9(x:number){yield* f10(x);}async function* f8(x:number){yield* f9(x);}async function* f7(x:number){yield* f8(x);}async function* f6(x:number){yield* f7(x);}async function* f5(x:number){yield* f6(x);}async function* f4(x:number){yield* f5(x);}async function* f3(x:number){yield* f4(x);}async function* f2(x:number){yield* f3(x);}async function* f1(x:number){yield* f2(x);}async function* f0(x:number){yield* f1(x);}const q:AsyncGenerator.<number,void,void>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "mixed: 2 declarations, forward accepts matching protocol",
+      "source": "{async function f0(x:number){return f1(x);}function f1(x:number){return \"s\";}const q:Promise.<string,any>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "mixed: 2 declarations, forward rejects wrong component",
+      "source": "{async function f0(x:number){return f1(x);}function f1(x:number){return \"s\";}const q:Promise.<number,any>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "mixed: 2 declarations, reverse accepts matching protocol",
+      "source": "{function f1(x:number){return \"s\";}async function f0(x:number){return f1(x);}const q:Promise.<string,any>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "mixed: 2 declarations, reverse rejects wrong component",
+      "source": "{function f1(x:number){return \"s\";}async function f0(x:number){return f1(x);}const q:Promise.<number,any>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "mixed: 12 declarations, forward accepts matching protocol",
+      "source": "{async function f0(x:number){return f1(x);}function f1(x:number){return f2(x);}async function f2(x:number){return f3(x);}function f3(x:number){return f4(x);}async function f4(x:number){return f5(x);}function f5(x:number){return f6(x);}async function f6(x:number){return f7(x);}function f7(x:number){return f8(x);}async function f8(x:number){return f9(x);}function f9(x:number){return f10(x);}async function f10(x:number){return f11(x);}function f11(x:number){return \"s\";}const q:Promise.<string,any>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "mixed: 12 declarations, forward rejects wrong component",
+      "source": "{async function f0(x:number){return f1(x);}function f1(x:number){return f2(x);}async function f2(x:number){return f3(x);}function f3(x:number){return f4(x);}async function f4(x:number){return f5(x);}function f5(x:number){return f6(x);}async function f6(x:number){return f7(x);}function f7(x:number){return f8(x);}async function f8(x:number){return f9(x);}function f9(x:number){return f10(x);}async function f10(x:number){return f11(x);}function f11(x:number){return \"s\";}const q:Promise.<number,any>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "mixed: 12 declarations, reverse accepts matching protocol",
+      "source": "{function f11(x:number){return \"s\";}async function f10(x:number){return f11(x);}function f9(x:number){return f10(x);}async function f8(x:number){return f9(x);}function f7(x:number){return f8(x);}async function f6(x:number){return f7(x);}function f5(x:number){return f6(x);}async function f4(x:number){return f5(x);}function f3(x:number){return f4(x);}async function f2(x:number){return f3(x);}function f1(x:number){return f2(x);}async function f0(x:number){return f1(x);}const q:Promise.<string,any>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "mixed: 12 declarations, reverse rejects wrong component",
+      "source": "{function f11(x:number){return \"s\";}async function f10(x:number){return f11(x);}function f9(x:number){return f10(x);}async function f8(x:number){return f9(x);}function f7(x:number){return f8(x);}async function f6(x:number){return f7(x);}function f5(x:number){return f6(x);}async function f4(x:number){return f5(x);}function f3(x:number){return f4(x);}async function f2(x:number){return f3(x);}function f1(x:number){return f2(x);}async function f0(x:number){return f1(x);}const q:Promise.<number,any>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "mixed: 24 declarations, forward accepts matching protocol",
+      "source": "{async function f0(x:number){return f1(x);}function f1(x:number){return f2(x);}async function f2(x:number){return f3(x);}function f3(x:number){return f4(x);}async function f4(x:number){return f5(x);}function f5(x:number){return f6(x);}async function f6(x:number){return f7(x);}function f7(x:number){return f8(x);}async function f8(x:number){return f9(x);}function f9(x:number){return f10(x);}async function f10(x:number){return f11(x);}function f11(x:number){return f12(x);}async function f12(x:number){return f13(x);}function f13(x:number){return f14(x);}async function f14(x:number){return f15(x);}function f15(x:number){return f16(x);}async function f16(x:number){return f17(x);}function f17(x:number){return f18(x);}async function f18(x:number){return f19(x);}function f19(x:number){return f20(x);}async function f20(x:number){return f21(x);}function f21(x:number){return f22(x);}async function f22(x:number){return f23(x);}function f23(x:number){return \"s\";}const q:Promise.<string,any>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "mixed: 24 declarations, forward rejects wrong component",
+      "source": "{async function f0(x:number){return f1(x);}function f1(x:number){return f2(x);}async function f2(x:number){return f3(x);}function f3(x:number){return f4(x);}async function f4(x:number){return f5(x);}function f5(x:number){return f6(x);}async function f6(x:number){return f7(x);}function f7(x:number){return f8(x);}async function f8(x:number){return f9(x);}function f9(x:number){return f10(x);}async function f10(x:number){return f11(x);}function f11(x:number){return f12(x);}async function f12(x:number){return f13(x);}function f13(x:number){return f14(x);}async function f14(x:number){return f15(x);}function f15(x:number){return f16(x);}async function f16(x:number){return f17(x);}function f17(x:number){return f18(x);}async function f18(x:number){return f19(x);}function f19(x:number){return f20(x);}async function f20(x:number){return f21(x);}function f21(x:number){return f22(x);}async function f22(x:number){return f23(x);}function f23(x:number){return \"s\";}const q:Promise.<number,any>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "mixed: 24 declarations, reverse accepts matching protocol",
+      "source": "{function f23(x:number){return \"s\";}async function f22(x:number){return f23(x);}function f21(x:number){return f22(x);}async function f20(x:number){return f21(x);}function f19(x:number){return f20(x);}async function f18(x:number){return f19(x);}function f17(x:number){return f18(x);}async function f16(x:number){return f17(x);}function f15(x:number){return f16(x);}async function f14(x:number){return f15(x);}function f13(x:number){return f14(x);}async function f12(x:number){return f13(x);}function f11(x:number){return f12(x);}async function f10(x:number){return f11(x);}function f9(x:number){return f10(x);}async function f8(x:number){return f9(x);}function f7(x:number){return f8(x);}async function f6(x:number){return f7(x);}function f5(x:number){return f6(x);}async function f4(x:number){return f5(x);}function f3(x:number){return f4(x);}async function f2(x:number){return f3(x);}function f1(x:number){return f2(x);}async function f0(x:number){return f1(x);}const q:Promise.<string,any>=f0(1);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "mixed: 24 declarations, reverse rejects wrong component",
+      "source": "{function f23(x:number){return \"s\";}async function f22(x:number){return f23(x);}function f21(x:number){return f22(x);}async function f20(x:number){return f21(x);}function f19(x:number){return f20(x);}async function f18(x:number){return f19(x);}function f17(x:number){return f18(x);}async function f16(x:number){return f17(x);}function f15(x:number){return f16(x);}async function f14(x:number){return f15(x);}function f13(x:number){return f14(x);}async function f12(x:number){return f13(x);}function f11(x:number){return f12(x);}async function f10(x:number){return f11(x);}function f9(x:number){return f10(x);}async function f8(x:number){return f9(x);}function f7(x:number){return f8(x);}async function f6(x:number){return f7(x);}function f5(x:number){return f6(x);}async function f4(x:number){return f5(x);}function f3(x:number){return f4(x);}async function f2(x:number){return f3(x);}function f1(x:number){return f2(x);}async function f0(x:number){return f1(x);}const q:Promise.<number,any>=f0(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async in uncalled",
+      "source": "function unused(){async function f0(x:number){return f1(x);}async function f1(x:number){return f2(x);}async function f2(x:number){return f3(x);}async function f3(x:number){return f4(x);}async function f4(x:number){return f5(x);}async function f5(x:number){return f6(x);}async function f6(x:number){return f7(x);}async function f7(x:number){return f8(x);}async function f8(x:number){return f9(x);}async function f9(x:number){return f10(x);}async function f10(x:number){return f11(x);}async function f11(x:number){return \"s\";}const q:Promise.<string,any>=f0(1);}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generator in uncalled",
+      "source": "function unused(){function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield \"s\";}const q:Generator.<string,void,void>=f0(1);}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-generator in uncalled",
+      "source": "function unused(){async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield \"s\";}const q:AsyncGenerator.<string,void,void>=f0(1);}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async in dead branch",
+      "source": "if(false){async function f0(x:number){return f1(x);}async function f1(x:number){return f2(x);}async function f2(x:number){return f3(x);}async function f3(x:number){return f4(x);}async function f4(x:number){return f5(x);}async function f5(x:number){return f6(x);}async function f6(x:number){return f7(x);}async function f7(x:number){return f8(x);}async function f8(x:number){return f9(x);}async function f9(x:number){return f10(x);}async function f10(x:number){return f11(x);}async function f11(x:number){return \"s\";}const q:Promise.<string,any>=f0(1);}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generator in dead branch",
+      "source": "if(false){function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield \"s\";}const q:Generator.<string,void,void>=f0(1);}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-generator in dead branch",
+      "source": "if(false){async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield \"s\";}const q:AsyncGenerator.<string,void,void>=f0(1);}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async in try",
+      "source": "try{async function f0(x:number){return f1(x);}async function f1(x:number){return f2(x);}async function f2(x:number){return f3(x);}async function f3(x:number){return f4(x);}async function f4(x:number){return f5(x);}async function f5(x:number){return f6(x);}async function f6(x:number){return f7(x);}async function f7(x:number){return f8(x);}async function f8(x:number){return f9(x);}async function f9(x:number){return f10(x);}async function f10(x:number){return f11(x);}async function f11(x:number){return \"s\";}const q:Promise.<string,any>=f0(1);}catch(e){}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generator in try",
+      "source": "try{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield \"s\";}const q:Generator.<string,void,void>=f0(1);}catch(e){}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-generator in try",
+      "source": "try{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield \"s\";}const q:AsyncGenerator.<string,void,void>=f0(1);}catch(e){}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async in switch",
+      "source": "switch(0){case 0:async function f0(x:number){return f1(x);}async function f1(x:number){return f2(x);}async function f2(x:number){return f3(x);}async function f3(x:number){return f4(x);}async function f4(x:number){return f5(x);}async function f5(x:number){return f6(x);}async function f6(x:number){return f7(x);}async function f7(x:number){return f8(x);}async function f8(x:number){return f9(x);}async function f9(x:number){return f10(x);}async function f10(x:number){return f11(x);}async function f11(x:number){return \"s\";}const q:Promise.<string,any>=f0(1);break;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generator in switch",
+      "source": "switch(0){case 0:function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield \"s\";}const q:Generator.<string,void,void>=f0(1);break;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-generator in switch",
+      "source": "switch(0){case 0:async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield \"s\";}const q:AsyncGenerator.<string,void,void>=f0(1);break;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async result narrows in if",
+      "source": "async function f0(x:number){return f1(x);}async function f1(x:number){return f2(x);}async function f2(x:number){return f3(x);}async function f3(x:number){return f4(x);}async function f4(x:number){return f5(x);}async function f5(x:number){return f6(x);}async function f6(x:number){return f7(x);}async function f7(x:number){return f8(x);}async function f8(x:number){return f9(x);}async function f9(x:number){return f10(x);}async function f10(x:number){return f11(x);}async function f11(x:number){return \"s\";}async function consume():Promise.<void,any>{const s=await f0(1);if (s is number) {}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async result narrows in while",
+      "source": "async function f0(x:number){return f1(x);}async function f1(x:number){return f2(x);}async function f2(x:number){return f3(x);}async function f3(x:number){return f4(x);}async function f4(x:number){return f5(x);}async function f5(x:number){return f6(x);}async function f6(x:number){return f7(x);}async function f7(x:number){return f8(x);}async function f8(x:number){return f9(x);}async function f9(x:number){return f10(x);}async function f10(x:number){return f11(x);}async function f11(x:number){return \"s\";}async function consume():Promise.<void,any>{const s=await f0(1);while(s is number) {}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async result narrows in do",
+      "source": "async function f0(x:number){return f1(x);}async function f1(x:number){return f2(x);}async function f2(x:number){return f3(x);}async function f3(x:number){return f4(x);}async function f4(x:number){return f5(x);}async function f5(x:number){return f6(x);}async function f6(x:number){return f7(x);}async function f7(x:number){return f8(x);}async function f8(x:number){return f9(x);}async function f9(x:number){return f10(x);}async function f10(x:number){return f11(x);}async function f11(x:number){return \"s\";}async function consume():Promise.<void,any>{const s=await f0(1);do {} while(s is number);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async result narrows in for",
+      "source": "async function f0(x:number){return f1(x);}async function f1(x:number){return f2(x);}async function f2(x:number){return f3(x);}async function f3(x:number){return f4(x);}async function f4(x:number){return f5(x);}async function f5(x:number){return f6(x);}async function f6(x:number){return f7(x);}async function f7(x:number){return f8(x);}async function f8(x:number){return f9(x);}async function f9(x:number){return f10(x);}async function f10(x:number){return f11(x);}async function f11(x:number){return \"s\";}async function consume():Promise.<void,any>{const s=await f0(1);for(;s is number;) {}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async result narrows in conditional",
+      "source": "async function f0(x:number){return f1(x);}async function f1(x:number){return f2(x);}async function f2(x:number){return f3(x);}async function f3(x:number){return f4(x);}async function f4(x:number){return f5(x);}async function f5(x:number){return f6(x);}async function f6(x:number){return f7(x);}async function f7(x:number){return f8(x);}async function f8(x:number){return f9(x);}async function f9(x:number){return f10(x);}async function f10(x:number){return f11(x);}async function f11(x:number){return \"s\";}async function consume():Promise.<void,any>{const s=await f0(1);const n=(s is number)?1:2;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async result narrows in logical",
+      "source": "async function f0(x:number){return f1(x);}async function f1(x:number){return f2(x);}async function f2(x:number){return f3(x);}async function f3(x:number){return f4(x);}async function f4(x:number){return f5(x);}async function f5(x:number){return f6(x);}async function f6(x:number){return f7(x);}async function f7(x:number){return f8(x);}async function f8(x:number){return f9(x);}async function f9(x:number){return f10(x);}async function f10(x:number){return f11(x);}async function f11(x:number){return \"s\";}async function consume():Promise.<void,any>{const s=await f0(1);(s is number) && 1;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generator locals anchor yielded contribution",
+      "source": "function* g(){const s:string=\"s\";yield s;} const q:Generator.<string,void,void>=g(); \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generator local aliases keep provenance",
+      "source": "function* g(){const s:string=\"s\";const t=s;yield t;} const q:Generator.<string,void,void>=g(); \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "delegation carries declared anchor",
+      "source": "function* inner():string{yield \"s\";} function* g(){yield* inner();} const q:Generator.<string,void,void>=g(); \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generator completion is separate",
+      "source": "function* g(x:number){yield 1;return \"done\";} const q:Generator.<number,string,void>=g(0); \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generator rejects wrong completion",
+      "source": "function* g(x:number){yield 1;return \"done\";} const q:Generator.<number,number,void>=g(0);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generator return only has no yielded contribution",
+      "source": "function* g(x:number){return \"done\";} const q:Generator.<never,string,void>=g(0); \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generator unknown completion remains unknown",
+      "source": "function* g(x:number,unknown){yield 1;return unknown;} const q:Generator.<number,any,void>=g(0,\"s\"); \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generator unknown yield keeps known completion",
+      "source": "function* g(x:number,unknown){yield unknown;return \"s\";} const q:Generator.<any,string,void>=g(0,1); \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async generator completion assimilates promise",
+      "source": "function p():Promise.<string,any>{return Promise.resolve(\"s\");} async function* g(x:number){yield 1;return p();} const q:AsyncGenerator.<number,string,void>=g(0); \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async generator local yield contributes",
+      "source": "async function* g(){const s:string=\"s\";yield s;} const q:AsyncGenerator.<string,void,void>=g(); \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "provisional async contribution stays private",
+      "source": "async function legacy(){return \"s\";} async function typed(x:number){return legacy();} const p:Promise.<string,any>=typed(0); try{const n:number=legacy();}catch(e){} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "untyped async wrapper stays untyped",
+      "source": "async function legacy(){return \"s\";} function wrapper(){return legacy();} try{const n:number=wrapper();}catch(e){} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "untyped generator wrapper stays untyped",
+      "source": "function* legacy(){yield \"s\";} function wrapper(){return legacy();} try{const n:number=wrapper();}catch(e){} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "typed wrapper can use private generator contribution",
+      "source": "function* legacy(){yield \"s\";} function wrapper(x:number){return legacy();} const q:Generator.<string,void,void>=wrapper(0); \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generic async inference substitutes at each call",
+      "source": "async function id<T:type>(x:T){return x;} const a:Promise.<number,any>=id(1);const b:Promise.<string,any>=id(\"s\");\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "dependency uses callee capture not caller parameter",
+      "source": "function outer(){const q:Promise.<number,any>=f(1);async function f(s:number){return g();}async function g(){return s;}let s:string=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "unknown capture does not borrow caller annotation",
+      "source": "function outer(){let s;const q:Promise.<number,any>=f(1);async function f(s:number){return g();}async function g(){return s;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "late async input can be requested again",
+      "source": "{let u:string|number=\"s\";const s=u;const q:Promise.<number,any>=g();async function g(){return s;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "growing recursion retains error",
+      "source": "function grow(x:number){return [grow(x)];}function stable(x:number){return x;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "rule": "rt-return-inference",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "legacy async declarations: automatic",
+      "source": "async function f0(x){return f1(x);}async function f1(x){return f2(x);}async function f2(x){return f3(x);}async function f3(x){return f4(x);}async function f4(x){return f5(x);}async function f5(x){return f6(x);}async function f6(x){return f7(x);}async function f7(x){return f8(x);}async function f8(x){return f9(x);}async function f9(x){return f10(x);}async function f10(x){return f11(x);}async function f11(x){return \"s\";}f0(1);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "legacy async declarations: forced",
+      "source": "async function f0(x){return f1(x);}async function f1(x){return f2(x);}async function f2(x){return f3(x);}async function f3(x){return f4(x);}async function f4(x){return f5(x);}async function f5(x){return f6(x);}async function f6(x){return f7(x);}async function f7(x){return f8(x);}async function f8(x){return f9(x);}async function f9(x){return f10(x);}async function f10(x){return f11(x);}async function f11(x){return \"s\";}f0(1);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "legacy async declarations: disabled",
+      "source": "async function f0(x){return f1(x);}async function f1(x){return f2(x);}async function f2(x){return f3(x);}async function f3(x){return f4(x);}async function f4(x){return f5(x);}async function f5(x){return f6(x);}async function f6(x){return f7(x);}async function f7(x){return f8(x);}async function f8(x){return f9(x);}async function f9(x){return f10(x);}async function f10(x){return f11(x);}async function f11(x){return \"s\";}f0(1);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      },
+      "checking": "disabled"
+    },
+    {
+      "name": "async module export dependency",
+      "modules": {
+        "dep": "export async function f0(x:number){return f1(x);}async function f1(x:number){return f2(x);}async function f2(x:number){return f3(x);}async function f3(x:number){return f4(x);}async function f4(x:number){return f5(x);}async function f5(x:number){return f6(x);}async function f6(x:number){return f7(x);}async function f7(x:number){return f8(x);}async function f8(x:number){return f9(x);}async function f9(x:number){return f10(x);}async function f10(x:number){return f11(x);}async function f11(x:number){return \"s\";}",
+        "main": "import {f0} from \"dep\";const q:Promise.<string,any>=f0(1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generator module export dependency",
+      "modules": {
+        "dep": "export function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield \"s\";}",
+        "main": "import {f0} from \"dep\";const q:Generator.<string,void,void>=f0(1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "async-generator module export dependency",
+      "modules": {
+        "dep": "export async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield \"s\";}",
+        "main": "import {f0} from \"dep\";const q:AsyncGenerator.<string,void,void>=f0(1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    }
+  ]
+}

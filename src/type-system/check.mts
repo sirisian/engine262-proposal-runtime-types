@@ -18116,7 +18116,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const only = selected as {
             Return: Known, InferredReturn?: Known, ProvisionalReturn?: Known, TypeParameters?: readonly TypeParameterRecord[],
           };
-          if (!only.Return && !only.InferredReturn && !inferencesInProgress.has(only as object)) {
+          if (!only.Return && (!only.InferredReturn || baselineGeneratorSignatures.has(only) || inferenceWave && !inferenceWave.has(only))
+            && !inferencesInProgress.has(only as object)) {
             driveInference(only as object);
           }
           // #sec-generics: a call that supplies type arguments binds
@@ -18293,6 +18294,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // is still checked where it crosses into the annotation, which is the
         // "bounded admission" the clause describes.
         return null;
+      }
+      if (inferenceDepth > 0 && baselineGeneratorSignatures.has(only)) {
+        if (inferencesInProgress.has(only)) return neverType;
+        return only.ProvisionalReturn ?? only.InferredReturn ?? null;
       }
       if (only.Return || only.InferredReturn) {
             if (!only.Return && only.InferredReturn) {
@@ -25452,6 +25457,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const pendingBySignature = new Map<object, ReturnInference>();
   const pendingInferences: ReturnInference[] = [];
+  // A dependency is evaluated at most once in one publication wave. A later
+  // wave can revisit a recursive result; ordinary checking can request a task
+  // again after a captured binding acquires its initializer contract.
+  let inferenceWave: Set<object> | undefined;
+  let changedInferences: Set<ReturnInference> | undefined;
+  const baselineGeneratorSignatures = new WeakSet<object>();
 
   const inDeclarationScope = <T,>(item: InferenceScope, action: () => T): T => {
     const outerFrames = frames.slice();
@@ -25582,22 +25593,51 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const driveInference = (only: object): Known => {
     const item = pendingBySignature.get(only);
     if (!item || inferencesInProgress.has(only)) return null;
+    if (inferenceWave?.has(only)) return item.signature.ProvisionalReturn ?? null;
     inferencesInProgress.add(only);
     inferenceDepth += 1;
-    let inferred: Known;
     try {
-      inferred = inDeclarationScope(item, () => {
-        const anchorage: ReturnAnchorage = { anchored: false };
-        const result = inferredReturnType(item.fn, item.parameterTypes, null, anchorage);
-        publishOrdinaryReturn(item, result, anchorage);
-        return result;
+      inDeclarationScope(item, () => {
+        let changed = false;
+        if (!item.generator && !item.asyncFunction) {
+          const anchorage: ReturnAnchorage = { anchored: false };
+          const result = inferredReturnType(item.fn, item.parameterTypes, null, anchorage);
+          changed = publishOrdinaryReturn(item, result, anchorage);
+        } else {
+          const anchorage: ReturnAnchorage = { anchored: false };
+          let result: Known = null;
+          if (item.generator) {
+            const yielded = inferredReturnType(item.fn, item.parameterTypes, null, anchorage, 'yield');
+            const returned = inferredReturnType(item.fn, item.parameterTypes, null, anchorage, 'generator-return');
+            // Unknown components stay unknown; a known yield does not prove a
+            // void completion, and a known completion does not prove a yield.
+            if (yielded || returned) result = generatorDeclaredType(yielded, item.generator.asyncGenerator,
+              returned ?? anyTypeRecord);
+          } else {
+            const resolves = inferredReturnType(item.fn, item.parameterTypes, null, anchorage, 'resolve');
+            if (resolves) result = libraryTypeRecord('Promise', [resolves, anyTypeRecord]);
+          }
+          if (result && (!item.signature.ProvisionalReturn || !SameType(item.signature.ProvisionalReturn, result))) {
+            item.signature.ProvisionalReturn = result;
+            changed = true;
+          }
+          if (result && (item.signatureTyped || anchorage.anchored)) {
+            if (!item.signature.InferredReturn || !SameType(item.signature.InferredReturn, result)) {
+              item.signature.InferredReturn = result;
+              changed = true;
+            }
+            baselineGeneratorSignatures.delete(only);
+            if (item.asyncFunction && !mentionsTypeParameter(result)) publishedReturnTypes.set(item.fn, result);
+          }
+        }
+        if (changed) changedInferences?.add(item);
       });
+      inferenceWave?.add(only);
+      return item.signature.ProvisionalReturn ?? null;
     } finally {
       inferenceDepth -= 1;
       inferencesInProgress.delete(only);
     }
-    if (inferred) item.signature.ProvisionalReturn = inferred;
-    return inferred;
   };
 
   /** Array literals every element of which is a literal; they anchor nothing. */
@@ -25654,7 +25694,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const signature = selectCallSignature(expr, expandValueSpreads(expr.Arguments ?? []), callee, expr, false);
         if (signature) {
           const result = signature.Return ?? signature.InferredReturn;
-          return !!result && result.Kind !== 'any';
+          return !!result && result.Kind !== 'any' && !baselineGeneratorSignatures.has(signature);
         }
       }
     }
@@ -25689,122 +25729,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  /**
-   * #sec-inference-fixpoint: publish an inferred return type for each queued
-   * function, repeating until nothing changes.
-   *
-   * Repetition is what lets one inference feed another: `g` returning `f()`
-   * cannot be typed until `f` is, and the two may be written in either order. A
-   * function still unresolved when the passes run out contributed something
-   * unknown - a recursive call reaches its own unpublished signature - and
-   * publishing nothing for it is the conservative answer, which leaves it
-   * untyped.
-   */
+  /** Complete dependency tasks before consumers read their published results. */
   const publishInferredReturns = (): void => {
-    if (pendingInferences.length === 0) {
-      return;
-    }
+    if (pendingInferences.length === 0) return;
     const queue = pendingInferences.splice(0, pendingInferences.length);
-    for (const item of queue) {
-      if (!item.generator && !item.asyncFunction) {
-        pendingBySignature.set(item.signature as object, item);
-      }
-    }
-    // Dependency queries settle ordinary acyclic chains directly. Revisit the
-    // group for recursive publications under the existing growth safeguard.
-    for (let pass = 0; pass < 8; pass += 1) {
-      let changed = false;
-      for (const item of queue) inDeclarationScope(item, () => {
-        if (item.generator) {
-          // _Y_ is computed here rather than while signatures are built, for
-          // the reason the return inference is: a `yield` whose operand calls
-          // another declaration cannot be typed until that declaration is in
-          // scope, and the pass that builds signatures has none of them yet.
-          const ya = { anchored: false };
-          inferenceDepth += 1;
-          let inferredYield: Known;
-          try {
-            inferredYield = inferredReturnType(item.fn, item.parameterTypes, null, ya, 'yield');
-          } finally {
-            inferenceDepth -= 1;
-          }
-          if (inferredYield && (item.signatureTyped || ya.anchored) && inferredYield.Kind !== 'void') {
-            // _R_ alongside _Y_: the same walk that collects yield operands sees
-            // `return`, and #sec-inferred-result-type asks for the join of both.
-            // `'return'` mode is what routes a fall-off-the-end `undefined` into
-            // R rather than into Y, which is the distinction drawn here.
-            const inferredR = inferredReturnType(item.fn, item.parameterTypes, null, { anchored: false }, 'return');
-            const rebuilt = generatorDeclaredType(
-              inferredYield,
-              item.generator.asyncGenerator,
-              inferredR && inferredR.Kind !== 'void' ? inferredR as TypeRecord : null,
-            );
-            // Into [[InferredReturn]], not [[Return]]. A generator with no
-            // annotation declares no return type, so writing the refined
-            // Generator type into the declared field would let an INFERRED type
-            // license an elision, which #sec-published-return-types forbids, and
-            // would put it in reach of identity and overload ranking besides.
-            if (rebuilt && (!item.signature.InferredReturn || !SameType(item.signature.InferredReturn, rebuilt))) {
-              item.signature.InferredReturn = rebuilt;
-              changed = true;
-            }
-          }
-          return;
-        }
-        if (item.asyncFunction) {
-          // #sec-inference-and-function-forms: publish `Promise.<T, any>`. The
-          // reject type is never inferred - anything may throw, and the
-          // convention that `undefined` there means a promise that never
-          // rejects is a claim no body supports - so `any` is what an inference
-          // can honestly say about it.
-          const aa = { anchored: false };
-          inferenceDepth += 1;
-          let resolves: Known;
-          try {
-            resolves = inferredReturnType(item.fn, item.parameterTypes, null, aa, 'resolve');
-          } finally {
-            inferenceDepth -= 1;
-          }
-          if (resolves && (item.signatureTyped || aa.anchored)) {
-            const settled = resolves.Kind === 'primitive' && resolves.Name === 'undefined'
-              ? voidType
-              : resolves;
-            const published = libraryTypeRecord('Promise', [settled, anyTypeRecord]);
-            if (published && (!item.signature.InferredReturn || !SameType(item.signature.InferredReturn, published))) {
-              item.signature.InferredReturn = published;
-              publishedReturnTypes.set(item.fn as unknown as object, published);
-              changed = true;
-            }
-          }
-          return;
-        }
-        const anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] } = { anchored: false };
-        inferenceDepth += 1;
-        // Mark only the active dependency. A recursive edge contributes never;
-        // an inactive dependency computes in its own declaration environment.
-        inferencesInProgress.add(item.signature as object);
-        let inferred: Known;
-        try {
-          inferred = inferredReturnType(item.fn, item.parameterTypes, null, anchorage);
-        } finally {
-          inferencesInProgress.delete(item.signature as object);
-          inferenceDepth -= 1;
-        }
-        changed = publishOrdinaryReturn(item, inferred, anchorage) || changed;
-      });
-      if (!changed) {
-        break;
-      }
-      if (pass === 7) {
-        // #sec-inference-fixpoint (r19): the repetition did not reach a
-        // fixpoint. That happens when the in-progress type recurs INSIDE a type
-        // constructor - `function w(a: uint32) { return [w(a)]; }` yields
-        // `[].<never>`, then `[].<[].<never>>`, and so on - so there is no type
-        // to publish and inference produces no equirecursive ones. The program
-        // says what it meant with an annotation, and the diagnostic says so
-        // rather than leaving the function silently untyped.
-        for (const item of queue) {
-          if (item.signature.InferredReturn || item.signature.ProvisionalReturn) {
+    for (const item of queue) pendingBySignature.set(item.signature, item);
+    const outerWave = inferenceWave;
+    const outerChanges = changedInferences;
+    try {
+      // Acyclic dependencies settle on demand, irrespective of function form
+      // or source order. Recursive results retain the existing growth guard.
+      for (let pass = 0; pass < 8; pass += 1) {
+        inferenceWave = new Set();
+        changedInferences = new Set();
+        for (const item of queue) driveInference(item.signature);
+        if (!changedInferences.size) break;
+        if (pass === 7) {
+          // A stable sibling is not evidence of recursive type growth.
+          for (const item of changedInferences) {
             const completion = CreateTypeDiagnostic('rt-return-inference', root, diagnosticPhase, 'the return type of $1 grows at every step and cannot be inferred; write it', Value(nameOfDeclaration(item.fn) ?? 'this function')) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
             item.signature.InferredReturn = undefined;
@@ -25812,6 +25754,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
       }
+    } finally {
+      inferenceWave = outerWave;
+      changedInferences = outerChanges;
     }
   };
 
@@ -26025,8 +25970,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const delegated = StaticDelegationContribution(y.AssignmentExpression ? staticType(y.AssignmentExpression) : null,
                 fn.type.startsWith('AsyncGenerator'), structureOf, awaitedType).yielded;
               const contribution = fn.type.startsWith('AsyncGenerator') ? awaitedType(delegated) : delegated;
-              if (contribution) contributions.push(contribution);
-              else unknown = true;
+              if (contribution) {
+                contributions.push(contribution);
+                if (derivesFromDeclaration(y.AssignmentExpression, contribution)) anchorage.anchored = true;
+              } else unknown = true;
               return;
             }
             const t = y.AssignmentExpression ? staticTypeIn(y.AssignmentExpression, wanted) : null;
@@ -26041,7 +25988,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             contributions.push(wanted && yielded.Kind === 'literal' && literalFitsNumericType(yielded, wanted) ? wanted : widen(yielded));
             // Fall through: a `yield` may contain another in its operand.
           }
-        } else if (n.type === 'LexicalDeclaration' || n.type === 'VariableStatement') {
+        }
+        if (n.type === 'LexicalDeclaration' || n.type === 'VariableStatement') {
           // #sec-anchored-contributions: "a binding's annotation" anchors a
           // contribution, so a body's own typed bindings must be in scope while
           // its returns are read. The pass declares the PARAMETERS and nothing
@@ -26202,7 +26150,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           // Fall through to the walk, so an initializer containing a function
           // literal is still skipped and a nested return is still found.
-        } else if (n.type === 'ReturnStatement') {
+        } else if (mode !== 'yield' && n.type === 'ReturnStatement') {
           const expr = (n as { Expression?: ParseNode | null }).Expression;
           if (!expr) {
             contributions.push(makePrimitive('undefined'));
@@ -26243,7 +26191,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               (anchorage.origins ??= []).push({ type: widen(t) as TypeRecord, from: origin });
             }
           }
-          if ((mode === 'resolve' || mode === 'generator-return' && fn.type === 'AsyncGeneratorMethod')
+          if ((mode === 'resolve' || mode === 'generator-return' && fn.type.startsWith('AsyncGenerator'))
               && t.Kind === 'nominal' && t.LibraryName === 'Promise'
               && t.Arguments.length > 0 && typeof t.Arguments[0] !== 'number') {
             // A promise contribution contributes what it RESOLVES with: an
@@ -26699,6 +26647,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       if (baselineGenerator) {
         signature.InferredReturn = baselineGenerator;
+        baselineGeneratorSignatures.add(signature);
       }
       recordOverloadDeclaration(signature as DeclaredOverload, n, annotated.map((type, index) =>
         (fn.FormalParameters![index] as { TypeAnnotation?: unknown }).TypeAnnotation ? type : anyTypeRecord));
@@ -35068,37 +35017,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // the wrong one finds nothing, the walk never descends, and no
           // `return` inside an async function is checked.
           //
-          // #sec-inference-and-function-forms: "_R_ is the join of its return
-          // contributions". Where no annotation supplies _R_, it must not be
-          // defaulted to `void` BEFORE the body is walked, or every `return`
-          // is checked against `void` and `function* g() { yield 1; return
-          // "done"; }` - ordinary JavaScript - is refused with "a literal type
-          // of string is not assignable to void".
-          //
-          // The contributions are collected first, by the same walk
-          // `do*` expressions already use (#sec-do-generator-expressions, where
-          // "Y, R, and N are found rather than declared"). A generator that
-          // returns nothing keeps `void`, which is the answer an ordinary
-          // function's empty contribution set reaches.
-          //
-          // _N_ stays `void`: the clause says in the same breath that it "is not
-          // inferred, being the type of what a caller sends IN".
-          let inferredGeneratorReturn: TypeRecord | null = null;
-          if (gen && !ann) {
-            const yielded: TypeRecord[] = [];
-            const returned: TypeRecord[] = [];
-            collectGeneratorTypes(
-              (n as { GeneratorBody?: ParseNode }).GeneratorBody
-                ?? (n as { AsyncGeneratorBody?: ParseNode }).AsyncGeneratorBody,
-              yielded,
-              returned,
-            );
-            if (returned.length > 0) {
-              inferredGeneratorReturn = returned.length === 1
-                ? returned[0]
-                : CanonicalizeType({ Kind: 'union', Members: returned } as TypeRecord) as TypeRecord;
-            }
-          }
+          // Body checking and publication use the same completion component.
+          // In particular an async generator returns the awaited contribution,
+          // not the Promise read by a syntax-only scan of its return operand.
+          const formals = (n as { FormalParameters?: readonly ParseNode[] }).FormalParameters
+            ?? (n as { UniqueFormalParameters?: readonly ParseNode[] }).UniqueFormalParameters
+            ?? (n as { ArrowParameters?: readonly ParseNode[] }).ArrowParameters;
+          const inferredGeneratorReturn = gen && !ann ? inferredReturnType(n, (formals ?? []).map((formal, index) => {
+            const annotation = (formal as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation;
+            return annotation ? resolveType(annotation.Type) : contextualParameterTypes.get(n)?.[index] ?? null;
+          }), null, { anchored: false }, 'generator-return') ?? anyTypeRecord : null;
           const declared = gen
             ? generatorDeclaredType(ann ? resolveType(ann.Type) : contextualMethodReturns.get(n) ?? contextualReturnTypes.get(n) ?? null, isAsyncGen, inferredGeneratorReturn)
             : null;
