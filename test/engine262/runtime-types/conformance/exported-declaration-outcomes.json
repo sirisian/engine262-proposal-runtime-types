@@ -1,0 +1,695 @@
+{
+  "schemaVersion": 1,
+  "specification": [
+    "sec-exported-declaration-preparation",
+    "sec-declaration-preparation-state",
+    "sec-recursive-declaration-validation",
+    "sec-module-type-checking-order",
+    "sec-narrowfrom",
+    "sec-primitive-metadata"
+  ],
+  "cases": [
+    {
+      "name": "an exported interface admits a recursive field",
+      "modules": {
+        "main": "export interface I {next:I|null;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an exported interface admits a recursive method",
+      "modules": {
+        "main": "export interface I {m(x:I):I;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "exported interfaces share their recursive declaration group",
+      "modules": {
+        "main": "export interface A {next:B|null;} export interface B {next:A|null;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local and exported interfaces share their declaration group",
+      "modules": {
+        "main": "interface A {next:B|null;} export interface B {next:A|null;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an exported generic interface retains recursive specialization",
+      "modules": {
+        "main": "export interface I<T:type> {value:T; next:I.<T>|null;} function unused(n:I.<uint8>){}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a named export does not prepare a local interface twice",
+      "modules": {
+        "main": "interface I {next:I|null;} export {I};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an exported recursive alias retains its reference boundary",
+      "modules": {
+        "main": "export type T={next:ref T|null};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an exported alias retains its closed builder result",
+      "modules": {
+        "main": "function b():type{return uint8;} export type T=b(); if(T!==uint8)throw new Error(\"wrong type\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an exported metadata shape governs an available default cast",
+      "modules": {
+        "main": "export type Dim={m:number}; meta Dim {default={m:0}; subtype(a,b){return a.m===b.m;} } primitive float64 {operator float64.<{m:1}>():float64.<{m:1}>{return this;}} type Meter=float64.<{m:1}>; let v:Meter; if(Number(v)!==0)throw new Error(\"wrong default\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an exported intersection alias is rebuilt after its metadata meet",
+      "modules": {
+        "main": "export type NB={bounds?:RangeBounds.<any>}; meta NB {default={}; subtype(a,b){if(b.bounds===undefined)return true;if(a.bounds===undefined)return false;return b.bounds.contains(a.bounds);} meet(a,b){if(a.bounds===undefined)return b;if(b.bounds===undefined)return a; const r=a.bounds.intersect(b.bounds);return r.isEmpty?null:{bounds:r};} } export type C=uint8.<{bounds:1..=10}>&uint8.<{bounds:5..=20}>; type M=uint8.<{bounds:5..=10}>; if(C!==M)throw new Error(\"wrong meet\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an exported alias rejects an unavailable cyclic imported extent",
+      "modules": {
+        "main": "import \"dep\"; export const N=2;",
+        "dep": "import {N} from \"main\"; export type V=[N].<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 31,
+            "end": 50,
+            "nodeType": "TypeAliasDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "an exported interface rejects an unavailable cyclic imported field type",
+      "modules": {
+        "main": "import \"dep\"; export type T=uint8;",
+        "dep": "import {T} from \"main\"; export interface I{value:T;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 31,
+            "end": 52,
+            "nodeType": "InterfaceDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "an exported interface rejects an unavailable cyclic imported method type",
+      "modules": {
+        "main": "import \"dep\"; export type T=uint8;",
+        "dep": "import {T} from \"main\"; export interface I{m(x:T):T;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 31,
+            "end": 53,
+            "nodeType": "InterfaceDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "a re-export retains the unavailable original binding",
+      "modules": {
+        "main": "import \"dep\"; export const N=2;",
+        "facade": "export {N} from \"main\";",
+        "dep": "import {N} from \"facade\"; export type V=[N].<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "facade"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 33,
+            "end": 52,
+            "nodeType": "TypeAliasDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "an exported metadata shape exposes a missing default in an uncalled function",
+      "modules": {
+        "main": "export type Dim={m:number}; meta Dim {default={m:0}; subtype(a,b){return a.m===b.m;} } type Meter=float64.<{m:1}>; function never(){let v:Meter;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_MISSING_DEFAULT",
+          "rule": "rt-missing-default",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "an exported metadata shape rejects an empty intersection",
+      "modules": {
+        "main": "export type NB={bounds?:RangeBounds.<any>}; meta NB {default={}; subtype(a,b){if(b.bounds===undefined)return true;if(a.bounds===undefined)return false;return b.bounds.contains(a.bounds);} meet(a,b){if(a.bounds===undefined)return b;if(b.bounds===undefined)return a; const r=a.bounds.intersect(b.bounds);return r.isEmpty?null:{bounds:r};} } export type T=uint8.<{bounds:1..=3}>&uint8.<{bounds:8..=9}>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_EMPTY_INTERSECTION",
+          "rule": "rt-empty-intersection",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "an exported alias rejects a failing closed builder before body entry",
+      "modules": {
+        "main": "function b():type{throw new Error(\"no type\");} export type T=b();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "an exported runtime-dependent field retains its runtime type failure",
+      "modules": {
+        "main": "function make(){return 5;} const T=make(); export interface I{value:T;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "a consumer can import a recursive interface",
+      "modules": {
+        "main": "import {I} from \"dep\"; function unused(x:I):I{return x;}",
+        "dep": "export interface I{next:I|null;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a renamed re-export preserves the recursive interface",
+      "modules": {
+        "main": "import {Node} from \"facade\"; function unused(x:Node):Node{return x;}",
+        "facade": "export {I as Node} from \"dep\";",
+        "dep": "export interface I{next:I|null;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "facade",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a namespace exposes the prepared recursive interface",
+      "modules": {
+        "main": "import * as ns from \"dep\"; type N=ns.I; function unused(x:N):N{return x;}",
+        "dep": "export interface I{next:I|null;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a consumer can specialize an exported recursive interface",
+      "modules": {
+        "main": "import {I} from \"dep\"; function unused(x:I.<uint8>):I.<uint8>{return x;}",
+        "dep": "export interface I<T:type>{value:T;next:I.<T>|null;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an asynchronous dependency prepares its exported interface",
+      "modules": {
+        "main": "import {I} from \"dep\"; function unused(x:I):I{return x;}",
+        "dep": "export interface I{next:I|null;} await 0;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an exported recursive alias remains usable at runtime",
+      "modules": {
+        "main": "export type I={next:I|null}; let i:I={next:null};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an exported class initializer runs once in body order",
+      "modules": {
+        "main": "type Marker=uint8; let count=0; export class C{static n=++count;} if(count!==1 || C.n!==1)throw new Error(\"wrong count\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an exported value initializer runs once in body order",
+      "modules": {
+        "main": "type Marker=uint8; let count=0; export const value=++count; if(count!==1 || value!==1)throw new Error(\"wrong count\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a default export expression runs once in body order",
+      "modules": {
+        "main": "type Marker=uint8; let count=0; export default ++count; if(count!==1)throw new Error(\"wrong count\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an exported function decorator runs once in body order",
+      "modules": {
+        "main": "type Marker=uint8; let seen=\"\"; function mark(c){seen+=\"@\";} @mark export function f(){return 1;} if(seen!==\"@\" || f()!==1)throw new Error(\"wrong decoration\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a valid runtime-dependent exported interface retains body resolution",
+      "modules": {
+        "main": "function make(){return uint8;} const T=make(); export interface I{value:T;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an exported inline cycle remains a declaration error",
+      "modules": {
+        "main": "export type R={next:R};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_LAYOUT",
+          "rule": "rt-layout",
+          "phase": "static",
+          "location": {
+            "start": 7,
+            "end": 23,
+            "nodeType": "TypeAliasDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "an exported bare alias cycle remains a declaration error",
+      "modules": {
+        "main": "export type R=R;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNPRODUCTIVE_TYPE",
+          "rule": "rt-unproductive-type",
+          "phase": "static",
+          "location": {
+            "start": 7,
+            "end": 16,
+            "nodeType": "TypeAliasDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "an exported builder result retains its argument contract",
+      "modules": {
+        "main": "function b(T:type):type{return T;} export type T=b(1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "top-level await does not postpone an unavailable exported type input",
+      "modules": {
+        "main": "import \"dep\"; export const N=2;",
+        "dep": "import {N} from \"main\"; export type V=[N].<uint8>; await 0;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 31,
+            "end": 50,
+            "nodeType": "TypeAliasDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "a namespace preserves an unavailable cyclic extent",
+      "modules": {
+        "main": "import \"dep\"; export const N=2;",
+        "dep": "import * as ns from \"main\"; export type V=[ns.N].<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 42,
+            "end": 56,
+            "nodeType": "ArrayType"
+          }
+        }
+      }
+    },
+    {
+      "name": "an exported metadata shape rejects an impossible is test",
+      "modules": {
+        "main": "export type NB={bounds?:RangeBounds.<any>};\nmeta NB {\n default={};\n validate(value,c){return c.bounds===undefined || c.bounds.contains(value);}\n subtype(a,b){if(b.bounds===undefined)return true;if(a.bounds===undefined)return false;return b.bounds.contains(a.bounds);}\n meet(a,b){if(a.bounds===undefined)return b;if(b.bounds===undefined)return a;const r=a.bounds.intersect(b.bounds);return r.isEmpty?null:{bounds:r};}\n narrow(cur,op,val){if(cur.bounds===undefined)return cur;if(op===\">\")return {bounds:cur.bounds.intersect((val+1)..)};if(op===\"<\")return {bounds:cur.bounds.intersect(..<val)};return cur;}\n}\nprimitive uint8 {operator uint8.<NB>(){return this;}}\nfunction unused(x:uint8.<{bounds:0..=10}>){if(x is uint8.<{bounds:20..=30}>){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "an exported metadata shape rejects an impossible if test",
+      "modules": {
+        "main": "export type NB={bounds?:RangeBounds.<any>};\nmeta NB {\n default={};\n validate(value,c){return c.bounds===undefined || c.bounds.contains(value);}\n subtype(a,b){if(b.bounds===undefined)return true;if(a.bounds===undefined)return false;return b.bounds.contains(a.bounds);}\n meet(a,b){if(a.bounds===undefined)return b;if(b.bounds===undefined)return a;const r=a.bounds.intersect(b.bounds);return r.isEmpty?null:{bounds:r};}\n narrow(cur,op,val){if(cur.bounds===undefined)return cur;if(op===\">\")return {bounds:cur.bounds.intersect((val+1)..)};if(op===\"<\")return {bounds:cur.bounds.intersect(..<val)};return cur;}\n}\nprimitive uint8 {operator uint8.<NB>(){return this;}}\nfunction unused(x:uint8.<{bounds:0..=10}>){if(x>20){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "an exported metadata shape rejects an impossible while test",
+      "modules": {
+        "main": "export type NB={bounds?:RangeBounds.<any>};\nmeta NB {\n default={};\n validate(value,c){return c.bounds===undefined || c.bounds.contains(value);}\n subtype(a,b){if(b.bounds===undefined)return true;if(a.bounds===undefined)return false;return b.bounds.contains(a.bounds);}\n meet(a,b){if(a.bounds===undefined)return b;if(b.bounds===undefined)return a;const r=a.bounds.intersect(b.bounds);return r.isEmpty?null:{bounds:r};}\n narrow(cur,op,val){if(cur.bounds===undefined)return cur;if(op===\">\")return {bounds:cur.bounds.intersect((val+1)..)};if(op===\"<\")return {bounds:cur.bounds.intersect(..<val)};return cur;}\n}\nprimitive uint8 {operator uint8.<NB>(){return this;}}\nfunction unused(x:uint8.<{bounds:0..=10}>){while(x>20){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "an exported metadata shape rejects an impossible for test",
+      "modules": {
+        "main": "export type NB={bounds?:RangeBounds.<any>};\nmeta NB {\n default={};\n validate(value,c){return c.bounds===undefined || c.bounds.contains(value);}\n subtype(a,b){if(b.bounds===undefined)return true;if(a.bounds===undefined)return false;return b.bounds.contains(a.bounds);}\n meet(a,b){if(a.bounds===undefined)return b;if(b.bounds===undefined)return a;const r=a.bounds.intersect(b.bounds);return r.isEmpty?null:{bounds:r};}\n narrow(cur,op,val){if(cur.bounds===undefined)return cur;if(op===\">\")return {bounds:cur.bounds.intersect((val+1)..)};if(op===\"<\")return {bounds:cur.bounds.intersect(..<val)};return cur;}\n}\nprimitive uint8 {operator uint8.<NB>(){return this;}}\nfunction unused(x:uint8.<{bounds:0..=10}>){for(;x>20;){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "an exported metadata shape rejects an impossible do while test",
+      "modules": {
+        "main": "export type NB={bounds?:RangeBounds.<any>};\nmeta NB {\n default={};\n validate(value,c){return c.bounds===undefined || c.bounds.contains(value);}\n subtype(a,b){if(b.bounds===undefined)return true;if(a.bounds===undefined)return false;return b.bounds.contains(a.bounds);}\n meet(a,b){if(a.bounds===undefined)return b;if(b.bounds===undefined)return a;const r=a.bounds.intersect(b.bounds);return r.isEmpty?null:{bounds:r};}\n narrow(cur,op,val){if(cur.bounds===undefined)return cur;if(op===\">\")return {bounds:cur.bounds.intersect((val+1)..)};if(op===\"<\")return {bounds:cur.bounds.intersect(..<val)};return cur;}\n}\nprimitive uint8 {operator uint8.<NB>(){return this;}}\nfunction unused(x:uint8.<{bounds:0..=10}>){do{}while(x>20);}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "an exported metadata shape rejects an impossible conditional test",
+      "modules": {
+        "main": "export type NB={bounds?:RangeBounds.<any>};\nmeta NB {\n default={};\n validate(value,c){return c.bounds===undefined || c.bounds.contains(value);}\n subtype(a,b){if(b.bounds===undefined)return true;if(a.bounds===undefined)return false;return b.bounds.contains(a.bounds);}\n meet(a,b){if(a.bounds===undefined)return b;if(b.bounds===undefined)return a;const r=a.bounds.intersect(b.bounds);return r.isEmpty?null:{bounds:r};}\n narrow(cur,op,val){if(cur.bounds===undefined)return cur;if(op===\">\")return {bounds:cur.bounds.intersect((val+1)..)};if(op===\"<\")return {bounds:cur.bounds.intersect(..<val)};return cur;}\n}\nprimitive uint8 {operator uint8.<NB>(){return this;}}\nfunction unused(x:uint8.<{bounds:0..=10}>){const y=x>20?1:2;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "an exported metadata shape rejects an impossible logical and test",
+      "modules": {
+        "main": "export type NB={bounds?:RangeBounds.<any>};\nmeta NB {\n default={};\n validate(value,c){return c.bounds===undefined || c.bounds.contains(value);}\n subtype(a,b){if(b.bounds===undefined)return true;if(a.bounds===undefined)return false;return b.bounds.contains(a.bounds);}\n meet(a,b){if(a.bounds===undefined)return b;if(b.bounds===undefined)return a;const r=a.bounds.intersect(b.bounds);return r.isEmpty?null:{bounds:r};}\n narrow(cur,op,val){if(cur.bounds===undefined)return cur;if(op===\">\")return {bounds:cur.bounds.intersect((val+1)..)};if(op===\"<\")return {bounds:cur.bounds.intersect(..<val)};return cur;}\n}\nprimitive uint8 {operator uint8.<NB>(){return this;}}\nfunction unused(x:uint8.<{bounds:0..=10}>){x>20 && 1;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "an exported metadata shape preserves an inhabited comparison and narrowed store",
+      "modules": {
+        "main": "export type NB={bounds?:RangeBounds.<any>};\nmeta NB {\n default={};\n validate(value,c){return c.bounds===undefined || c.bounds.contains(value);}\n subtype(a,b){if(b.bounds===undefined)return true;if(a.bounds===undefined)return false;return b.bounds.contains(a.bounds);}\n meet(a,b){if(a.bounds===undefined)return b;if(b.bounds===undefined)return a;const r=a.bounds.intersect(b.bounds);return r.isEmpty?null:{bounds:r};}\n narrow(cur,op,val){if(cur.bounds===undefined)return cur;if(op===\">\")return {bounds:cur.bounds.intersect((val+1)..)};if(op===\"<\")return {bounds:cur.bounds.intersect(..<val)};return cur;}\n}\nprimitive uint8 {operator uint8.<NB>(){return this;}}\nfunction unused(x:uint8.<{bounds:0..=10}>){if(x>5){let y:uint8.<{bounds:6..=10}>=x;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an exported metadata shape preserves an inhabited is test",
+      "modules": {
+        "main": "export type NB={bounds?:RangeBounds.<any>};\nmeta NB {\n default={};\n validate(value,c){return c.bounds===undefined || c.bounds.contains(value);}\n subtype(a,b){if(b.bounds===undefined)return true;if(a.bounds===undefined)return false;return b.bounds.contains(a.bounds);}\n meet(a,b){if(a.bounds===undefined)return b;if(b.bounds===undefined)return a;const r=a.bounds.intersect(b.bounds);return r.isEmpty?null:{bounds:r};}\n narrow(cur,op,val){if(cur.bounds===undefined)return cur;if(op===\">\")return {bounds:cur.bounds.intersect((val+1)..)};if(op===\"<\")return {bounds:cur.bounds.intersect(..<val)};return cur;}\n}\nprimitive uint8 {operator uint8.<NB>(){return this;}}\nfunction unused(x:uint8.<{bounds:0..=10}>){if(x is uint8.<{bounds:5..=30}>){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a local metadata shape applies the same impossible-test judgment",
+      "modules": {
+        "main": "type NB={bounds?:RangeBounds.<any>};\nmeta NB {\n default={};\n validate(value,c){return c.bounds===undefined || c.bounds.contains(value);}\n subtype(a,b){if(b.bounds===undefined)return true;if(a.bounds===undefined)return false;return b.bounds.contains(a.bounds);}\n meet(a,b){if(a.bounds===undefined)return b;if(b.bounds===undefined)return a;const r=a.bounds.intersect(b.bounds);return r.isEmpty?null:{bounds:r};}\n narrow(cur,op,val){if(cur.bounds===undefined)return cur;if(op===\">\")return {bounds:cur.bounds.intersect((val+1)..)};if(op===\"<\")return {bounds:cur.bounds.intersect(..<val)};return cur;}\n}\nprimitive uint8 {operator uint8.<NB>(){return this;}}\nfunction unused(x:uint8.<{bounds:0..=10}>){if(x>20){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "a local metadata shape preserves the same inhabited branch",
+      "modules": {
+        "main": "type NB={bounds?:RangeBounds.<any>};\nmeta NB {\n default={};\n validate(value,c){return c.bounds===undefined || c.bounds.contains(value);}\n subtype(a,b){if(b.bounds===undefined)return true;if(a.bounds===undefined)return false;return b.bounds.contains(a.bounds);}\n meet(a,b){if(a.bounds===undefined)return b;if(b.bounds===undefined)return a;const r=a.bounds.intersect(b.bounds);return r.isEmpty?null:{bounds:r};}\n narrow(cur,op,val){if(cur.bounds===undefined)return cur;if(op===\">\")return {bounds:cur.bounds.intersect((val+1)..)};if(op===\"<\")return {bounds:cur.bounds.intersect(..<val)};return cur;}\n}\nprimitive uint8 {operator uint8.<NB>(){return this;}}\nfunction unused(x:uint8.<{bounds:0..=10}>){if(x>5){let y:uint8.<{bounds:6..=10}>=x;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

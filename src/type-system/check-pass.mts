@@ -181,6 +181,17 @@ function nestedMetaTypeNames(root: ParseNode): Set<string> {
   return names;
 }
 
+function sourcePreparationItems(root: ParseNode.Script | ParseNode.Module): readonly ParseNode[] {
+  const items = root.type === 'Script' ? root.ScriptBody?.StatementList : root.ModuleBody?.ModuleItemList;
+  return (items ?? []).map((item) => {
+    // #sec-exported-declaration-preparation: exports preserve scope and phase.
+    // Keep the original node so preparation and body evaluation share identity.
+    const declaration = item.type === 'ExportDeclaration' ? item.Declaration : undefined;
+    return declaration?.type === 'TypeAliasDeclaration' || declaration?.type === 'InterfaceDeclaration'
+      ? declaration : item;
+  });
+}
+
 /**
  * proposal-runtime-types #sec-type-errors: the CHECKING PASS. It runs per
  * source text, after parsing and before that source text is evaluated, from
@@ -219,10 +230,10 @@ function nestedMetaTypeNames(root: ParseNode): Set<string> {
  *    before the body runs.
  *
  * Enum declarations with runtime dependencies or decorators, and declarations
- * nested in blocks or wrapped in `export`, are left to body order. Closed enum
- * declarations are processed below. Metadata judgments are not memoized across
- * passes.
+ * nested in blocks are left to body order. Closed enum declarations are
+ * processed below. Metadata judgments are not memoized across passes.
  */
+
 export function* RunPreEvaluationTypeCheck(root: ParseNode.Script | ParseNode.Module): PlainEvaluator {
   // #sec-evaluation-budget: this pass runs a source text's own type
   // declarations and then applies the metadata subtype judgment, both of which
@@ -232,8 +243,8 @@ export function* RunPreEvaluationTypeCheck(root: ParseNode.Script | ParseNode.Mo
   // which is every tool that type-checks a file.
   BeginTypeEvaluation();
   try {
-    const items = root.type === 'Script' ? root.ScriptBody?.StatementList : root.ModuleBody?.ModuleItemList;
-    const names = (items ?? []).flatMap((item) => (
+    const items = sourcePreparationItems(root);
+    const names = items.flatMap((item) => (
       item.type === 'TypeAliasDeclaration' || item.type === 'InterfaceDeclaration'
         ? [item.BindingIdentifier.name] : []
     ));
@@ -276,9 +287,7 @@ function isUninitializedImportRead(error: unknown): boolean {
 }
 
 function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Module): PlainEvaluator {
-  const items = root.type === 'Script'
-    ? root.ScriptBody?.StatementList
-    : root.ModuleBody?.ModuleItemList;
+  const items = sourcePreparationItems(root);
   // A |ComputedType| alias -
   // `type G = makeG();` - resolves by EVALUATING, so the walk that runs at
   // PARSE time cannot know what it denotes: nothing has evaluated yet, the
