@@ -1,0 +1,11 @@
+# Module checking outcome corpus
+
+`module-checking-outcomes.json` contains source graphs and required outcomes independent of engine262's loader and test assertions. Specifiers are exact keys in `modules`; each graph starts at `main`. Source strings must be passed unchanged, including directives, hashbangs and offsets. The runtime-types feature is enabled unless a case explicitly disables it.
+
+`status` is the settled graph evaluation result. `bodyEntries` lists the exact module-body entry sequence; an entry is recorded before its first statement and once for each actual body execution. `loaded`, when present, gives the compilation/loading sequence. `errorClass` identifies the native exception class without invoking source accessors. An absent error class means successful completion. An absent diagnostic means there is no checker diagnostic, including runtime-thrown `StaticTypeError` objects.
+
+The optional `diagnostic` object supplies engine262 assertions for the semantic rule and phase; family codes are host metadata, not a required language-visible property. Location offsets refer to the original source. A portable adapter may map an implementation's structured diagnostic to the named specification rule.
+
+The engine adapter in `module-observer.mts` caches each module record, observes original ModuleBody identities, and waits for a settled host callback. A missing fixture, duplicate completion callback, premature pending callback, exception in the adapter or timeout is a test-harness failure. It must not satisfy a rejected-program expectation. `module-checking-order.test.mts` exercises this adapter, including explicit harness-failure controls.
+
+The corpus covers parsing, linking, pre-body checking, runtime exceptions, asynchronous dependency chains, sharing, cycles, imported binding availability and source-position preservation. It does not establish complete declaration preparation, imported-builder specialization, replacement-decorator loading, every module failure precedence rule, or portable fuel accounting. Those remain separate conformance obligations.

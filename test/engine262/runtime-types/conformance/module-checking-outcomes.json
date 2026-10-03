@@ -1,0 +1,415 @@
+{
+  "schemaVersion": 1,
+  "specification": [
+    "sec-module-type-checking-order",
+    "sec-type-errors"
+  ],
+  "cases": [
+    {
+      "name": "synchronous dependencies finish before the importer",
+      "modules": {
+        "main": "import \"dep\";",
+        "dep": "void 0;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an importer without await waits for its asynchronous dependency",
+      "modules": {
+        "main": "import \"dep\";",
+        "dep": "await 0;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "asynchronous completion propagates through two importers",
+      "modules": {
+        "main": "import \"middle\";",
+        "middle": "import \"leaf\";",
+        "leaf": "await 0;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "leaf",
+          "middle",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a module with its own await settles normally",
+      "modules": {
+        "main": "import \"dep\"; await 0;",
+        "dep": "void 0;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a static root error precedes dependency loading",
+      "modules": {
+        "main": "import \"dep\"; let x: number; if ([]) {}",
+        "dep": "void 0;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_CONSTANT_CONDITION",
+          "phase": "static"
+        },
+        "loaded": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a dependency static error precedes all body entry",
+      "modules": {
+        "main": "import \"dep\";",
+        "dep": "let x: number; if ([]) {}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_CONSTANT_CONDITION",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "a syntax error precedes dependency loading",
+      "modules": {
+        "main": "import \"dep\"; let = ;",
+        "dep": "void 0;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "SyntaxError"
+      }
+    },
+    {
+      "name": "a linking error precedes both bodies",
+      "modules": {
+        "main": "import { missing } from \"dep\";",
+        "dep": "export const x = 1;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "SyntaxError"
+      }
+    },
+    {
+      "name": "deferred rejection after dependency: importer await False, dependency await False",
+      "modules": {
+        "main": "import \"dep\";  type Invalid = float32.<{ unknownKey: 1 }>;",
+        "dep": " void 0;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNCLAIMED_METADATA",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "deferred rejection after dependency: importer await False, dependency await True",
+      "modules": {
+        "main": "import \"dep\";  type Invalid = float32.<{ unknownKey: 1 }>;",
+        "dep": "await 0; void 0;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNCLAIMED_METADATA",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "deferred rejection after dependency: importer await True, dependency await False",
+      "modules": {
+        "main": "import \"dep\"; await 0; type Invalid = float32.<{ unknownKey: 1 }>;",
+        "dep": " void 0;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNCLAIMED_METADATA",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "deferred rejection after dependency: importer await True, dependency await True",
+      "modules": {
+        "main": "import \"dep\"; await 0; type Invalid = float32.<{ unknownKey: 1 }>;",
+        "dep": "await 0; void 0;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNCLAIMED_METADATA",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "dependency checking failure prevents importer body",
+      "modules": {
+        "main": "import \"dep\";",
+        "dep": "type Invalid = float32.<{ unknownKey: 1 }>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNCLAIMED_METADATA",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "a failing dependency after await keeps its runtime error",
+      "modules": {
+        "main": "import \"dep\";",
+        "dep": "await 0; throw new TypeError(\"dependency\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "a runtime StaticTypeError is not a checking rejection",
+      "modules": {
+        "main": "globalThis.__moduleBodyRan = false; throw new StaticTypeError(\"runtime\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "StaticTypeError"
+      }
+    },
+    {
+      "name": "a constructor getter cannot alter the observed native error",
+      "modules": {
+        "main": "const e = new TypeError(\"runtime\"); Object.defineProperty(e, \"constructor\", { get() { throw new Error(\"getter\"); } }); throw e;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "a hashbang preserves diagnostic source positions",
+      "modules": {
+        "main": "#!/usr/bin/env node\nlet x: number; if ([]) {}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_CONSTANT_CONDITION",
+          "phase": "static",
+          "location": {
+            "start": 39,
+            "end": 41
+          }
+        }
+      }
+    },
+    {
+      "name": "synchronous cycles follow ordinary module evaluation order",
+      "modules": {
+        "main": "import \"dep\"; export const x = 1;",
+        "dep": "import \"main\"; void 0;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an asynchronous cycle does not wait for every body in the cycle",
+      "modules": {
+        "main": "import \"dep\"; export const x = 1;",
+        "dep": "import \"main\"; await 0;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a shared asynchronous dependency runs once in a diamond",
+      "modules": {
+        "main": "import \"left\"; import \"right\";",
+        "left": "import \"leaf\";",
+        "right": "import \"leaf\";",
+        "leaf": "await 0;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "leaf",
+          "left",
+          "right",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "legacy modules also wait for asynchronous dependencies",
+      "modules": {
+        "main": "import \"dep\";",
+        "dep": "await 0;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      },
+      "runtimeTypes": false
+    },
+    {
+      "name": "an unavailable imported length in a cycle fails before the candidate body",
+      "modules": {
+        "main": "import \"dep\"; export const N = 2;",
+        "dep": "import { N } from \"main\"; type V = [N].<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "an unavailable imported type in a cycle fails before the candidate body",
+      "modules": {
+        "main": "import \"dep\"; export type T = uint8;",
+        "dep": "import { T } from \"main\"; type V = [1].<T>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "an unavailable imported interface member type fails before the candidate body",
+      "modules": {
+        "main": "import \"dep\"; export type T = uint8;",
+        "dep": "import { T } from \"main\"; interface I { value: T; }"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "a re-export identifies the unavailable target binding in a cycle",
+      "modules": {
+        "main": "import \"dep\"; export type T = uint8;",
+        "dep": "import { T } from \"relay\"; type V = [1].<T>;",
+        "relay": "export { T } from \"main\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "relay"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "an initialized imported length remains available",
+      "modules": {
+        "main": "import { N } from \"dep\"; type V = [N].<uint8>;",
+        "dep": "export const N = 2;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    }
+  ]
+}

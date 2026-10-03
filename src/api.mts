@@ -354,29 +354,15 @@ export class ManagedRealm extends Realm {
         finish(link);
         return Value.undefined;
       }
-      // A module with TOP-LEVEL AWAIT answers a PROMISE from `Evaluate`, and
-      // calling `finish` with that completion reports while the body is still
-      // suspended at its first `await`. The inspector's callback then reads a
-      // `HostDefinedLastValue` nothing has set yet and shows the namespace where
-      // the console should echo the entry's last value.
-      //
-      // So settle first where there is something to settle for, using the same
-      // `PerformPromiseThen` shape this function already uses for
-      // `LoadRequestedModules` above. A module WITHOUT top-level await answers a
-      // completion rather than a promise and is unaffected.
       const evaluated = yield* module.Evaluate();
       const evaluationPromise = evaluated instanceof ThrowCompletion ? undefined : X(evaluated);
-      // ONLY where the module actually awaits. `Evaluate` answers a promise for
-      // EVERY module, not just an awaiting one, so testing for a promise defers
-      // them all - which changes when a non-awaiting module's THROW is reported
-      // and broke four `declared-inverses` tests that read the error. `HasTLA`
-      // is the real question: a module without it has already finished running
-      // by the time `Evaluate` returns, and has nothing to wait for.
-      if (module.HasTLA === Value.true
-          && evaluationPromise instanceof ObjectValue && 'PromiseState' in evaluationPromise) {
-        // The SAME completion, reported LATER: `finish` takes the evaluation
-        // promise either way, and the only thing that changes is that the body
-        // has run by the time a reader sees it.
+      // An asynchronous dependency can leave this promise pending even when
+      // the importing module has no await. Report only after the whole
+      // evaluation settles, including its deferred pre-body type check.
+      // Preserve the existing top-level-await callback path and synchronous
+      // reporting for already settled modules without their own await.
+      if (evaluationPromise instanceof ObjectValue && 'PromiseState' in evaluationPromise
+          && (module.HasTLA === Value.true || evaluationPromise.PromiseState === 'pending')) {
         PerformPromiseThen(evaluationPromise, CreateBuiltinFunction.from(() => {
           finish(evaluated);
           return Value.undefined;

@@ -1,6 +1,7 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { EnsureCompletion, Q, X } from '../completion.mts';
 import { FirstFreeReference } from '../static-semantics/PreprocessorEvaluability.mts';
+import { ModuleEnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity } from '../execution-context/Environment.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { RequireType, ConvertValue, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault, PrimitiveCastsFor, CastCoversTarget } from '../abstract-ops/runtime-types.mts';
 import {
@@ -261,6 +262,18 @@ function* runPreEvaluationTypeCheckWithDiagnostics(root: ParseNode.Script | Pars
   return result;
 }
 
+function isUninitializedImportRead(error: unknown): boolean {
+  const identity = UninitializedBindingIdentity(error);
+  const environment = surroundingAgent.runningExecutionContext.LexicalEnvironment;
+  if (identity === undefined || !(environment instanceof ModuleEnvironmentRecord)) return false;
+  for (const binding of environment.bindings.values()) {
+    if (!binding.indirect) continue;
+    const [target, name] = binding.target;
+    if (target.Environment && DeclarativeBindingIdentity(target.Environment, name) === identity) return true;
+  }
+  return false;
+}
+
 function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Module): PlainEvaluator {
   const items = root.type === 'Script'
     ? root.ScriptBody?.StatementList
@@ -359,6 +372,11 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
           && (item as { Type?: { type?: string } }).Type?.type === 'ComputedType') {
           computedAliasResolved = true;
         }
+      } else if (root.type === 'Module' && isUninitializedImportRead(attempt.Value)) {
+        // #sec-module-type-checking-order: a required imported binding can
+        // still be uninitialized in a cycle. Do not retry after body entry.
+        return CreateTypeDiagnostic('rt-type-evaluation', item, 'pre-evaluation',
+          'type evaluation could not complete: $1', inspect(attempt.Value));
       }
     } else if (item.type === 'PrimitiveOperatorDeclaration') {
       // Found by the suite. #sec-type-errors lists what the pass processes before applying a
