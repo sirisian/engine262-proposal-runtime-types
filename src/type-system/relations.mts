@@ -528,7 +528,8 @@ export function SameTypeWithAssumptions(s: TypeRecord, t: TypeRecord, assumption
       if (s.LibraryName !== undefined || (t.Kind === 'nominal' && t.LibraryName !== undefined)) {
         return t.Kind === 'nominal' && s.LibraryName === t.LibraryName && SameArgumentList(s.Arguments, t.Arguments, next);
       }
-      return t.Kind === 'nominal' && s.Declaration === t.Declaration && SameArgumentList(s.Arguments, t.Arguments, next);
+      return t.Kind === 'nominal' && s.Declaration === t.Declaration
+        && s.DeclarationIdentity === t.DeclarationIdentity && SameArgumentList(s.Arguments, t.Arguments, next);
     case 'union':
     case 'intersection':
       // Matched as a SET, not a sequence. A union is its members and nothing
@@ -1173,7 +1174,8 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
   const sameFamily = t.Kind === 'nominal' && s.Kind === 'nominal'
     && (t.LibraryName !== undefined
       ? (t.LibraryName === s.LibraryName && COLLECTION_LIBRARY_NAMES.has(t.LibraryName))
-      : (s.LibraryName === undefined && t.Declaration !== undefined && t.Declaration === s.Declaration));
+      : (s.LibraryName === undefined && t.Declaration !== undefined && t.Declaration === s.Declaration
+        && t.DeclarationIdentity === s.DeclarationIdentity));
   if (sameFamily && t.Kind === 'nominal' && s.Kind === 'nominal'
       && t.Arguments.length > 0 && t.Arguments.length === s.Arguments.length
       && t.Arguments.some((a) => typeof a !== 'number' && (a as TypeRecord).Kind === 'any')) {
@@ -1446,7 +1448,8 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
           && tn.Arguments.length === 0) {
         return true;
       }
-      if (s.Declaration === tn.Declaration && s.Arguments.length === tn.Arguments.length
+      if (s.Declaration === tn.Declaration && s.DeclarationIdentity === tn.DeclarationIdentity
+        && s.Arguments.length === tn.Arguments.length
         && s.Arguments.length > 0) {
         // A LIBRARY type has no Declaration to carry a variance annotation - it
         // is a name in a set - so its declared variance is stated here.
@@ -1847,7 +1850,8 @@ export function matchTypeStructurally(pattern: TypeRecord, target: TypeRecord, b
     }
     case 'nominal': {
       const tn = target as typeof pattern;
-      return pattern.Declaration === tn.Declaration && pattern.Arguments.length === tn.Arguments.length
+      return pattern.Declaration === tn.Declaration && pattern.DeclarationIdentity === tn.DeclarationIdentity
+        && pattern.Arguments.length === tn.Arguments.length
         && pattern.Arguments.every((a, i) => {
           const b = tn.Arguments[i]!;
           return typeof a === 'object' && typeof b === 'object'

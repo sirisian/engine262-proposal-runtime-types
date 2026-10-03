@@ -4835,7 +4835,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
   let type = Q(yield* TypeNodeToTypeRecordUnchecked(node));
   if (type.Kind === 'nominal') {
     let conflict: string | undefined;
-    type = MergePartialStructures(type, RuntimePartialContributions(type.Declaration), (key) => {
+    type = MergePartialStructures(type, RuntimePartialContributions(type.DeclarationIdentity ?? type.Declaration), (key) => {
       conflict ??= key;
     });
     if (conflict) return Throw.TypeError('$1 is already declared on this interface', Value(conflict));

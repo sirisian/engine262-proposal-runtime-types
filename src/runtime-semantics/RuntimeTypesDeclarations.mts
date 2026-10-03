@@ -132,7 +132,7 @@ export function* ResolveInterfaceDeclaration(node: ParseNode.InterfaceDeclaratio
   const outermost = active.size === 0;
   let completed = false;
   const structure: TypeRecord = { Kind: 'object', Properties: [], IndexSignatures: [] };
-  const record: TypeRecord = { Kind: 'nominal', Declaration: node, Arguments: [], Structure: structure };
+  const record: TypeRecord = { Kind: 'nominal', Declaration: node, DeclarationIdentity: identity, Arguments: [], Structure: structure };
   active.set(identity, record);
   const context = surroundingAgent.runningExecutionContext;
   const outer = context.LexicalEnvironment;
@@ -1965,12 +1965,13 @@ function* RegisterPartialInterface(node: ParseNode.InterfaceDeclaration): PlainE
   } finally {
     popTypeParameterFrame();
   }
-  const parts = RuntimePartialContributions(primary);
+  const parts = RuntimePartialContributions(existing.TypeRecord.DeclarationIdentity ?? primary);
   if (parts.some((part) => part.Declaration === node)) return undefined;
   parts.push({ Declaration: node, Structure: () => structure, Resolve: (type) => types.get(type) ?? null });
   const updates: { record: TypeRecord, merged: TypeRecord }[] = [];
   let conflict: string | undefined;
   for (const record of NominalRecordsOf(primary)) {
+    if (record.Kind !== 'nominal' || record.DeclarationIdentity !== existing.TypeRecord.DeclarationIdentity) continue;
     const merged = MergePartialStructures(record, parts, (key) => {
       conflict ??= key;
     });
@@ -2180,6 +2181,50 @@ export function RegisterClassTypeEnvironment(ctor: Value, environment: Environme
 }
 export function ClassTypeEnvironmentOf(ctor: Value): EnvironmentRecord | undefined {
   return classTypeEnvironments.get(ctor) ?? (ctor as { Environment?: EnvironmentRecord }).Environment;
+}
+
+/** The evaluated superclass retains its actual interface binding instances. */
+export function RuntimeClassBaseOf(ctor: Value): TypeRecord | undefined {
+  const parent = (ctor as { Prototype?: Value }).Prototype;
+  if (!(parent instanceof ObjectValue)) return undefined;
+  const type = LookupClassType(parent);
+  return isTypeObject(type) ? type.TypeRecord : undefined;
+}
+
+/** Resolve actual interface bindings when publishing a class's runtime contract. */
+export function* ResolveImplementedInterfaces(node: ParseNode.ClassDeclaration | ParseNode.ClassExpression,
+  ctor: Value, args: readonly (TypeRecord | number)[] = []): PlainEvaluator<readonly TypeRecord[] | undefined> {
+  const targets = node.ClassTail.ImplementsClause;
+  if (!targets?.length) return undefined;
+  const context = surroundingAgent.runningExecutionContext;
+  const outer = context.LexicalEnvironment;
+  context.LexicalEnvironment = ClassTypeEnvironmentOf(ctor) ?? outer;
+  const frame = new Map<string, TypeRecord>();
+  (node.TypeParameters?.TypeParameterList ?? []).forEach((parameter, i) => {
+    const argument = args[i];
+    frame.set(parameter.BindingIdentifier.name, typeof argument === 'number'
+      ? { Kind: 'literal', Value: Value(argument), Base: builtinTypeRecord('uint32')! }
+      : argument ?? { Kind: 'parameter', Name: parameter.BindingIdentifier.name, Declaration: parameter });
+  });
+  if (node.BindingIdentifier) {
+    const published = PublishedClassTypeOf(node);
+    frame.set(node.BindingIdentifier.name, {
+      ...(published?.Kind === 'nominal' ? published : {}),
+      Kind: 'nominal', Declaration: node, Constructor: ctor,
+      Arguments: (node.TypeParameters?.TypeParameterList ?? []).map((p) => frame.get(p.BindingIdentifier.name)!),
+    });
+  }
+  pushTypeParameterFrame(frame);
+  try {
+    const interfaces: TypeRecord[] = [];
+    for (const target of targets) {
+      interfaces.push(Q(yield* TypeNodeToTypeRecord(target)));
+    }
+    return interfaces;
+  } finally {
+    popTypeParameterFrame();
+    context.LexicalEnvironment = outer;
+  }
 }
 
 export function GenericClassDeclarationOf(ctor: Value): ParseNode.ClassDeclaration | undefined {
@@ -2484,6 +2529,8 @@ function* SpecializeFromFrame(
   const record = MergePartialStructures({
     ...(published?.Kind === 'nominal' ? published : {}),
     Kind: 'nominal', Declaration: declaration as never, Arguments: argRecords, Constructor: ctor,
+    Implements: Q(yield* ResolveImplementedInterfaces(body, ctor, argRecords)),
+    Base: RuntimeClassBaseOf(ctor) ?? (published?.Kind === 'nominal' ? published.Base : undefined),
   } as TypeRecord, RuntimePartialContributions(declaration), (key) => {
     conflict ??= key;
   });
@@ -3062,7 +3109,7 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
         return Throw.TypeError('$1 is not generic and takes no type arguments', displayType(record));
       }
       let conflict: string | undefined;
-      const applied = MergePartialStructures({ ...record, Arguments: argRecords }, RuntimePartialContributions(record.Declaration), (key) => {
+      const applied = MergePartialStructures({ ...record, Arguments: argRecords }, RuntimePartialContributions(record.DeclarationIdentity ?? record.Declaration), (key) => {
         conflict ??= key;
       });
       if (conflict) return Throw.TypeError('$1 is already declared on this interface', Value(conflict));

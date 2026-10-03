@@ -1,0 +1,569 @@
+{
+  "schemaVersion": 1,
+  "specification": [
+    "sec-interface-declaration-identity",
+    "sec-sametypewithassumptions",
+    "sec-recursive-interface-resolution",
+    "sec-partial-classes"
+  ],
+  "cases": [
+    {
+      "name": "distinct activations retain distinct interface identities",
+      "source": "function f(T){interface N {value:T;next:N|null;}return N;} const A=f(uint8);const B=f(string);String(A!==B);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "equal captures do not merge distinct declaration activations",
+      "source": "function f(T){interface N {value:T;next:N|null;}return N;} String(f(uint8)!==f(uint8));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "closed interfaces still belong to their declaration activation",
+      "source": "function f(){interface N {value:uint8;}return N;} String(f()!==f());",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "repeated reads of one binding preserve identity",
+      "source": "interface N {value:uint8;} String(N===N);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "aliases of one interface preserve identity",
+      "source": "interface N {value:uint8;} type A=N; const B=N; String(A===B);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "an escaped closure reads the same interface binding",
+      "source": "function f(){interface N {value:uint8;}return ()=>N;} const g=f();String(g()===g());",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "separate escaped closures keep separate interface bindings",
+      "source": "function f(){interface N {value:uint8;}return ()=>N;} const a=f(),b=f();String(a()!==b());",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "loop entries create separate interface bindings",
+      "source": "const out=[];for(let i=0;i<2;i++){interface N {value:uint8;}out.push(N);}String(out[0]!==out[1]);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "generator calls create separate interface bindings",
+      "source": "function* f(){interface N {value:uint8;}return N;}String(f().next().value!==f().next().value);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "second capture accepts its own string contract",
+      "source": "function f(T){interface N {value:T;next:N|null;}return N;} const A=f(uint8);const B=f(string);let x:any={value:\"a\",next:{value:\"b\",next:null}};String(x is B);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "second capture rejects a stale numeric contract",
+      "source": "function f(T){interface N {value:T;next:N|null;}return N;} const A=f(uint8);const B=f(string);let x:any={value:(1:=uint8),next:null};String(x is B);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "second capture rejects an earlier any contract",
+      "source": "function f(T){interface N {value:T;next:N|null;}return N;} const A=f(any);const B=f(uint8);let x:any={value:\"bad\",next:null};String(x is B);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "earlier interface retains its contract after another activation",
+      "source": "function f(T){interface N {value:T;next:N|null;}return N;} const A=f(uint8);const B=f(string);let x:any={value:(1:=uint8),next:null};String(x is A);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "earlier interface does not acquire the later contract",
+      "source": "function f(T){interface N {value:T;next:N|null;}return N;} const A=f(uint8);const B=f(string);let x:any={value:\"a\",next:null};String(x is A);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "mutual recursive captures belong to the same activation",
+      "source": "function f(T){interface A {b:B|null;}interface B {value:T;a:A|null;}return A;} const A=f(any),B=f(uint8);let x:any={b:{value:\"bad\",a:null}};String(x is B);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "forward captures belong to the same activation",
+      "source": "function f(T){interface A {b:B;}interface B {value:T;}return A;}const A=f(any),B=f(uint8);let x:any={b:{value:\"bad\"}};String(x is B);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "captured aliases remain isolated across activations",
+      "source": "function f(T){type Link=N|null;interface N {value:T;next:Link;}return N;}const A=f(any),B=f(uint8);let x:any={value:\"bad\",next:null};String(x is B);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "generic function applications retain their captured argument",
+      "source": "function f<T:type>(){interface N {value:T;}return N;}const A=f.<any>(),B=f.<uint8>();let x:any={value:\"bad\"};String(x is B);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "generic function applications accept their own captured argument",
+      "source": "function f<T:type>(){interface N {value:T;}return N;}const A=f.<uint8>(),B=f.<string>();let x:any={value:\"good\"};String(x is B);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "equal specializations from one binding have one identity",
+      "source": "function f(T){interface N<U:type>{value:T;extra:U;}return N;} const A=f(uint8);String(A.<string>===A.<string>);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "specializations of separate bindings remain distinct",
+      "source": "function f(T){interface N<U:type>{value:T;extra:U;}return N;} const A=f(uint8),B=f(uint8);String(A.<string>!==B.<string>);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "generic captures reject an earlier broad contract",
+      "source": "function f(T){interface N<U:type>{value:T;extra:U;}return N;} const A=f(any),B=f(uint8);let x:any={value:\"bad\",extra:true};String(x is B.<boolean>);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "generic captures accept their own later contract",
+      "source": "function f(T){interface N<U:type>{value:T;extra:U;}return N;} const A=f(uint8),B=f(string);let x:any={value:\"good\",extra:true};String(x is B.<boolean>);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "erased generic family arguments do not erase declaration identity",
+      "source": "function f(T){interface N<U:type>{value:T;extra:U;}return N;} const A=f(uint8),B=f(string);String(Reflect.isAssignable(A.<uint8>,B.<any>));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "nominal assignability distinguishes interface activations",
+      "source": "function f(T){interface N {value:T;next:N|null;}return N;} const A=f(uint8),B=f(string);String(Reflect.isAssignable(A,B));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "same-shaped nominal activations are not one declared interface",
+      "source": "function f(T){interface N {value:T;next:N|null;}return N;} const A=f(uint8),B=f(uint8);String(Reflect.isAssignable(A,B));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "structural assignability still accepts the actual contract",
+      "source": "function f(T){interface N {value:T;}return N;}const A=f(any),B=f(uint8);String(Reflect.isAssignable(type {value:uint8},B));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "structural assignability rejects a stale captured contract",
+      "source": "function f(T){interface N {value:T;next:N|null;}return N;} const A=f(any),B=f(uint8);String(Reflect.isAssignable(type {value:string,next:null},B));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "typed variable rejects the stale broad interface",
+      "source": "function f(T){interface N {value:T;next:N|null;}return N;} const A=f(any),B=f(uint8);let x:any={value:\"bad\",next:null};let q:B=x;",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed parameter rejects the stale broad interface",
+      "source": "function f(T){interface N {value:T;next:N|null;}return N;} const A=f(any),B=f(uint8);function take(x:B){}let x:any={value:\"bad\",next:null};take(x);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed return rejects the stale broad interface",
+      "source": "function f(T){interface N {value:T;next:N|null;}return N;} const A=f(any),B=f(uint8);function take():B{let x:any={value:\"bad\",next:null};return x;}take();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "failed activation does not change a prior completed interface",
+      "source": "function f(T){interface N {value:T;next:N|null;}return N;} const A=f(uint8);try{f(5);}catch(e){}let x:any={value:(1:=uint8),next:null};String(x is A);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "failed activation does not complete a later interface",
+      "source": "function f(T){interface N {value:T;next:N|null;}return N;} try{f(5);}catch(e){}const B=f(uint8);let x:any={value:\"bad\",next:null};String(x is B);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "captured index contract belongs to each activation",
+      "source": "function f(T){interface N {[key:string]:T;}return N;}const A=f(any),B=f(uint8);let x:any={key:\"bad\"};String(x is B);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "captured tuple contract belongs to each activation",
+      "source": "function f(T){interface N {value:[T];}return N;}const A=f(any),B=f(uint8);let x:any={value:[\"bad\"]};String(x is B);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "captured array contract belongs to each activation",
+      "source": "function f(T){interface N {value:[].<T>;}return N;}const A=f(any),B=f(uint8);let x:any={value:[\"bad\"]};String(x is B);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "reflection round trip retains the interface instance",
+      "source": "function f(T){interface N {value:T;next:N|null;}return N;} const A=f(uint8),B=f(string);String(Reflect.makeType(Reflect.getReflection(B))===B);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "reflection round trip does not select the earlier instance",
+      "source": "function f(T){interface N {value:T;next:N|null;}return N;} const A=f(uint8),B=f(string);String(Reflect.makeType(Reflect.getReflection(B))!==A);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "type keyed maps distinguish interface activations",
+      "source": "function f(T){interface N {value:T;next:N|null;}return N;} const A=f(uint8),B=f(string);const m=new Map();m.set(A,\"a\");m.set(B,\"b\");String(m.size===2&&m.get(A)===\"a\"&&m.get(B)===\"b\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "unions retain two nominal activations",
+      "source": "function f(T){interface N {value:T;next:N|null;}return N;} const A=f(uint8),B=f(string);String((type A|B)!==A);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "partial members retain each activations captured contract",
+      "source": "function f(T){interface N {}partial interface N {value:T;}return N;} const A=f(any),B=f(uint8);let x:any={value:\"bad\"};String(x is B);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "later partial members do not overwrite earlier contracts",
+      "source": "function f(T){interface N {}partial interface N {value:T;}return N;} const A=f(uint8),B=f(string);let x:any={value:(1:=uint8)};String(x is A);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "existing applications receive only their own partial extension",
+      "source": "function f(T){interface N<U:type>{extra:U;}const Early=N.<boolean>;partial interface N<_>{value:T;}return [N,Early];} const a=f(any),b=f(uint8);let x:any={extra:true,value:\"bad\"};const B=b[1];String(x is B);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "later applications receive only their own partial extension",
+      "source": "function f(T){interface N<U:type>{extra:U;}const Early=N.<boolean>;partial interface N<_>{value:T;}return [N,Early];} const a=f(any),b=f(uint8);const B=b[0];let x:any={extra:true,value:\"bad\"};String(x is B.<boolean>);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "transparent structural aliases still intern across calls",
+      "source": "function f(T){type A={value:T};return A;}String(f(uint8)===f(uint8));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "separate source declarations keep their nominal distinction",
+      "source": "interface A {value:uint8;}interface B {value:uint8;}String(A!==B);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "class implements the actual returned interface binding",
+      "source": "function f(){interface N {}return N;}const A=f(),B=f();class C implements A {}String(Reflect.isAssignable(C,A));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "class does not implement a sibling activation",
+      "source": "function f(){interface N {}return N;}const A=f(),B=f();class C implements A {}String(Reflect.isAssignable(C,B));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "class expression keeps the actual interface binding",
+      "source": "function f(){interface N {}return N;}const A=f(),B=f();const C=class implements A {};String(Reflect.isAssignable(C,A));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "inherited implements retains the actual interface binding",
+      "source": "function f(){interface N {}return N;}const A=f(),B=f();class C implements A {}class D extends C{}String(Reflect.isAssignable(D,A));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "inherited implements rejects another activation",
+      "source": "function f(){interface N {}return N;}const A=f(),B=f();class C implements A {}class D extends C{}String(Reflect.isAssignable(D,B));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "covariance relates applications of one interface binding",
+      "source": "function f(){interface N<out T:type>{readonly value:T;}return N;}const A=f();String(Reflect.isAssignable(A.<uint8>,A.<uint8|string>));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "covariance does not merge separate interface bindings",
+      "source": "function f(){interface N<out T:type>{readonly value:T;}return N;}const A=f(),B=f();String(Reflect.isAssignable(A.<uint8>,B.<uint8|string>));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "one source activation retains its class implementation",
+      "source": "function f(){interface N {}class C implements N {}return [N,C];}const a=f(),b=f();String(Reflect.isAssignable(b[1],b[0]));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "an earlier class does not acquire a later interface activation",
+      "source": "function f(){interface N {}class C implements N {}return [N,C];}const a=f(),b=f();String(Reflect.isAssignable(a[1],b[0]));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "unnamed class expressions retain each actual interface binding",
+      "source": "function f(){interface N {}return [N,class implements N {}];}const a=f(),b=f();String(Reflect.isAssignable(b[1],b[0]));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "anonymous default class retains its exported interface",
+      "modules": {
+        "types": "export interface N {}export default class implements N {}",
+        "main": "import C,{N} from \"types\";if(!Reflect.isAssignable(C,N))throw new Error(\"lost interface\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "types",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imports preserve one exported interface identity",
+      "modules": {
+        "types": "export interface N {value:uint8;}",
+        "main": "import {N} from \"types\";import {N as M} from \"types\";if(N!==M)throw new Error(\"identity\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "types",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported factories isolate captured interfaces",
+      "modules": {
+        "types": "export function f(T){interface N {value:T;next:N|null;}return N;}",
+        "main": "import {f} from \"types\";const A=f(any),B=f(uint8);let x:any={value:\"bad\",next:null};if(x is B)throw new Error(\"stale contract\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "types",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "async resumption retains the selected activation",
+      "modules": {
+        "main": "function f(T){interface N {value:T;}return N;}const A=f(any);await 0;const B=f(uint8);let x:any={value:\"bad\"};if(x is B)throw new Error(\"stale contract\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

@@ -1,3 +1,6 @@
+import type { TypeRecord } from '../type-system/records.mts';
+import { InstallTypeObjectSurface } from '../intrinsics/TypePrototype.mts';
+import { RegisterStampedClass } from '../type-system/intern.mts';
 import { Value } from '../value.mts';
 import { PublishedClassTypeOf } from '../type-system/check.mts';
 import { Q } from '../completion.mts';
@@ -6,6 +9,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { AssociateClassType } from '../abstract-ops/runtime-types.mts';
+import { ResolveImplementedInterfaces, RuntimeClassBaseOf } from './RuntimeTypesDeclarations.mts';
 import { ClassDefinitionEvaluation, DecoratorListEvaluation } from './all.mts';
 import { surroundingAgent } from '#self';
 
@@ -30,18 +34,27 @@ export function* Evaluate_ClassExpression(ClassExpression: ParseNode.ClassExpres
   // proposal-runtime-types: associate the class type with its constructor.
   if (surroundingAgent.feature('runtime-types')) {
     const published = PublishedClassTypeOf(ClassExpression as unknown as object);
-    AssociateClassType(value, GetTypeObject({
+    const runtimeRecord: TypeRecord = {
       Kind: 'nominal',
       Declaration: ClassExpression,
       Arguments: [],
       Constructor: value,
       // As at ClassDeclaration: the relation
       // reads these two and this record carried neither.
-      Implements: published?.Kind === 'nominal' ? published.Implements : undefined,
+      Implements: Q(yield* ResolveImplementedInterfaces(ClassExpression, value)),
       InstanceFieldKeys: published?.Kind === 'nominal' ? published.InstanceFieldKeys : undefined,
-      Base: published?.Kind === 'nominal' ? published.Base : undefined,
+      Base: RuntimeClassBaseOf(value) ?? (published?.Kind === 'nominal' ? published.Base : undefined),
       Structure: published?.Kind === 'nominal' ? published.Structure : undefined,
-    }));
+    };
+    const typeObject = GetTypeObject(runtimeRecord);
+    if (!ClassExpression.TypeParameters?.TypeParameterList.length) {
+      (value as unknown as { TypeRecord?: TypeRecord }).TypeRecord = runtimeRecord;
+      Q(yield* InstallTypeObjectSurface(surroundingAgent.currentRealmRecord, value));
+      AssociateClassType(value, value);
+      RegisterStampedClass(ClassExpression, value);
+    } else {
+      AssociateClassType(value, typeObject);
+    }
   }
   return value;
 }

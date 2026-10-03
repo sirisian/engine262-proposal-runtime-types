@@ -550,6 +550,13 @@ export function NominalRecordsOf(declaration: object): TypeRecord[] {
 /** Complete a forward nominal record without replacing an already published type object. */
 function completeNominalRecord(known: TypeRecord, supplied: TypeRecord): void {
   if (known.Kind !== 'nominal' || supplied.Kind !== 'nominal') return;
+  // A forward class summary has symbolic interface declarations. Publication
+  // supplies the actual bindings; a missing identity is never a wildcard.
+  if (supplied.Constructor !== undefined
+    && (known.Constructor === undefined || known.Constructor === supplied.Constructor)) {
+    if (supplied.Implements !== undefined) (known as { Implements?: readonly TypeRecord[] }).Implements = supplied.Implements;
+    if (supplied.Base !== undefined) (known as { Base?: TypeRecord }).Base = supplied.Base;
+  }
   for (const key of ['Constructor', 'Structure', 'Implements', 'Base', 'InstanceFieldKeys'] as const) {
     if (known[key] === undefined && supplied[key] !== undefined) {
       (known as unknown as Record<string, unknown>)[key] = supplied[key];

@@ -1,3 +1,4 @@
+import type { TypeRecord } from '../type-system/records.mts';
 import { IsPartialDeclaration } from '../type-system/partial-types.mts';
 import { Value, ObjectValue } from '../value.mts';
 import { StringValue } from '../static-semantics/all.mts';
@@ -13,7 +14,7 @@ import { RecordTypeOrigin, OriginOfNode } from '../type-system/provenance.mts';
 import { PublishedClassTypeOf } from '../type-system/check.mts';
 import { InstallTypeObjectSurface } from '../intrinsics/TypePrototype.mts';
 import { RegisterStampedClass } from '../type-system/intern.mts';
-import { RegisterPartialClass } from './RuntimeTypesDeclarations.mts';
+import { RegisterPartialClass, ResolveImplementedInterfaces, RuntimeClassBaseOf } from './RuntimeTypesDeclarations.mts';
 import {
   InitializeBoundName, ClassDefinitionEvaluation, type DecoratorDefinitionRecord, DecoratorListEvaluation,
   ApplyDecorators, ClassDecoratorContext,
@@ -59,7 +60,22 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
   if (!BindingIdentifier) {
     const anon = Q(yield* ClassDefinitionEvaluation(ClassTail, Value.undefined, Value('default'), sourceText, decorators));
     if (surroundingAgent.feature('runtime-types')) {
-      AssociateClassType(anon, GetTypeObject({ Kind: 'nominal', Declaration: ClassDeclaration, Arguments: [], Constructor: anon }));
+      const published = PublishedClassTypeOf(ClassDeclaration);
+      const record: TypeRecord = {
+        ...(published?.Kind === 'nominal' ? published : {}),
+        Kind: 'nominal', Declaration: ClassDeclaration, Arguments: [], Constructor: anon,
+        Implements: Q(yield* ResolveImplementedInterfaces(ClassDeclaration, anon)),
+        Base: RuntimeClassBaseOf(anon) ?? (published?.Kind === 'nominal' ? published.Base : undefined),
+      };
+      const typeObject = GetTypeObject(record);
+      if (!ClassDeclaration.TypeParameters?.TypeParameterList.length) {
+        (anon as unknown as { TypeRecord?: TypeRecord }).TypeRecord = record;
+        Q(yield* InstallTypeObjectSurface(surroundingAgent.currentRealmRecord, anon));
+        AssociateClassType(anon, anon);
+        RegisterStampedClass(ClassDeclaration, anon);
+      } else {
+        AssociateClassType(anon, typeObject);
+      }
     }
     return anon;
   }
@@ -91,7 +107,7 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
   // proposal-runtime-types: associate the class type with its constructor.
   if (surroundingAgent.feature('runtime-types')) {
     const published = PublishedClassTypeOf(ClassDeclaration as unknown as object);
-    const typeObject = GetTypeObject({
+    const runtimeRecord: TypeRecord = {
       Kind: 'nominal',
       Declaration: ClassDeclaration,
       Arguments: [],
@@ -102,11 +118,12 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
       // relations the checker decides correctly. Taken from the checker's own
       // record for this declaration rather than rebuilt, since the structure
       // must include inherited members and there must be exactly one builder.
-      Implements: published?.Kind === 'nominal' ? published.Implements : undefined,
+      Implements: Q(yield* ResolveImplementedInterfaces(ClassDeclaration, value)),
       InstanceFieldKeys: published?.Kind === 'nominal' ? published.InstanceFieldKeys : undefined,
-      Base: published?.Kind === 'nominal' ? published.Base : undefined,
+      Base: RuntimeClassBaseOf(value) ?? (published?.Kind === 'nominal' ? published.Base : undefined),
       Structure: published?.Kind === 'nominal' ? published.Structure : undefined,
-    });
+    };
+    const typeObject = GetTypeObject(runtimeRecord);
     // "A class's type object IS its constructor" (README, and the specification
     // twice). The record is stamped onto the constructor and the type-object
     // surface installed on it, so `V === type V` and a class name is the type
@@ -124,7 +141,9 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
       TypeRecord?: { Declaration?: { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } },
     }).TypeRecord?.Declaration?.TypeParameters?.TypeParameterList?.length ?? 0;
     if (genericParameters === 0) {
-      (value as unknown as { TypeRecord?: unknown }).TypeRecord = (typeObject as unknown as { TypeRecord: unknown }).TypeRecord;
+      // Keep this constructor's resolved interfaces when an older activation
+      // of the same source has already populated the nominal intern table.
+      (value as unknown as { TypeRecord?: unknown }).TypeRecord = runtimeRecord;
       Q(yield* InstallTypeObjectSurface(surroundingAgent.currentRealmRecord, value as unknown as ObjectValue));
       AssociateClassType(value, value);
       // #sec-provenance: a class type carried NO origin, while an alias, an

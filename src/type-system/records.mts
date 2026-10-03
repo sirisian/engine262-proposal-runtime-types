@@ -606,10 +606,13 @@ export type TypeRecord =
   | {
     readonly Kind: 'nominal',
     readonly Declaration: ParseNode,
+    // An interface declaration's actual lexical binding, including its activation.
+    // This opaque identity retains no environment, program value or reference.
+    readonly DeclarationIdentity?: object,
     readonly Arguments: readonly (TypeRecord | number)[],
     // proposal-runtime-types: evaluated enum member values, and the
     // resolved structural shape of an interface, attached at declaration
-    // evaluation. SameType compares by [[Declaration]] identity only.
+    // evaluation. Interface identity also includes [[DeclarationIdentity]].
     readonly EnumMembers?: readonly Value[],
     // proposal-runtime-types (#sec-enums): "An enum type is a subtype of its
     // underlying type, so a value of an enum type is usable wherever the

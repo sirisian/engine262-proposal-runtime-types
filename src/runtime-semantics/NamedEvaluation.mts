@@ -1,3 +1,4 @@
+import type { TypeRecord } from '../type-system/records.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { PublishedClassTypeOf } from '../type-system/check.mts';
 import { AssociateClassType } from '../abstract-ops/runtime-types.mts';
@@ -8,6 +9,7 @@ import { Q } from '../completion.mts';
 import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { ValueEvaluator } from '../evaluator.mts';
+import { ResolveImplementedInterfaces, RuntimeClassBaseOf } from './RuntimeTypesDeclarations.mts';
 import {
   ClassDefinitionEvaluation,
   InstantiateOrdinaryFunctionExpression,
@@ -79,18 +81,19 @@ function* NamedEvaluation_ClassExpression(ClassExpression: ParseNode.ClassExpres
   // evaluation path taken by `const C = class {}` and property definitions.
   if (surroundingAgent.feature('runtime-types') && value instanceof ObjectValue) {
     const published = PublishedClassTypeOf(ClassExpression as unknown as object);
-    const typeObject = GetTypeObject({
+    const runtimeRecord: TypeRecord = {
       Kind: 'nominal',
       Declaration: ClassExpression,
       Arguments: [],
       Constructor: value,
       // As at ClassDeclaration: the relation
       // reads these two and this record carried neither.
-      Implements: published?.Kind === 'nominal' ? published.Implements : undefined,
+      Implements: Q(yield* ResolveImplementedInterfaces(ClassExpression, value)),
       InstanceFieldKeys: published?.Kind === 'nominal' ? published.InstanceFieldKeys : undefined,
-      Base: published?.Kind === 'nominal' ? published.Base : undefined,
+      Base: RuntimeClassBaseOf(value) ?? (published?.Kind === 'nominal' ? published.Base : undefined),
       Structure: published?.Kind === 'nominal' ? published.Structure : undefined,
-    });
+    };
+    const typeObject = GetTypeObject(runtimeRecord);
     // "A class's type object IS its constructor" (README, and the specification
     // twice). The record is stamped onto the constructor and the type-object
     // surface installed on it, so `V === type V` and a class name is the type
@@ -108,7 +111,9 @@ function* NamedEvaluation_ClassExpression(ClassExpression: ParseNode.ClassExpres
       TypeRecord?: { Declaration?: { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } },
     }).TypeRecord?.Declaration?.TypeParameters?.TypeParameterList?.length ?? 0;
     if (genericParameters === 0) {
-      (value as unknown as { TypeRecord?: unknown }).TypeRecord = (typeObject as unknown as { TypeRecord: unknown }).TypeRecord;
+      // Keep this constructor's resolved interfaces when an older activation
+      // of the same source has already populated the nominal intern table.
+      (value as unknown as { TypeRecord?: unknown }).TypeRecord = runtimeRecord;
       Q(yield* InstallTypeObjectSurface(surroundingAgent.currentRealmRecord, value as unknown as ObjectValue));
       AssociateClassType(value, value);
       RegisterStampedClass((typeObject as unknown as { TypeRecord: { Declaration: object } }).TypeRecord.Declaration, value as unknown as ObjectValue);
