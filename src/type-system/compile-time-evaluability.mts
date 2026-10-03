@@ -222,11 +222,38 @@ export function ModuleBindingDeclaration(module: ParseNode.Module, name: string)
   return declarationInList(module.ModuleBody?.ModuleItemList ?? [], name);
 }
 
+/** Availability is a proof: an unrelated inner binding cannot hide an external read. */
+export function LexicalFreeReferences(root: ParseNode): readonly (ParseNode & { name: string })[] {
+  const references: (ParseNode & { name: string })[] = [];
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (!isNode(value)) return;
+    if (value.type === 'IdentifierReference' && typeof value.name === 'string') {
+      const declaration = ResolveBindingDeclaration(value, value.name);
+      for (let at: ParseNode | undefined = declaration?.node; at; at = at.parent) {
+        if (at === root) return;
+      }
+      references.push(value as ParseNode & { name: string });
+      return;
+    }
+    for (const [key, child] of Object.entries(value)) {
+      if (!skipKey(key)) visit(child);
+    }
+  };
+  visit(root);
+  return references;
+}
+
 export interface EvaluabilityContext {
   /** Whether the source text assigns to _name_ anywhere; a reassigned function is not the one read. */
   readonly assigned: (name: string, reference: ParseNode) => boolean;
   /** A linked evaluator may follow imports to their original declarations. */
   readonly resolve?: (reference: ParseNode, name: string) => BindingDeclaration | undefined;
+  /** An admitted declaration can still require an environment not yet instantiated. */
+  readonly unavailable?: (declaration: BindingDeclaration, reference: ParseNode & { name: string }) => boolean;
 }
 
 const IN_PROGRESS = Symbol('in progress');
@@ -255,11 +282,14 @@ export function CompileTimeEvaluabilityChecker(context: EvaluabilityContext) {
   const violation = (expr: ParseNode, bound: ReadonlySet<string> = new Set()): string | undefined => {
     const floor = FirstNonEvaluableForm(expr);
     if (floor !== undefined) return floor;
-    for (const reference of FreeReferences(expr)) {
+    // The conservative name scan suffices to refuse known forbidden captures.
+    // Establishing availability requires the actual lexical free references.
+    for (const reference of context.unavailable ? LexicalFreeReferences(expr) : FreeReferences(expr)) {
       const name = reference.name;
       if (bound.has(name)) continue;
       const declaration = (context.resolve ?? ResolveBindingDeclaration)(reference, name);
       if (!declaration) continue;
+      if (context.unavailable?.(declaration, reference)) return `a read of the unavailable binding ${name}`;
       switch (declaration.kind) {
         case 'let':
         case 'var':

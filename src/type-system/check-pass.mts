@@ -1,6 +1,6 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { EnsureCompletion, Q, X } from '../completion.mts';
-import { FirstFreeReference, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
+import { FirstFreeReference } from '../static-semantics/PreprocessorEvaluability.mts';
 import { ModuleEnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity } from '../execution-context/Environment.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { RequireType, ConvertValue, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault, PrimitiveCastsFor, CastCoversTarget } from '../abstract-ops/runtime-types.mts';
@@ -9,6 +9,7 @@ import {
   BeginTypeDeclarationPreparation,
 } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { Evaluate_PrimitiveOperatorDeclaration } from '../runtime-semantics/PrimitiveOperatorDeclaration.mts';
+import { classConstructorOfNode } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { JSStringValue, ObjectValue, Value } from '../value.mts';
 import { CreateTypeDiagnostic, TypeDiagnosticApplies, TypeDiagnosticOf } from './diagnostics.mts';
 import type { TypeRecord } from './records.mts';
@@ -29,7 +30,7 @@ import {
 } from './check.mts';
 import { BeginTypeEvaluation, BudgetExhaustionKind, EndTypeEvaluation, IsBudgetExhausted } from './budget.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
-import { ResolveBindingDeclaration } from './compile-time-evaluability.mts';
+import { LexicalFreeReferences, ResolveBindingDeclaration } from './compile-time-evaluability.mts';
 import { TypeExpressionEvaluabilityViolation } from './builder-evaluability.mts';
 import { BeginFragmentEvaluation, EndFragmentEvaluation } from './fragment-library.mts';
 import { Evaluate, Get, GetValue, inspect, Throw, DeclarativeEnvironmentRecord, InstantiateFunctionObject, surroundingAgent } from '#self';
@@ -79,11 +80,40 @@ const FRAGMENT_FLOOR: readonly string[] = [
 // arguments. Leaving them out meant such a builder was never evaluated here,
 // so its throw escaped at run time as the program's own exception - where
 // #sec-computed-types makes "a call ... that completes abruptly" a type error,
-// which the obligation's evaluation reports. Only the builder path admits them:
-// a type DEFAULT that throws is evaluated where the program runs, as before.
+// which the obligation's evaluation reports. Closed specialization predicates
+// admit the same constructors; type defaults keep their existing admission rule.
 const ERROR_CONSTRUCTORS: readonly string[] = [
   'Error', 'TypeError', 'RangeError', 'SyntaxError', 'ReferenceError', 'EvalError', 'URIError', 'AggregateError',
 ];
+
+/** A class Type Object cannot expose its constructor or layout before class evaluation. */
+function whereInputNeedsRuntimeValue(t: TypeRecord, seen = new Set<TypeRecord>()): boolean {
+  if (seen.has(t)) return false;
+  seen.add(t);
+  const needs = (type: TypeRecord | null | undefined): boolean => !!type && whereInputNeedsRuntimeValue(type, seen);
+  switch (t.Kind) {
+    case 'parameter': case 'deferred': return true;
+    case 'nominal':
+      if (['ClassDeclaration', 'ClassExpression'].includes(t.Declaration?.type)
+        && !classConstructorOfNode.has(t.Declaration)) return true;
+      if (needs(t.Structure) || needs(t.Base) || needs(t.Underlying) || t.Implements?.some(needs)) return true;
+      return t.Arguments.some((arg) => typeof arg !== 'number' && needs(arg));
+    case 'primitive': return t.Arguments.some((arg) => typeof arg !== 'number' && needs(arg));
+    case 'union': case 'intersection': return t.Members.some(needs);
+    case 'literal': case 'parameterized': return needs(t.Base);
+    case 'tuple': return t.Elements.some((element) => needs(element.Type));
+    case 'array': return needs(t.Element) || (typeof t.Extent === 'object' && needs(t.Extent));
+    case 'reference': case 'shared': return needs(t.Target);
+    case 'object':
+      return t.Properties.some((property) => needs(property.type) || needs(property.writeType))
+        || t.IndexSignatures.some((signature) => needs(signature.Key) || needs(signature.Value));
+    case 'function':
+      return t.Signatures.some((signature) => needs(signature.Return) || needs(signature.ThisType)
+        || signature.Parameters.some((parameter) => needs(parameter.Type))
+        || signature.Narrows?.some((rule) => needs(rule.Type)));
+    default: return false;
+  }
+}
 
 /**
  * Does this type's default depend on a CLASS declared in this source text?
@@ -459,13 +489,27 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       // Free names must denote available source bindings, never a same-spelled
       // outer value in place of an uninstantiated nested declaration.
       const admitted = new Set(available);
-      for (const reference of FreeReferences(predicate)) {
+      const references = LexicalFreeReferences(predicate);
+      for (const reference of references) {
         if (admitted.has(reference.name)) continue;
         const binding = ResolveBindingDeclaration(reference, reference.name);
-        if ((!binding && (builtinTypeRecord(reference.name) || FRAGMENT_FLOOR.includes(reference.name)))
+        if ((!binding && (builtinTypeRecord(reference.name) || FRAGMENT_FLOOR.includes(reference.name) || ERROR_CONSTRUCTORS.includes(reference.name)))
           || ((binding?.kind === 'function' || binding?.kind === 'import') && availableDeclarations.has(binding.node))) admitted.add(reference.name);
       }
-      if (FirstFreeReference(predicate, admitted) || TypeExpressionEvaluabilityViolation(predicate)) continue;
+      if (references.some((reference) => !admitted.has(reference.name))) continue;
+      if (references.some((reference) => frame.has(reference.name) && whereInputNeedsRuntimeValue(frame.get(reference.name)!))) continue;
+      // Inspect transitive lexical captures before calling helpers. A caught
+      // premature TDZ read is no more evidence than an uncaught one. Imported
+      // inputs retain the module boundary's required-failure rule.
+      if (TypeExpressionEvaluabilityViolation(predicate, Value.undefined, (binding, reference) => {
+        let source: ParseNode = reference;
+        while (source.parent) source = source.parent;
+        if (source !== root || ResolveBindingDeclaration(reference, reference.name)?.kind === 'import') return false;
+        if (binding.kind === 'function') return !availableDeclarations.has(binding.node);
+        if (binding.kind === 'type') return !preEvaluatedTypeDeclarations.has(binding.node);
+        if (binding.kind === 'type-parameter') return binding.node !== check.declaration || !frame.has(reference.name);
+        return true;
+      })) continue;
       // Runtime subjects and writes require their evaluation-time environment.
       const hasRuntimeSubject = (node: ParseNode): boolean => {
         if (['ThisExpression', 'ContractReturn', 'AssignmentExpression', 'UpdateExpression'].includes(node.type)
@@ -507,8 +551,8 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       }
       if (result.Type === 'throw') {
         if (IsBudgetExhausted()) return result;
-        // Layouts and decorated types may not have evaluated yet.
-        continue;
+        return CreateTypeDiagnostic('rt-type-evaluation', clause, 'pre-evaluation',
+          'a $1 clause could not be evaluated: $2', Value('where'), inspect(result.Value));
       }
       if (!result.Value) return CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this application', Value('where'));
       MarkGenericWhereVerified(clause, frame);

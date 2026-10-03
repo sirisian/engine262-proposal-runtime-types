@@ -1,0 +1,1042 @@
+{
+  "schemaVersion": 1,
+  "specification": [
+    "sec-generic-where",
+    "sec-specialization-predicate-completion",
+    "sec-module-type-checking-order",
+    "sec-evaluation-budget"
+  ],
+  "cases": [
+    {
+      "name": "function: missing Type Object method rejects a closed unused application",
+      "source": "function F<T:type>():void where T.missing() {} function unused(){F.<uint8>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 26,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "function: non-callable Type Object property rejects a closed unused application",
+      "source": "function F<T:type>():void where T.byteLength() {} function unused(){F.<uint8>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 26,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "function: invalid JSON input rejects a closed unused application",
+      "source": "function F<N:uint32>():void where JSON.parse(\"{\") {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 28,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "function: invalid regular expression rejects a closed unused application",
+      "source": "function F<N:uint32>():void where new RegExp(\"[\") {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 28,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "function: explicit Error rejects a closed unused application",
+      "source": "function check(n){throw new Error(\"failed\");} function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 74,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "function: primitive thrown value rejects a closed unused application",
+      "source": "function check(n){throw n;} function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 56,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "function: missing helper reference rejects a closed unused application",
+      "source": "function check(n){return missing(n);} function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 66,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "function: direct Error construction rejects a closed unused application",
+      "source": "function F<N:uint32>():void where (()=>{throw new Error(\"failed\");})() {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 28,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "function: nested helper failure rejects a closed unused application",
+      "source": "function check(n){return fail(n);} function fail(n){throw new TypeError(\"failed\");} function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 112,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "function: rethrow after catch rejects a closed unused application",
+      "source": "function check(n){try{throw n;}catch(e){throw new RangeError(\"failed\");}} function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 102,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "function: finally replaces successful return rejects a closed unused application",
+      "source": "function check(n){try{return true;}finally{throw n;}} function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 82,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "alias: missing Type Object method rejects a closed unused application",
+      "source": "type F<T:type>=uint8 where T.missing(); function unused(){let x:F.<uint8>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 21,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "alias: non-callable Type Object property rejects a closed unused application",
+      "source": "type F<T:type>=uint8 where T.byteLength(); function unused(){let x:F.<uint8>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 21,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "alias: invalid JSON input rejects a closed unused application",
+      "source": "type F<N:uint32>=uint8 where JSON.parse(\"{\"); function unused(){let x:F.<1>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 23,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "alias: invalid regular expression rejects a closed unused application",
+      "source": "type F<N:uint32>=uint8 where new RegExp(\"[\"); function unused(){let x:F.<1>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 23,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "alias: explicit Error rejects a closed unused application",
+      "source": "function check(n){throw new Error(\"failed\");} type F<N:uint32>=uint8 where check(N); function unused(){let x:F.<1>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 69,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "alias: primitive thrown value rejects a closed unused application",
+      "source": "function check(n){throw n;} type F<N:uint32>=uint8 where check(N); function unused(){let x:F.<1>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 51,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "alias: missing helper reference rejects a closed unused application",
+      "source": "function check(n){return missing(n);} type F<N:uint32>=uint8 where check(N); function unused(){let x:F.<1>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 61,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "alias: direct Error construction rejects a closed unused application",
+      "source": "type F<N:uint32>=uint8 where (()=>{throw new Error(\"failed\");})(); function unused(){let x:F.<1>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 23,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "alias: nested helper failure rejects a closed unused application",
+      "source": "function check(n){return fail(n);} function fail(n){throw new TypeError(\"failed\");} type F<N:uint32>=uint8 where check(N); function unused(){let x:F.<1>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 107,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "alias: rethrow after catch rejects a closed unused application",
+      "source": "function check(n){try{throw n;}catch(e){throw new RangeError(\"failed\");}} type F<N:uint32>=uint8 where check(N); function unused(){let x:F.<1>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 97,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "alias: finally replaces successful return rejects a closed unused application",
+      "source": "function check(n){try{return true;}finally{throw n;}} type F<N:uint32>=uint8 where check(N); function unused(){let x:F.<1>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 77,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "handled throw succeeds",
+      "source": "function check(n){try{throw n;}catch(e){return true;}} function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "handled throw returns false",
+      "source": "function check(n){try{throw n;}catch(e){return false;}} function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 84,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "finally overrides throw",
+      "source": "function check(n){try{throw n;}finally{return true;}} function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "finally preserves throw",
+      "source": "function check(n){try{throw n;}finally{}} function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 70,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "conditional skips failing branch",
+      "source": "function F<N:uint32>():void where if (N > 0) { true } else { JSON.parse(\"{\") } {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "conditional selects failing branch",
+      "source": "function F<N:uint32>():void where if (N > 0) { JSON.parse(\"{\") } else { true } {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 28,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "short circuit skips throwing operand",
+      "source": "function F<N:uint32>():void where N > 0 || JSON.parse(\"{\") {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "short circuit reaches throwing operand",
+      "source": "function F<N:uint32>():void where N < 0 || JSON.parse(\"{\") {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 28,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "unselected conditional has vacuous truth",
+      "source": "function F<N:uint32>():void where if (N < 0) { JSON.parse(\"{\") } {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "ordinary false predicate is distinct",
+      "source": "function F<N:uint32>():void where N < 0 {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 28,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Error-shaped object remains a thrown value",
+      "source": "function check(n){throw {name:\"ReferenceError\",message:\"x cannot be used before initialization\"};} function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 127,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "uninitialized helper local is a real failure",
+      "source": "function check(n){return local; const local=true;} function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 79,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "named arguments select the failing branch",
+      "source": "type F<A:uint32,B:uint32>=uint8 where A > B || JSON.parse(\"{\"); function unused(){let x:F.<B:2,A:1>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 32,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "default argument retains failing constraint",
+      "source": "type F<N:uint32=1>=uint8 where JSON.parse(\"{\"); function unused(){let x:F;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 25,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "value pack callback failure is early",
+      "source": "type F<...N:[].<uint32>>=uint8 where N.every(n=>JSON.parse(\"{\")); function unused(){let x:F.<1,2>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 31,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "empty pack never invokes failing callback",
+      "source": "type F<...N:[].<uint32>>=uint8 where N.every(n=>JSON.parse(\"{\")); function unused(){let x:F.<>;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "enclosing specialization closes failing erased constraint",
+      "source": "type F<N:uint32>=uint8 where JSON.parse(\"{\"); function outer<M:uint32>(){let x:F.<M>;} function unused(){outer.<1>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 23,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "unbound enclosing specialization stays deferred",
+      "source": "type F<N:uint32>=uint8 where JSON.parse(\"{\"); function outer<M:uint32>(){let x:F.<M>;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "a later clause has its own failure location",
+      "source": "function F<N:uint32>():void where N > 0 where JSON.parse(\"{\") {} function unused(){F.<1>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 40,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "a successful specialization cannot hide a later throw",
+      "source": "function check(n){if(n > 1){throw n;} return true;} function F<N:uint32>():void where check(N) {} function unused(){F.<1>();F.<2>();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 80,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "uncaught unavailable constant",
+      "source": "const limit=1; function check(n){return n >= limit;} function F<N:uint32>():void where check(N) {} F.<1>();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "caught unavailable constant cannot prove false",
+      "source": "const limit=1; function check(n){try{return n >= limit;}catch(e){return false;}} function F<N:uint32>():void where check(N) {} F.<1>();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "caught unavailable constant cannot cache success",
+      "source": "const limit=2; function check(n){try{return n >= limit;}catch(e){return true;}} function F<N:uint32>():void where check(N) {} F.<1>();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "transitive unavailable constant",
+      "source": "const limit=1; function read(){return limit;} function check(n){try{return Number(n) >= read();}catch(e){return false;}} function F<N:uint32>():void where check(N) {} F.<1>();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "outer value parameter stays runtime-dependent",
+      "source": "function outer(limit){function check(n){return Number(n) >= limit;} function F<N:uint32>():void where check(N) {} F.<1>();} outer(1);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "uninstantiated local helper cannot use an outer namesake",
+      "source": "function check(n){throw n;} function outer(){function check(n){return true;} function F<N:uint32>():void where check(N) {} F.<1>();} outer();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "mutable helper capture remains runtime-dependent",
+      "source": "let enabled=true; function check(n){return enabled;} function F<N:uint32>():void where check(N) {} F.<1>();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "runtime-dependent helper exception stays native",
+      "source": "let enabled=true; function check(n){if(enabled){throw new Error(\"runtime\");}return true;} function F<N:uint32>():void where check(N) {} F.<1>();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "Error"
+      }
+    },
+    {
+      "name": "class constructor input waits for evaluation",
+      "source": "class C {static good(){return true;}} function F<T:type>():void where T.good() {} F.<C>();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "class layout input waits for evaluation",
+      "source": "class C {x:uint8;} function F<T:type>():void where T.byteLength > 0 {} F.<C>();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "caught missing constructor member cannot prove false",
+      "source": "class C {static good(){return true;}} function check(T){try{return T.good();}catch(e){return false;}} function F<T:type>():void where check(T) {} F.<C>();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "class capture waits for ordinary body initialization",
+      "source": "class C {static good(){return true;}} function check(n){try{return C.good();}catch(e){return false;}} function F<N:uint32>():void where check(N) {} F.<1>();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "unavailable composite layout keeps its native runtime failure",
+      "source": "class C {x:uint8;} function F<T:type>():void where T.byteLength > 0 {} F.<[C]>();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "runtime-subject alias keeps boundary checking",
+      "source": "type Positive<N:uint32>=uint8 where this > N; let x:Positive.<1>=2;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "inner block binding cannot hide a transitive external constant",
+      "source": "const limit=1; function check(n){{const limit=2;}return n>=limit;} function F<N:uint32>():void where check(N) {} F.<1>();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "inner block binding cannot hide a caught premature read",
+      "source": "const limit=1; function check(n){{const limit=2;}try{return n>=limit;}catch(e){return false;}} function F<N:uint32>():void where check(N) {} F.<1>();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "nested parameter cannot hide a sibling external read",
+      "source": "const limit=1; function check(n){function inner(limit){return limit;} return n>=limit;} function F<N:uint32>():void where check(N) {} F.<1>();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "predicate-local shadow does not hide an outer constant",
+      "source": "const limit=1; function F<N:uint32>():void where (()=>{{const limit=2;}return Number(N)>=limit;})() {} F.<1>();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "local constant within a predicate is available",
+      "source": "function F<N:uint32>():void where (()=>{const limit=1; return Number(N)>=limit;})() {} F.<1>();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "local constant within a helper is available",
+      "source": "function check(n){const limit=1;return n>=limit;} function F<N:uint32>():void where check(N) {} F.<1>();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "module local throwing predicate prevents body entry",
+      "modules": {
+        "main": "function check(n){throw n;} function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 56,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "imported throwing predicate preserves completed dependency",
+      "modules": {
+        "main": "import {check} from \"helper\"; function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}",
+        "helper": "export function check(n){throw n;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "helper"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 58,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "re-exported throwing predicate keeps its lexical body",
+      "modules": {
+        "main": "import {check} from \"bridge\"; function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}",
+        "bridge": "export {check} from \"helper\";",
+        "helper": "export function check(n){throw n;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "helper",
+          "bridge"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 58,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "namespace predicate throw prevents importer entry",
+      "modules": {
+        "main": "import * as ns from \"helper\"; function F<N:uint32>():void where ns.check(N) {} function unused(){F.<1>();}",
+        "helper": "export function check(n){throw n;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "helper"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 58,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "asynchronous dependency finishes before predicate failure",
+      "modules": {
+        "main": "import {check} from \"helper\"; function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}",
+        "helper": "await 0; export function check(n){throw n;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "helper"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 58,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "module dependency initialization supplies immutable capture",
+      "modules": {
+        "main": "import {check} from \"helper\"; function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}",
+        "helper": "const limit=1; export function check(n){return n >= limit;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "helper",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "cyclic required import failure cannot defer to body",
+      "modules": {
+        "main": "import \"consumer\"; export const limit=1;",
+        "consumer": "import {limit} from \"main\"; function F<N:uint32>():void where N >= limit {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 56,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "cyclic imported helper capture failure is early",
+      "modules": {
+        "main": "import \"consumer\"; const limit=1; export function check(n){return n >= limit;}",
+        "consumer": "import {check} from \"main\"; function F<N:uint32>():void where check(N) {} function unused(){F.<1>();}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 56,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "module local constant is not evaluated early",
+      "modules": {
+        "main": "const limit=1; function check(n){try{return n>=limit;}catch(e){return false;}} function F<N:uint32>():void where check(N) {} F.<1>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

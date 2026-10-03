@@ -4,7 +4,7 @@ import { JSStringValue, Value } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { surroundingAgent } from '#self';
 import {
-  CompileTimeEvaluabilityChecker, ModuleBindingDeclaration, ResolveBindingDeclaration, type BindingDeclaration,
+  CompileTimeEvaluabilityChecker, ModuleBindingDeclaration, ResolveBindingDeclaration, type BindingDeclaration, type EvaluabilityContext,
 } from './compile-time-evaluability.mts';
 
 function sourceRoot(node: ParseNode): ParseNode {
@@ -17,7 +17,9 @@ export function BuilderEvaluabilityViolation(call: ParseNode.ComputedType, calle
   return TypeExpressionEvaluabilityViolation(call, callee);
 }
 
-export function TypeExpressionEvaluabilityViolation(expression: ParseNode, callee: Value = Value.undefined): string | undefined {
+export function TypeExpressionEvaluabilityViolation(
+  expression: ParseNode, callee: Value = Value.undefined, unavailable?: EvaluabilityContext['unavailable'],
+): string | undefined {
   const fn = callee as { ECMAScriptCode?: { parent?: ParseNode }, ScriptOrModule?: unknown };
   const modules = new Map<ParseNode, SourceTextModuleRecord>();
   for (const module of [surroundingAgent.runningExecutionContext.ScriptOrModule, fn.ScriptOrModule]) {
@@ -102,6 +104,6 @@ export function TypeExpressionEvaluabilityViolation(expression: ParseNode, calle
     }
     return facts.eval || facts.declarations.has(declaration.node);
   };
-  const violation = CompileTimeEvaluabilityChecker({ resolve, assigned });
+  const violation = CompileTimeEvaluabilityChecker({ resolve, assigned, unavailable });
   return violation(expression) ?? (fn.ECMAScriptCode?.parent ? violation(fn.ECMAScriptCode.parent) : undefined);
 }

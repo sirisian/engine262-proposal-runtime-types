@@ -1,5 +1,5 @@
 // Generated from proposal-runtime-types/diagnostics.json.
-// Catalog SHA-256: a2b76a50fe073a2b3723720ca2d04fd3d4ded65257ca585f6f9dfd27266f6da8
+// Catalog SHA-256: 342ce1a000d52a8bc8e790689961c501d13999e1f51eac92e4dbe09587748a99
 export const TypeDiagnosticCatalog = [
   {
     "code": "RT_DEFAULT_EVALUATION",
@@ -163,9 +163,10 @@ export const TypeDiagnosticCatalog = [
     "errorClass": "StaticTypeError",
     "specification": [
       "sec-compile-time-evaluability",
-      "sec-module-type-checking-order"
+      "sec-module-type-checking-order",
+      "sec-specialization-predicate-completion"
     ],
-    "explanation": "A closed type expression does not evaluate to a Type Object.",
+    "explanation": "A required type computation cannot complete normally, or a closed type expression does not produce a Type Object.",
     "arguments": {
       "type": "array",
       "items": {
@@ -2835,4 +2836,4 @@ export const TypeDiagnosticCatalog = [
 ] as const;
 export type TypeDiagnosticCode = typeof TypeDiagnosticCatalog[number]['code'];
 export type TypeDiagnosticRule = typeof TypeDiagnosticCatalog[number]['rule'];
-export const TypeDiagnosticCatalogHash = 'a2b76a50fe073a2b3723720ca2d04fd3d4ded65257ca585f6f9dfd27266f6da8';
+export const TypeDiagnosticCatalogHash = '342ce1a000d52a8bc8e790689961c501d13999e1f51eac92e4dbe09587748a99';
