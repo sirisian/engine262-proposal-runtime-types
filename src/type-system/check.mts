@@ -3425,6 +3425,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const t = frames[i].bindings.get(name);
       if (t) {
+        const prepared = preparedBindings.get(frames[i])?.get(name);
+        if (prepared?.flowIncomplete) observeBindingInput(prepared);
         return t;
       }
       // AN UNTYPED DECLARATION STILL SHADOWS. `declare` records every name in
@@ -3603,6 +3605,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // block-local `x` must never replace a fact about an outer `x` at a join.
   const metadataFlowInputs = new WeakMap<TypeRecord, readonly NarrowingInput[]>();
   type FlowFacts = Map<Frame, Map<string, TypeRecord>>;
+  // A transfer evaluated with an unavailable inference input is not a final
+  // proof. Completing the input alone does not recompute that transfer.
+  const incompleteFlows = new WeakSet<FlowFacts>();
+  let flowNeedsReplay = false;
   type FlowExit = { kind: 'break' | 'continue' | 'return' | 'throw', target?: ParseNode, facts: FlowFacts };
   let flowLive = true;
   let flowExits: FlowExit[] = [];
@@ -3626,10 +3632,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         result.get(owner)!.set(name, type);
       }
     });
+    if (flowNeedsReplay) incompleteFlows.add(result);
     return result;
   };
   const restoreFlow = (facts: FlowFacts = new Map()): void => {
     const current = captureFlow();
+    flowNeedsReplay = incompleteFlows.has(facts);
     const active = [...facts].filter(([frame, entries]) => frames.includes(frame) && entries.size);
     if (current.size === active.length && active.every(([frame, entries]) => {
       const existing = current.get(frame);
@@ -3676,6 +3684,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         joined.get(owner)!.set(name, type);
       }
     }
+    if (live.some((facts) => incompleteFlows.has(facts))) incompleteFlows.add(joined);
     return joined;
   };
   const resumeFlow = (facts: FlowFacts | undefined): void => {
@@ -18120,6 +18129,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             && !inferencesInProgress.has(only as object)) {
             driveInference(only as object);
           }
+          observeInferenceInputs(only);
           // #sec-generics: a call that supplies type arguments binds
           // them to the signature's type parameters, and the return type is
           // read with that binding applied. Without this a generic call had no
@@ -23728,6 +23738,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /** Evaluate each operand once, retaining separate facts for both answers. */
   const walkTest = (test: ParseNode, deciding = true, truthiness = deciding, visit = true): TestFlow => {
+    const incomplete = flowNeedsReplay;
+    const result = withFlowInputs(() => walkTestOutcomes(test, deciding, truthiness, visit));
+    if (incomplete || flowNeedsReplay) {
+      if (result.whenTrue) incompleteFlows.add(result.whenTrue);
+      if (result.whenFalse) incompleteFlows.add(result.whenFalse);
+    }
+    return result;
+  };
+  const walkTestOutcomes = (test: ParseNode, deciding: boolean, truthiness: boolean, visit: boolean): TestFlow => {
     const live = flowLive;
     const canon = live && visit ? testCanon(test) : null;
     const repeated = canon && deciding ? recordedOutcome(canon) : undefined;
@@ -25453,6 +25472,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     generator?: { asyncGenerator: boolean },
     /** An async function, whose inference is of the type its result RESOLVES with. */
     asyncFunction?: boolean,
+    inputs?: Set<PreparedBinding>,
   };
 
   const pendingBySignature = new Map<object, ReturnInference>();
@@ -25541,13 +25561,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return changed;
   };
 
-  type PreparedBinding = InferenceScope & { expression: ParseNode, constant: boolean, type?: TypeRecord };
+  type PreparedBinding = InferenceScope & { node: ParseNode, expression: ParseNode, constant: boolean, type?: Known, completed?: boolean, flowIncomplete?: boolean };
   const preparedBindings = new WeakMap<Frame, Map<string, PreparedBinding>>();
   const preparingBindings = new Set<PreparedBinding>();
   const preparedBindingType = (frame: Frame, name: string): Known => {
     const binding = preparedBindings.get(frame)?.get(name);
-    if (!binding || preparingBindings.has(binding)) return null;
-    if (binding.type) return binding.type;
+    if (!binding) return null;
+    if (binding.completed || binding.type) {
+      observeBindingInput(binding);
+      return binding.type ?? null;
+    }
+    if (preparingBindings.has(binding)) {
+      observeBindingInput(binding);
+      return null;
+    }
     preparingBindings.add(binding);
     const outerDepth = inferenceDepth;
     // Const inference consumes published contracts; a provisional result is
@@ -25586,6 +25613,135 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     } finally {
       inferenceDepth = outerDepth;
       preparingBindings.delete(binding);
+      if (!binding.type) observeBindingInput(binding);
+    }
+  };
+
+  const inferenceInputCollectors: Set<PreparedBinding>[] = [];
+  const bindingWalkInputs = new WeakMap<ParseNode, Set<PreparedBinding>>();
+  const withFlowInputs = <T,>(action: () => T): T => {
+    const inputs = new Set<PreparedBinding>();
+    inferenceInputCollectors.push(inputs);
+    try {
+      return action();
+    } finally {
+      inferenceInputCollectors.pop();
+      if (inputs.size) flowNeedsReplay = true;
+    }
+  };
+  let initializerInputs: Set<PreparedBinding> | undefined;
+  const observeBindingInput = (binding: PreparedBinding): void => {
+    if (!binding.flowIncomplete && (binding.completed || binding.type)) return;
+    initializerInputs?.add(binding);
+    for (const inputs of inferenceInputCollectors) inputs.add(binding);
+  };
+  const observeInferenceInputs = (signature: object): void => {
+    for (const input of pendingBySignature.get(signature)?.inputs ?? []) observeBindingInput(input);
+  };
+
+  const completePreparedBinding = (frame: Frame, name: string, type: Known): void => {
+    const binding = preparedBindings.get(frame)?.get(name);
+    if (!binding || binding.completed) return;
+    binding.type = type;
+    binding.completed = true;
+    binding.flowIncomplete = flowNeedsReplay || !!bindingWalkInputs.get(binding.node)?.size;
+    // Both published and private results may have used the unavailable input.
+    // Every active caller records transitive inputs, so invalidation reaches
+    // wrappers as well as the function that directly captured this binding.
+    for (const item of pendingBySignature.values()) {
+      if (!item.inputs?.has(binding)) continue;
+      item.signature.InferredReturn = undefined;
+      item.signature.ProvisionalReturn = undefined;
+      publishedReturnTypes.delete(item.fn);
+      publishedAnchors.delete(item.signature);
+      publishedOrigins.delete(item.signature);
+      inferenceWave?.delete(item.signature);
+    }
+  };
+
+  type InitializerContext = InferenceScope & {
+    flow: FlowFacts,
+    uninitialized: Map<Frame, Set<string> | undefined>,
+    thisTypes: Known[], classes: ParseNode[], returns: Known[], generators: Known[],
+    asynchronous: boolean[], patterns: Set<ParseNode>, gate: ParseNode | undefined,
+  };
+  type InitializerObligation = { context: InitializerContext, expression: ParseNode, target: Known, inputs: Set<PreparedBinding> };
+  const initializerObligations: InitializerObligation[] = [];
+  const captureInitializerContext = (): InitializerContext => ({
+    frames: frames.slice(), varFrames: varFrames.slice(), typeScopes: typeParameterScopes.slice(),
+    flow: captureFlow(), uninitialized: new Map(frames.map((frame) => {
+      const names = uninitializedVars.get(frame);
+      return [frame, names && new Set(names)];
+    })),
+    thisTypes: thisTypeFrames.slice(), classes: classContext.slice(), returns: returnTypes.slice(),
+    generators: generatorTypes.slice(), asynchronous: asyncReturns.slice(), patterns: new Set(activePatternScopes), gate: gateNode,
+  });
+  const inInitializerContext = (context: InitializerContext, action: () => void): void => {
+    const outer = captureInitializerContext();
+    const live = flowLive;
+    const apply = (state: InitializerContext): void => {
+      thisTypeFrames.splice(0, thisTypeFrames.length, ...state.thisTypes);
+      classContext.splice(0, classContext.length, ...state.classes);
+      returnTypes.splice(0, returnTypes.length, ...state.returns);
+      generatorTypes.splice(0, generatorTypes.length, ...state.generators);
+      asyncReturns.splice(0, asyncReturns.length, ...state.asynchronous);
+      activePatternScopes.clear();
+      for (const pattern of state.patterns) activePatternScopes.add(pattern);
+      gateNode = state.gate;
+    };
+    inDeclarationScope(context, () => {
+      const displaced = captureFlow();
+      const uninitialized = new Map(context.frames.map((frame) => [frame, uninitializedVars.get(frame)]));
+      typeRevision += 1;
+      apply(context);
+      restoreFlow(context.flow);
+      for (const [frame, names] of context.uninitialized) {
+        if (names) uninitializedVars.set(frame, new Set(names));
+        else uninitializedVars.delete(frame);
+      }
+      try {
+        action();
+      } finally {
+        for (const [frame, names] of uninitialized) {
+          if (names) uninitializedVars.set(frame, names);
+          else uninitializedVars.delete(frame);
+        }
+        restoreFlow(displaced);
+        apply(outer);
+        flowLive = live;
+        typeRevision += 1;
+      }
+    });
+  };
+
+  const checkInitializerAssignable = (expression: ParseNode, target: Known, context?: InitializerContext): void => {
+    if (!target) return;
+    const saved = context ?? captureInitializerContext();
+    const previous = initializerInputs;
+    const inputs = new Set<PreparedBinding>();
+    initializerInputs = inputs;
+    const mark = errors.length;
+    try {
+      const source = staticTypeIn(expression, target);
+      withProvenance(expression, () => requireAssignable(source, target));
+    } finally {
+      initializerInputs = previous;
+    }
+    if (inputs.size && !invalidTypeGraph) {
+      // An incomplete attempt is not a verdict. Reconsider the source at its
+      // original flow and context after the required declaration work finishes.
+      errors.splice(mark);
+      initializerObligations.push({ context: saved, expression, target, inputs });
+    }
+  };
+  const finishInitializerObligations = (): void => {
+    for (let index = 0; index < initializerObligations.length; index += 1) {
+      const obligation = initializerObligations[index];
+      if (incompleteFlows.has(obligation.context.flow)
+        || [...obligation.inputs].some((input) => input.flowIncomplete || !input.completed && !input.type)) continue;
+      inInitializerContext(obligation.context, () => checkInitializerAssignable(
+        obligation.expression, obligation.target, obligation.context,
+      ));
     }
   };
 
@@ -25595,6 +25751,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!item || inferencesInProgress.has(only)) return null;
     if (inferenceWave?.has(only)) return item.signature.ProvisionalReturn ?? null;
     inferencesInProgress.add(only);
+    const inputs = new Set<PreparedBinding>();
+    inferenceInputCollectors.push(inputs);
     inferenceDepth += 1;
     try {
       inDeclarationScope(item, () => {
@@ -25637,6 +25795,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     } finally {
       inferenceDepth -= 1;
       inferencesInProgress.delete(only);
+      inferenceInputCollectors.pop();
+      item.inputs = inputs;
+      observeInferenceInputs(only);
     }
   };
 
@@ -26501,8 +26662,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             && (declaration.LetOrConst === 'const' || binding.TypedInitializer)) {
           const frame = frames[frames.length - 1];
           if (!preparedBindings.has(frame)) preparedBindings.set(frame, new Map());
+          if (preparedBindings.get(frame)!.get(binding.BindingIdentifier.name)?.node === binding) continue;
           preparedBindings.get(frame)!.set(binding.BindingIdentifier.name, {
-            expression, constant: !binding.TypedInitializer,
+            node: binding, expression, constant: !binding.TypedInitializer,
             frames: frames.slice(), varFrames: varFrames.slice(), typeScopes: typeParameterScopes.slice(),
           });
         }
@@ -31559,9 +31721,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (single?.type === 'AssignmentExpression') handledStoreEffects.delete(single);
     const gateSaved = gateNode;
     if (single?.location) gateNode = single;
+    const inputs = single && ['LexicalBinding', 'VariableDeclaration', 'AssignmentExpression'].includes(single.type)
+      ? new Set<PreparedBinding>() : undefined;
+    if (inputs) {
+      inferenceInputCollectors.push(inputs);
+      bindingWalkInputs.set(single!, inputs);
+    }
     try {
       walkNode(node);
     } finally {
+      if (inputs) {
+        inferenceInputCollectors.pop();
+        bindingWalkInputs.delete(single!);
+        if (single!.type === 'AssignmentExpression' && inputs.size) flowNeedsReplay = true;
+      }
       gateNode = gateSaved;
     }
     if (single && selectedOperatorCalls.has(single)) {
@@ -33174,7 +33347,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const booleanDiscriminant = booleanSingleton(singleValueOperandType(expression) ?? staticType(expression));
         const switchOrigin = capturePlace(expression);
         const switchOrigins = switchOrigin ? [switchOrigin] : [];
-        const switchType = staticType(expression);
+        const switchType = withFlowInputs(() => staticType(expression));
         let savedBoolean = savedPredicateResult(expression);
         const producer = optionalProducer(expression);
         const optionalResult = producer ? visitOptionalProducer(producer, true) : undefined;
@@ -33222,7 +33395,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             const labelOrigin = capturePlace(label);
             if (labelOrigin) switchOrigins.push(labelOrigin);
-            const labelTypeBefore = staticType(label);
+            const labelTypeBefore = withFlowInputs(() => staticType(label));
             walk(label);
             if (savedBoolean) {
               savedBoolean = effectOnTest(savedBoolean, () => previewFlowEffects(label));
@@ -33347,6 +33520,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             requireBindingType(inferred);
             declare(n.BindingIdentifier.name, inferred ? widen(inferred) : null, bindingFrame);
+            completePreparedBinding(bindingFrame, n.BindingIdentifier.name, inferred ? widen(inferred) : null);
             if (isConstDeclaration && booleanType(inferred)) {
               const result = walkTest(n.TypedInitializer.AssignmentExpression, false, false);
               resumeFlow(joinFlow([result.whenTrue, result.whenFalse]));
@@ -33404,8 +33578,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               referenceOperations.set(n, { kind: 'bind', slot: referenceSlot(bindingFrame, n.BindingIdentifier.name, n),
                 locations: borrowedLocations(n.Initializer), source: n.Initializer });
             }
-            withProvenance(n.Initializer, () => requireAssignable((n as { Ref?: boolean }).Ref
-              ? locationType(n.Initializer!) : staticTypeIn(n.Initializer!, declared), declared));
+            if ((n as { Ref?: boolean }).Ref) {
+              withProvenance(n.Initializer, () => requireAssignable(locationType(n.Initializer!), declared));
+            } else checkInitializerAssignable(n.Initializer, declared);
             initialized = staticType(n.Initializer);
             if (isConstDeclaration && booleanType(declared ?? (constInitializerParticipates(n.Initializer) ? initialized : null))
               && !(n as { Ref?: boolean }).Ref) {
@@ -33463,6 +33638,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (inferred && inferred.Kind !== 'any') {
               inferredConstTypes.set(n, inferred);
               declare(n.BindingIdentifier.name, inferred, bindingFrame);
+              completePreparedBinding(bindingFrame, n.BindingIdentifier.name, inferred);
               rememberValueOrigin(bindingFrame, n.BindingIdentifier.name, newInit, inferred);
               if (predicate) rememberPredicate(bindingFrame, n.BindingIdentifier.name, newInit, predicate);
               return;
@@ -33509,6 +33685,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           declare(n.BindingIdentifier.name, declared, bindingFrame);
+          completePreparedBinding(bindingFrame, n.BindingIdentifier.name, declared);
           if (!(n as { Ref?: boolean }).Ref) {
             const domain = storedDomain(initialized, declared);
             if (domain) declareNarrowed(n.BindingIdentifier.name, domain);
@@ -35067,6 +35244,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   hoistVarBindings(statementList);
   sweepTypePositions(statementList);
   walk(statementList);
+  if (!invalidTypeGraph) finishInitializerObligations();
   if (invalidTypeGraph) {
     restoreFlow(new Map());
     return errors;
