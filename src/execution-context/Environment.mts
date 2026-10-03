@@ -214,6 +214,38 @@ export function RefBindingHolder(base: EnvironmentRecord, N: JSStringValue): Dec
   return undefined;
 }
 
+// Opaque tokens identify bindings without retaining their environments or values.
+// Error objects acquire no observable properties or additional GC roots.
+const bindingIdentities = new WeakMap<DeclarativeEnvironmentBinding, object>();
+const uninitializedBindingReads = new WeakMap<ObjectValue, object>();
+
+function bindingIdentity(binding: DeclarativeEnvironmentBinding): object {
+  let identity = bindingIdentities.get(binding);
+  if (!identity) {
+    identity = {};
+    bindingIdentities.set(binding, identity);
+  }
+  return identity;
+}
+
+/** Identity of the direct declarative binding, not a same-named outer binding. */
+export function DeclarativeBindingIdentity(base: EnvironmentRecord, N: JSStringValue): object | undefined {
+  const binding = RefBindingHolder(base, N)?.bindings.get(N);
+  return binding && bindingIdentity(binding);
+}
+
+/** Internal evidence of an actual uninitialized binding read; messages are irrelevant. */
+export function UninitializedBindingIdentity(error: unknown): object | undefined {
+  return error instanceof ObjectValue ? uninitializedBindingReads.get(error) : undefined;
+}
+
+function uninitializedBindingRead(binding: DeclarativeEnvironmentBinding, N: JSStringValue) {
+  const completion = Throw.ReferenceError('$1 cannot be used before initialization', N);
+  Assert(completion.Value instanceof ObjectValue);
+  uninitializedBindingReads.set(completion.Value, bindingIdentity(binding));
+  return completion;
+}
+
 interface ModuleEnvironmentBinding extends DeclarativeEnvironmentBinding {
   readonly target: [AbstractModuleRecord, JSStringValue];
 }
@@ -368,7 +400,7 @@ export class DeclarativeEnvironmentRecord extends EnvironmentRecord {
     }
     // 3. If the binding for N in envRec is an uninitialized binding, throw a ReferenceError exception.
     if (binding.initialized === false) {
-      return Throw.ReferenceError('$1 cannot be used before initialization', N);
+      return uninitializedBindingRead(binding, N);
     }
     // 4. Return the value currently bound to N in envRec.
     return NormalCompletion(binding.value!);
@@ -559,7 +591,7 @@ export class ModuleEnvironmentRecord extends DeclarativeEnvironmentRecord {
     }
     // 5. If the binding for N in envRec is an uninitialized binding, throw a ReferenceError exception.
     if (binding.initialized === false) {
-      return Throw.ReferenceError('$1 cannot be used before initialization', N);
+      return uninitializedBindingRead(binding, N);
     }
     // 6. Return the value currently bound to N in envRec.
     return NormalCompletion(binding.value!);

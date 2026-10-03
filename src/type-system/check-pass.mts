@@ -5,7 +5,7 @@ import type { PlainEvaluator } from '../evaluator.mts';
 import { RequireType, ConvertValue, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault, PrimitiveCastsFor, CastCoversTarget } from '../abstract-ops/runtime-types.mts';
 import {
   Evaluate_MetaDeclaration, Evaluate_RuntimeTypesBindingDeclaration, preEvaluatedTypeDeclarations,
-  typeDeclarationNamesInPass,
+  BeginTypeDeclarationPreparation,
 } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { Evaluate_PrimitiveOperatorDeclaration } from '../runtime-semantics/PrimitiveOperatorDeclaration.mts';
 import { JSStringValue, ObjectValue, Value } from '../value.mts';
@@ -230,21 +230,35 @@ export function* RunPreEvaluationTypeCheck(root: ParseNode.Script | ParseNode.Mo
   // which is every tool that type-checks a file.
   BeginTypeEvaluation();
   try {
-    const result = EnsureCompletion(yield* runPreEvaluationTypeCheckMetered(root));
-    // Exhaustion takes precedence over incidental completions from an abandoned hook.
-    if (IsBudgetExhausted()) {
-      return CreateTypeDiagnostic('rt-type-evaluation-limit', root, 'pre-evaluation',
-        'the type evaluation budget was exhausted ($1) while checking this source text: $2',
-        Value(BudgetExhaustionKind() ?? 'steps'), result.Type === 'throw' ? inspect(result.Value) : 'evaluation was abandoned');
+    const items = root.type === 'Script' ? root.ScriptBody?.StatementList : root.ModuleBody?.ModuleItemList;
+    const names = (items ?? []).flatMap((item) => (
+      item.type === 'TypeAliasDeclaration' || item.type === 'InterfaceDeclaration'
+        ? [item.BindingIdentifier.name] : []
+    ));
+    const endPreparation = BeginTypeDeclarationPreparation(surroundingAgent.runningExecutionContext.LexicalEnvironment, names);
+    try {
+      return yield* runPreEvaluationTypeCheckWithDiagnostics(root);
+    } finally {
+      endPreparation();
     }
-    if (result.Type === 'throw' && !TypeDiagnosticOf(result.Value)) {
-      return CreateTypeDiagnostic('rt-type-evaluation', root, 'pre-evaluation',
-        'type evaluation could not complete: $1', inspect(result.Value));
-    }
-    return result;
   } finally {
     EndTypeEvaluation();
   }
+}
+
+function* runPreEvaluationTypeCheckWithDiagnostics(root: ParseNode.Script | ParseNode.Module): PlainEvaluator {
+  const result = EnsureCompletion(yield* runPreEvaluationTypeCheckMetered(root));
+  // Exhaustion takes precedence over incidental completions from an abandoned hook.
+  if (IsBudgetExhausted()) {
+    return CreateTypeDiagnostic('rt-type-evaluation-limit', root, 'pre-evaluation',
+      'the type evaluation budget was exhausted ($1) while checking this source text: $2',
+      Value(BudgetExhaustionKind() ?? 'steps'), result.Type === 'throw' ? inspect(result.Value) : 'evaluation was abandoned');
+  }
+  if (result.Type === 'throw' && !TypeDiagnosticOf(result.Value)) {
+    return CreateTypeDiagnostic('rt-type-evaluation', root, 'pre-evaluation',
+      'type evaluation could not complete: $1', inspect(result.Value));
+  }
+  return result;
 }
 
 function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Module): PlainEvaluator {
@@ -333,17 +347,6 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         surroundingAgent.runningExecutionContext.callSite.setLocation(clause as never);
         return CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation',
           'a $1 clause is not satisfied by this application', Value('where'));
-      }
-    }
-  }
-  // The names this pass is defining, so a recursive reference can be told from a
-  // member naming a VALUE binding - both report "cannot be used before
-  // initialization" from the same site.
-  for (const item of items ?? []) {
-    if (item.type === 'TypeAliasDeclaration' || item.type === 'InterfaceDeclaration') {
-      const declared = (item as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
-      if (declared) {
-        typeDeclarationNamesInPass.add(declared);
       }
     }
   }

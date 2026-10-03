@@ -60,7 +60,7 @@ import {
 } from '../abstract-ops/all.mts';
 import { R as MathematicalValue } from "../abstract-ops/all.mjs";
 import { ThrowCompletion } from '../completion.mts';
-import { DeclarativeEnvironmentRecord } from '../execution-context/Environment.mts';
+import { DeclarativeEnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity } from '../execution-context/Environment.mts';
 import { ClassDefinitionEvaluation, PartialClassMergeEvaluation } from './ClassDefinitionEvaluation.mts';
  import { Evaluate_PropertyName } from './PropertyName.mts';
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
@@ -85,66 +85,33 @@ import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunc
  */
 export const preEvaluatedTypeDeclarations = new WeakSet<ParseNode>();
 
-/**
- * The names of TYPE declarations the pre-evaluation pass is currently defining.
- *
- * A pre-evaluated interface resolves its members while top-level `let` and
- * `const` bindings are still uninitialized, so a member naming one gets a
- * temporal-dead-zone report - and a RECURSIVE interface reaching its own
- * binding gets the SAME report, from the same site, with the same text.
- *
- * Measured: `const q = 5; interface I { n: q; }` gives
- * `"q" cannot be used before initialization`, and
- * `interface Node { next: Node | undefined; }` gives the same for `"Node"`.
- * Nothing in the completion separates them, so the NAME is compared against
- * this set instead: a type declaration's own name is the recursive case and is
- * exempt; anything else is a value binding, which #sec-type-names makes a
- * TypeError - "`q` IS bound; it simply does not denote a type".
- */
-export const typeDeclarationNamesInPass = new Set<string>();
+// #sec-declaration-preparation-state: nested checking suspends the outer group.
+const declarationPreparationFrames = new WeakMap<object, Set<object>[]>();
 
-/**
- * Whether a thrown completion is a temporal-dead-zone report rather than an
- * unresolvable type.
- *
- * A recursive interface reaches its own binding while that binding is still
- * initializing. That is not the failure being reported - the name IS a type and
- * IS bound - so it is left unreported, as it was before the report existed.
- */
-/**
- * Whether a thrown completion is a TYPE declaration referring to itself, rather
- * than a member naming a VALUE binding.
- *
- * Both are reported identically - `"q" cannot be used before initialization` and
- * `"Node" cannot be used before initialization`, from the same site - so the
- * NAME decides. A name this pass is defining is the recursive case and is
- * exempt; anything else is a value binding, which #sec-type-names makes a
- * TypeError: "`q` IS bound; it simply does not denote a type".
- */
-function isRecursiveTypeReference(value: ObjectValue): boolean {
-  const name = initializationErrorName(value);
-  return name !== null && typeDeclarationNamesInPass.has(name);
+/** Open an activation-local group and return its exception-safe cleanup. */
+export function BeginTypeDeclarationPreparation(environment: EnvironmentRecord, names: readonly string[]): () => void {
+  let frames = declarationPreparationFrames.get(surroundingAgent);
+  if (!frames) {
+    frames = [];
+    declarationPreparationFrames.set(surroundingAgent, frames);
+  }
+  const identities = new Set<object>();
+  for (const name of names) {
+    const identity = DeclarativeBindingIdentity(environment, Value(name));
+    if (identity) identities.add(identity);
+  }
+  frames.push(identities);
+  return () => {
+    Assert(frames[frames.length - 1] === identities);
+    frames.pop();
+  };
 }
 
-/** The name a temporal-dead-zone report names, or null. */
-function initializationErrorName(value: ObjectValue): string | null {
-  try {
-    const properties = (value as unknown as {
-      properties?: Map<{ stringValue(): string }, { Value?: { stringValue(): string } }>,
-    }).properties;
-    if (properties) {
-      for (const [key, descriptor] of properties) {
-        if (key.stringValue() === 'message') {
-          const message = descriptor.Value?.stringValue() ?? '';
-          const match = /^"(.*)" cannot be used before initialization$/.exec(message);
-          return match ? match[1] : null;
-        }
-      }
-    }
-  } catch {
-    return null;
-  }
-  return null;
+/** An unresolved read can refer only to a pending declaration in this activation. */
+export function IsPendingTypeDeclarationReference(error: unknown): boolean {
+  const identity = UninitializedBindingIdentity(error);
+  const frames = declarationPreparationFrames.get(surroundingAgent);
+  return identity !== undefined && (frames?.[frames.length - 1]?.has(identity) ?? false);
 }
 
 /**
@@ -630,7 +597,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
         const attempt = EnsureCompletion(yield* TypeNodeToTypeRecord(m.TypeAnnotation.Type));
         if (attempt.Type === 'normal') {
           resolved = attempt.Value as TypeRecord;
-        } else if (!isRecursiveTypeReference(attempt.Value as ObjectValue)) {
+        } else if (!IsPendingTypeDeclarationReference(attempt.Value as ObjectValue)) {
           return attempt;
         }
       } else if (m.MethodSignature) {
@@ -697,7 +664,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
         // it already and only the interface was silent.
         //
         // The recursive case is exempted as the data branch exempts it.
-        if (attempt.Type !== 'normal' && !isRecursiveTypeReference(attempt.Value as ObjectValue)) {
+        if (attempt.Type !== 'normal' && !IsPendingTypeDeclarationReference(attempt.Value as ObjectValue)) {
           return attempt;
         }
         const built = attempt.Type === 'normal' ? attempt.Value as TypeRecord : undefined;
