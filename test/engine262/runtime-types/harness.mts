@@ -1,7 +1,8 @@
 import { expect } from 'vitest';
 import {
   Agent, ManagedRealm, setSurroundingAgent, FinishLoadingImportedModule,
-  EnsureCompletion, Get, Value, X, ObjectValue, JSStringValue,
+  EnsureCompletion, ObjectValue,
+  TypeDiagnosticOf,
 } from '#self';
 
 /**
@@ -19,6 +20,30 @@ export function run(source: string) {
   setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
   const realm = new ManagedRealm();
   return realm.evaluateScriptSkipDebugger(source);
+}
+
+export type ScriptCheckingMode = 'automatic' | 'forced' | 'disabled';
+
+/** Observe the original source without changing its directives, scope, or locations. */
+export function observeScript(source: string, checking: ScriptCheckingMode = 'automatic') {
+  const agent = new Agent({ features: checking === 'disabled' ? [] : ['runtime-types'] });
+  setSurroundingAgent(agent);
+  const realm = new ManagedRealm();
+  let bodyEntered = false;
+  agent.hostDefinedOptions.onNodeEvaluation = (node) => {
+    if (node.type === 'ScriptBody') bodyEntered = true;
+  };
+  try {
+    const completion = EnsureCompletion(realm.evaluateScriptSkipDebugger(source, { forceCheckedCode: checking === 'forced' }));
+    const nativeErrors = ['Error', 'EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'StaticTypeError'] as const;
+    const errorClass = completion.Type === 'throw' && completion.Value instanceof ObjectValue
+      ? nativeErrors.find((name) => completion.Value instanceof ObjectValue
+        && 'Prototype' in completion.Value && completion.Value.Prototype === realm.Intrinsics[`%${name}.prototype%`])
+      : undefined;
+    return { completion, bodyEntered, errorClass, diagnostic: TypeDiagnosticOf(completion.Value) };
+  } finally {
+    delete agent.hostDefinedOptions.onNodeEvaluation;
+  }
 }
 
 /**
@@ -148,24 +173,11 @@ export function expectThrown(source: string, messageIncludes?: string) {
 }
 
 /** Assert the error's kind AND rejection before the candidate body executes. */
-export function expectEarlyError(source: string, kind: 'StaticTypeError' | 'SyntaxError') {
-  setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
-  const realm = new ManagedRealm();
-  realm.evaluateScriptSkipDebugger('globalThis.__earlyErrorBodyRan = false;');
-  // Keep declarations at script scope: wrapping them in a block would change
-  // which type declarations the pre-evaluation pass can resolve.
-  const completion = EnsureCompletion(realm.evaluateScriptSkipDebugger(`globalThis.__earlyErrorBodyRan = true; ${source}`));
-  expect(completion.Type, `expected an early ${kind} for: ${source}`).toBe('throw');
-  const ran = realm.evaluateScriptSkipDebugger('String(globalThis.__earlyErrorBodyRan);');
-  expect(normalValueString(ran, source), `candidate body ran: ${source}`).toBe('false');
-  const pop = realm.pushTopContext();
-  try {
-    const constructor = X(Get(completion.Value as ObjectValue, Value('constructor')));
-    const name = X(Get(constructor as ObjectValue, Value('name'))) as JSStringValue;
-    expect(name.stringValue(), `expected ${kind} for: ${source}`).toBe(kind);
-  } finally {
-    pop?.();
-  }
+export function expectEarlyError(source: string, kind: 'StaticTypeError' | 'SyntaxError', checking: ScriptCheckingMode = 'automatic') {
+  const result = observeScript(source, checking);
+  expect(result.completion.Type, `expected an early ${kind} for: ${source}`).toBe('throw');
+  expect(result.bodyEntered, `candidate body ran: ${source}`).toBe(false);
+  expect(result.errorClass, `expected ${kind} for: ${source}`).toBe(kind);
 }
 
 export function expectStaticTypeError(source: string) {

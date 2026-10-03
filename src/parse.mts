@@ -1,5 +1,6 @@
 import { Parser, type ParserOptions } from './parser/Parser.mts';
 import { TypedStrictRanges } from './parser/TypedStrictness.mts';
+import { MarkInheritedChecked } from './type-system/checked-code.mts';
 import type { ExecutionContext } from './execution-context/ExecutionContext.mts';
 import {
   CheckModule, CheckScript, PublishedReturnTypeOf, TakeNarrowingRequests,
@@ -386,6 +387,8 @@ export class ScriptRecord {
 }
 export interface ParseScriptHostDefined {
   readonly specifier?: string | undefined;
+  /** Test/diagnostic override; requires runtime-types and does not change parsing or strictness. */
+  readonly forceCheckedCode?: boolean;
   readonly [kInternal]?: {
     json?: boolean;
     /** only used in inspector.compileScript */ allowAllPrivateNames?: boolean;
@@ -472,6 +475,7 @@ function ParseScriptInRealm(sourceText: string, realm: Realm, hostDefined: Parse
   // join the early-error list, as TypeError objects rather than SyntaxError
   // objects, which is the specification's deliberate divergence.
   if (surroundingAgent.feature('runtime-types')) {
+    if (hostDefined.forceCheckedCode) MarkInheritedChecked(body);
     // A decoration on a STATEMENT is legal only where it names a replacement
     // decorator, and a Script has no preprocessor import - so any decorated
     // statement here is a runtime decoration of one, which has nothing to run

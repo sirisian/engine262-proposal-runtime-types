@@ -1,0 +1,331 @@
+{
+  "schemaVersion": 1,
+  "description": "Legacy Script outcomes. Disabled and automatic modes test language compatibility; forced mode is an optional host checker probe, not an additional language requirement.",
+  "cases": [
+    {
+      "id": "array-if",
+      "source": "if ([]) {}",
+      "expected": {
+        "disabled": {
+          "completion": "normal",
+          "bodyEntered": true
+        },
+        "automatic": {
+          "completion": "normal",
+          "bodyEntered": true
+        },
+        "forced": {
+          "completion": "throw",
+          "bodyEntered": false,
+          "errorClass": "StaticTypeError",
+          "rule": "rt-constant-condition"
+        }
+      }
+    },
+    {
+      "id": "array-conditional",
+      "source": "([] ? 1 : 2);",
+      "expected": {
+        "disabled": {
+          "completion": "normal",
+          "bodyEntered": true
+        },
+        "automatic": {
+          "completion": "normal",
+          "bodyEntered": true
+        },
+        "forced": {
+          "completion": "throw",
+          "bodyEntered": false,
+          "errorClass": "StaticTypeError",
+          "rule": "rt-constant-condition"
+        }
+      }
+    },
+    {
+      "id": "array-while",
+      "source": "while ([]) { break; }",
+      "expected": {
+        "disabled": {
+          "completion": "normal",
+          "bodyEntered": true
+        },
+        "automatic": {
+          "completion": "normal",
+          "bodyEntered": true
+        },
+        "forced": {
+          "completion": "throw",
+          "bodyEntered": false,
+          "errorClass": "StaticTypeError",
+          "rule": "rt-constant-condition"
+        }
+      }
+    },
+    {
+      "id": "array-for",
+      "source": "for (; []; ) { break; }",
+      "expected": {
+        "disabled": {
+          "completion": "normal",
+          "bodyEntered": true
+        },
+        "automatic": {
+          "completion": "normal",
+          "bodyEntered": true
+        },
+        "forced": {
+          "completion": "throw",
+          "bodyEntered": false,
+          "errorClass": "StaticTypeError",
+          "rule": "rt-constant-condition"
+        }
+      }
+    },
+    {
+      "id": "array-do-while",
+      "source": "function f() { do {} while ([]); }",
+      "expected": {
+        "disabled": {
+          "completion": "normal",
+          "bodyEntered": true
+        },
+        "automatic": {
+          "completion": "normal",
+          "bodyEntered": true
+        },
+        "forced": {
+          "completion": "throw",
+          "bodyEntered": false,
+          "errorClass": "StaticTypeError",
+          "rule": "rt-constant-condition"
+        }
+      }
+    },
+    {
+      "id": "empty-for-of",
+      "source": "for (const x of []) {}",
+      "expected": {
+        "disabled": {
+          "completion": "normal",
+          "bodyEntered": true
+        },
+        "automatic": {
+          "completion": "normal",
+          "bodyEntered": true
+        },
+        "forced": {
+          "completion": "throw",
+          "bodyEntered": false,
+          "errorClass": "StaticTypeError",
+          "rule": "rt-empty-iteration"
+        }
+      }
+    },
+    {
+      "id": "literal-call",
+      "source": "false();",
+      "expected": {
+        "disabled": {
+          "completion": "throw",
+          "bodyEntered": true,
+          "errorClass": "TypeError"
+        },
+        "automatic": {
+          "completion": "throw",
+          "bodyEntered": true,
+          "errorClass": "TypeError"
+        },
+        "forced": {
+          "completion": "throw",
+          "bodyEntered": false,
+          "errorClass": "StaticTypeError",
+          "rule": "rt-not-callable"
+        }
+      }
+    },
+    {
+      "id": "untyped-binding-call",
+      "source": "const f = 1; f();",
+      "expected": {
+        "disabled": {
+          "completion": "throw",
+          "bodyEntered": true,
+          "errorClass": "TypeError"
+        },
+        "automatic": {
+          "completion": "throw",
+          "bodyEntered": true,
+          "errorClass": "TypeError"
+        },
+        "forced": {
+          "completion": "throw",
+          "bodyEntered": true,
+          "errorClass": "TypeError"
+        }
+      }
+    },
+    {
+      "id": "unresolved-binding",
+      "source": "missingName;",
+      "expected": {
+        "disabled": {
+          "completion": "throw",
+          "bodyEntered": true,
+          "errorClass": "ReferenceError"
+        },
+        "automatic": {
+          "completion": "throw",
+          "bodyEntered": true,
+          "errorClass": "ReferenceError"
+        },
+        "forced": {
+          "completion": "throw",
+          "bodyEntered": true,
+          "errorClass": "ReferenceError"
+        }
+      }
+    },
+    {
+      "id": "explicit-runtime-error",
+      "source": "throw new RangeError(\"runtime\");",
+      "expected": {
+        "disabled": {
+          "completion": "throw",
+          "bodyEntered": true,
+          "errorClass": "RangeError"
+        },
+        "automatic": {
+          "completion": "throw",
+          "bodyEntered": true,
+          "errorClass": "RangeError"
+        },
+        "forced": {
+          "completion": "throw",
+          "bodyEntered": true,
+          "errorClass": "RangeError"
+        }
+      }
+    },
+    {
+      "id": "strict-syntax",
+      "source": "\"use strict\"; with ({}) {}",
+      "expected": {
+        "disabled": {
+          "completion": "throw",
+          "bodyEntered": false,
+          "errorClass": "SyntaxError"
+        },
+        "automatic": {
+          "completion": "throw",
+          "bodyEntered": false,
+          "errorClass": "SyntaxError"
+        },
+        "forced": {
+          "completion": "throw",
+          "bodyEntered": false,
+          "errorClass": "SyntaxError"
+        }
+      }
+    },
+    {
+      "id": "hashbang-strict-syntax",
+      "source": "#!/usr/bin/env node\n\"use strict\"; with ({}) {}",
+      "expected": {
+        "disabled": {
+          "completion": "throw",
+          "bodyEntered": false,
+          "errorClass": "SyntaxError"
+        },
+        "automatic": {
+          "completion": "throw",
+          "bodyEntered": false,
+          "errorClass": "SyntaxError"
+        },
+        "forced": {
+          "completion": "throw",
+          "bodyEntered": false,
+          "errorClass": "SyntaxError"
+        }
+      }
+    },
+    {
+      "id": "sloppy-duplicate-parameters",
+      "source": "function f(x, x) { return x; } String(f(1, 2));",
+      "expected": {
+        "disabled": {
+          "completion": "normal",
+          "bodyEntered": true,
+          "value": "2"
+        },
+        "automatic": {
+          "completion": "normal",
+          "bodyEntered": true,
+          "value": "2"
+        },
+        "forced": {
+          "completion": "normal",
+          "bodyEntered": true,
+          "value": "2"
+        }
+      }
+    },
+    {
+      "id": "explicit-boolean-test",
+      "source": "if (true) {}",
+      "expected": {
+        "disabled": {
+          "completion": "normal",
+          "bodyEntered": true
+        },
+        "automatic": {
+          "completion": "normal",
+          "bodyEntered": true
+        },
+        "forced": {
+          "completion": "normal",
+          "bodyEntered": true
+        }
+      }
+    },
+    {
+      "id": "unconditional-loop",
+      "source": "for (;;) { break; }",
+      "expected": {
+        "disabled": {
+          "completion": "normal",
+          "bodyEntered": true
+        },
+        "automatic": {
+          "completion": "normal",
+          "bodyEntered": true
+        },
+        "forced": {
+          "completion": "normal",
+          "bodyEntered": true
+        }
+      }
+    },
+    {
+      "id": "ordinary-effects",
+      "source": "globalThis.count = 0; for (let i = 0; i < 2; i++) count++; String(count);",
+      "expected": {
+        "disabled": {
+          "completion": "normal",
+          "bodyEntered": true,
+          "value": "2"
+        },
+        "automatic": {
+          "completion": "normal",
+          "bodyEntered": true,
+          "value": "2"
+        },
+        "forced": {
+          "completion": "normal",
+          "bodyEntered": true,
+          "value": "2"
+        }
+      }
+    }
+  ]
+}
