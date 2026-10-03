@@ -114,6 +114,44 @@ export function IsPendingTypeDeclarationReference(error: unknown): boolean {
   return identity !== undefined && (frames?.[frames.length - 1]?.has(identity) ?? false);
 }
 
+// Records under construction belong to actual bindings in the current agent.
+// They are never successful fallback types and leave no evidence on failure.
+const resolvingInterfaces = new WeakMap<object, Map<object, TypeRecord>>();
+
+/** Resolve an interface graph in its declaration environment without initializing its binding. */
+export function* ResolveInterfaceDeclaration(node: ParseNode.InterfaceDeclaration, environment: EnvironmentRecord): PlainEvaluator<TypeRecord> {
+  const identity = DeclarativeBindingIdentity(environment, Value(node.BindingIdentifier.name));
+  Assert(identity !== undefined);
+  let active = resolvingInterfaces.get(surroundingAgent);
+  if (!active) {
+    active = new Map();
+    resolvingInterfaces.set(surroundingAgent, active);
+  }
+  const pending = active.get(identity);
+  if (pending) return pending;
+  const outermost = active.size === 0;
+  let completed = false;
+  const structure: TypeRecord = { Kind: 'object', Properties: [], IndexSignatures: [] };
+  const record: TypeRecord = { Kind: 'nominal', Declaration: node, Arguments: [], Structure: structure };
+  active.set(identity, record);
+  const context = surroundingAgent.runningExecutionContext;
+  const outer = context.LexicalEnvironment;
+  context.LexicalEnvironment = environment;
+  try {
+    Q(yield* Evaluate_RuntimeTypesBindingDeclaration(node, true, (resolved) => {
+      Assert(resolved.Kind === 'nominal' && resolved.Structure !== undefined);
+      tieAliasKnot(structure, resolved.Structure);
+    }));
+    completed = true;
+    return record;
+  } finally {
+    context.LexicalEnvironment = outer;
+    // Reuse completed subgraphs only within this formation, including diamonds.
+    if (outermost) active.clear();
+    else if (!completed) active.delete(identity);
+  }
+}
+
 /**
  * @param rebind Rebuild the Type Object for a declaration already evaluated, and
  *   UPDATE its binding rather than initializing one.
@@ -450,11 +488,12 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       X(CreateDataPropertyOrThrow(obj, Value(String(i)), memberValues[i]));
     }
     value = obj;
+  } else if (node.type === 'InterfaceDeclaration' && !shapeOnly) {
+    value = GetTypeObject(Q(yield* ResolveInterfaceDeclaration(node, env)));
   } else if (node.type === 'InterfaceDeclaration') {
     // The interface's structural shape: annotated members check their type,
-    // method signatures check callability, and a member whose type cannot be
-    // resolved checks presence only. Operators and index signatures join with
-    // this later.
+    // method signatures retain their full contracts. An unresolved annotation
+    // propagates its completion rather than reducing the member to presence.
     // The interface's structure is a real ~object~ record now; membership
     // rides the structural IsOfType case, while identity stays nominal.
     // The runtime half. A generic
@@ -512,6 +551,10 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
         Arguments: [],
         Structure: callable,
       } as unknown as TypeRecord;
+      if (shapeOnly) {
+        shapeOnly(fnRecord);
+        return undefined;
+      }
       value = GetTypeObject(fnRecord);
     } else {
     for (const member of node.InterfaceMemberList) {
@@ -572,34 +615,9 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       }
       let resolved: TypeRecord = { Kind: 'any' };
       if (m.TypeAnnotation) {
-        // A member whose type will not resolve is REPORTED. The throw was
-        // discarded here, so `interface I { n: U; }` for an unbound `U` was
-        // accepted in silence - and so was `const q = 5; interface I { n: q; }`,
-        // where `q` is bound and is not a type.
-        //
-        // #sec-type-references states both and separates them: "`Tokne` is bound
-        // by nothing, so resolution walks the scope chain, finds nothing, and
-        // reports a *ReferenceError* as it would for any unbound name. `q` IS
-        // bound; it simply does not denote a type, which is a *TypeError*. A
-        // reader who mistyped a name and a reader who reached for a value are
-        // told different things because they made different mistakes."
-        //
-        // `TypeNodeToTypeRecord` already raises the right one of the two;
-        // propagating its completion is the whole fix. Every OTHER position
-        // already does this, which is why an object type reports `U` and an
-        // interface did not.
-        // A RECURSIVE or MUTUALLY recursive interface names a binding that is
-        // still initializing, and that answers "cannot be used before
-        // initialization" - which is not an unresolvable type, it is this
-        // declaration's own reference to itself. Those are left as they were,
-        // so `interface Node { next: Node | undefined; }` and
-        // `interface A { b: B; } interface B { a: A; }` keep working.
-        const attempt = EnsureCompletion(yield* TypeNodeToTypeRecord(m.TypeAnnotation.Type));
-        if (attempt.Type === 'normal') {
-          resolved = attempt.Value as TypeRecord;
-        } else if (!IsPendingTypeDeclarationReference(attempt.Value as ObjectValue)) {
-          return attempt;
-        }
+        // Recursive interface references return the pending graph node; an
+        // unrelated failed read must retain its original completion.
+        resolved = Q(yield* TypeNodeToTypeRecord(m.TypeAnnotation.Type));
       } else if (m.MethodSignature) {
         // This was a STUB - a function type
         // with NO signatures - so every comparison against a method member
@@ -648,29 +666,10 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
             popTypeParameterFrame();
           }
         }
-        // The marker a METHOD's [[ThisType]] is, attached as the checker
-        // attaches it: a class's method member carries it, [[ThisType]] is
-        // contravariant, and absence is not a wildcard - so an unmarked
-        // interface member refused the class that declared it.
-        // A method signature whose types will not resolve is REPORTED, as a data
-        // member's are - the same discard, one branch over.
-        //
-        // A bare parameter name IS a type reference: #sec-function-types gives
-        // `FunctionTypeParameter : \`ref\`? Type` and
-        // `\`ref\`? BindingIdentifier \`?\`? TypeAnnotation`, with no production
-        // for a name alone. So `greet(a)` declares a parameter of type `a`, and
-        // reporting an unbound `a` is correct - the function-type and
-        // object-type spellings, `(a) => uint8` and `{ greet(a) }`, both report
-        // it already and only the interface was silent.
-        //
-        // The recursive case is exempted as the data branch exempts it.
-        if (attempt.Type !== 'normal' && !IsPendingTypeDeclarationReference(attempt.Value as ObjectValue)) {
-          return attempt;
-        }
-        const built = attempt.Type === 'normal' ? attempt.Value as TypeRecord : undefined;
-        resolved = built && built.Kind === 'function'
+        const built = Q(attempt);
+        resolved = built.Kind === 'function'
           ? { Kind: 'function', Signatures: built.Signatures.map((sig) => ({ ...sig, ThisType: SelfThisTypeRecord })) }
-          : { Kind: 'function', Signatures: [] };
+          : built;
       }
       // The DECLARED DEFAULT travels with the member: a typed composite
       // creation fills it before freezing, so it is part of the contents that
@@ -763,6 +762,10 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       Arguments: [],
       Structure: { Kind: 'object', Properties, IndexSignatures },
     };
+    if (shapeOnly) {
+      shapeOnly(record);
+      return undefined;
+    }
     value = GetTypeObject(record);
     }
     } finally {

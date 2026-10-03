@@ -1,0 +1,478 @@
+{
+  "schemaVersion": 1,
+  "specification": [
+    "sec-recursive-interface-resolution",
+    "sec-declaration-preparation-state",
+    "sec-recursive-declaration-validation",
+    "sec-interfaces-semantics"
+  ],
+  "cases": [
+    {
+      "name": "recursive interface forms in a block",
+      "source": "{interface N {next:N|null;} let x:any={next:null}; String(x is N);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "recursive interface forms in a function",
+      "source": "function f(){interface N {next:N|null;} let x:any={next:null}; return String(x is N);} f();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "recursive interface forms in a arrow",
+      "source": "const f=()=>{interface N {next:N|null;} let x:any={next:null}; return String(x is N);}; f();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "recursive interface forms in a loop",
+      "source": "for(let i=0;i<2;i++){interface N {next:N|null;} let x:any={next:null}; String(x is N);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "recursive interface forms in a while",
+      "source": "let i=0; while(i++<1){interface N {next:N|null;} let x:any={next:null}; String(x is N);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "recursive interface forms in a do",
+      "source": "do{interface N {next:N|null;} let x:any={next:null}; String(x is N);}while(false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "recursive interface forms in a switch",
+      "source": "switch(1){case 1:interface N {next:N|null;} let x:any={next:null}; String(x is N); break;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "recursive interface forms in a try",
+      "source": "try{interface N {next:N|null;} let x:any={next:null}; String(x is N);}finally{}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "recursive interface forms in a catch",
+      "source": "try{throw 0;}catch(e){interface N {next:N|null;} let x:any={next:null}; String(x is N);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "recursive interface forms in a method",
+      "source": "class C {f(){interface N {next:N|null;} let x:any={next:null}; return String(x is N);}} new C().f();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "recursive interface forms in a generator",
+      "source": "function* f(){interface N {next:N|null;} let x:any={next:null}; return String(x is N);} f().next().value;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "top level retains valid nested value",
+      "source": "interface N {next:N|null;} let x:any={next:{next:null}}; String(x is N);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "top level retains invalid nested value",
+      "source": "interface N {next:N|null;} let x:any={next:{next:5}}; String(x is N);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "top level retains missing recursive member",
+      "source": "interface N {next:N|null;} let x:any={next:{}}; String(x is N);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "nested block retains valid nested value",
+      "source": "{interface N {next:N|null;} let x:any={next:{next:null}}; String(x is N);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "nested block retains invalid nested value",
+      "source": "{interface N {next:N|null;} let x:any={next:{next:5}}; String(x is N);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "nested block retains missing recursive member",
+      "source": "{interface N {next:N|null;} let x:any={next:{}}; String(x is N);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "mutual recursion rejects an invalid return edge",
+      "source": "{interface A {b:B|null;} interface B {a:A|null;} let x:any={b:{a:5}}; String(x is A);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "mutual recursion accepts a finite chain",
+      "source": "{interface A {b:B|null;} interface B {a:A|null;} let x:any={b:{a:null}}; String(x is A);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "forward interface retains its member contract",
+      "source": "{interface A {b:B|null;} interface B {value:uint8;} let x:any={b:{value:\"bad\"}}; String(x is A);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "forward formation leaves the expression binding uninitialized",
+      "source": "{interface A {b:B|null;} B; interface B {value:uint8;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "outer namesake does not supply an inner recursive type",
+      "source": "interface N {value:uint8;} {interface N {next:N|null;} let x:any={next:null}; String(x is N);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "forward outer declaration resolves its own captured type",
+      "source": "type V=uint8; { {type V=string; interface Use {target:Target;} let x:any={target:{value:\"bad\",next:null}}; String(x is Use);} interface Target {value:V;next:Target|null;} }",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "recursive method signature forms without erasure",
+      "source": "{interface N {f(n:N):N;} }",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "recursive callable signature forms without erasure",
+      "source": "{interface N {(n:N):N;} }",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "recursive index signature rejects invalid values",
+      "source": "{interface N {[k:string]:N|null;} let x:any={a:{b:5}}; String(x is N);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "recursive index signature accepts valid values",
+      "source": "{interface N {[k:string]:N|null;} let x:any={a:{b:null}}; String(x is N);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "recursive tuple member retains its leaf contract",
+      "source": "{interface N {next:[N|null];} let x:any={next:[{next:[5]}]}; String(x is N);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "recursive array member retains its element contract",
+      "source": "{interface N {next:[].<N>;} let x:any={next:[{next:[5]}]}; String(x is N);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "recursive generic member checks a nested value",
+      "source": "{interface N<T:type>{value:T;next:N.<T>|null;} let x:any={value:1,next:{value:\"bad\",next:null}}; String(x is N.<uint8>);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "recursive generic member accepts matching nested values",
+      "source": "{interface N<T:type>{value:T;next:N.<T>|null;} let x:any={value:\"a\",next:{value:\"b\",next:null}}; String(x is N.<string>);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "mutually recursive generics preserve bound arguments",
+      "source": "{interface A<T:type>{b:B.<T>|null;} interface B<T:type>{value:T;a:A.<T>|null;} let x:any={b:{value:5,a:null}}; String(x is A.<string>);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "alias edge into an interface keeps recursive structure",
+      "source": "{type Link=N|null; interface N {next:Link;} let x:any={next:{next:5}}; String(x is N);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "interface edge through an alias keeps recursive structure",
+      "source": "{interface N {next:Link;} type Link=N|null; let x:any={next:{next:5}}; String(x is N);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "runtime conversion cannot accept a weakened recursive member",
+      "source": "{interface N {next:N|null;} let x:any={next:{next:5}}; let n:N=x;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "unrelated uninitialized value is not a recursive declaration",
+      "source": "{interface N {next:V;} const V=5;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "initialized non-type value stays a native type failure",
+      "source": "function f(V){interface N {next:V;}} f(5);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "runtime-dependent captured type remains in its actual environment",
+      "source": "function f(T){interface N {value:T;next:N|null;} let x:any={value:1,next:{value:\"bad\",next:null}};return String(x is N);} f(uint8);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "failed formation does not poison a later activation",
+      "source": "function f(T){interface N {next:N|null;value:T;} return N;} try{f(5);}catch(e){} const T=f(uint8); let x:any={value:1,next:{value:\"bad\",next:null}}; String(x is T);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "failed forward formation restores the enclosing environment",
+      "source": "function f(T){type Local=uint8; try{interface A {b:B;} interface B {x:T;}}catch(e){} return String(Local === uint8);} f(5);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "unreachable nested declaration does not resolve a runtime capture",
+      "source": "function f(T){if(false){interface N {value:T;next:N|null;}}} f(5);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "bare alias cycle still rejects before source entry",
+      "source": "function unused(){type A=A;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNPRODUCTIVE_TYPE",
+          "rule": "rt-unproductive-type",
+          "phase": "static",
+          "location": {
+            "nodeType": "TypeAliasDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "inline alias cycle still rejects before source entry",
+      "source": "function unused(){type A={next:A};}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_LAYOUT",
+          "rule": "rt-layout",
+          "phase": "static",
+          "location": {
+            "nodeType": "TypeAliasDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "invalid recursive generic literal is still an early error",
+      "source": "function unused(){interface N<T:type>{value:T;next:N.<T>|null;} const n:N.<uint8>={value:1,next:{value:\"bad\",next:null}};}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "location": {
+            "nodeType": "ObjectLiteral"
+          }
+        }
+      }
+    },
+    {
+      "name": "exported recursion preserves a nested contract",
+      "modules": {
+        "main": "export interface N {next:N|null;} let x:any={next:{next:5}}; if(x is N){throw new Error(\"lost contract\");}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "module block supports recursion",
+      "modules": {
+        "main": "{interface N {next:N|null;} let x:any={next:null}; if(!(x is N)){throw new Error(\"lost contract\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported recursive interface retains the full graph",
+      "modules": {
+        "main": "import {N} from \"types\"; let x:any={next:{next:5}}; if(x is N){throw new Error(\"lost contract\");}",
+        "types": "export interface N {next:N|null;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "types",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "asynchronous module forms a nested interface after resumption",
+      "modules": {
+        "main": "await 0; {interface N {next:N|null;} let x:any={next:null}; if(!(x is N)){throw new Error(\"lost contract\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

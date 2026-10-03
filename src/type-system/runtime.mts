@@ -1,6 +1,7 @@
+import { EnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity } from '../execution-context/Environment.mts';
 import { TypeNameEnvironmentFor } from '../execution-context/TypeNames.mts';
 import { isRationalObject, rationalWidthOf } from '../intrinsics/Rational.mts';
-import { FamilyCasesOf, SpecializedClassConstructor } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
+import { FamilyCasesOf, SpecializedClassConstructor, ResolveInterfaceDeclaration } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { sourceTextOf } from '../parser/TokensOf.mts';
 import { FirstEvaluabilityViolation } from '../static-semantics/PreprocessorEvaluability.mts';
 import { wrappedParse } from '../parse.mts';
@@ -34,6 +35,7 @@ import { skipDebugger } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import { BuilderEvaluabilityViolation } from './builder-evaluability.mts';
+import { ResolveBindingDeclaration } from './compile-time-evaluability.mts';
 import { BeginFragmentEvaluation, EndFragmentEvaluation } from './fragment-library.mts';
 import { ApplyValidateHook, HasMetaHooks, MetaTypeClaiming, CheckedConvertValue, CrossBareValueIntoParameterization, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion, RegisteredEnumOf } from '../abstract-ops/runtime-types.mts';
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
@@ -5416,6 +5418,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
       // dead zone is a property of the binding.
       const resolved = EnsureCompletion(yield* GetValue(ref));
       let declared;
+      let declarationRecord: TypeRecord | undefined;
       if (resolved.Type === 'throw') {
         const declaration = declarationNamed(node, name);
         // #sec-type-alias-declarations: an alias may refer to itself. Its
@@ -5462,6 +5465,13 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
             }
           }
         }
+        const lexical = ResolveBindingDeclaration(node, name);
+        const uninitialized = UninitializedBindingIdentity(resolved.Value);
+        if (lexical?.node.type === 'InterfaceDeclaration' && !lexical.node.Partial
+          && ref.Base instanceof EnvironmentRecord && uninitialized !== undefined
+          && uninitialized === DeclarativeBindingIdentity(ref.Base, Value(name))) {
+          declarationRecord = Q(yield* ResolveInterfaceDeclaration(lexical.node, ref.Base));
+        }
         if (declaration && (declaration.type === 'ClassDeclaration' || declaration.type === 'ClassExpression')) {
           // A Type Object over the declaration, so the resolution continues
           // down the SAME path an initialized binding takes - including the
@@ -5471,7 +5481,10 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
           declared = GetTypeObject({ Kind: 'nominal', Declaration: declaration, Arguments: [] });
         }
       }
-      const value = declared !== undefined ? declared as unknown as Value : Q(resolved);
+      let value: Value;
+      if (declarationRecord) value = Value.undefined;
+      else if (declared !== undefined) value = declared as unknown as Value;
+      else value = Q(resolved);
       // proposal-runtime-types: resolve the name to a base Type Record. The name
       // is either bound to a Type Object, or it is a class constructor whose
       // associated class type we look up. A generic type alias is expanded eagerly
@@ -5479,7 +5492,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
       // arguments through the single attach point below, so a name that resolves
       // as a Type Object and a name that resolves as a constructor instantiate
       // consistently.
-      let baseRecord: TypeRecord | null = null;
+      let baseRecord: TypeRecord | null = declarationRecord ?? null;
       if (isTypeObject(value)) {
         const record = value.TypeRecord;
         if (record.Kind === 'nominal' && record.Declaration.type === 'TypeAliasDeclaration' && (record.Declaration as ParseNode.TypeAliasDeclaration).TypeParameters) {
