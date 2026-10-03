@@ -1,0 +1,910 @@
+{
+  "schemaVersion": 1,
+  "specification": [
+    "sec-generic-where",
+    "sec-bindtypearguments",
+    "sec-type-errors",
+    "sec-module-type-checking-order"
+  ],
+  "cases": [
+    {
+      "name": "Top-level closed alias constraint rejects before body entry",
+      "source": "type Pos<N:uint32> = uint8 where N > 2; function unused(){ let x:Pos.<1>; }",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 27,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Nested alias constraint rejects an uncalled invalid application",
+      "source": "function unused(){ type Pos<N:uint32> = uint8 where N > 2; let x:Pos.<1>; }",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 46,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Inner alias uses its own satisfied constraint",
+      "source": "type Pos<N:uint32> = uint8 where N > 2; function unused(){type Pos<N:uint32> = uint8 where N < 4; let x:Pos.<1>;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Inner alias uses its own failed constraint",
+      "source": "type Pos<N:uint32> = uint8 where N > 2; function unused(){type Pos<N:uint32> = uint8 where N < 4; let x:Pos.<9>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 85,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Unconstrained inner alias does not inherit an outer clause",
+      "source": "type Pos<N:uint32> = uint8 where N > 2; function unused(){type Pos<N:uint32> = uint8; let x:Pos.<1>;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Alias application is checked at modest nesting depth",
+      "source": "type Pos<N:uint32>=uint8 where N>2; function unused(){{{{{{{{{{{let x:Pos.<1>;}}}}}}}}}}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 25,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Alias application is checked beyond the old traversal cutoff",
+      "source": "type Pos<N:uint32>=uint8 where N>2; function unused(){{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{let x:Pos.<1>;}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 25,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Alias application is checked at a second deeper nesting depth",
+      "source": "type Pos<N:uint32>=uint8 where N>2; function unused(){{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{let x:Pos.<1>;}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 25,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Named arguments reject using their parameter names",
+      "source": "type P<N:uint32,M:uint32>=uint8 where N<M; function unused(){let x:P.<M:1,N:3>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 32,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Reordered named arguments retain the accepted binding",
+      "source": "type P<N:uint32,M:uint32>=uint8 where N<M; function unused(){let x:P.<M:3,N:1>;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Bare alias applies defaults before checking its constraint",
+      "source": "type P<N:uint32=0>=uint8 where N>0; function unused(){let x:P;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 25,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Empty argument list applies defaults before checking its constraint",
+      "source": "type P<N:uint32=0>=uint8 where N>0; function unused(){let x:P.<>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 25,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Satisfied defaulted alias remains accepted",
+      "source": "type P<N:uint32=1>=uint8 where N>0; function unused(){let x:P;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Dependent defaults supply the actual constraint bindings",
+      "source": "type P<N:uint32=3,M:uint32=N>=uint8 where N<M; function unused(){let x:P;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 36,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Spread arguments reject after ordinary binding",
+      "source": "type P<N:uint32,M:uint32>=uint8 where N<M; function unused(){let x:P.<...[3,1]>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 32,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Valid spread arguments remain accepted",
+      "source": "type P<N:uint32,M:uint32>=uint8 where N<M; function unused(){let x:P.<...[1,3]>;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Value pack constraint checks every bound element",
+      "source": "type P<...N:[].<uint32>>=uint8 where N.every(n=>n>0); function unused(){let x:P.<1,0>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 31,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Satisfied value pack constraint remains accepted",
+      "source": "type P<...N:[].<uint32>>=uint8 where N.every(n=>n>0); function unused(){let x:P.<1,2>;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Unbound outer generic argument retains an open obligation",
+      "source": "type P<N:uint32>=uint8 where N>0; function unused<N:uint32>(x:P.<N>){}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Enclosing specialization closes an erased alias constraint",
+      "source": "type P<N:uint32>=uint8 where N>0; function f<N:uint32>(x:P.<N>){} function unused(){f.<0>(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 23,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Satisfied enclosing specialization remains accepted",
+      "source": "type P<N:uint32>=uint8 where N>0; function f<N:uint32>(x:P.<N>){} f.<2>(1);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Alias result use cannot discard a failed constraint",
+      "source": "type P<N:uint32>=uint8 where N>0; type Q=P.<0>; function unused(x:Q){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 23,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "One application retains different enclosing specialization bindings",
+      "source": "type P<N:uint32>=uint8 where N>0; function f<N:uint32>(x:P.<N>){} function unused(){f.<1>(1);f.<0>(1);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 23,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Available pure helper remains an early constraint check",
+      "source": "function positive(N){return N>0;} type P<N:uint32>=uint8 where positive(N); function unused(){let x:P.<0>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 57,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Type parameter predicate can compare an intrinsic Type Object",
+      "source": "type P<T:type>=uint8 where T===string; function unused(){let x:P.<uint8>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 21,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Checking an uncalled alias does not execute a mutable closure",
+      "source": "let calls=0; function predicate(){calls++;return false;} type P<N:uint32>=uint8 where predicate(); function unused(){let x:P.<1>;} if(calls!==0)throw new Error(\"unexpected calls\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Uninstantiated enclosing parameter remains a runtime dependency",
+      "source": "function unused(limit){type P<N:uint32>=uint8 where N>limit;let x:P.<2>;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Direct eval exposes the nested alias rejection to its caller",
+      "source": "let caught=false; try{eval(\"function unused(){type P<N:uint32>=uint8 where N>0;let x:P.<0>;}\");}catch(e){caught=e instanceof StaticTypeError;} if(!caught)throw new Error(\"missing rejection\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Dynamic function creation rejects a closed nested alias constraint",
+      "source": "let caught=false;try{new Function(\"function unused(){type P<N:uint32>=uint8 where N>0;let x:P.<0>;}\");}catch(e){caught=e instanceof StaticTypeError;}if(!caught)throw new Error(\"missing rejection\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Valid nested alias application still produces its runtime value",
+      "source": "function run(){type P<N:uint32>=uint8 where N>0;let x:P.<2>=1;return x;}if(String(run())!==\"1\")throw new Error(\"wrong value\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "A value parameter does not inherit a same-spelled alias constraint",
+      "source": "type P<N:uint32>=uint8 where N>0; function unused(P){let x:P.<0>;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "A higher-kinded parameter does not inherit an outer alias constraint",
+      "source": "type P<N:uint32>=uint8 where N>0; function unused<P<_>:type>(x:P.<0>){}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Closed alias constraint is retained in a block",
+      "source": "function unused(){ {type P<N:uint32>=uint8 where N>0;let x:P.<0>;} }",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 43,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Closed alias constraint is retained in a unreachable if branch",
+      "source": "function unused(){if(false){type P<N:uint32>=uint8 where N>0;let x:P.<0>;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 51,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Closed alias constraint is retained in a while body",
+      "source": "function unused(){while(false){type P<N:uint32>=uint8 where N>0;let x:P.<0>;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 54,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Closed alias constraint is retained in a for body",
+      "source": "function unused(){for(;false;){type P<N:uint32>=uint8 where N>0;let x:P.<0>;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 54,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Closed alias constraint is retained in a do body",
+      "source": "function unused(){do{type P<N:uint32>=uint8 where N>0;let x:P.<0>;}while(false);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 44,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Closed alias constraint is retained in a switch clause",
+      "source": "function unused(flag:any){switch(flag){case 0:{type P<N:uint32>=uint8 where N>0;let x:P.<0>;}break;default:break;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 70,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Closed alias constraint is retained in a try body",
+      "source": "function unused(){try{type P<N:uint32>=uint8 where N>0;let x:P.<0>;}catch(e){}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 45,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Closed alias constraint is retained in a finally body",
+      "source": "function unused(){try{}finally{type P<N:uint32>=uint8 where N>0;let x:P.<0>;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 54,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Closed alias constraint is retained in a arrow function",
+      "source": "const unused=()=>{type P<N:uint32>=uint8 where N>0;let x:P.<0>;};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 41,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Closed alias constraint is retained in a generator",
+      "source": "function* unused(){type P<N:uint32>=uint8 where N>0;let x:P.<0>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 42,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Closed alias constraint is retained in a async function",
+      "source": "async function unused(){type P<N:uint32>=uint8 where N>0;let x:P.<0>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 47,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Closed alias constraint is retained in a async generator",
+      "source": "async function* unused(){type P<N:uint32>=uint8 where N>0;let x:P.<0>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 48,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Closed alias constraint is retained in a class method",
+      "source": "class C {unused(){type P<N:uint32>=uint8 where N>0;let x:P.<0>;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 41,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Forward alias reference retains the declaration constraint",
+      "source": "function unused(){let x:P.<0>;type P<N:uint32>=uint8 where N>0;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 53,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Sibling scopes keep distinct same-spelled alias constraints",
+      "source": "function a(){type P<N:uint32>=uint8 where N>0;let x:P.<1>;}function b(){type P<N:uint32>=uint8 where N<0;let x:P.<1>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 95,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Nested helper is not replaced with a same-spelled outer function",
+      "source": "function positive(N){return false;} type P<N:uint32>=uint8 where N>0;function unused(){function positive(N){return true;}type P<N:uint32>=uint8 where positive(N);let x:P.<1>;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Mutable helper is not invoked speculatively",
+      "source": "let calls=0;function predicate(){calls++;return true;}type P<N:uint32>=uint8 where predicate();function unused(){let x:P.<1>;}if(calls!==0)throw new Error(\"wrong effect\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Reassigned helper is not treated as a fixed predicate",
+      "source": "function predicate(){return false;}predicate=()=>true;type P<N:uint32>=uint8 where predicate();function unused(){let x:P.<1>;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Runtime-subject clause remains a boundary check",
+      "source": "type P<N:uint32>={value:uint8} where this.value>N;function unused(x:P.<1>){}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Satisfied pure-helper predicate retains runtime behavior",
+      "source": "function positive(N){return N>0;}type P<N:uint32>=uint8 where positive(N);let x:P.<1>=1;if(String(x)!==\"1\")throw new Error(\"wrong value\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Signed zero remains a distinct generic constraint input",
+      "source": "type P<N:number>=uint8 where 1/N>0;function unused(){let x:P.<0>;let y:P.<-0>;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation",
+          "location": {
+            "start": 23,
+            "nodeType": "WhereClause"
+          }
+        }
+      }
+    },
+    {
+      "name": "Runtime-dependent alias constraint retains its runtime TypeError",
+      "source": "function run(limit){type P<N:uint32>=uint8 where N>limit;let x:P.<2>=1;}run(3);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "Module checks a closed nested alias before its own body",
+      "modules": {
+        "main": "function unused(){ type Pos<N:uint32> = uint8 where N > 2; let x:Pos.<1>; }"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "Exported generic alias uses ordinary named argument binding",
+      "modules": {
+        "main": "export type P<N:uint32,M:uint32>=uint8 where N<M; function unused(){let x:P.<M:1,N:3>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "Dependency effects precede a nested alias failure",
+      "modules": {
+        "main": "import \"dep\"; function unused(){ type Pos<N:uint32> = uint8 where N > 2; let x:Pos.<1>; }",
+        "dep": "export const n=1;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "Asynchronous dependency completes before nested alias checking",
+      "modules": {
+        "main": "import \"dep\"; function unused(){ type Pos<N:uint32> = uint8 where N > 2; let x:Pos.<1>; }",
+        "dep": "await 0; export const n=1;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "Module lexical shadowing retains its accepted alias",
+      "modules": {
+        "main": "type Pos<N:uint32> = uint8 where N > 2; function unused(){type Pos<N:uint32> = uint8 where N < 4; let x:Pos.<1>;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "Imported predicate retains its original callable binding",
+      "modules": {
+        "main": "import {positive} from \"dep\"; type P<N:uint32>=uint8 where positive(N);function unused(){let x:P.<0>;}",
+        "dep": "export function positive(N){return N>0;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "Imported satisfied predicate retains its result",
+      "modules": {
+        "main": "import {positive} from \"dep\"; type P<N:uint32>=uint8 where positive(N);let x:P.<2>=1;",
+        "dep": "export function positive(N){return N>0;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "Re-exported predicate retains its lexical declaration",
+      "modules": {
+        "main": "import {positive} from \"facade\"; type P<N:uint32>=uint8 where positive(N);function unused(){let x:P.<0>;}",
+        "facade": "export {positive} from \"dep\";",
+        "dep": "export function positive(N){return N>0;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "facade"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { EnsureCompletion, Q, X } from '../completion.mts';
-import { FirstFreeReference } from '../static-semantics/PreprocessorEvaluability.mts';
+import { FirstFreeReference, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
 import { ModuleEnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity } from '../execution-context/Environment.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { RequireType, ConvertValue, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault, PrimitiveCastsFor, CastCoversTarget } from '../abstract-ops/runtime-types.mts';
@@ -13,7 +13,7 @@ import { JSStringValue, ObjectValue, Value } from '../value.mts';
 import { CreateTypeDiagnostic, TypeDiagnosticApplies, TypeDiagnosticOf } from './diagnostics.mts';
 import type { TypeRecord } from './records.mts';
 import {
-  DefaultValueOf, EvaluateAliasApplicationClauses, TypeNodeToTypeRecord, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame,
+  DefaultValueOf, TypeNodeToTypeRecord, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame,
   EvaluateRefinementPredicate, ValuePackView, InferGenericBindingsFrom, staticArguments, markValueParameterBinding } from './runtime.mts';
 import { GenericWhereVerified, MarkGenericWhereVerified } from './generic-where.mts';
 import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
@@ -30,6 +30,7 @@ import {
 import { BeginTypeEvaluation, BudgetExhaustionKind, EndTypeEvaluation, IsBudgetExhausted } from './budget.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import { ResolveBindingDeclaration } from './compile-time-evaluability.mts';
+import { TypeExpressionEvaluabilityViolation } from './builder-evaluability.mts';
 import { BeginFragmentEvaluation, EndFragmentEvaluation } from './fragment-library.mts';
 import { Evaluate, Get, GetValue, inspect, Throw, DeclarativeEnvironmentRecord, InstantiateFunctionObject, surroundingAgent } from '#self';
 
@@ -296,83 +297,6 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   // where it can be used - but that walk only runs when narrowing recorded
   // something, so an alias-annotated binding never reached it.
   let computedAliasResolved = false;
-  // #sec-generic-where: a violated
-  // clause is a type error at the SPECIALIZATION, and a written application's
-  // arguments are in the source - so it is determinable, and #sec-type-errors
-  // then makes it an Early Error: "a source text that contains one is rejected
-  // rather than evaluated".
-  //
-  // Collected here rather than checked in `check.mts` because the checker is
-  // SYNCHRONOUS and a predicate reaches user code through `yield*`. This loop is
-  // a generator and runs before the checker walks, which is the same shape the
-  // ComputedType pre-evaluation above already uses.
-  //
-  // Keyed by the APPLICATION node, not the alias name: `Pos.<3>` and `Pos.<0>`
-  // are two applications of one name and must not share a verdict.
-  const aliasDeclarations = new Map<string, ParseNode>();
-  for (const item of items ?? []) {
-    if (item.type === 'TypeAliasDeclaration') {
-      const declName = (item as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
-      const cls = (item as { WhereClauses?: readonly ParseNode[] | null }).WhereClauses;
-      if (typeof declName === 'string' && cls && cls.length > 0
-          && (item as { TypeParameters?: unknown }).TypeParameters) {
-        aliasDeclarations.set(declName, item);
-      }
-    }
-  }
-  if (aliasDeclarations.size > 0) {
-    const applications: { node: ParseNode, declaration: ParseNode }[] = [];
-    // A visited set, because a Parse Node graph has PARENT links: `node.parent`
-    // points back up, so a plain recursive walk revisits forever. The same trap
-    // the contract-fact walk met, and the reason that one carries a set too.
-    const seen = new Set<object>();
-    const seek = (node: ParseNode | null | undefined, depth = 0): void => {
-      if (!node || typeof node !== 'object' || depth > 40 || seen.has(node)) {
-        return;
-      }
-      seen.add(node);
-      if ((node as { type?: string }).type === 'TypeReference'
-          && (node as { TypeArguments?: unknown }).TypeArguments) {
-        const named = (node as { TypeName?: { IdentifierReference?: { name?: string } } })
-          .TypeName?.IdentifierReference?.name;
-        const decl = typeof named === 'string' ? aliasDeclarations.get(named) : undefined;
-        if (decl) {
-          applications.push({ node, declaration: decl });
-        }
-      }
-      for (const key of Object.keys(node)) {
-        if (key === 'parent' || key === 'location' || key === 'source') {
-          continue;
-        }
-        let value;
-        try {
-          value = (node as unknown as Record<string, unknown>)[key];
-        } catch {
-          continue;
-        }
-        if (Array.isArray(value)) {
-          value.forEach((v) => seek(v as ParseNode, depth + 1));
-        } else if (value && typeof value === 'object') {
-          seek(value as ParseNode, depth + 1);
-        }
-      }
-    };
-    (items ?? []).forEach((i) => seek(i));
-    for (const applied of applications) {
-      const verdict = EnsureCompletion(yield* EvaluateAliasApplicationClauses(
-        applied.declaration as never, applied.node as never,
-      ));
-      if (verdict.Type === 'throw') {
-        return verdict;
-      }
-      if (verdict.Value !== undefined) {
-        const clause = verdict.Value as ParseNode.WhereClause;
-        surroundingAgent.runningExecutionContext.callSite.setLocation(clause as never);
-        return CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation',
-          'a $1 clause is not satisfied by this application', Value('where'));
-      }
-    }
-  }
   for (const item of items ?? []) {
     if (item.type === 'TypeAliasDeclaration' || item.type === 'InterfaceDeclaration') {
       const attempt = EnsureCompletion(yield* Evaluate_RuntimeTypesBindingDeclaration(item));
@@ -517,6 +441,10 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       return CreateTypeDiagnostic('rt-default-conversion', check.initializer ?? root, 'pre-evaluation', 'a default is not convertible to $1', Value(displayType(check.type)));
     }
   }
+  const availableDeclarations = new Set<ParseNode>(items.flatMap((item) => {
+    const declaration = item.type === 'ExportDeclaration' ? item.HoistableDeclaration : item;
+    return declaration?.type === 'FunctionDeclaration' || declaration?.type === 'ImportDeclaration' ? [declaration] : [];
+  }));
   for (const check of GenericWhereChecksOf(root)) {
     const parameters = check.declaration.TypeParameters!.TypeParameterList;
     const frame = new Map<string, TypeRecord>();
@@ -527,7 +455,17 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     const available = new Set(frame.keys());
     for (const clause of check.clauses) {
       const predicate = clause.RefinementPredicate;
-      if (GenericWhereVerified(clause, frame) || FirstNonEvaluableForm(predicate) || FirstFreeReference(predicate, available)) continue;
+      if (GenericWhereVerified(clause, frame) || FirstNonEvaluableForm(predicate)) continue;
+      // Free names must denote available source bindings, never a same-spelled
+      // outer value in place of an uninstantiated nested declaration.
+      const admitted = new Set(available);
+      for (const reference of FreeReferences(predicate)) {
+        if (admitted.has(reference.name)) continue;
+        const binding = ResolveBindingDeclaration(reference, reference.name);
+        if ((!binding && (builtinTypeRecord(reference.name) || FRAGMENT_FLOOR.includes(reference.name)))
+          || ((binding?.kind === 'function' || binding?.kind === 'import') && availableDeclarations.has(binding.node))) admitted.add(reference.name);
+      }
+      if (FirstFreeReference(predicate, admitted) || TypeExpressionEvaluabilityViolation(predicate)) continue;
       // Runtime subjects and writes require their evaluation-time environment.
       const hasRuntimeSubject = (node: ParseNode): boolean => {
         if (['ThisExpression', 'ContractReturn', 'AssignmentExpression', 'UpdateExpression'].includes(node.type)
@@ -541,7 +479,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       if (hasRuntimeSubject(predicate)) continue;
       const context = surroundingAgent.runningExecutionContext;
       const outer = context.LexicalEnvironment;
-      const scope = new DeclarativeEnvironmentRecord(null);
+      const scope = new DeclarativeEnvironmentRecord(outer);
       for (const parameter of parameters) {
         const name = parameter.BindingIdentifier.name;
         const bound = frame.get(name)!;

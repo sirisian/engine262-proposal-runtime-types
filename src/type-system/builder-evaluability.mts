@@ -14,6 +14,10 @@ function sourceRoot(node: ParseNode): ParseNode {
 
 /** Check the original lexical declarations; neither reading values nor running bodies is needed. */
 export function BuilderEvaluabilityViolation(call: ParseNode.ComputedType, callee: Value): string | undefined {
+  return TypeExpressionEvaluabilityViolation(call, callee);
+}
+
+export function TypeExpressionEvaluabilityViolation(expression: ParseNode, callee: Value = Value.undefined): string | undefined {
   const fn = callee as { ECMAScriptCode?: { parent?: ParseNode }, ScriptOrModule?: unknown };
   const modules = new Map<ParseNode, SourceTextModuleRecord>();
   for (const module of [surroundingAgent.runningExecutionContext.ScriptOrModule, fn.ScriptOrModule]) {
@@ -99,5 +103,5 @@ export function BuilderEvaluabilityViolation(call: ParseNode.ComputedType, calle
     return facts.eval || facts.declarations.has(declaration.node);
   };
   const violation = CompileTimeEvaluabilityChecker({ resolve, assigned });
-  return violation(call) ?? (fn.ECMAScriptCode?.parent ? violation(fn.ECMAScriptCode.parent) : undefined);
+  return violation(expression) ?? (fn.ECMAScriptCode?.parent ? violation(fn.ECMAScriptCode.parent) : undefined);
 }

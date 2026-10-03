@@ -761,7 +761,7 @@ export function SetEvaluatedGenericDefault(application: object, node: object, ty
 }
 
 export interface GenericWhereCheck {
-  readonly declaration: ParseNode.FunctionDeclaration;
+  readonly declaration: ParseNode.FunctionDeclaration | ParseNode.TypeAliasDeclaration;
   readonly clauses: readonly ParseNode.WhereClause[];
   readonly bindings: ReadonlyMap<string, TypeRecord>;
 }
@@ -2947,7 +2947,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const defaultConversions: DefaultConversionCheck[] = [];
   const specializedDefaultBindings: ReadonlyMap<string, TypeRecord>[] = [];
   const genericDefaults: GenericDefaultCheck[] = [];
-  const whereChecks = new Map<object, GenericWhereCheck>();
+  const whereChecks = new Map<object, GenericWhereCheck[]>();
+  const recordWhereCheck = (application: object, declaration: GenericWhereCheck['declaration'], bindings: ReadonlyMap<string, TypeRecord>): void => {
+    const clauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
+    if (!clauses?.length) return;
+    const checks = whereChecks.get(application) ?? [];
+    if (checks.some((check) => check.declaration === declaration && check.bindings.size === bindings.size
+      && [...bindings].every(([name, bound]) => check.bindings.has(name) && SameType(bound, check.bindings.get(name)!)))) return;
+    checks.push({ declaration, clauses, bindings: new Map(bindings) });
+    whereChecks.set(application, checks);
+  };
   const signatureDeclarations = new WeakMap<object, ParseNode>();
   const formalPatternBindings = new WeakMap<object, ReadonlyMap<string, TypeRecord>>();
 
@@ -4273,6 +4282,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const visit = (node: ParseNode, available: ReadonlyMap<string, TypeRecord>): void => {
       const scoped = new Map(available);
       if (node !== declaration) for (const name of typeParameterNamesOf(node) ?? []) scoped.delete(name);
+      // An alias can erase its parameters from its result type while its
+      // predicate still depends on them. Close that retained obligation too.
+      for (const check of [...(whereChecks.get(node) ?? [])]) {
+        if (check.declaration.type !== 'TypeAliasDeclaration'
+          || ![...check.bindings.values()].some((bound) => mentionsTypeParameter(bound))) continue;
+        const closed = new Map<string, TypeRecord>();
+        for (const [name, bound] of check.bindings) {
+          const resolved = substituteTypeParameters(bound, scoped);
+          if (resolved) closed.set(name, resolved);
+        }
+        if (closed.size === check.bindings.size) recordWhereCheck(node, check.declaration, closed);
+      }
       if (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') {
         checkOwnFieldContracts(node, scoped);
         checkOverrideArgumentObligations(node, scoped);
@@ -11652,6 +11673,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const bindings = new Map<string, TypeRecord>();
             bindExplicitTypeArguments(parameters, rawArgList, bindings, { complete: true, application: node });
             if (bindings.size !== parameters.length) return null;
+            // #sec-generic-where: retain the resolved declaration and bound
+            // arguments, including named, defaulted and spread arguments.
+            if (genericDeclaration.type === 'TypeAliasDeclaration') recordWhereCheck(node, genericDeclaration, bindings);
             // #sec-specialization-lists: a family with CASES selects before either shape
             // is assumed - an alias's right-hand side, an interface's contract.
             // Returning the primary here bypassed case selection entirely.
@@ -17657,7 +17681,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const clauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] } | undefined)?.WhereClauses;
           if (base.Signatures.length === 1 && declaration?.type === 'FunctionDeclaration'
             && clauses?.length && [...bindings.values()].every((type) => !mentionsTypeParameter(type))) {
-            whereChecks.set(node, { declaration, clauses, bindings });
+            recordWhereCheck(node, declaration, bindings);
           }
           const substituted = substituteTypeParameters({ Kind: 'function', Signatures: [signature] }, bindings);
           const specialized = { ...(substituted as typeof base).Signatures[0]!,
@@ -35468,7 +35492,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   defaultRequirements.set(root, defaultsNeeded);
   defaultConversionChecks.set(root, defaultConversions);
   genericDefaultChecks.set(root, genericDefaults);
-  genericWhereChecks.set(root, [...whereChecks.values()]);
+  genericWhereChecks.set(root, [...whereChecks.values()].flat()
+    .filter((check) => [...check.bindings.values()].every((bound) => !mentionsTypeParameter(bound))));
 
   restoreFlow(new Map());
   return errors;

@@ -5081,9 +5081,9 @@ export function* VerifyContracts(fn: object, result: Value, args: readonly Value
     //
     // The guard decided TWO things and should have decided one: when to push the
     // binding, which is cheap enough to do unconditionally, and whether to
-    // evaluate, which was never its business. EvaluateAliasApplicationClauses
-    // already evaluates every clause without such a guard, so a builder's
-    // clauses and an alias's now behave alike.
+    // evaluate, which was never its business. A specialization predicate is
+    // evaluated with its bound parameters; a result contract likewise needs
+    // the result binding for every clause.
     PushContractReturn(result);
     let verdict;
     try {
