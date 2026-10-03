@@ -25394,6 +25394,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   let inferenceDepth = 0;
 
+  // A transparent local may contribute its initializer's type without deriving
+  // that type from an annotation. Keep that provenance separate from the type.
+  const inferenceBindingAnchors = new WeakMap<Frame, Map<string, boolean>>();
+  const recordInferenceAnchor = (name: string, anchored: boolean): void => {
+    const frame = frames[frames.length - 1];
+    if (!inferenceBindingAnchors.has(frame)) inferenceBindingAnchors.set(frame, new Map());
+    inferenceBindingAnchors.get(frame)!.set(name, anchored);
+  };
+
   /**
    * #sec-inference-fixpoint: the signatures whose inference is running right
    * now. A contribution that reaches one of them is a recursive reference, and
@@ -25477,9 +25486,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /**
    * Whether a TYPE has exactly one value: a ~literal~, or the ~primitive~
    * `null` or `undefined` (#sec-null-and-undefined-types gives those two
-   * [[Kind]]: ~primitive~). Such a type "knows its type perfectly well and
-   * still says nothing a program annotated", so a contribution of it is
-   * unanchored - see `derivesFromDeclaration`, which reads this first.
+   * [[Kind]]: ~primitive~). A literal expression of such a type does not
+   * establish an anchor. A binding's declaration provenance is checked first:
+   * a singleton annotation is still an annotation.
    */
   const selfDescribingType = (t: { Kind?: string, Name?: string } | null | undefined): boolean => !!t
     && (t.Kind === 'literal'
@@ -25489,11 +25498,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * #sec-anchored-contributions: whether a contribution is ANCHORED, meaning its
    * Static Type derives from a declared type rather than from a literal alone.
    *
-   * A literal type is the mark of an unanchored contribution: `return 'foo'`
-   * knows its type perfectly well and still says nothing a program annotated,
-   * while `return f()` where `f` declares `: uint32` reports `uint32` because a
-   * declaration said so, and a read of a typed binding reports its annotation
-   * for the same reason. An unknown contribution derives from nothing at all.
+   * Binding reads retain their declaration provenance through singleton
+   * narrowing and parentheses. Transparent inference locals retain their
+   * initializer's provenance separately from its widened type. For other
+   * expressions, self-describing literals supply no declaration evidence.
    *
    * A known, non-literal contribution is NOT therefore anchored, because a
    * form that DESCRIBES ITSELF derives from no declaration either: an object
@@ -25510,6 +25518,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * decided where the array is built.
    */
   const derivesFromDeclaration = (expr: ParseNode | null | undefined, t: { Kind?: string, Name?: string } | null | undefined): boolean => {
+    expr = expr ? patternExpression(expr) : expr;
+    if (expr?.type === 'IdentifierReference') {
+      for (let i = frames.length - 1; i >= 0; i -= 1) {
+        const anchor = inferenceBindingAnchors.get(frames[i])?.get(expr.name);
+        if (anchor !== undefined) return anchor;
+        if (frames[i].declaredNames.has(expr.name)) break;
+      }
+      const declared = lookupDeclared(expr.name);
+      return !!declared && declared.Kind !== 'any';
+    }
     if (!t || selfDescribingType(t)) {
       return false;
     }
@@ -25813,6 +25831,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    *    collected; the walk stops at every function form.
    */
   const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known = null, anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] } = { anchored: false }, mode: 'return' | 'yield' | 'resolve' | 'generator-return' = 'return'): Known => {
+    // A closure reads captured storage when called, not when its declaration
+    // is visited. Its published result cannot freeze the current value facts
+    // of the enclosing walk. Preserve the declared contracts and restore the
+    // caller's flow state even if inference exits abruptly.
+    const outerFlow = captureFlow();
+    restoreFlow();
+    try {
+      return inferredReturnTypeInScope(fn, parameterTypes, wanted, anchorage, mode);
+    } finally {
+      restoreFlow(outerFlow);
+    }
+  };
+
+  const inferredReturnTypeInScope = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known, anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] }, mode: 'return' | 'yield' | 'resolve' | 'generator-return'): Known => {
     // A method's parameters are its UniqueFormalParameters, and a getter has
     // none at all.
     const params = (fn as { ArrowParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[] }).ArrowParameters
@@ -25969,9 +26001,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             if (bound.TypeAnnotation) {
               const bt = resolveType(bound.TypeAnnotation.Type);
-              if (bt) {
-                declare(bname, bt);
-              }
+              declare(bname, bt);
+              recordInferenceAnchor(bname, !!bt && bt.Kind !== 'any');
               continue;
             }
             // An UNANNOTATED local that cannot change is a name for its
@@ -26003,9 +26034,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             if (cannotChange && init) {
               const initType = staticType(init) ?? objectLiteralShape(init);
-              if (initType) {
-                declare(bname, widen(initType));
-              }
+              const anchored = derivesFromDeclaration(init, initType);
+              declare(bname, initType ? widen(initType) : null);
+              recordInferenceAnchor(bname, anchored);
+            } else {
+              declare(bname, null);
+              recordInferenceAnchor(bname, false);
             }
           }
           // A DESTRUCTURING pattern binds names too, and each takes the type of
@@ -26056,6 +26090,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 const declaredHere = resolveType(el.TypeAnnotation.Type);
                 if (declaredHere) {
                   declare(name, declaredHere);
+                  recordInferenceAnchor(name, declaredHere.Kind !== 'any');
                 }
                 return;
               }
@@ -26066,6 +26101,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 return;
               }
               declare(name, widen(positionType));
+              recordInferenceAnchor(name, derivesFromDeclaration(init, sourceType));
             };
             if (pattern.type === 'ObjectBindingPattern') {
               const props = (pattern as unknown as { BindingPropertyList?: readonly ParseNode[] }).BindingPropertyList ?? [];

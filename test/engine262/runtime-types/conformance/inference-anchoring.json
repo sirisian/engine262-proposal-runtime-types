@@ -1,0 +1,837 @@
+{
+  "description": "Declaration provenance, captured contracts and signed-literal narrowing. Sources are evaluated unchanged.",
+  "specSections": [
+    "sec-anchored-contributions",
+    "sec-inference-fixpoint",
+    "sec-published-return-types",
+    "sec-static-type-checking"
+  ],
+  "cases": [
+    {
+      "name": "string let anchors in script",
+      "source": "let s: string = \"s\"; function g() { return ((s)); } const q: number = g();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "string let anchors in block",
+      "source": "{let s: string = \"s\"; function g() { return ((s)); } const q: number = g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "string let anchors in uncalled function",
+      "source": "function outer(){let s: string = \"s\"; function g() { return ((s)); } const q: number = g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "string let anchors in try",
+      "source": "try {let s: string = \"s\"; function g() { return ((s)); } const q: number = g();} catch(e){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "string let anchors in dead block",
+      "source": "if(false){let s: string = \"s\"; function g() { return ((s)); } const q: number = g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "string var anchors in script",
+      "source": "var s: string = \"s\"; function g() { return ((s)); } const q: number = g();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "string var anchors in block",
+      "source": "{var s: string = \"s\"; function g() { return ((s)); } const q: number = g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "string var anchors in uncalled function",
+      "source": "function outer(){var s: string = \"s\"; function g() { return ((s)); } const q: number = g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "string var anchors in try",
+      "source": "try {var s: string = \"s\"; function g() { return ((s)); } const q: number = g();} catch(e){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "string var anchors in dead block",
+      "source": "if(false){var s: string = \"s\"; function g() { return ((s)); } const q: number = g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "singleton const anchors in script",
+      "source": "const s: \"s\" = \"s\"; function g() { return ((s)); } const q: number = g();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "singleton const anchors in block",
+      "source": "{const s: \"s\" = \"s\"; function g() { return ((s)); } const q: number = g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "singleton const anchors in uncalled function",
+      "source": "function outer(){const s: \"s\" = \"s\"; function g() { return ((s)); } const q: number = g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "singleton const anchors in try",
+      "source": "try {const s: \"s\" = \"s\"; function g() { return ((s)); } const q: number = g();} catch(e){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "singleton const anchors in dead block",
+      "source": "if(false){const s: \"s\" = \"s\"; function g() { return ((s)); } const q: number = g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "null anchors in script",
+      "source": "let s: null = null; function g() { return ((s)); } const q: number = g();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "null anchors in block",
+      "source": "{let s: null = null; function g() { return ((s)); } const q: number = g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "null anchors in uncalled function",
+      "source": "function outer(){let s: null = null; function g() { return ((s)); } const q: number = g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "null anchors in try",
+      "source": "try {let s: null = null; function g() { return ((s)); } const q: number = g();} catch(e){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "null anchors in dead block",
+      "source": "if(false){let s: null = null; function g() { return ((s)); } const q: number = g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "undefined anchors in script",
+      "source": "let s: undefined = undefined; function g() { return ((s)); } const q: number = g();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "undefined anchors in block",
+      "source": "{let s: undefined = undefined; function g() { return ((s)); } const q: number = g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "undefined anchors in uncalled function",
+      "source": "function outer(){let s: undefined = undefined; function g() { return ((s)); } const q: number = g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "undefined anchors in try",
+      "source": "try {let s: undefined = undefined; function g() { return ((s)); } const q: number = g();} catch(e){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "undefined anchors in dead block",
+      "source": "if(false){let s: undefined = undefined; function g() { return ((s)); } const q: number = g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "boolean singleton anchors in script",
+      "source": "let s: true = true; function g() { return ((s)); } const q: number = g();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "boolean singleton anchors in block",
+      "source": "{let s: true = true; function g() { return ((s)); } const q: number = g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "boolean singleton anchors in uncalled function",
+      "source": "function outer(){let s: true = true; function g() { return ((s)); } const q: number = g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "boolean singleton anchors in try",
+      "source": "try {let s: true = true; function g() { return ((s)); } const q: number = g();} catch(e){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "boolean singleton anchors in dead block",
+      "source": "if(false){let s: true = true; function g() { return ((s)); } const q: number = g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "unannotated const string local does not anchor",
+      "source": "function g(){ const s = \"s\"; return s; } try { const q: number = g(); } catch(e){} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "unannotated const null local does not anchor",
+      "source": "function g(){ const s = null; return s; } try { const q: number = g(); } catch(e){} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "unannotated const object local does not anchor",
+      "source": "function g(){ const s = {}; return s; } try { const q: number = g(); } catch(e){} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "unannotated let string local does not anchor",
+      "source": "function g(){ let s = \"s\"; return s; } try { const q: number = g(); } catch(e){} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "unannotated let null local does not anchor",
+      "source": "function g(){ let s = null; return s; } try { const q: number = g(); } catch(e){} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "unannotated let object local does not anchor",
+      "source": "function g(){ let s = {}; return s; } try { const q: number = g(); } catch(e){} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "an untyped parameter shadows the outer annotation",
+      "source": "let s: string = \"s\"; function g(s){return s;} const q: number = g(1); String(q);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "an uninitialized local shadows the outer annotation",
+      "source": "let s: string = \"s\"; function g(){let s; return s;} try { const q: number = g(); } catch(e){} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "an explicit any local shadows the outer annotation",
+      "source": "let s: string = \"s\"; function g(){let s: any = 1; return s;} const q: number = g(); String(q);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "a local declared source anchors: let s: null = null; return s;",
+      "source": "function g(){let s: null = null; return s;} const q: number = g();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "a local declared source anchors: let s: string = \"s\"; const copy = s; return copy;",
+      "source": "function g(){let s: string = \"s\"; const copy = s; return copy;} const q: number = g();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "a captured contract survives s=1;",
+      "source": "let s: string | number = \"s\"; function g(){return s;} s=1; String(g());",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "a captured contract survives function change(){s=1;} change();",
+      "source": "let s: string | number = \"s\"; function g(){return s;} function change(){s=1;} change(); String(g());",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "inference restores the enclosing current-value fact",
+      "source": "let s: string | number = \"s\"; function g(){return s;} if(typeof s === \"string\"){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "a parameter narrows through r === -1",
+      "source": "function f(r: uint64 | -1){if(r === -1) {} else {let n: uint64 = r;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "a parameter narrows through r !== -1",
+      "source": "function f(r: uint64 | -1){if(r !== -1) {let n: uint64 = r;} else {}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "a parameter narrows through -1 === r",
+      "source": "function f(r: uint64 | -1){if(-1 === r) {} else {let n: uint64 = r;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "a parameter narrows through r === (-1)",
+      "source": "function f(r: uint64 | -1){if(r === (-1)) {} else {let n: uint64 = r;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "positive parameter control narrows",
+      "source": "function f(r: uint64 | 5){if(r === 5){}else{let n: uint64 = r;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "positive initialized control remains impossible",
+      "source": "let r: uint64 | 5 = 5; if(r === 5){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "string parameter control narrows",
+      "source": "function f(r: uint8 | \"none\"){if(r === \"none\"){}else{let n: uint8 = r;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "string initialized control remains impossible",
+      "source": "let r: uint8 | \"none\" = \"none\"; if(r === \"none\"){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "null parameter control narrows",
+      "source": "function f(r: uint8 | null){if(r === null){}else{let n: uint8 = r;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "null initialized control remains impossible",
+      "source": "let r: uint8 | null = null; if(r === null){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "typeof parameter control narrows",
+      "source": "function f(r: uint8 | string){if(typeof r === \"string\"){}else{let n: uint8 = r;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "typeof initialized control remains impossible",
+      "source": "let r: uint8 | string = \"s\"; if(typeof r === \"string\"){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "signed initialized === remains impossible",
+      "source": "let r: uint64 | -1 = -1; if(r === -1){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "signed initialized !== remains impossible",
+      "source": "let r: uint64 | -1 = -1; if(r !== -1){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "literal-only legacy source in automatic mode",
+      "source": "function g(){const s = \"s\"; return s;} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "literal-only legacy source in forced mode",
+      "source": "function g(){const s = \"s\"; return s;} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "literal-only legacy source in disabled mode",
+      "source": "function g(){const s = \"s\"; return s;} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      },
+      "checking": "disabled"
+    },
+    {
+      "name": "an untyped object destructure retains literal provenance",
+      "source": "function g(){const { s } = { s: \"s\" }; return s;} try { const q: number = g(); } catch(e){} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "an untyped array destructure retains literal provenance",
+      "source": "function g(){const [s] = [\"s\"]; return s;} try { const q: number = g(); } catch(e){} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "a typed object destructure retains declaration provenance",
+      "source": "function g(){let source: { s: string } = { s: \"s\" }; const { s } = source; return s;} const q: number = g();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "a typed array destructure retains declaration provenance",
+      "source": "function g(){let source: [].<string> = [\"s\"]; const [s] = source; return s;} const q: number = g();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    }
+  ]
+}

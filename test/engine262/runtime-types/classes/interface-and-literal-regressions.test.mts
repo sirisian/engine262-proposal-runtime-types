@@ -1401,25 +1401,25 @@ test('a comparison against a SIGNED numeric literal narrows', () => {
   // type its annotation names, and the comparison must admit the signed form as
   // an operand.
   //
-  // An assignment hides the first, because it checks the VALUE against the
-  // target's range; narrowing cannot, because it compares TYPES.
-  expect(accepts('type R = uint64 | -1; let r: R = -1;'
-    + ' if (r === -1) { "a"; } else { let n: uint64 = r; }')).toBe(true);
-  expect(accepts('type R = uint64 | -1; let r: R = -1;'
-    + ' if (r !== -1) { let n: uint64 = r; }')).toBe(true);
+  // Parameters keep both alternatives possible. An initialized singleton would
+  // correctly trigger the impossible-test rule before testing subtraction.
+  expect(accepts('type R = uint64 | -1; function f(r: R) {'
+    + ' if (r === -1) { "a"; } else { let n: uint64 = r; } }')).toBe(true);
+  expect(accepts('type R = uint64 | -1; function f(r: R) {'
+    + ' if (r !== -1) { let n: uint64 = r; } }')).toBe(true);
 
   // A positive literal, a string arm, a null arm and `typeof` narrowed already.
-  expect(accepts('type P = uint64 | 5; let p: P = 5;'
-    + ' if (p === 5) { "a"; } else { let n: uint64 = p; }')).toBe(true);
-  expect(accepts('type S = uint8 | "none"; let s: S = "none";'
-    + ' if (s === "none") { "a"; } else { let n: uint8 = s; }')).toBe(true);
-  expect(accepts('type N = uint8 | null; let v: N = null;'
-    + ' if (v === null) { "a"; } else { let n: uint8 = v; }')).toBe(true);
-  expect(accepts('type U = uint8 | string; let s: U = "x";'
-    + ' if (typeof s === "string") { "a"; } else { let n: uint8 = s; }')).toBe(true);
+  expect(accepts('type P = uint64 | 5; function f(p: P) {'
+    + ' if (p === 5) { "a"; } else { let n: uint64 = p; } }')).toBe(true);
+  expect(accepts('type S = uint8 | "none"; function f(s: S) {'
+    + ' if (s === "none") { "a"; } else { let n: uint8 = s; } }')).toBe(true);
+  expect(accepts('type N = uint8 | null; function f(v: N) {'
+    + ' if (v === null) { "a"; } else { let n: uint8 = v; } }')).toBe(true);
+  expect(accepts('type U = uint8 | string; function f(s: U) {'
+    + ' if (typeof s === "string") { "a"; } else { let n: uint8 = s; } }')).toBe(true);
 
   // The union is still refused where it has NOT been narrowed.
-  expect(accepts('type R = uint64 | -1; let r: R = -1; let n: uint64 = r;')).toBe(false);
+  expect(accepts('type R = uint64 | -1; function f(r: R) { let n: uint64 = r; }')).toBe(false);
 });
 
 test('a CLASS type is not satisfied by an object literal', () => {
