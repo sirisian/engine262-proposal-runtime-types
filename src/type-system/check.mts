@@ -3420,7 +3420,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const lookup = (name: string): Known => {
     for (let i = frames.length - 1; i >= 0; i -= 1) {
-      if (frames[i] === varFrames[varFrames.length - 1] && uninitializedVars.get(frames[i])?.has(name)) {
+      if (inferenceDepth === 0 && frames[i] === varFrames[varFrames.length - 1] && uninitializedVars.get(frames[i])?.has(name)) {
         return undefinedType;
       }
       const t = frames[i].bindings.get(name);
@@ -3436,7 +3436,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // declaration having a type; a name declared here is `~any~` here, not
       // whatever it meant outside.
       if (frames[i].declaredNames.has(name)) {
-        return null;
+        return preparedBindingType(frames[i], name);
       }
     }
     return null;
@@ -3558,7 +3558,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (let i = frames.length - 1; i >= 0; i -= 1) {
       const f = frames[i] as Frame & { narrowed?: Set<string> };
       if (f.narrowed?.has(name)) {
-        if (f.declaredNames.has(name)) return narrowedDeclarations.get(f)?.get(name) ?? null;
+        if (f.declaredNames.has(name)) return narrowedDeclarations.get(f)?.get(name) ?? preparedBindingType(f, name);
         continue;
       }
       const t = f.bindings.get(name);
@@ -3566,7 +3566,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return t;
       }
       if (f.declaredNames.has(name)) {
-        return null;
+        return preparedBindingType(f, name);
       }
     }
     return null;
@@ -18116,6 +18116,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const only = selected as {
             Return: Known, InferredReturn?: Known, ProvisionalReturn?: Known, TypeParameters?: readonly TypeParameterRecord[],
           };
+          if (!only.Return && !only.InferredReturn && !inferencesInProgress.has(only as object)) {
+            driveInference(only as object);
+          }
           // #sec-generics: a call that supplies type arguments binds
           // them to the signature's type parameters, and the return type is
           // read with that binding applied. Without this a generic call had no
@@ -25429,56 +25432,173 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * answer `never` during any inference, which is wrong for the ordinary
    * wrapper.
    */
-  const pendingBySignature = new Map<object, {
-    signature: { Return: Known, InferredReturn?: Known, ProvisionalReturn?: Known },
-    fn: ParseNode,
-    parameterTypes: readonly Known[],
-    signatureTyped: boolean,
-  }>();
-
-  /** Compute and cache a queued function's provisional type, on demand. */
-  const driveInference = (only: object): Known => {
-    const item = pendingBySignature.get(only);
-    if (!item || inferencesInProgress.has(only)) {
-      return null;
-    }
-    inferencesInProgress.add(only);
-    inferenceDepth += 1;
-    let inferred: Known;
-    try {
-      inferred = inferredReturnType(item.fn, item.parameterTypes, null, { anchored: false });
-    } finally {
-      inferenceDepth -= 1;
-      inferencesInProgress.delete(only);
-    }
-    if (inferred) {
-      item.signature.ProvisionalReturn = inferred;
-    }
-    return inferred;
+  type InferenceScope = {
+    frames: readonly Frame[],
+    varFrames: readonly Frame[],
+    typeScopes: readonly Map<string, Known | null>[],
+    typeParameterNames?: readonly string[],
   };
 
-  /**
-   * proposal-runtime-types #sec-inferred-return-types: the functions of a scope
-   * whose return type is to be inferred, queued while their signatures are
-   * built and resolved once all of them are in scope.
-   */
-  const pendingInferences: {
+  type ReturnInference = InferenceScope & {
     signature: { Return: Known, InferredReturn?: Known, ProvisionalReturn?: Known },
     fn: ParseNode,
     parameterTypes: readonly Known[],
     signatureTyped: boolean,
-    /**
-     * The type parameters the declaration binds, which must be in scope while
-     * its body is read: the inference runs after the collection loop that
-     * pushed them, so it pushes them again or `T` resolves to nothing and the
-     * body types as ~any~.
-     */
-    typeParameterNames?: readonly string[],
     /** A generator, whose inference computes _Y_ and rebuilds its Generator type. */
     generator?: { asyncGenerator: boolean },
     /** An async function, whose inference is of the type its result RESOLVES with. */
     asyncFunction?: boolean,
-  }[] = [];
+  };
+
+  const pendingBySignature = new Map<object, ReturnInference>();
+  const pendingInferences: ReturnInference[] = [];
+
+  const inDeclarationScope = <T,>(item: InferenceScope, action: () => T): T => {
+    const outerFrames = frames.slice();
+    const outerVars = varFrames.slice();
+    const outerTypes = typeParameterScopes.slice();
+    frames.splice(0, frames.length, ...item.frames);
+    varFrames.splice(0, varFrames.length, ...item.varFrames);
+    typeParameterScopes.splice(0, typeParameterScopes.length, ...item.typeScopes);
+    if (item.typeParameterNames) typeParameterScopes.push(scopeOfNames(item.typeParameterNames));
+    try {
+      return action();
+    } finally {
+      frames.splice(0, frames.length, ...outerFrames);
+      varFrames.splice(0, varFrames.length, ...outerVars);
+      typeParameterScopes.splice(0, typeParameterScopes.length, ...outerTypes);
+    }
+  };
+
+  type ReturnAnchorage = { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] };
+
+  const publishOrdinaryReturn = (item: ReturnInference, inferred: Known, anchorage: ReturnAnchorage): boolean => {
+    let changed = false;
+    // Every queued function gets a PROVISIONAL type, whether or not it
+    // participates, so that a participating function asking about this one
+    // gets an answer. Publication is the separate step below.
+    // Compared by SameType, not by identity: each pass builds a fresh
+    // record, so an identity test reported a change every time. The
+    // fixpoint then ran its full pass budget on every program and never
+    // detected non-convergence, because it could not tell a type that grows
+    // from one that is merely rebuilt.
+    if (inferred && (!item.signature.ProvisionalReturn
+      || !SameType(item.signature.ProvisionalReturn, inferred))) {
+      item.signature.ProvisionalReturn = inferred;
+      changed = true;
+    }
+    // A join of ~any~ publishes nothing: a function whose result is unknown
+    // is indistinguishable from one that never participated.
+    if (!inferred) {
+      return changed;
+    }
+    // Participation: the signature declares a type, or a contribution is
+    // anchored. The second is what carries a type one call past the
+    // annotation that established it.
+    if (!item.signatureTyped && !anchorage.anchored) {
+      return changed;
+    }
+    // #sec-inferred-result-type as harmonized: where every contribution is
+    // valueless the join is `void`, which is the annotation such a function
+    // would have been given. A bare `undefined` join is exactly that case,
+    // since a body that MIXES a valueless path with a value-carrying one
+    // joins to a union rather than to `undefined` alone.
+    const published = inferred.Kind === 'primitive' && inferred.Name === 'undefined'
+      ? voidType
+      : inferred;
+    const previous = item.signature.InferredReturn;
+    if (!previous || !SameType(previous, published)) {
+      item.signature.InferredReturn = published;
+      changed = true;
+    }
+    if (anchorage.from) {
+      publishedAnchors.set(item.signature as object, anchorage.from);
+    }
+    if (anchorage.origins && anchorage.origins.length > 0) {
+      publishedOrigins.set(item.signature as object, anchorage.origins);
+    }
+    // The run time enforces what is published, so the type is recorded
+    // against the declaration the boundary will look it up from - EXCEPT
+    // where the published type is an expression over the declaration's type
+    // parameters. Such a type means something only once a call binds them,
+    // and the boundary sees one function for every instantiation, so
+    // enforcing it there refused `id(5)` against a bare `T`. The checker
+    // still publishes it, and substitutes it per call.
+    if (!mentionsTypeParameter(published)) {
+      publishedReturnTypes.set(item.fn as unknown as object, published);
+    }
+    return changed;
+  };
+
+  type PreparedBinding = InferenceScope & { expression: ParseNode, constant: boolean, type?: TypeRecord };
+  const preparedBindings = new WeakMap<Frame, Map<string, PreparedBinding>>();
+  const preparingBindings = new Set<PreparedBinding>();
+  const preparedBindingType = (frame: Frame, name: string): Known => {
+    const binding = preparedBindings.get(frame)?.get(name);
+    if (!binding || preparingBindings.has(binding)) return null;
+    if (binding.type) return binding.type;
+    preparingBindings.add(binding);
+    const outerDepth = inferenceDepth;
+    // Const inference consumes published contracts; a provisional result is
+    // private to a participating function's contribution computation.
+    inferenceDepth = 0;
+    try {
+      return inDeclarationScope(binding, () => {
+        const expression = patternExpression(binding.expression)!;
+        // Preparation may use a contract independent of the initializer's
+        // incoming flow. A generic/overloaded call or an ordinary binding read
+        // can depend on narrowing at that position; leave it to the normal walk.
+        if (expression.type === 'IdentifierReference') {
+          for (let i = frames.length - 1; i >= 0; i -= 1) {
+            if (frames[i].declaredNames.has(expression.name)) {
+              const type = preparedBindingType(frames[i], expression.name);
+              if (type) binding.type = type;
+              return type;
+            }
+          }
+          return null;
+        }
+        if (expression.type === 'CallExpression') {
+          const target = patternExpression(expression.CallExpression);
+          if (target?.type !== 'IdentifierReference') return null;
+          const callee = lookupDeclared(target.name);
+          if (callee?.Kind !== 'function' || callee.Signatures.length !== 1) return null;
+          const signature = callee.Signatures[0];
+          if (!signature.Return || signature.Return.Kind === 'any' || signature.TypeParameters?.length) return null;
+        } else if (expression.type !== 'TypedConversionExpression'
+            && (binding.constant || !literalExpressionType(expression))) return null;
+        const type = staticType(binding.expression);
+        if (!type || type.Kind === 'any') return null;
+        binding.type = binding.constant ? type : widen(type);
+        return binding.type;
+      });
+    } finally {
+      inferenceDepth = outerDepth;
+      preparingBindings.delete(binding);
+    }
+  };
+
+  /** Compute a dependency in its declaration environment, not its caller's. */
+  const driveInference = (only: object): Known => {
+    const item = pendingBySignature.get(only);
+    if (!item || inferencesInProgress.has(only)) return null;
+    inferencesInProgress.add(only);
+    inferenceDepth += 1;
+    let inferred: Known;
+    try {
+      inferred = inDeclarationScope(item, () => {
+        const anchorage: ReturnAnchorage = { anchored: false };
+        const result = inferredReturnType(item.fn, item.parameterTypes, null, anchorage);
+        publishOrdinaryReturn(item, result, anchorage);
+        return result;
+      });
+    } finally {
+      inferenceDepth -= 1;
+      inferencesInProgress.delete(only);
+    }
+    if (inferred) item.signature.ProvisionalReturn = inferred;
+    return inferred;
+  };
 
   /** Array literals every element of which is a literal; they anchor nothing. */
   const literalDerivedArrays = new WeakSet<object>();
@@ -25527,6 +25647,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const declared = lookupDeclared(expr.name);
       return !!declared && declared.Kind !== 'any';
+    }
+    if (expr?.type === 'CallExpression') {
+      const callee = callableForm(staticType(expr.CallExpression));
+      if (callee?.Kind === 'function') {
+        const signature = selectCallSignature(expr, expandValueSpreads(expr.Arguments ?? []), callee, expr, false);
+        if (signature) {
+          const result = signature.Return ?? signature.InferredReturn;
+          return !!result && result.Kind !== 'any';
+        }
+      }
     }
     if (!t || selfDescribingType(t)) {
       return false;
@@ -25580,18 +25710,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         pendingBySignature.set(item.signature as object, item);
       }
     }
-    // Two passes settle a chain written in either order; a third changes
-    // nothing that a second did not, absent recursion, which is left
-    // unpublished rather than iterated to a fixpoint.
-    // Iterate to convergence. Two passes settle a chain written in either
-    // order; a cycle needs one pass per edge before it stops changing, and the
-    // bound is what keeps a body whose type grows at every step - a
-    // self-reference under a type constructor - from iterating forever. Such a
-    // function simply does not publish, which is the conservative answer this
-    // increment gives in place of the error #sec-inference-fixpoint specifies.
+    // Dependency queries settle ordinary acyclic chains directly. Revisit the
+    // group for recursive publications under the existing growth safeguard.
     for (let pass = 0; pass < 8; pass += 1) {
       let changed = false;
-      for (const item of queue) {
+      for (const item of queue) inDeclarationScope(item, () => {
         if (item.generator) {
           // _Y_ is computed here rather than while signatures are built, for
           // the reason the return inference is: a `yield` whose operand calls
@@ -25626,7 +25749,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               changed = true;
             }
           }
-          continue;
+          return;
         }
         if (item.asyncFunction) {
           // #sec-inference-and-function-forms: publish `Promise.<T, any>`. The
@@ -25653,18 +25776,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               changed = true;
             }
           }
-          continue;
+          return;
         }
         const anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] } = { anchored: false };
-        if (item.typeParameterNames) {
-          typeParameterScopes.push(scopeOfNames(item.typeParameterNames));
-        }
         inferenceDepth += 1;
-        // Only the signature being computed is marked. Marking the whole queue
-        // would let a MUTUAL cycle settle, but it also makes every call to a
-        // not-yet-published function answer `never` during an inference, which
-        // is wrong for the ordinary case and for query inference alike. Mutual
-        // recursion therefore does not publish yet.
+        // Mark only the active dependency. A recursive edge contributes never;
+        // an inactive dependency computes in its own declaration environment.
         inferencesInProgress.add(item.signature as object);
         let inferred: Known;
         try {
@@ -25672,64 +25789,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         } finally {
           inferencesInProgress.delete(item.signature as object);
           inferenceDepth -= 1;
-          if (item.typeParameterNames) {
-            typeParameterScopes.pop();
-          }
         }
-        // Every queued function gets a PROVISIONAL type, whether or not it
-        // participates, so that a participating function asking about this one
-        // gets an answer. Publication is the separate step below.
-        // Compared by SameType, not by identity: each pass builds a fresh
-        // record, so an identity test reported a change every time. The
-        // fixpoint then ran its full pass budget on every program and never
-        // detected non-convergence, because it could not tell a type that grows
-        // from one that is merely rebuilt.
-        if (inferred && (!item.signature.ProvisionalReturn
-          || !SameType(item.signature.ProvisionalReturn, inferred))) {
-          item.signature.ProvisionalReturn = inferred;
-          changed = true;
-        }
-        // A join of ~any~ publishes nothing: a function whose result is unknown
-        // is indistinguishable from one that never participated.
-        if (!inferred) {
-          continue;
-        }
-        // Participation: the signature declares a type, or a contribution is
-        // anchored. The second is what carries a type one call past the
-        // annotation that established it.
-        if (!item.signatureTyped && !anchorage.anchored) {
-          continue;
-        }
-        // #sec-inferred-result-type as harmonized: where every contribution is
-        // valueless the join is `void`, which is the annotation such a function
-        // would have been given. A bare `undefined` join is exactly that case,
-        // since a body that MIXES a valueless path with a value-carrying one
-        // joins to a union rather than to `undefined` alone.
-        const published = inferred.Kind === 'primitive' && inferred.Name === 'undefined'
-          ? voidType
-          : inferred;
-        const previous = item.signature.InferredReturn;
-        if (!previous || !SameType(previous, published)) {
-          item.signature.InferredReturn = published;
-          changed = true;
-        }
-        if (anchorage.from) {
-          publishedAnchors.set(item.signature as object, anchorage.from);
-        }
-        if (anchorage.origins && anchorage.origins.length > 0) {
-          publishedOrigins.set(item.signature as object, anchorage.origins);
-        }
-        // The run time enforces what is published, so the type is recorded
-        // against the declaration the boundary will look it up from - EXCEPT
-        // where the published type is an expression over the declaration's type
-        // parameters. Such a type means something only once a call binds them,
-        // and the boundary sees one function for every instantiation, so
-        // enforcing it there refused `id(5)` against a bare `T`. The checker
-        // still publishes it, and substitutes it per call.
-        if (!mentionsTypeParameter(published)) {
-          publishedReturnTypes.set(item.fn as unknown as object, published);
-        }
-      }
+        changed = publishOrdinaryReturn(item, inferred, anchorage) || changed;
+      });
       if (!changed) {
         break;
       }
@@ -26292,7 +26354,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * typed, and a rest parameter suppresses the signature entirely rather than
    * inviting an arity mistake.
    */
-  const declareFunctionSignatures = (outerList: readonly ParseNode[], publishNow: boolean = true) => {
+  const declareFunctionSignatures = (outerList: readonly ParseNode[]) => {
     // An `export`ed declaration is wrapped, and the collection below reads the
     // list positionally, so `export function f(): uint32 {}` was never
     // collected: its signature existed nowhere, and a call of it was ~any~ in
@@ -26477,6 +26539,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         Object.assign(target, earlyResolved);
       }
     }
+    // Prepare contracts without evaluating initializers or initializing values.
+    // Existing entries from the first source pass retain inferred const types.
+    for (const declaration of list) {
+      if (declaration.type !== 'LexicalDeclaration') continue;
+      for (const binding of declaration.BindingList) {
+        if (binding.TypeAnnotation || !binding.BindingIdentifier
+            || !frames[frames.length - 1].declaredNames.has(binding.BindingIdentifier.name)) {
+          declarePatternAnnotations(binding);
+        }
+        const expression = binding.TypedInitializer?.AssignmentExpression ?? binding.Initializer;
+        if (!binding.TypeAnnotation && !binding.Ref && binding.BindingIdentifier && expression
+            && (declaration.LetOrConst === 'const' || binding.TypedInitializer)) {
+          const frame = frames[frames.length - 1];
+          if (!preparedBindings.has(frame)) preparedBindings.set(frame, new Map());
+          preparedBindings.get(frame)!.set(binding.BindingIdentifier.name, {
+            expression, constant: !binding.TypedInitializer,
+            frames: frames.slice(), varFrames: varFrames.slice(), typeScopes: typeParameterScopes.slice(),
+          });
+        }
+      }
+    }
     for (const n of list) {
       // #sec-generator-types. A generator
       // declaration was skipped entirely, so a call of one had no type at all.
@@ -26625,12 +26708,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // still publish one. The inference cannot run here, because it reads the
       // types of the other declarations in this scope and none of them is in
       // scope yet, so the work is queued and run once every signature exists.
-      // A generator or async function is not queued: what each publishes is a
-      // protocol type built from a different join, which is left to
-      // the clause that defines it.
+      // Generator and async tasks retain their function form so publication
+      // builds the corresponding protocol type from their contributions.
       if (!fn.TypeAnnotation && isGenerator) {
         pendingInferences.push({
           signature,
+          frames: frames.slice(),
+          varFrames: varFrames.slice(),
+          typeScopes: typeParameterScopes.slice(),
           fn: n as ParseNode,
           parameterTypes: annotated.slice(),
           signatureTyped: annotated.some((t) => t !== null),
@@ -26641,6 +26726,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (!fn.TypeAnnotation && isAsyncFunction) {
         pendingInferences.push({
           signature,
+          frames: frames.slice(),
+          varFrames: varFrames.slice(),
+          typeScopes: typeParameterScopes.slice(),
           fn: n as ParseNode,
           parameterTypes: annotated.slice(),
           signatureTyped: annotated.some((t) => t !== null),
@@ -26651,6 +26739,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (!fn.TypeAnnotation && !isGenerator && n.type === 'FunctionDeclaration') {
         pendingInferences.push({
           signature,
+          frames: frames.slice(),
+          varFrames: varFrames.slice(),
+          typeScopes: typeParameterScopes.slice(),
           fn: fn as unknown as ParseNode,
           parameterTypes: annotated.slice(),
           signatureTyped: annotated.some((t) => t !== null),
@@ -26671,19 +26762,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       });
       declare(name, { Kind: 'function', Signatures: overloads ? Signatures : Signatures.slice(-1) } as unknown as Known);
     }
-    // The fixpoint is NOT run here when the caller will run it after the list's
-    // own declarations are walked.
-    //
-    // This function runs BEFORE its statement list is walked - which is the
-    // point, so `f(300)` above `function f(v: uint8) {}` is an Early Error - and
-    // publishing here meant the fixpoint sampled the list's bindings before they
-    // existed. At top level that is invisible, because `checkInTwoPasses` hands
-    // pass 1's FRAME to pass 2 and the second pass's first sample already finds
-    // them; a BLOCK's declarations do not survive that way, so a nested
-    // fixpoint saw `NULL` in both passes and never converged.
-    if (publishNow) {
-      publishInferredReturns();
-      }
     // Class instance types are recorded over the same list, so a class may be
     // named as a type anywhere in it.
     for (const n of list) {
@@ -32216,12 +32294,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // declaration. Their signatures are declared over the whole list before
       // any of it is walked, which is what lets `f(300)` above `function
       // f(v: uint8) {}` be the Early Error it should be.
-      declareFunctionSignatures(node as readonly ParseNode[], false);
+      declareFunctionSignatures(node as readonly ParseNode[]);
       if (invalidTypeGraph) return;
+      publishInferredReturns();
       for (const statement of node as readonly ParseNode[]) walk(statement);
-      // The list's own bindings are declared by now, so an inference anchored by
-      // one of them has something to read: `let s: string = "s"; function g(){
-      // return s; }` in a block publishes `string` as it does at top level.
+      // Nested declaration work queued while walking is completed before the
+      // scope exits. Initial publication precedes all consumers in this list.
       if (!invalidTypeGraph) publishInferredReturns();
         return;
     }
@@ -33167,7 +33245,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const ordered = [...(block.CaseClauses_a ?? []), ...(block.DefaultClause ? [block.DefaultClause] : []), ...(block.CaseClauses_b ?? [])];
           const statements = ordered.flatMap((clause) => clause.StatementList ?? []);
           predeclareFlowLexicals(statements);
-          declareFunctionSignatures(statements, false);
+          declareFunctionSignatures(statements);
+          publishInferredReturns();
           const entries = new Map<ParseNode, FlowFacts | undefined>();
           let failed: FlowFacts | undefined = captureFlow();
           let stable = name !== null && flowOwner(name) === owner;

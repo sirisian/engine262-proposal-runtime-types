@@ -1,0 +1,1017 @@
+{
+  "description": "Return publication before consumers, lexical dependency environments and legacy participation. Sources are evaluated unchanged.",
+  "specSections": [
+    "sec-inference-fixpoint",
+    "sec-return-publication-dependencies",
+    "sec-anchored-contributions",
+    "sec-published-return-types"
+  ],
+  "cases": [
+    {
+      "name": "sgq contracts precede consumers in script",
+      "source": "let s: string=\"s\";function g(){return s;}const q:number=g();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "sgq contracts precede consumers in block",
+      "source": "{let s: string=\"s\";function g(){return s;}const q:number=g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "sgq contracts precede consumers in uncalled function",
+      "source": "function outer(){let s: string=\"s\";function g(){return s;}const q:number=g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "sgq contracts precede consumers in dead block",
+      "source": "if(false){let s: string=\"s\";function g(){return s;}const q:number=g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "sgq contracts precede consumers in try",
+      "source": "try{let s: string=\"s\";function g(){return s;}const q:number=g();}catch(e){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "sgq contracts precede consumers in switch",
+      "source": "switch(1){case 1:let s: string=\"s\";function g(){return s;}const q:number=g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "sqg contracts precede consumers in script",
+      "source": "let s: string=\"s\";const q:number=g();function g(){return s;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "sqg contracts precede consumers in block",
+      "source": "{let s: string=\"s\";const q:number=g();function g(){return s;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "sqg contracts precede consumers in uncalled function",
+      "source": "function outer(){let s: string=\"s\";const q:number=g();function g(){return s;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "sqg contracts precede consumers in dead block",
+      "source": "if(false){let s: string=\"s\";const q:number=g();function g(){return s;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "sqg contracts precede consumers in try",
+      "source": "try{let s: string=\"s\";const q:number=g();function g(){return s;}}catch(e){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "sqg contracts precede consumers in switch",
+      "source": "switch(1){case 1:let s: string=\"s\";const q:number=g();function g(){return s;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "gsq contracts precede consumers in script",
+      "source": "function g(){return s;}let s: string=\"s\";const q:number=g();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "gsq contracts precede consumers in block",
+      "source": "{function g(){return s;}let s: string=\"s\";const q:number=g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "gsq contracts precede consumers in uncalled function",
+      "source": "function outer(){function g(){return s;}let s: string=\"s\";const q:number=g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "gsq contracts precede consumers in dead block",
+      "source": "if(false){function g(){return s;}let s: string=\"s\";const q:number=g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "gsq contracts precede consumers in try",
+      "source": "try{function g(){return s;}let s: string=\"s\";const q:number=g();}catch(e){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "gsq contracts precede consumers in switch",
+      "source": "switch(1){case 1:function g(){return s;}let s: string=\"s\";const q:number=g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "gqs contracts precede consumers in script",
+      "source": "function g(){return s;}const q:number=g();let s: string=\"s\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "gqs contracts precede consumers in block",
+      "source": "{function g(){return s;}const q:number=g();let s: string=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "gqs contracts precede consumers in uncalled function",
+      "source": "function outer(){function g(){return s;}const q:number=g();let s: string=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "gqs contracts precede consumers in dead block",
+      "source": "if(false){function g(){return s;}const q:number=g();let s: string=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "gqs contracts precede consumers in try",
+      "source": "try{function g(){return s;}const q:number=g();let s: string=\"s\";}catch(e){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "gqs contracts precede consumers in switch",
+      "source": "switch(1){case 1:function g(){return s;}const q:number=g();let s: string=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "qsg contracts precede consumers in script",
+      "source": "const q:number=g();let s: string=\"s\";function g(){return s;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "qsg contracts precede consumers in block",
+      "source": "{const q:number=g();let s: string=\"s\";function g(){return s;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "qsg contracts precede consumers in uncalled function",
+      "source": "function outer(){const q:number=g();let s: string=\"s\";function g(){return s;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "qsg contracts precede consumers in dead block",
+      "source": "if(false){const q:number=g();let s: string=\"s\";function g(){return s;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "qsg contracts precede consumers in try",
+      "source": "try{const q:number=g();let s: string=\"s\";function g(){return s;}}catch(e){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "qsg contracts precede consumers in switch",
+      "source": "switch(1){case 1:const q:number=g();let s: string=\"s\";function g(){return s;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "qgs contracts precede consumers in script",
+      "source": "const q:number=g();function g(){return s;}let s: string=\"s\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "qgs contracts precede consumers in block",
+      "source": "{const q:number=g();function g(){return s;}let s: string=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "qgs contracts precede consumers in uncalled function",
+      "source": "function outer(){const q:number=g();function g(){return s;}let s: string=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "qgs contracts precede consumers in dead block",
+      "source": "if(false){const q:number=g();function g(){return s;}let s: string=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "qgs contracts precede consumers in try",
+      "source": "try{const q:number=g();function g(){return s;}let s: string=\"s\";}catch(e){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "qgs contracts precede consumers in switch",
+      "source": "switch(1){case 1:const q:number=g();function g(){return s;}let s: string=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "a caller parameter does not replace a typed callee capture",
+      "source": "function outer(){let s:string=\"s\";const q:number=h(1);function h(s:number){return g();}function g(){return s;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "a caller parameter does not annotate an unknown callee capture",
+      "source": "function outer(){let s;const q:number=h(\"s\");function h(s:string){return g();}function g(){return s;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "an untyped callee parameter shadows an outer annotation",
+      "source": "let s:string=\"s\";{const q:number=g(1);function g(s){return s;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "a forward var capture reads its declared contract during inference",
+      "source": "function outer(){const q:number=g();function g(){return s;}var s:string=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "a forward alias supplies a captured contract",
+      "source": "{const q:number=g();function g(){return s;}let s:S=\"s\";type S=string;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "an async declaration publishes before its consumer",
+      "source": "{const q:Promise.<number,any> =g();async function g(){return s;}let s:string=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "a generator declaration publishes before iteration",
+      "source": "{for(const x of g()){let q:number=x;}function* g(){yield s;}let s:string=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "literal-only dependencies remain unpublished: function g(){return h();}function h(){return \"s\";}",
+      "source": "try {const q:number=g();function g(){return h();}function h(){return \"s\";}}catch(e){} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "literal-only dependencies remain unpublished: function h(){return \"s\";}function g(){return h();}",
+      "source": "try {const q:number=g();function h(){return \"s\";}function g(){return h();}}catch(e){} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "3 declarations publish with reverse order False",
+      "source": "function outer(){const q:number=g0();function g0(){return g1();}function g1(){return g2();}function g2(){return s;}let s:string=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "3 declarations publish with reverse order True",
+      "source": "function outer(){const q:number=g0();function g2(){return s;}function g1(){return g2();}function g0(){return g1();}let s:string=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "12 declarations publish with reverse order False",
+      "source": "function outer(){const q:number=g0();function g0(){return g1();}function g1(){return g2();}function g2(){return g3();}function g3(){return g4();}function g4(){return g5();}function g5(){return g6();}function g6(){return g7();}function g7(){return g8();}function g8(){return g9();}function g9(){return g10();}function g10(){return g11();}function g11(){return s;}let s:string=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "12 declarations publish with reverse order True",
+      "source": "function outer(){const q:number=g0();function g11(){return s;}function g10(){return g11();}function g9(){return g10();}function g8(){return g9();}function g7(){return g8();}function g6(){return g7();}function g5(){return g6();}function g4(){return g5();}function g3(){return g4();}function g2(){return g3();}function g1(){return g2();}function g0(){return g1();}let s:string=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "24 declarations publish with reverse order False",
+      "source": "function outer(){const q:number=g0();function g0(){return g1();}function g1(){return g2();}function g2(){return g3();}function g3(){return g4();}function g4(){return g5();}function g5(){return g6();}function g6(){return g7();}function g7(){return g8();}function g8(){return g9();}function g9(){return g10();}function g10(){return g11();}function g11(){return g12();}function g12(){return g13();}function g13(){return g14();}function g14(){return g15();}function g15(){return g16();}function g16(){return g17();}function g17(){return g18();}function g18(){return g19();}function g19(){return g20();}function g20(){return g21();}function g21(){return g22();}function g22(){return g23();}function g23(){return s;}let s:string=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "24 declarations publish with reverse order True",
+      "source": "function outer(){const q:number=g0();function g23(){return s;}function g22(){return g23();}function g21(){return g22();}function g20(){return g21();}function g19(){return g20();}function g18(){return g19();}function g17(){return g18();}function g16(){return g17();}function g15(){return g16();}function g14(){return g15();}function g13(){return g14();}function g12(){return g13();}function g11(){return g12();}function g10(){return g11();}function g9(){return g10();}function g8(){return g9();}function g7(){return g8();}function g6(){return g7();}function g5(){return g6();}function g4(){return g5();}function g3(){return g4();}function g2(){return g3();}function g1(){return g2();}function g0(){return g1();}let s:string=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "captured inferred binding const s=typed(); precedes use True",
+      "source": "{function typed():string{return \"s\";}const s=typed();function g(){return s;}const q:number=g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "captured inferred binding const s=typed(); precedes use False",
+      "source": "{function typed():string{return \"s\";}function g(){return s;}const q:number=g();const s=typed();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "captured inferred binding let s:=typed(); precedes use True",
+      "source": "{function typed():string{return \"s\";}let s:=typed();function g(){return s;}const q:number=g();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "captured inferred binding let s:=typed(); precedes use False",
+      "source": "{function typed():string{return \"s\";}function g(){return s;}const q:number=g();let s:=typed();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "a compatible forward lexical read still has its temporal dead zone",
+      "source": "{const q:string=g();function g(){return s;}let s:string=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "an unknown captured name remains a runtime reference error",
+      "source": "{const q:number=g();function g(){return missing;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "an untyped literal-only callee retains the runtime boundary",
+      "source": "{const q:number=g();function g(){return \"s\";}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "a literal-only constant capture is not initialized by preparation",
+      "source": "{const q:number=g();function g(){return s;}const s=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "typed const preparation does not execute its initializer",
+      "source": "function typed():string{throw \"entered\";}{const q:string=g();function g(){return s;}const s=typed();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "legacy declaration order with automatic checking",
+      "source": "String(g());function g(){return h();}function h(){return \"ok\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "legacy declaration order with forced checking",
+      "source": "String(g());function g(){return h();}function h(){return \"ok\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "legacy declaration order with disabled checking",
+      "source": "String(g());function g(){return h();}function h(){return \"ok\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      },
+      "checking": "disabled"
+    },
+    {
+      "name": "a reassigned function keeps its runtime result",
+      "source": "{function g(a:uint32){return \"s\";}g=function(a){return 1;};const q:number=g((1:=uint32));String(q);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "module forward use rejects before evaluation",
+      "modules": {
+        "main": "const q:number=g();function g(){return s;}let s:string=\"s\";export {g};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "an imported forward capture rejects before either body",
+      "modules": {
+        "main": "import {g} from \"dep\";const q:number=g();",
+        "dep": "export function g(){return s;}let s:string=\"s\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "a compatible imported contract evaluates in dependency order",
+      "modules": {
+        "main": "import {g} from \"dep\";const q:string=g();",
+        "dep": "export function g(){return s;}let s:string=\"s\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "module contract preparation preserves runtime temporal dead zones",
+      "modules": {
+        "main": "const q:string=g();function g(){return s;}let s:string=\"s\";export {g};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "a flow-sensitive const preserves its initializer type",
+      "source": "{let u:string|number=\"s\";const s=u;function g(){return s;}const q:string=g();}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "a branch-local const preserves the narrowed parameter",
+      "source": "function f(u:string|number){if(typeof u === \"string\"){const s=u;function g(){return s;}const q:string=g();}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "a generic const initializer preserves its flow-sensitive argument",
+      "source": "function id<T:type>(x:T):T{return x;}{let u:string|number=\"s\";const s=id(u);function g(){return s;}const q:string=g();}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "a forward flow-sensitive const does not invent an incompatible contract",
+      "source": "{let u:string|number=\"s\";const q:string=g();function g(){return s;}const s=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "12 forward typed constants share their prepared contract",
+      "source": "{const q:number=g();function g(){return s0;}const s0=s1;const s1=s2;const s2=s3;const s3=s4;const s4=s5;const s5=s6;const s6=s7;const s7=s8;const s8=s9;const s9=s10;const s10=s11;const s11=typed();function typed():string{return \"s\";}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "24 forward typed constants share their prepared contract",
+      "source": "{const q:number=g();function g(){return s0;}const s0=s1;const s1=s2;const s2=s3;const s3=s4;const s4=s5;const s5=s6;const s6=s7;const s7=s8;const s8=s9;const s9=s10;const s10=s11;const s11=s12;const s12=s13;const s13=s14;const s14=s15;const s15=s16;const s16=s17;const s17=s18;const s18=s19;const s19=s20;const s20=s21;const s21=s22;const s22=s23;const s23=typed();function typed():string{return \"s\";}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    }
+  ]
+}
