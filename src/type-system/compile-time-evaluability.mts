@@ -217,9 +217,16 @@ export function ResolveBindingDeclaration(reference: ParseNode, name: string): B
   return undefined;
 }
 
+/** Resolve a linked module's local binding without reading its value. */
+export function ModuleBindingDeclaration(module: ParseNode.Module, name: string): BindingDeclaration | undefined {
+  return declarationInList(module.ModuleBody?.ModuleItemList ?? [], name);
+}
+
 export interface EvaluabilityContext {
   /** Whether the source text assigns to _name_ anywhere; a reassigned function is not the one read. */
-  readonly assigned: (name: string) => boolean;
+  readonly assigned: (name: string, reference: ParseNode) => boolean;
+  /** A linked evaluator may follow imports to their original declarations. */
+  readonly resolve?: (reference: ParseNode, name: string) => BindingDeclaration | undefined;
 }
 
 const IN_PROGRESS = Symbol('in progress');
@@ -251,7 +258,7 @@ export function CompileTimeEvaluabilityChecker(context: EvaluabilityContext) {
     for (const reference of FreeReferences(expr)) {
       const name = reference.name;
       if (bound.has(name)) continue;
-      const declaration = ResolveBindingDeclaration(reference, name);
+      const declaration = (context.resolve ?? ResolveBindingDeclaration)(reference, name);
       if (!declaration) continue;
       switch (declaration.kind) {
         case 'let':
@@ -273,7 +280,7 @@ export function CompileTimeEvaluabilityChecker(context: EvaluabilityContext) {
           continue;
         }
         case 'function': {
-          if (context.assigned(name)) return `a use of ${name}, which the program reassigns`;
+          if (context.assigned(name, reference)) return `a use of ${name}, which the program reassigns`;
           const inner = judged(declaration.node, () => violation(declaration.node));
           if (inner !== undefined) return `a use of ${name}, whose body holds ${inner}`;
           continue;

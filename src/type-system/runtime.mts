@@ -33,6 +33,7 @@ import { PublishedReturnTypeOf } from './check.mts';
 import { skipDebugger } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
+import { BuilderEvaluabilityViolation } from './builder-evaluability.mts';
 import { BeginFragmentEvaluation, EndFragmentEvaluation } from './fragment-library.mts';
 import { ApplyValidateHook, HasMetaHooks, MetaTypeClaiming, CheckedConvertValue, CrossBareValueIntoParameterization, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion, RegisteredEnumOf } from '../abstract-ops/runtime-types.mts';
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
@@ -6896,6 +6897,13 @@ function* evaluateComputedTypeBody(node: ParseNode.ComputedType): PlainEvaluator
       v = Q(yield* Get(v as ObjectValue, Value(part.name)));
     }
     callee = v;
+  }
+  // The original declaration retains lexical parents. Reparsing SourceText
+  // alone cannot distinguish a captured const from a captured let, including
+  // when the function was reached through an import or a namespace.
+  const violation = BuilderEvaluabilityViolation(node, callee);
+  if (violation !== undefined) {
+    return Throw.TypeError('a builder is not compile-time evaluable: $1', Value(violation));
   }
   const args: Value[] = [];
   for (const a of node.Arguments) {

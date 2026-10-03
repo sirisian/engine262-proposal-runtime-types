@@ -1,0 +1,625 @@
+{
+  "schemaVersion": 1,
+  "specification": [
+    "sec-imported-builder-bindings",
+    "sec-iscompiletimeevaluable",
+    "sec-evaluatebuildercall",
+    "sec-module-type-checking-order"
+  ],
+  "cases": [
+    {
+      "name": "a typed imported builder retains its callable value",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V = build(uint8); if (V !== uint8) throw new Error(\"wrong type\");",
+        "dep": "export function build(T: type): type { return T; }"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a cyclic function declaration is available without its module body",
+      "modules": {
+        "main": "import \"dep\"; export function build(T: type): type { return T; }",
+        "dep": "import {build} from \"main\"; type V=build(uint8); if(V!==uint8) throw new Error(\"wrong type\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a namespace preserves the actual builder and its type result",
+      "modules": {
+        "main": "import * as ns from \"dep\"; type V = ns.build(uint8); if (V !== uint8) throw new Error(\"wrong type\");",
+        "dep": "export function build(T: type): type { return T; }"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a cyclic namespace resolves an initialized function declaration",
+      "modules": {
+        "main": "import \"dep\"; export function build(T: type): type { return T; }",
+        "dep": "import * as ns from \"main\"; type V=ns.build(uint8); if(V!==uint8) throw new Error(\"wrong type\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "renamed re-exports preserve function identity and resolution",
+      "modules": {
+        "main": "import {renamed as build} from \"facade\"; type V = build(uint8); if (V !== uint8) throw new Error(\"wrong type\");",
+        "facade": "export {build as renamed} from \"dep\";",
+        "dep": "export function build(T: type): type { return T; }"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "facade",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a default-imported builder remains callable",
+      "modules": {
+        "main": "import build from \"dep\"; type V = build(uint8); if (V !== uint8) throw new Error(\"wrong type\");",
+        "dep": "export default function build(T: type): type { return T; }"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an untyped imported builder still yields a Type Object",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V = build(uint8); if (V !== uint8) throw new Error(\"wrong type\");",
+        "dep": "export function build(T) { return T; }"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an imported arrow builder retains its lexical function value",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V = build(uint8); if (V !== uint8) throw new Error(\"wrong type\");",
+        "dep": "export const build = (T: type): type => T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an asynchronous dependency completes before an imported builder check",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V = build(uint8); if (V !== uint8) throw new Error(\"wrong type\");",
+        "dep": "export function build(T: type): type { return T; } await 0;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a generic imported builder binds its declared type parameter",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V = build(uint8); if (V !== uint8) throw new Error(\"wrong type\");",
+        "dep": "export function build<T: type>(value: T): T { return value; }"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a generic annotation using an imported builder evaluates at specialization",
+      "modules": {
+        "main": "import {build} from \"dep\"; function f<T: type>(x: T): build(T) { return x; } const x: uint8=f.<uint8>(1); if(String(x)!==\"1\") throw new Error(\"wrong value\");",
+        "dep": "export function build(T: type): type { return T; }"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "the importer cannot replace a builder capture with a same-spelled constant",
+      "modules": {
+        "main": "import {build} from \"dep\"; const T=string; type V=build(); if(V!==uint8) throw new Error(\"wrong capture\");",
+        "dep": "const T=uint8; export function build(): type {return T;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a helper retains its defining module environment",
+      "modules": {
+        "main": "import {build} from \"dep\"; const T=string; type V=build(); if(V!==uint8) throw new Error(\"wrong capture\");",
+        "dep": "const T=uint8; function helper(): type {return T;} export function build(): type {return helper();}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an imported Type Object is passed as its value",
+      "modules": {
+        "main": "import {build,T} from \"dep\"; type V=build(T); if(V!==uint8) throw new Error(\"wrong argument\");",
+        "dep": "export function build(T: type): type { return T; } export type T=uint8;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an imported scalar is passed as its value",
+      "modules": {
+        "main": "import {build,n} from \"dep\"; type V=build(n); if(V!==uint8) throw new Error(\"wrong argument\");",
+        "dep": "export const n=1; export function build(n: number): type {if(n===1) return uint8; return string;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an imported function Type Object remains distinct from a function value",
+      "modules": {
+        "main": "import {build,Fn} from \"dep\"; type V=build(Fn); if(V!==Fn) throw new Error(\"wrong type\");",
+        "dep": "export function build(T: type): type { return T; } export type Fn=(T: type)=>type;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a nested local builder shadow does not change an imported builder",
+      "modules": {
+        "main": "import {build} from \"dep\"; function unused(){function build(): type {return string;} type V=build(); if(V!==string) throw new Error(\"wrong local\");} type V=build(uint8); if(V!==uint8) throw new Error(\"wrong import\"); unused();",
+        "dep": "export function build(T: type): type { return T; }"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a builder may create and mutate its own local state",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V=build(); if(V!==uint8) throw new Error(\"wrong type\");",
+        "dep": "export function build(): type {let T=string; T=uint8; return T;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an immutable capture may itself be imported",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V=build(); if(V!==uint8) throw new Error(\"wrong type\");",
+        "dep": "import {T} from \"leaf\"; export function build(): type {return T;}",
+        "leaf": "export const T=uint8;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "leaf",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an immutable namespace capture remains admitted",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V=build();",
+        "dep": "import * as ns from \"leaf\"; export function build(): type {return ns.T;}",
+        "leaf": "export const T=uint8;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "leaf",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a failed imported argument contract rejects before importer entry",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V=build(1);",
+        "dep": "export function build(T: type): type { return T; }"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "a failed imported return contract rejects before importer entry",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V=build(1);",
+        "dep": "export function build(T: any): type {return T;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "an imported builder must return a Type Object even without a return contract",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V=build(1);",
+        "dep": "export function build(T: any): any {return T;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "an uncalled nested closed annotation still checks an imported builder",
+      "modules": {
+        "main": "import {build} from \"dep\"; function unused(x: build(1)) {}",
+        "dep": "export function build(T: type): type { return T; }"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "a captured mutable binding is not made constant by importing its builder",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V=build();",
+        "dep": "let T=uint8; export function build(): type {return T;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "a mutable capture through a local helper is rejected",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V=build();",
+        "dep": "let T=uint8; function helper(): type {return T;} export function build(): type {return helper();}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "an immutable import of an exported let remains mutable state",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V=build();",
+        "dep": "import {T} from \"leaf\"; export function build(): type {return T;}",
+        "leaf": "export let T=uint8;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "leaf",
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "a re-export cannot hide a mutable capture",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V=build();",
+        "dep": "import {T} from \"facade\"; export function build(): type {return T;}",
+        "facade": "export {T} from \"leaf\";",
+        "leaf": "export let T=uint8;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "leaf",
+          "facade",
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "a namespace member does not freeze an exported mutable value",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V=build();",
+        "dep": "import * as ns from \"leaf\"; export function build(): type {return ns.T;}",
+        "leaf": "export let T=uint8;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "leaf",
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "an imported helper cannot hide a mutable capture",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V=build();",
+        "dep": "import {helper} from \"leaf\"; export function build(): type {return helper();}",
+        "leaf": "let T=uint8; export function helper(): type {return T;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "leaf",
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "a namespace helper cannot hide a mutable capture",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V=build();",
+        "dep": "import * as ns from \"leaf\"; export function build(): type {return ns.helper();}",
+        "leaf": "let T=uint8; export function helper(): type {return T;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "leaf",
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "a reassigned helper is not a stable function declaration",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V=build();",
+        "dep": "function helper(): type {return uint8;} helper=()=>string; export function build(): type {return helper();}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "a reassigned exported builder is rejected through a namespace",
+      "modules": {
+        "main": "import * as ns from \"dep\"; type V=ns.build();",
+        "dep": "export function build(): type {return uint8;} build=()=>string;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "a same-spelled assignment in an unrelated function does not reassign a helper",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V=build(); if(V!==uint8) throw new Error(\"wrong type\");",
+        "dep": "function helper(): type {return uint8;} function unused(){let helper=1; helper=2;} export function build(): type {return helper();}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a cyclic imported builder cannot read an uninitialized captured constant",
+      "modules": {
+        "main": "import \"dep\"; const T=uint8; export function build(): type {return T;}",
+        "dep": "import {build} from \"main\"; type V=build();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "an imported throwing builder rejects its type computation",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V=build();",
+        "dep": "export function build(): type {throw new Error(\"no type\");}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "an imported builder naming ambient state remains rejected",
+      "modules": {
+        "main": "import {build} from \"dep\"; type V=build();",
+        "dep": "export function build(): type {globalThis.changed=1; return uint8;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    }
+  ]
+}

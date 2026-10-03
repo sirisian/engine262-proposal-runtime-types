@@ -29,6 +29,7 @@ import {
 } from './check.mts';
 import { BeginTypeEvaluation, BudgetExhaustionKind, EndTypeEvaluation, IsBudgetExhausted } from './budget.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
+import { ResolveBindingDeclaration } from './compile-time-evaluability.mts';
 import { BeginFragmentEvaluation, EndFragmentEvaluation } from './fragment-library.mts';
 import { Evaluate, Get, GetValue, inspect, Throw, DeclarativeEnvironmentRecord, InstantiateFunctionObject, surroundingAgent } from '#self';
 
@@ -788,6 +789,10 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     }
     if (deferred) continue;
     for (const [name, type] of obligation.aliases) {
+      // Import facts describe the binding's type, not its value. Resolve the
+      // live binding in the Module Environment instead of fabricating a Type
+      // Object that shadows an imported builder, namespace, or value.
+      if (ResolveBindingDeclaration(obligation.node, name)?.kind === 'import') continue;
       bindings.set(name, GetTypeObject(type));
     }
     for (const [name, fn] of obligation.functions) {
