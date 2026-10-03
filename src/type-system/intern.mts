@@ -14,7 +14,7 @@ import { NumberValue, BigIntValue, isTypedNumber } from '../value.mts';
 import { InstallTypeLayoutProperties } from './layout-properties.mts';
 import type { TypeRecord } from './records.mts';
 import { neverType, orderKey, propertiesInKeyOrder, displayType, CanonicalWidthArgument } from './records.mts';
-import { CountConstructedTypeRecord } from './budget.mts';
+import { CountTypeConstructionRequest } from './budget.mts';
 import { AreDisjoint, IsSubtype, SameTypeStructural } from './relations.mts';
 import { OrdinaryObjectCreate, surroundingAgent, ConvertValue, SameValue, Throw, Value, R, X } from '#self';
 import { RequireType } from '#self';
@@ -558,6 +558,7 @@ function completeNominalRecord(known: TypeRecord, supplied: TypeRecord): void {
 }
 
 export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { readonly '%Type.prototype%': ObjectValue } }): TypeObject {
+  CountTypeConstructionRequest();
   const canonical = CanonicalizeType(t);
   // A bare NON-GENERIC class type IS its constructor.
   //
@@ -634,11 +635,6 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
   };
   const isEnum = canonical.Kind === 'nominal' && canonical.EnumMembers !== undefined;
   const proto = (isEnum && intrinsics['%Enum.prototype%']) || intrinsics['%Type.prototype%'];
-  // #sec-evaluation-budget counts CONSTRUCTED Type Records, so the count sits
-  // after the intern-table lookup above: a type that was already interned is
-  // not constructed again, and charging for it would make the budget depend on
-  // how often a program mentions a type rather than on how many it builds.
-  CountConstructedTypeRecord();
   const obj = OrdinaryObjectCreate(proto, ['TypeRecord']) as unknown as TypeObject;
   obj.TypeRecord = canonical;
   // proposal-runtime-types (spec sec-conversions, sec-enums): a Type Object is

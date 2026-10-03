@@ -1,5 +1,5 @@
 // Generated from proposal-runtime-types/diagnostics.json.
-// Catalog SHA-256: 3a77ee6c9d43dfa3be2d198780bc37aca78693a348f50231ee6dec4e0d41b3a8
+// Catalog SHA-256: fee7ff4c79769dd82d865ad4f11f2ac2b27ff490dc4559a108899fd850c9d6c6
 export const TypeDiagnosticCatalog = [
   {
     "code": "RT_DEFAULT_EVALUATION",
@@ -837,7 +837,8 @@ export const TypeDiagnosticCatalog = [
     ],
     "errorClass": "StaticTypeError",
     "specification": [
-      "sec-memory-layout"
+      "sec-memory-layout",
+      "sec-recursive-declaration-validation"
     ],
     "explanation": "The declared storage cannot have the required finite layout.",
     "arguments": {
@@ -1687,7 +1688,8 @@ export const TypeDiagnosticCatalog = [
     ],
     "errorClass": "StaticTypeError",
     "specification": [
-      "sec-type-alias-declarations"
+      "sec-type-alias-declarations",
+      "sec-recursive-declaration-validation"
     ],
     "explanation": "The alias only defines itself and produces no type.",
     "arguments": {
@@ -2764,7 +2766,8 @@ export const TypeDiagnosticCatalog = [
     ],
     "errorClass": "StaticTypeError",
     "specification": [
-      "sec-evaluation-budget"
+      "sec-evaluation-budget",
+      "sec-type-evaluation-accounting"
     ],
     "explanation": "The specified semantic work limit is exhausted; the computation supplies no fallback type.",
     "arguments": {
@@ -2831,4 +2834,4 @@ export const TypeDiagnosticCatalog = [
 ] as const;
 export type TypeDiagnosticCode = typeof TypeDiagnosticCatalog[number]['code'];
 export type TypeDiagnosticRule = typeof TypeDiagnosticCatalog[number]['rule'];
-export const TypeDiagnosticCatalogHash = '3a77ee6c9d43dfa3be2d198780bc37aca78693a348f50231ee6dec4e0d41b3a8';
+export const TypeDiagnosticCatalogHash = 'fee7ff4c79769dd82d865ad4f11f2ac2b27ff490dc4559a108899fd850c9d6c6';

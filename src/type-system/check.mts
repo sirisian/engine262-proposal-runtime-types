@@ -1,4 +1,4 @@
-import { CreateTypeDiagnostic, ReportTypeDiagnostic } from './diagnostics.mts';
+import { TypeDiagnosticOf, CreateTypeDiagnostic, ReportTypeDiagnostic } from './diagnostics.mts';
 import type { TypeDiagnosticRule } from './diagnostic-catalog.mts';
 import type { Formattable } from '../host-defined/error-messages.mts';
 import { SelectCase, ValueArityAdmits, CaseParameters, CaseArgumentsAdmit, PlaceCaseArguments } from '../abstract-ops/callable-selection.mts';
@@ -2784,7 +2784,9 @@ interface ReferenceSyntaxIdentities {
  */
 function checkInTwoPasses(statementList: readonly ParseNode[] | null, root: ParseNode, session: CheckSession, afterTypeEvaluation = false): ObjectValue[] {
   const identities: ReferenceSyntaxIdentities = { nodes: new WeakMap(), alternatives: new WeakMap() };
-  CheckStatementList(statementList, root, session, afterTypeEvaluation, undefined, undefined, identities);
+  const initialErrors = CheckStatementList(statementList, root, session, afterTypeEvaluation, undefined, undefined, identities);
+  if (initialErrors.some((error) => TypeDiagnosticOf(error)?.rule === 'rt-layout'
+    || TypeDiagnosticOf(error)?.rule === 'rt-unproductive-type')) return initialErrors;
   const referenceStores = new Map<ParseNode, TypeRecord[]>();
   const errors = CheckStatementList(statementList, root, session, afterTypeEvaluation, undefined, referenceStores, identities);
   // Flow is computed over the completed declarations. A final walk checks
@@ -2905,6 +2907,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // ---- outputs and the pre-scan -------------------------------------
 
   const errors: ObjectValue[] = [];
+  let invalidTypeGraph = false;
   // Context for existing built-in signature production. Diagnostic obligations
   // carry their own source nodes and never use this contextual-typing cursor.
   let gateNode: ParseNode | undefined;
@@ -2913,6 +2916,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const reportType = (code: TypeDiagnosticRule, source: unknown, message: string, ...args: readonly Formattable[]): void => {
     const node = source && typeof source === 'object' && 'type' in source ? source as ParseNode : root;
     ReportTypeDiagnostic(errors, code, node, diagnosticPhase, message, ...args);
+    if (code === 'rt-layout' || code === 'rt-unproductive-type') invalidTypeGraph = true;
   };
   // The signatures this proposal gives the existing Array methods are contracts
   // on existing JavaScript (#sec-checked-code). Outside checked code their
@@ -26744,7 +26748,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const layoutRoots = [...classNodes.values(), ...classExpressionNodes].filter((node) => !classLayoutsChecked.has(node));
     const cycle = FirstClassInlineCycle(layoutRoots.map((node) => instanceTypeOf(node)).filter((type): type is TypeRecord => type !== null), inlineFieldsOf);
     layoutRoots.forEach((node) => classLayoutsChecked.add(node));
-    if (cycle) reportType('rt-layout', root, '$1 contains itself through field $2, so it has no finite layout', Value(displayType(cycle.type)), Value(cycle.field));
+    if (cycle) reportType('rt-layout', cycle.type.Kind === 'nominal' ? cycle.type.Declaration : root, '$1 contains itself through field $2, so it has no finite layout', Value(displayType(cycle.type)), Value(cycle.field));
     // #sec-type-alias-declarations states the same rule for an ALIAS: "It is a
     // type error if a cycle never [passes through a reference position], since
     // the type would demand an infinite inline layout, which is the same rule
@@ -26790,7 +26794,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         for (let next = bareTarget(aliasName); next !== undefined && aliasNodes.has(next); next = bareTarget(next)) {
           if (next === aliasName) {
             chain.forEach((member) => inReportedCycle.add(member));
-            reportType('rt-unproductive-type', root, '$1 is defined as itself, so it denotes no type', Value(aliasName));
+            reportType('rt-unproductive-type', aliasNode, '$1 is defined as itself, so it denotes no type', Value(aliasName));
             break;
           }
           if (chain.includes(next)) break; // a cycle that does not include this alias is reported from its own members
@@ -26820,7 +26824,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const aliasCycle = FirstInlineCycle(resolved);
       if (aliasCycle !== null) {
-        reportType('rt-layout', root, '$1 contains itself through field $2, so it has no finite layout', Value(aliasName), Value(aliasCycle));
+        reportType('rt-layout', aliasNode, '$1 contains itself through field $2, so it has no finite layout', Value(aliasName), Value(aliasCycle));
         break;
       }
     }
@@ -31447,6 +31451,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const walk = (node: ParseNode | readonly ParseNode[] | null | undefined): void => {
+    if (invalidTypeGraph) return;
     const single = node && !Array.isArray(node) ? node as ParseNode : undefined;
     // Unreachable source is still checked, but cannot contribute an outgoing
     // edge. In particular it cannot revive a return with a later declaration.
@@ -32152,11 +32157,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // any of it is walked, which is what lets `f(300)` above `function
       // f(v: uint8) {}` be the Early Error it should be.
       declareFunctionSignatures(node as readonly ParseNode[], false);
+      if (invalidTypeGraph) return;
       for (const statement of node as readonly ParseNode[]) walk(statement);
       // The list's own bindings are declared by now, so an inference anchored by
       // one of them has something to read: `let s: string = "s"; function g(){
       // return s; }` in a block publishes `string` as it does at top level.
-      publishInferredReturns();
+      if (!invalidTypeGraph) publishInferredReturns();
         return;
     }
     const n = node as ParseNode;
@@ -32526,6 +32532,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             delete target[key];
           }
           Object.assign(target, resolved);
+        }
+        // #sec-type-alias-declarations: reject a completed invalid graph before
+        // contextual typing or canonicalization traverses its cyclic members.
+        if (isPlainAlias && resolved && !mentionsTypeParameter(placeholder)) {
+          const cycle = FirstInlineCycle(placeholder);
+          if (cycle !== null) {
+            reportType('rt-layout', n, '$1 contains itself through field $2, so it has no finite layout',
+              Value(n.BindingIdentifier.name), Value(cycle));
+            return;
+          }
         }
         // The prelude's generic alias can resolve to its unbound parameter.
         // Capture its declaration independently of whether its body resolved.
@@ -34984,6 +35000,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   hoistVarBindings(statementList);
   sweepTypePositions(statementList);
   walk(statementList);
+  if (invalidTypeGraph) {
+    restoreFlow(new Map());
+    return errors;
+  }
   const reportedReferenceWrites = new Set<ParseNode>();
   CheckReferencePermissions(referenceAnalysisRoots, referenceOperations, (origin, write) => {
     if (reportedReferenceWrites.has(write)) return;

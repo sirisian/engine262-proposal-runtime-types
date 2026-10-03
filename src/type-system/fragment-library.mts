@@ -115,18 +115,18 @@ function excludedSetFor(realm: Realm): WeakSet<ObjectValue> {
  * fragment check running twice, once with a frame open and once without. A rule
  * keyed on that frame would have missed the site that runs without one.
  */
-let fragmentDepth = 0;
+const fragmentDepths = new WeakMap<object, number>();
 
 export function BeginFragmentEvaluation(): void {
-  fragmentDepth += 1;
+  fragmentDepths.set(surroundingAgent, (fragmentDepths.get(surroundingAgent) ?? 0) + 1);
 }
 
 export function EndFragmentEvaluation(): void {
-  fragmentDepth = Math.max(0, fragmentDepth - 1);
+  fragmentDepths.set(surroundingAgent, Math.max(0, (fragmentDepths.get(surroundingAgent) ?? 0) - 1));
 }
 
 export function InFragmentEvaluation(): boolean {
-  return fragmentDepth > 0;
+  return (fragmentDepths.get(surroundingAgent) ?? 0) > 0;
 }
 
 /**
@@ -135,7 +135,7 @@ export function InFragmentEvaluation(): boolean {
  * restricts what a type may be computed from, not what a program may do.
  */
 export function IsExcludedFromFragment(F: ObjectValue): boolean {
-  if (fragmentDepth === 0) {
+  if (!InFragmentEvaluation()) {
     return false;
   }
   const realm = (F as unknown as { Realm?: Realm }).Realm ?? surroundingAgent.currentRealmRecord;

@@ -75,10 +75,7 @@ test('exhaustion is not catchable by the evaluated code', () => {
   expect(runWithBudget(guarded, { steps: 100 })).toMatchObject({ Type: 'normal' });
 });
 
-test('the record limit meters constructed Type Records', () => {
-  // The second of the two limits, and it counts CONSTRUCTION rather than
-  // mention: a type already interned is not built again, so the count follows
-  // how many types a program builds and not how often it names them.
+test('record requests leave evaluations with no construction requests unaffected', () => {
   expect(runWithBudget('let x: uint8 = 5; String(x);', { records: 0 })).toMatchObject({ Type: 'normal' });
   expect(runWithBudget(crossing, { records: 1_000_000 })).toMatchObject({ Type: 'normal' });
 });

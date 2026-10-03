@@ -42,7 +42,7 @@ import { joinTypes } from './logical-types.mts';
 import { literalFitsNumericType } from './literal-fit.mts';
 import { InjectedClassOf, CanonicalWidthArgument, orderKey, typeParameterRecordsOf, setDeferredOperatorImpl, mentionsTypeParameter, substituteTypeParameters } from './records.mts';
 import {
-  ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation, EnterMetaHookEvaluation, ExitMetaHookEvaluation,
+  ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation, EnterTypeComputation, ExitTypeComputation, EvaluateWithTypeBudget,
 } from './budget.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { libraryTypeParameterNames, typeArgumentNameOf, assignTypeArguments } from './type-argument-order.mts';
@@ -1611,16 +1611,29 @@ function* proposeThroughDeclaredInverse(
   const key = orderKey(argType);
   let proposal = table.get(key);
   if (proposal === undefined) {
-    ConsumeEvaluationSteps(1);
-    if (IsBudgetExhausted()) {
-      return Throw.TypeError('$1', Value(`the evaluation budget is exhausted evaluating the inverse of ${builder}`));
+    BeginTypeEvaluation();
+    EnterTypeComputation(`the inverse of ${builder}`);
+    BeginFragmentEvaluation();
+    try {
+      ConsumeEvaluationSteps(1);
+      if (IsBudgetExhausted()) {
+        return Throw.TypeError('$1', Value(`the evaluation budget is exhausted evaluating the inverse of ${builder}`));
+      }
+      const called = EnsureCompletion(yield* Call(inverse, Value.undefined, [GetTypeObject(argType)]));
+      // Never memoize a fallback returned by a catch after semantic exhaustion.
+      if (IsBudgetExhausted()) {
+        return Throw.TypeError('$1', Value(`the evaluation budget is exhausted evaluating the inverse of ${builder}`));
+      }
+      if (called.Type !== 'normal') {
+        return called as never;
+      }
+      proposal = called.Value as Value;
+      table.set(key, proposal);
+    } finally {
+      EndFragmentEvaluation();
+      ExitTypeComputation();
+      EndTypeEvaluation();
     }
-    const called = EnsureCompletion(yield* Call(inverse, Value.undefined, [GetTypeObject(argType)]));
-    if (called.Type !== 'normal') {
-      return called as never;
-    }
-    proposal = called.Value as Value;
-    table.set(key, proposal);
   }
   // The proposal: a Type Object, or an object of Type Objects keyed by name.
   const recordOf = (v: Value): TypeRecord | null => ((v as { TypeRecord?: TypeRecord }).TypeRecord ?? null);
@@ -3534,7 +3547,7 @@ function* EvaluatePredicateExpression(expression: ParseNode.AssignmentExpression
   // present. A dummy satisfies it; it is read only when the body is an anonymous
   // function definition, which a boolean predicate is not.
   (fn as { ClassFieldInitializerName: Value }).ClassFieldInitializerName = Value('');
-  return Q(yield* Call(fn, value, []));
+  return Q(yield* EvaluateWithTypeBudget('a refinement predicate', Call(fn, value, [])));
 }
 
 /**
@@ -5968,8 +5981,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
               Extent: { Kind: 'parameter', Name: (node.ArrayExtent as { sourceText?: string }).sourceText ?? 'extent' } as unknown as TypeRecord,
             } as unknown as TypeRecord;
           }
-          const ref = Q(yield* Evaluate(node.ArrayExtent));
-          const v = Q(yield* GetValue(ref));
+          const v = Q(yield* evaluateTypeInitializer(node.ArrayExtent, anyType, 'an array extent'));
           // A TYPED number counts. A value generic binds the value its
           // constraint admits - `f.<4, 2>` over `<N: uint32, I: uint32>` binds a
           // `uint32` 4, not a Number 4, and the two are never SameValue under
@@ -6022,15 +6034,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
           if (outsideElement !== undefined) {
             return Throw.TypeError('a tuple element default must be compile-time evaluable, and $1 is not', Value(outsideElement));
           }
-          BeginFragmentEvaluation();
-          try {
-            Initial = Q(yield* GetValue(Q(yield* Evaluate(e.Initializer))));
-            if (!mentionsTypeParameter(Type)) {
-              Initial = Q(yield* CheckedConvertValue(Initial, Type));
-            }
-          } finally {
-            EndFragmentEvaluation();
-          }
+          Initial = Q(yield* evaluateTypeInitializer(e.Initializer, Type, 'a tuple element default'));
           sawDefault = true;
         }
         if (e.Rest) {
@@ -6212,15 +6216,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
           // The library half of the fragment applies to what this evaluation
           // REACHES, so the scope is opened around it: an excluded built-in is
           // refused at the call, wherever the call came from.
-          BeginFragmentEvaluation();
-          try {
-            initial = Q(yield* GetValue(Q(EnsureCompletion(yield* Evaluate(memberInitializer as never))) as never));
-            if (!mentionsTypeParameter(type)) {
-              initial = Q(yield* CheckedConvertValue(initial, type));
-            }
-          } finally {
-            EndFragmentEvaluation();
-          }
+          initial = Q(yield* evaluateTypeInitializer(memberInitializer, type, 'an object member default'));
         }
         Properties.push({ key, type, optional: member.Optional, readonly: member.Readonly, initial });
       }
@@ -6867,7 +6863,29 @@ export function* functionRecordFromSignature(params: readonly ParseNode.Function
   }
 }
 
+function* evaluateTypeInitializer(node: ParseNode, type: TypeRecord, subject: string): PlainEvaluator<Value> {
+  BeginFragmentEvaluation();
+  try {
+    return Q(yield* EvaluateWithTypeBudget(subject, (function* (): PlainEvaluator<Value> {
+      const value = Q(yield* GetValue(Q(yield* Evaluate(node as ParseNode.AssignmentExpressionOrHigher))));
+      if (mentionsTypeParameter(type)) return value;
+      return Q(yield* CheckedConvertValue(value, type));
+    })()));
+  } finally {
+    EndFragmentEvaluation();
+  }
+}
+
 function* evaluateComputedType(node: ParseNode.ComputedType): PlainEvaluator<Value> {
+  BeginFragmentEvaluation();
+  try {
+    return Q(yield* EvaluateWithTypeBudget(node.sourceText || 'a computed type', evaluateComputedTypeBody(node)));
+  } finally {
+    EndFragmentEvaluation();
+  }
+}
+
+function* evaluateComputedTypeBody(node: ParseNode.ComputedType): PlainEvaluator<Value> {
   let callee: Value;
   if (node.Callee.type === 'ComputedType') {
     callee = Q(yield* evaluateComputedType(node.Callee));
@@ -7007,7 +7025,7 @@ export function* ConstraintAdmits(candidate: TypeRecord, constraint: TypeRecord 
     pushTypeParameterFrame(frame);
     BeginTypeEvaluation();
     // The evaluator's step meter is shared with pure metadata hooks.
-    EnterMetaHookEvaluation('a family declaration default');
+    EnterTypeComputation('a family declaration default');
     const context = surroundingAgent.runningExecutionContext;
     const savedEnvironment = context.LexicalEnvironment;
     if (record.DefaultEnvironment) context.LexicalEnvironment = record.DefaultEnvironment as typeof savedEnvironment;
@@ -7024,7 +7042,7 @@ export function* ConstraintAdmits(candidate: TypeRecord, constraint: TypeRecord 
       return result.Value as TypeRecord;
     } finally {
       context.LexicalEnvironment = savedEnvironment;
-      ExitMetaHookEvaluation();
+      ExitTypeComputation();
       EndTypeEvaluation();
       popTypeParameterFrame();
     }

@@ -10,7 +10,7 @@ import { Q, X, EnsureCompletion, isEvaluator, Await, type ThrowCompletion } from
 // module graph disagree, and the graph wins.
 import { CopyValueClassInstance, exactNumericValue, exactNumericEquals } from './testing-comparison.mts';
 import { SoAStorageOf } from '../intrinsics/SoA.mts';
-import { ConsumeEvaluationSteps, IsBudgetExhausted, EnterMetaHookEvaluation, ExitMetaHookEvaluation, BeginTypeEvaluation, EndTypeEvaluation } from '../type-system/budget.mts';
+import { ConsumeEvaluationSteps, IsBudgetExhausted, EnterTypeComputation, ExitTypeComputation, BeginTypeEvaluation, EndTypeEvaluation } from '../type-system/budget.mts';
 import { Construct, IsCallable, IsConstructor, PrivateFieldAdd, PrivateMethodOrAccessorAdd, ToLength, SameValue } from './all.mts';
 import { CanonicalizeType, GetTypeObject, ConvertToDecimal } from '../type-system/intern.mts';
 import { TypedBooleanValue, TypedBoolean, TypedSymbolValue, TypedSymbol, TypedBigIntValue, TypedBigInt, NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext, Descriptor } from '../value.mts';
@@ -3509,15 +3509,6 @@ export function* ApplyMetaHook(typeObject: object, name: string, args: readonly 
   if (!fn) {
     return undefined;
   }
-  // #sec-evaluation-budget: this is where the type machinery runs USER CODE,
-  // so it is where the meter belongs. Once the enclosing top-level type
-  // evaluation is exhausted the hook is not called at all - the evaluation is
-  // abandoned, and calling on would be running code the budget already
-  // refused.
-  if (IsBudgetExhausted()) {
-    return Throw.TypeError('$1', `${LookupMetaTypeName(typeObject) ?? 'a meta type'}'s ${name} hook exceeded the evaluation budget`);
-  }
-  ConsumeEvaluationSteps(1);
   // A hook may annotate its parameters
   // with the meta type's type parameter, and #sec-meta-declarations says what
   // that parameter is: "bound to the base at each parameterization the meta type
@@ -3542,31 +3533,26 @@ export function* ApplyMetaHook(typeObject: object, name: string, args: readonly 
     pushTypeParameterFrame(new Map([[parameterName, base]]));
   }
   try {
-    // The charge above is one step per hook
-    // CALL; this marks the span in which the ordinary evaluator charges per
-    // NODE, so a hook that loops is bounded by the work it does rather than by
-    // returning to be charged again.
-    // The meter needs a FRAME to charge, and a
-    // crossing from an unconstrained value opens none - measured `open=false`
-    // there, where a constrained crossing measured `open=true`. So the two
-    // failing probes had two different causes: one unmetered span, one absent
-    // frame.
-    //
-    // BeginTypeEvaluation joins an enclosing frame rather than opening a new
-    // one, so a hook reached from the checking pass or from an alias
-    // instantiation still shares ONE budget - which is the property
-    // `runtime.mts` already relies on for recursion.
+    // Join an enclosing type computation, or open one for a runtime boundary.
     BeginTypeEvaluation();
     // The subject the diagnostic will name: the meta type's declared name where
     // one is registered, and the hook that was running. #sec-evaluation-budget
     // forbids an evaluation "no diagnostic names".
-    EnterMetaHookEvaluation(`${LookupMetaTypeName(typeObject) ?? 'a meta type'}'s ${name} hook`);
+    EnterTypeComputation(`${LookupMetaTypeName(typeObject) ?? 'a meta type'}'s ${name} hook`);
     try {
+      ConsumeEvaluationSteps(1);
+      if (IsBudgetExhausted()) {
+        return Throw.TypeError('the type evaluation budget was exhausted at $1', Value(`${LookupMetaTypeName(typeObject) ?? 'a meta type'}'s ${name} hook`));
+      }
       const values = args.map((a) => MetadataAsObject(a));
       if ((name === 'validate' || name === 'quantize') && values.length > 0) values[0] = WithoutMetadata(values[0]);
-      return Q(yield* Call(fn as never, Value.undefined, values));
+      const result = EnsureCompletion(yield* Call(fn as never, Value.undefined, values));
+      if (IsBudgetExhausted()) {
+        return Throw.TypeError('the type evaluation budget was exhausted at $1', Value(`${LookupMetaTypeName(typeObject) ?? 'a meta type'}'s ${name} hook`));
+      }
+      return Q(result);
     } finally {
-      ExitMetaHookEvaluation();
+      ExitTypeComputation();
       EndTypeEvaluation();
     }
   } finally {

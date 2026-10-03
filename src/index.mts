@@ -110,3 +110,6 @@ export { MatchSpecializationList, MatchSpecializationPattern, ValidateSpecializa
 export { CompareSpecificity, SelectSpecialization, FindDuplicateCases, AnalyzeCallableGroup } from './type-system/specialization-selection.mts';
 export type { PatternSlotParameter } from './type-system/specialization-patterns.mts';
 export type { CallableGroupHost, CallableDeclaration, SpecializationCase } from './type-system/specialization-selection.mts';
+
+import * as TypeEvaluationBudget from './type-system/budget.mts';
+export { TypeEvaluationBudget };

@@ -1,3 +1,5 @@
+import { BeginTypeEvaluation, EndTypeEvaluation, InTypeComputation, IsBudgetExhausted, CurrentTypeComputationSubject } from '../type-system/budget.mts';
+import { InFragmentEvaluation } from '../type-system/fragment-library.mts';
 import { AdoptedReceiverTypeOf, SelfThisTypeRecord } from '../type-system/check.mts';
 import { SameType } from '../type-system/relations.mts';
 import { NoDefaultValueError } from '../type-system/intern.mts';
@@ -230,7 +232,22 @@ export function OrdinaryCallBindThis(F: ECMAScriptFunctionObject, calleeContext:
 }
 
 /** https://tc39.es/ecma262/#sec-ordinarycallevaluatebody */
-export function* OrdinaryCallEvaluateBody(F: ECMAScriptFunctionObject, argumentsList: Arguments) {
+export function* OrdinaryCallEvaluateBody(F: ECMAScriptFunctionObject, argumentsList: Arguments): ReturnType<typeof ordinaryCallEvaluateBody> {
+  if (!InTypeComputation() && !InFragmentEvaluation()) return yield* ordinaryCallEvaluateBody(F, argumentsList);
+  // #sec-type-evaluation-accounting: ordinary calls made by a computation also
+  // consume nesting allowance, including recursion through callbacks.
+  BeginTypeEvaluation();
+  try {
+    if (IsBudgetExhausted()) {
+      return Throw.TypeError('the type evaluation budget was exhausted at $1', Value(CurrentTypeComputationSubject()));
+    }
+    return yield* ordinaryCallEvaluateBody(F, argumentsList);
+  } finally {
+    EndTypeEvaluation();
+  }
+}
+
+function* ordinaryCallEvaluateBody(F: ECMAScriptFunctionObject, argumentsList: Arguments) {
   // proposal-runtime-types #sec-generics: a body declared inside a
   // specialization sees that specialization's bindings. The frame captured when
   // the function was created is pushed HERE, at the single point every body
