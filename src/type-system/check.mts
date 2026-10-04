@@ -25673,16 +25673,49 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  const activeParameterFrames = new Set<Frame>();
+  const captureParameterScope = (frame: Frame): (() => void) => {
+    const state = { ...cloneFrame(frame), narrowed: frame.narrowed && new Set(frame.narrowed) };
+    const restFrame = frame as Frame & { refRestNames?: Set<string> };
+    const restNames = restFrame.refRestNames && new Set(restFrame.refRestNames);
+    const mapState = <T,>(table: WeakMap<Frame, Map<string, T>>): (() => void) => {
+      const values = table.get(frame);
+      const saved = values && new Map(values);
+      return () => {
+        if (saved) table.set(frame, new Map(saved));
+        else table.delete(frame);
+      };
+    };
+    const setState = (table: WeakMap<Frame, Set<string>>): (() => void) => {
+      const values = table.get(frame);
+      const saved = values && new Set(values);
+      return () => {
+        if (saved) table.set(frame, new Set(saved));
+        else table.delete(frame);
+      };
+    };
+    const restore = [mapState(narrowedDeclarations), mapState(invocationOrigins), mapState(unaryBindingParticipation),
+      mapState(referenceSlots), mapState(metadataValueFacts), mapState(savedTags), mapState(savedPredicates),
+      mapState(inferenceBindingAnchors), mapState(preparedBindings), setState(uninitializedVars), setState(patternBindingFrames)];
+    return () => {
+      Object.assign(frame, cloneFrame(state), { narrowed: state.narrowed && new Set(state.narrowed) });
+      restFrame.refRestNames = restNames && new Set(restNames);
+      for (const apply of restore) apply();
+    };
+  };
+
   type InitializerContext = InferenceScope & {
     flow: FlowFacts,
     uninitialized: Map<Frame, Set<string> | undefined>,
+    parameters: Map<Frame, () => void>,
     thisTypes: Known[], classes: ParseNode[], returns: Known[], generators: Known[],
     asynchronous: boolean[], patterns: Set<ParseNode>, gate: ParseNode | undefined,
   };
-  type InitializerObligation = { context: InitializerContext, expression: ParseNode, target: Known, inputs: Set<PreparedBinding> };
+  type InitializerObligation = { context: InitializerContext, expression: ParseNode, target: Known, inputs: Set<PreparedBinding>, provenance: boolean };
   const initializerObligations: InitializerObligation[] = [];
   const captureInitializerContext = (): InitializerContext => ({
     frames: frames.slice(), varFrames: varFrames.slice(), typeScopes: typeParameterScopes.slice(),
+    parameters: new Map(frames.filter((frame) => activeParameterFrames.has(frame)).map((frame) => [frame, captureParameterScope(frame)])),
     flow: captureFlow(), uninitialized: new Map(frames.map((frame) => {
       const names = uninitializedVars.get(frame);
       return [frame, names && new Set(names)];
@@ -25694,6 +25727,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const outer = captureInitializerContext();
     const live = flowLive;
     const apply = (state: InitializerContext): void => {
+      activeParameterFrames.clear();
+      for (const frame of state.parameters.keys()) activeParameterFrames.add(frame);
       thisTypeFrames.splice(0, thisTypeFrames.length, ...state.thisTypes);
       classContext.splice(0, classContext.length, ...state.classes);
       returnTypes.splice(0, returnTypes.length, ...state.returns);
@@ -25705,7 +25740,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     };
     inDeclarationScope(context, () => {
       const displaced = captureFlow();
+      const parameters = [...context.parameters.keys()].map(captureParameterScope);
       const uninitialized = new Map(context.frames.map((frame) => [frame, uninitializedVars.get(frame)]));
+      // Defaults keep the parameter environment from their checking position.
+      // Later body declarations and metadata must not enter that environment.
+      for (const restore of context.parameters.values()) restore();
       typeRevision += 1;
       apply(context);
       restoreFlow(context.flow);
@@ -25721,6 +25760,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           else uninitializedVars.delete(frame);
         }
         restoreFlow(displaced);
+        for (const restore of parameters) restore();
         apply(outer);
         flowLive = live;
         typeRevision += 1;
@@ -25728,7 +25768,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     });
   };
 
-  const checkInitializerAssignable = (expression: ParseNode, target: Known, context?: InitializerContext): void => {
+  const checkInitializerAssignable = (expression: ParseNode, target: Known, provenance = true, context?: InitializerContext): void => {
     if (!target) return;
     const saved = context ?? captureInitializerContext();
     const previous = initializerInputs;
@@ -25737,7 +25777,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const mark = errors.length;
     try {
       const source = staticTypeIn(expression, target);
-      withProvenance(expression, () => requireAssignable(source, target));
+      if (provenance) withProvenance(expression, () => requireAssignable(source, target, expression));
+      else requireAssignable(source, target, expression);
     } finally {
       initializerInputs = previous;
     }
@@ -25745,7 +25786,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // An incomplete attempt is not a verdict. Reconsider the source at its
       // original flow and context after the required declaration work finishes.
       errors.splice(mark);
-      initializerObligations.push({ context: saved, expression, target, inputs });
+      initializerObligations.push({ context: saved, expression, target, inputs, provenance });
     }
   };
   const finishInitializerObligations = (): void => {
@@ -25754,7 +25795,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (incompleteFlows.has(obligation.context.flow)
         || [...obligation.inputs].some((input) => !bindingReady(input))) continue;
       inInitializerContext(obligation.context, () => checkInitializerAssignable(
-        obligation.expression, obligation.target, obligation.context,
+        obligation.expression, obligation.target, obligation.provenance, obligation.context,
       ));
     }
   };
@@ -28059,7 +28100,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // The default is an independently written typed boundary, even when a
       // particular caller always supplies this position.
       if (annotation) {
-        requireAssignable(staticTypeIn(node.Initializer, admitted), admitted);
+        checkInitializerAssignable(node.Initializer, admitted, false);
         const fallback = staticTypeIn(node.Initializer, admitted);
         if (node.Optional && fallback && AreDisjoint(fallback, undefinedType)) bindingType = annotation;
       }
@@ -28460,7 +28501,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         frames[frames.length - 1].enumBindings.set(b.BindingIdentifier.name, boundEnum);
       }
       if (b.Initializer) {
-        withProvenance(b.Initializer, () => requireAssignable(staticTypeIn(b.Initializer, declared), declared));
+        checkInitializerAssignable(b.Initializer, declared);
         walk(b.Initializer);
       }
       // #sec-type-annotations: an omitted optional parameter holds undefined.
@@ -28480,7 +28521,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       participation.set(b.BindingIdentifier.name, (!!b.TypeAnnotation || !!contextual) && declared?.Kind !== 'any');
     } else {
       if (!b.TypeAnnotation && contextual && b.Initializer) {
-        requireAssignable(staticTypeIn(b.Initializer, contextual), contextual);
+        checkInitializerAssignable(b.Initializer, contextual, false);
       }
       checkPattern(b, { type: b.TypeAnnotation ? resolveType(b.TypeAnnotation.Type) : contextual }, true, !!b.TypeAnnotation || !!contextual);
       if (!b.TypeAnnotation && b.Initializer) {
@@ -28623,6 +28664,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // initialized values, and does not expose body declarations to defaults.
     formals.forEach((p, i) => declarePatternAnnotations(p, frames[frames.length - 1],
       parameterBodyType(p, contextual?.[i] ?? null, records?.[i])));
+    const parameterFrame = frames[frames.length - 1];
+    activeParameterFrames.add(parameterFrame);
     let index = 0;
     for (const p of params ?? []) {
       if (p.type === 'SingleNameBinding' || p.type === 'BindingElement') {
@@ -28666,6 +28709,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       index += 1;
     }
+    activeParameterFrames.delete(parameterFrame);
     hoistVarBindings(body);
     if (body) {
       // proposal-runtime-types #sec-overloading-on-return-type: a CONCISE arrow
@@ -34837,7 +34881,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (n.TypeAnnotation) {
           const declared = resolveType(n.TypeAnnotation.Type);
           if (n.Initializer) {
-            requireAssignable(staticTypeIn(n.Initializer, declared), declared);
+            checkInitializerAssignable(n.Initializer, declared, false);
           } else if (declared && !mentionsTypeParameter(declared) && !n.Decorators?.length) {
             // #sec-typed-classes: a field without an initializer needs a
             // default. check-pass.mts resolves this after metadata processing.
