@@ -25428,8 +25428,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // A transparent local may contribute its initializer's type without deriving
   // that type from an annotation. Keep that provenance separate from the type.
   const inferenceBindingAnchors = new WeakMap<Frame, Map<string, boolean>>();
-  const recordInferenceAnchor = (name: string, anchored: boolean): void => {
-    const frame = frames[frames.length - 1];
+  const recordInferenceAnchor = (name: string, anchored: boolean, frame = frames[frames.length - 1]): void => {
     if (!inferenceBindingAnchors.has(frame)) inferenceBindingAnchors.set(frame, new Map());
     inferenceBindingAnchors.get(frame)!.set(name, anchored);
   };
@@ -26236,8 +26235,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!list) {
       return null;
     }
-    return pushBlock(() => {
-      declareParameters();
+    const collectBody = (variableFrame: Frame): Known => {
+      // #sec-contribution-environments: an unknown local still shadows an
+      // outer contract. Predeclare names before reading any contribution.
+      predeclareFlowLexicals(list);
       const contributions: TypeRecord[] = [];
       let unknown = false;
       const collect = (n: ParseNode | null | undefined): void => {
@@ -26256,6 +26257,76 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           || n.type === 'GeneratorMethod' || n.type === 'AsyncGeneratorMethod' || n.type === 'AsyncMethod'
           || n.type === 'ClassDeclaration' || n.type === 'ClassExpression'
           || n.type === 'DoExpression' && n.star) {
+          return;
+        }
+        if (n.type === 'Block') {
+          pushBlock(() => {
+            predeclareFlowLexicals(n.StatementList);
+            n.StatementList.forEach(collect);
+          });
+          return;
+        }
+        if (n.type === 'SwitchStatement') {
+          collect(n.Expression);
+          pushBlock(() => {
+            const clauses = [...n.CaseBlock.CaseClauses_a ?? [],
+              ...n.CaseBlock.DefaultClause ? [n.CaseBlock.DefaultClause] : [],
+              ...n.CaseBlock.CaseClauses_b ?? []];
+            predeclareFlowLexicals(clauses.flatMap((clause) => clause.StatementList));
+            clauses.forEach(collect);
+          });
+          return;
+        }
+        if (n.type === 'TryStatement') {
+          collect(n.Block);
+          for (const clause of n.CatchClauses ?? (n.Catch ? [n.Catch] : [])) collect(clause);
+          collect(n.Finally);
+          return;
+        }
+        if (n.type === 'Catch') {
+          pushBlock(() => {
+            const type = n.TypeAnnotation ? resolveType(n.TypeAnnotation.Type) : null;
+            if (n.CatchParameter?.type === 'BindingIdentifier') declare(n.CatchParameter.name, type);
+            else declarePatternAnnotations(n.CatchParameter, frames[frames.length - 1], type);
+            collect(n.Block);
+          });
+          return;
+        }
+        if (n.type === 'ForStatement') {
+          pushBlock(() => {
+            if (n.LexicalDeclaration) {
+              predeclareFlowLexicals([n.LexicalDeclaration]);
+              collect(n.LexicalDeclaration);
+            } else n.VariableDeclarationList?.forEach(collect);
+            collect(n.Expression_a);
+            collect(n.Expression_b);
+            collect(n.Expression_c);
+            collect(n.Statement);
+          });
+          return;
+        }
+        if (n.type === 'ForInStatement' || n.type === 'ForOfStatement' || n.type === 'ForAwaitStatement') {
+          pushBlock(() => {
+            const binding = n.ForDeclaration?.ForBinding ?? n.ForBinding;
+            const frame = n.ForDeclaration ? frames[frames.length - 1] : variableFrame;
+            if (binding && (n.ForDeclaration || binding.TypeAnnotation)) declarePatternAnnotations(binding, frame);
+            const source = n.type === 'ForInStatement' ? n.Expression : n.AssignmentExpression;
+            collect(source);
+            collect(n.LeftHandSideExpression);
+            if (binding && n.ForDeclaration) {
+              const sourceType = staticType(source);
+              const element = n.type === 'ForInStatement' ? makePrimitive('string')
+                : n.type === 'ForAwaitStatement'
+                  ? AsyncIterationContribution(sourceType, structureOf, awaitedType,
+                    (type) => iteratedElementType(source, type)).element
+                  : iteratedElementType(source);
+              const anchored = derivesFromDeclaration(source, sourceType);
+              declarePatternAnnotations(binding, frame, element, { onBinding: (name, type, annotated) => {
+                recordInferenceAnchor(name, !!type && type.Kind !== 'any' && (annotated || anchored), frame);
+              } });
+            }
+            collect(n.Statement);
+          });
           return;
         }
         if (mode === 'yield') {
@@ -26284,18 +26355,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // Fall through: a `yield` may contain another in its operand.
           }
         }
-        if (n.type === 'LexicalDeclaration' || n.type === 'VariableStatement') {
-          // #sec-anchored-contributions: "a binding's annotation" anchors a
-          // contribution, so a body's own typed bindings must be in scope while
-          // its returns are read. The pass declares the PARAMETERS and nothing
-          // else, so `function g(a: uint32) { let t: uint8 = 1; return t; }`
-          // saw `t` as undeclared, read the contribution as unknown, and
-          // published nothing - while the same function returning the parameter
-          // or a declared call published correctly. Declared as the walk reaches
-          // them, which is source order, so a declaration precedes the returns
-          // that read it.
-          const list = (n as unknown as { BindingList?: readonly ParseNode[], VariableDeclarationList?: readonly ParseNode[] });
-          for (const b of list.BindingList ?? list.VariableDeclarationList ?? []) {
+        if (n.type === 'LexicalDeclaration' || n.type === 'VariableDeclaration') {
+          // Declaration contracts and initializer provenance belong to the
+          // binding's owner, which can outlive the current lexical block.
+          const bindingFrame = n.type === 'LexicalDeclaration' ? frames[frames.length - 1] : variableFrame;
+          const bindings = n.type === 'LexicalDeclaration' ? n.BindingList : [n];
+          for (const b of bindings) {
             const bound = b as unknown as {
               BindingIdentifier?: { name?: string } | null,
               TypeAnnotation?: ParseNode.TypeAnnotation | null,
@@ -26306,10 +26371,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             if (bound.TypeAnnotation) {
               const bt = resolveType(bound.TypeAnnotation.Type);
-              declare(bname, bt);
-              recordInferenceAnchor(bname, !!bt && bt.Kind !== 'any');
+              declare(bname, bt, bindingFrame);
+              recordInferenceAnchor(bname, !!bt && bt.Kind !== 'any', bindingFrame);
               continue;
             }
+            // An unannotated var has already been hoisted. A bare redeclaration
+            // must not erase a shared parameter's contract, and var initializers
+            // are not transparent aliases under #sec-anchored-contributions.
+            if (n.type === 'VariableDeclaration') continue;
             // An UNANNOTATED local that cannot change is a name for its
             // initializer's value, and a contribution that reads it is the
             // initializer's type widened. Without this, extracting a
@@ -26340,11 +26409,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (cannotChange && init) {
               const initType = staticType(init) ?? objectLiteralShape(init);
               const anchored = derivesFromDeclaration(init, initType);
-              declare(bname, initType ? widen(initType) : null);
-              recordInferenceAnchor(bname, anchored);
+              declare(bname, initType ? widen(initType) : null, bindingFrame);
+              recordInferenceAnchor(bname, anchored, bindingFrame);
             } else {
-              declare(bname, null);
-              recordInferenceAnchor(bname, false);
+              declare(bname, null, bindingFrame);
+              recordInferenceAnchor(bname, false, bindingFrame);
             }
           }
           // A DESTRUCTURING pattern binds names too, and each takes the type of
@@ -26359,7 +26428,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // default's, and a rest element of an object pattern collects a
           // remainder this proposal may not be able to write; guessing at either
           // would state something the program does not.
-          for (const b of list.BindingList ?? list.VariableDeclarationList ?? []) {
+          for (const b of bindings) {
             const pattern = (b as unknown as { BindingPattern?: ParseNode | null }).BindingPattern;
             const init = (b as unknown as { Initializer?: ParseNode | null }).Initializer;
             if (!pattern || !init) {
@@ -26394,8 +26463,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (el.TypeAnnotation) {
                 const declaredHere = resolveType(el.TypeAnnotation.Type);
                 if (declaredHere) {
-                  declare(name, declaredHere);
-                  recordInferenceAnchor(name, declaredHere.Kind !== 'any');
+                  declare(name, declaredHere, bindingFrame);
+                  recordInferenceAnchor(name, declaredHere.Kind !== 'any', bindingFrame);
                 }
                 return;
               }
@@ -26405,8 +26474,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (el.Initializer) {
                 return;
               }
-              declare(name, widen(positionType));
-              recordInferenceAnchor(name, derivesFromDeclaration(init, sourceType));
+              declare(name, widen(positionType), bindingFrame);
+              recordInferenceAnchor(name, derivesFromDeclaration(init, sourceType), bindingFrame);
             };
             if (pattern.type === 'ObjectBindingPattern') {
               const props = (pattern as unknown as { BindingPropertyList?: readonly ParseNode[] }).BindingPropertyList ?? [];
@@ -26585,6 +26654,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
       return Members.length === 1 ? Members[0]! : { Kind: 'union', Members };
+    };
+    return pushBlock(() => {
+      declareParameters();
+      const variableFrame = frames[frames.length - 1];
+      varFrames.push(variableFrame);
+      try {
+        hoistVarBindings(body);
+        return pushBlock(() => collectBody(variableFrame));
+      } finally {
+        varFrames.pop();
+      }
     });
   };
 
@@ -27228,11 +27308,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * left alone - inferring one from the source's shape is a separate rule -
    * and so is a rest, whose annotation is the type of what it collects.
    */
-  const declarePatternAnnotations = (pattern: ParseNode | null | undefined, frame = frames[frames.length - 1], contextual: Known = null): void => {
+  const declarePatternAnnotations = (pattern: ParseNode | null | undefined, frame = frames[frames.length - 1], contextual: Known = null, options: {
+    onBinding?: (name: string, type: Known, annotated: boolean) => void,
+    preserveExisting?: boolean,
+  } = {}): void => {
     if (!pattern || typeof pattern !== 'object') {
       return;
     }
-    const visit = (node: ParseNode | null | undefined, incoming: Known = null): void => {
+    const visit = (node: ParseNode | null | undefined, incoming: Known = null, annotated = false): void => {
       if (!node || typeof node !== 'object') {
         return;
       }
@@ -27242,28 +27325,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         TypeAnnotation?: ParseNode.TypeAnnotation | null,
         BindingPattern?: ParseNode | null,
       };
+      annotated ||= !!el.TypeAnnotation;
       if (el.BindingIdentifier?.name) {
-        declare(el.BindingIdentifier.name, parameterBodyType(node, incoming), frame);
+        // An unannotated var redeclaration reuses storage. In particular, a
+        // destructuring target must not erase a shared parameter's contract.
+        if (options.preserveExisting && !annotated && frame.declaredNames.has(el.BindingIdentifier.name)) return;
+        const type = parameterBodyType(node, incoming);
+        declare(el.BindingIdentifier.name, type, frame);
+        options.onBinding?.(el.BindingIdentifier.name, type, annotated);
         return;
       }
       const type = el.TypeAnnotation ? resolveType(el.TypeAnnotation.Type) : incoming;
       if (el.BindingPattern) {
-        visit(el.BindingPattern, type);
+        visit(el.BindingPattern, type, annotated);
         return;
       }
       if (node.type === 'ObjectBindingPattern') {
         for (const property of node.BindingPropertyList) {
           const p = property as PatternNode;
           const key = p.BindingIdentifier?.name ?? patternKey(p.PropertyName);
-          visit((p.BindingElement ?? p) as ParseNode, patternProperty({ type }, key).type);
+          visit((p.BindingElement ?? p) as ParseNode, patternProperty({ type }, key).type, annotated);
         }
-        visit(node.BindingRestProperty, null);
+        visit(node.BindingRestProperty, null, annotated);
         return;
       }
       if (node.type === 'ArrayBindingPattern') {
         const element = StaticIterationContribution(type, structureOf).element;
-        for (const item of node.BindingElementList) visit(item, element);
-        visit(node.BindingRestElement, element ? { Kind: 'array', Element: element, Extent: 'dynamic' } : null);
+        for (const item of node.BindingElementList) visit(item, element, annotated);
+        visit(node.BindingRestElement, element ? { Kind: 'array', Element: element, Extent: 'dynamic' } : null, annotated);
         return;
       }
       for (const key of Object.keys(node)) {
@@ -27274,11 +27363,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (Array.isArray(child)) {
           for (const c of child) {
             if (c && typeof c === 'object' && 'type' in (c as object)) {
-              visit(c as ParseNode);
+              visit(c as ParseNode, null, annotated);
             }
           }
         } else if (child && typeof child === 'object' && 'type' in (child as object)) {
-          visit(child as ParseNode);
+          visit(child as ParseNode, null, annotated);
         }
       }
     };
@@ -28562,7 +28651,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           uninitializedVars.get(frame)!.add(n.BindingIdentifier.name);
         }
       } else {
-        declarePatternAnnotations(n.BindingPattern, frame);
+        declarePatternAnnotations(n.BindingPattern, frame, null, { preserveExisting: true });
       }
     }
     for (const key of Object.keys(n)) {

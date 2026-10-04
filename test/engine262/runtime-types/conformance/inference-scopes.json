@@ -1,0 +1,1253 @@
+{
+  "description": "Lexical environments of return, resolution and yield contributions; shadowing, declaration hoisting, scope exit, and runtime/legacy controls.",
+  "specification": [
+    "sec-contribution-environments",
+    "sec-anchored-contributions",
+    "sec-elision-stability"
+  ],
+  "cases": [
+    {
+      "name": "uninitialized block local: number",
+      "source": "function f(x:string,flag:boolean){let g=x;{let g;g=1;}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "uninitialized block local: string",
+      "source": "function f(x:string,flag:boolean){let g=x;{let g;g=1;}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "annotated block local: number",
+      "source": "function f(x:string,flag:boolean){let g=x;{let g:number=1;}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "annotated block local: string",
+      "source": "function f(x:string,flag:boolean){let g=x;{let g:number=1;}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "constant block local: number",
+      "source": "function f(x:string,flag:boolean){let g=x;{const g=1;}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "constant block local: string",
+      "source": "function f(x:string,flag:boolean){let g=x;{const g=1;}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "nested blocks: number",
+      "source": "function f(x:string,flag:boolean){let g=x;{{let g:number=1;}}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "nested blocks: string",
+      "source": "function f(x:string,flag:boolean){let g=x;{{let g:number=1;}}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "labelled block: number",
+      "source": "function f(x:string,flag:boolean){let g=x;label:{let g:number=1;break label;}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "labelled block: string",
+      "source": "function f(x:string,flag:boolean){let g=x;label:{let g:number=1;break label;}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "if block: number",
+      "source": "function f(x:string,flag:boolean){let g=x;if(flag){let g:number=1;}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "if block: string",
+      "source": "function f(x:string,flag:boolean){let g=x;if(flag){let g:number=1;}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "else block: number",
+      "source": "function f(x:string,flag:boolean){let g=x;if(flag){}else{let g:number=1;}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "else block: string",
+      "source": "function f(x:string,flag:boolean){let g=x;if(flag){}else{let g:number=1;}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "while block: number",
+      "source": "function f(x:string,flag:boolean){let g=x;while(flag){let g:number=1;break;}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "while block: string",
+      "source": "function f(x:string,flag:boolean){let g=x;while(flag){let g:number=1;break;}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "do block: number",
+      "source": "function f(x:string,flag:boolean){let g=x;do{let g:number=1;}while(false);return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "do block: string",
+      "source": "function f(x:string,flag:boolean){let g=x;do{let g:number=1;}while(false);return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "for lexical head: number",
+      "source": "function f(x:string,flag:boolean){let g=x;for(let g:number=1;flag;){break;}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "for lexical head: string",
+      "source": "function f(x:string,flag:boolean){let g=x;for(let g:number=1;flag;){break;}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "for body: number",
+      "source": "function f(x:string,flag:boolean){let g=x;for(;flag;){let g:number=1;break;}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "for body: string",
+      "source": "function f(x:string,flag:boolean){let g=x;for(;flag;){let g:number=1;break;}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "for of lexical head: number",
+      "source": "function f(x:string,flag:boolean){let g=x;for(const g:number of [1]){}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "for of lexical head: string",
+      "source": "function f(x:string,flag:boolean){let g=x;for(const g:number of [1]){}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "for in lexical head: number",
+      "source": "function f(x:string,flag:boolean){let g=x;for(const g in {a:1}){}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "for in lexical head: string",
+      "source": "function f(x:string,flag:boolean){let g=x;for(const g in {a:1}){}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "catch parameter: number",
+      "source": "function f(x:string,flag:boolean){let g=x;try{throw 1;}catch(g){}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "catch parameter: string",
+      "source": "function f(x:string,flag:boolean){let g=x;try{throw 1;}catch(g){}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "filtered catch parameter: number",
+      "source": "function f(x:string,flag:boolean){let g=x;try{throw 1;}catch(g:number){}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "filtered catch parameter: string",
+      "source": "function f(x:string,flag:boolean){let g=x;try{throw 1;}catch(g:number){}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "destructuring catch: number",
+      "source": "function f(x:string,flag:boolean){let g=x;try{throw {g:1};}catch({g}){}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "destructuring catch: string",
+      "source": "function f(x:string,flag:boolean){let g=x;try{throw {g:1};}catch({g}){}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "catch block: number",
+      "source": "function f(x:string,flag:boolean){let g=x;try{}catch{let g:number=1;}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "catch block: string",
+      "source": "function f(x:string,flag:boolean){let g=x;try{}catch{let g:number=1;}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "finally block: number",
+      "source": "function f(x:string,flag:boolean){let g=x;try{}finally{let g:number=1;}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "finally block: string",
+      "source": "function f(x:string,flag:boolean){let g=x;try{}finally{let g:number=1;}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "switch shared scope: number",
+      "source": "function f(x:string,flag:boolean){let g=x;switch(flag){case true:let g:number=1;break;default:break;}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "switch shared scope: string",
+      "source": "function f(x:string,flag:boolean){let g=x;switch(flag){case true:let g:number=1;break;default:break;}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "object destructuring: number",
+      "source": "function f(x:string,flag:boolean){let g=x;{const {g}={g:1};}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "object destructuring: string",
+      "source": "function f(x:string,flag:boolean){let g=x;{const {g}={g:1};}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "array destructuring: number",
+      "source": "function f(x:string,flag:boolean){let g=x;{const [g]=[1];}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "array destructuring: string",
+      "source": "function f(x:string,flag:boolean){let g=x;{const [g]=[1];}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "destructuring default: number",
+      "source": "function f(x:string,flag:boolean){let g=x;{const {g=1}={};}return g;}const q:number=f(\"s\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "destructuring default: string",
+      "source": "function f(x:string,flag:boolean){let g=x;{const {g=1}={};}return g;}const q:string=f(\"s\",false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "later lexical shadow",
+      "source": "function outer(g:string,source,flag){function f(){{return g;let g;}}const q:number=f();}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "later destructuring shadow",
+      "source": "function outer(g:string,source,flag){function f(){{return g;const {g}={g:1};}}const q:number=f();}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "later for head shadow",
+      "source": "function outer(g:string,source,flag){function f(){for(let g=g;false;){return g;}}const q:number=f();}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "untyped catch contribution",
+      "source": "function outer(g:string,source,flag){function f(){try{throw 1;}catch(g){return g;}}const q:number=f();}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "destructuring catch contribution",
+      "source": "function outer(g:string,source,flag){function f(){try{throw {g:1};}catch({g}){return g;}}const q:number=f();}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "untyped loop contribution",
+      "source": "function outer(g:string,source,flag){function f(){for(const g of source){return g;}}const q:number=f();}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "switch later shadow",
+      "source": "function outer(g:string,source,flag){function f(){switch(flag){case true:return g;default:let g;return g;}}const q:number=f();}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "hoisted variable shadow",
+      "source": "function outer(g:string,source,flag){function f(){return g;{var g;}}const q:number=f();}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "hoisted destructured variable shadow",
+      "source": "function outer(g:string,source,flag){function f(){return g;{var {g}={g:1};}}const q:number=f();}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "typed catch contributes",
+      "source": "function f(){try{throw \"s\";}catch(g:string){return g;}}const q:number=f();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "typed catch contributes compatible",
+      "source": "function f(){try{throw \"s\";}catch(g:string){return g;}}const q:string=f();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "annotated block contributes",
+      "source": "function f(){{const g:string=\"s\";return g;}}const q:number=f();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "annotated block contributes compatible",
+      "source": "function f(){{const g:string=\"s\";return g;}}const q:string=f();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "annotated var escapes block",
+      "source": "function f(){{var g:string=\"s\";}return g;}const q:number=f();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "annotated var escapes block compatible",
+      "source": "function f(){{var g:string=\"s\";}return g;}const q:string=f();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "annotated var in loop head",
+      "source": "function f(){for(var g:string=\"s\";false;){}return g;}const q:number=f();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "annotated var in loop head compatible",
+      "source": "function f(){for(var g:string=\"s\";false;){}return g;}const q:string=f();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "annotated catch pattern",
+      "source": "function f(){try{throw {g:\"s\"};}catch({g}:{g:string}){return g;}}const q:number=f();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "annotated catch pattern compatible",
+      "source": "function f(){try{throw {g:\"s\"};}catch({g}:{g:string}){return g;}}const q:string=f();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "const f=(x:string)=>",
+      "source": "const f=(x:string)=>{let g=x;{let g:number=1;}return g;};const q:number=f(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "const f=function(x:string)",
+      "source": "const f=function(x:string){let g=x;{let g:number=1;}return g;};const q:number=f(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "function f(x:string)",
+      "source": "function f(x:string){let g=x;{let g:number=1;}return g;};const q:number=f(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async function f(x:string)",
+      "source": "async function f(x:string){let g=x;{let g:number=1;}return g;};const q:Promise.<number>=f(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "const f=async(x:string)=>",
+      "source": "const f=async(x:string)=>{let g=x;{let g:number=1;}return g;};const q:Promise.<number>=f(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "function* f(x:string)",
+      "source": "function* f(x:string){let g=x;{let g:number=1;}yield g;};const q:Generator.<number,void,void>=f(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async function* f(x:string)",
+      "source": "async function* f(x:string){let g=x;{let g:number=1;}yield g;};const q:AsyncGenerator.<number,void,void>=f(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "shadowing preserves runtime result",
+      "source": "function f(x:string){let g=x;{let g:number=1;}return g;}f(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "real write remains dynamic",
+      "source": "function f(x:string){let g=x;{g=1;}return g;}const q:number=f(\"s\");String(q);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "captured write remains dynamic",
+      "source": "function f(x:string){let g=x;function write(){g=1;}write();return g;}const q:number=f(\"s\");String(q);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "initializer executes once",
+      "source": "let calls=0;function f(x:string){let g=(calls++,x);{let g:number=1;}return g;}f(\"s\");String(calls);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "legacy no annotation automatic",
+      "source": "function f(){let g=\"s\";{let g=1;}return g;}f();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "legacy no annotation forced",
+      "source": "function f(){let g=\"s\";{let g=1;}return g;}f();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "legacy no annotation disabled",
+      "source": "function f(){let g=\"s\";{let g=1;}return g;}f();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      },
+      "checking": "disabled"
+    },
+    {
+      "name": "typed parameter bare var retains value",
+      "source": "function f(g:string){{var g;}return g;}f(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "default parameter bare var retains value",
+      "source": "function f(g:string=\"s\"){{var g;}return g;}f();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "shared parameter var contract",
+      "source": "function f(g:string){{var g;}return g;}const q:number=f(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "separated parameter var contract",
+      "source": "function f(g:string=\"s\"){{var g;}return g;}const q:number=f(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "typed for var preserves shared parameter",
+      "source": "function f(g:string,source){for(var g of source){return g;}return g;}const q:number=f(\"s\",[\"s\"]);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "untyped for var escapes lexical body",
+      "source": "function outer(g:string,source){function f(){for(var g of source){}return g;}const q:number=f();}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "sibling scopes retain separate contributions",
+      "source": "function f(flag:boolean){if(flag){const g:string=\"s\";return g;}else{const g:number=1;return g;}}const q:string|number=f(false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "try and finally retain separate contributions",
+      "source": "function f(flag:boolean){try{const g:string=\"s\";if(flag)return g;}finally{let g:number=1;}return 1;}const q:string|number=f(false);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "catch clauses do not share bindings",
+      "source": "function f(){try{throw 1;}catch(g:string){return g;}catch(g:number){return g;}}const q:string|number=f();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "for await head stays local",
+      "source": "async function f(x:string){let g=x;for await(const g:number of [1]){}return g;}const q:Promise.<number>=f(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "lexical declaration after return retains outer TDZ semantics",
+      "source": "function outer(g:string){function f(){{return g;let g;}}f();}outer(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "var hoisting retains undefined runtime value",
+      "source": "function outer(g:string){function f(){return g;{var g;}}return f();}String(outer(\"s\"));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "undefined"
+      }
+    },
+    {
+      "name": "typed iterable under string: number",
+      "source": "function outer(g:string){function f(source:[].<string>){for(const g of source)return g;return \"s\";}const q:number=f([]);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "typed iterable under string: string",
+      "source": "function outer(g:string){function f(source:[].<string>){for(const g of source)return g;return \"s\";}const q:string=f([]);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "typed iterable under number: number",
+      "source": "function outer(g:number){function f(source:[].<string>){for(const g of source)return g;return \"s\";}const q:number=f([]);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "typed iterable under number: string",
+      "source": "function outer(g:number){function f(source:[].<string>){for(const g of source)return g;return \"s\";}const q:string=f([]);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "typed iterable pattern under string: number",
+      "source": "function outer(g:string){function f(source:[].<{g:string}>){for(const {g} of source)return g;return \"s\";}const q:number=f([]);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "typed iterable pattern under string: string",
+      "source": "function outer(g:string){function f(source:[].<{g:string}>){for(const {g} of source)return g;return \"s\";}const q:string=f([]);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "typed iterable pattern under number: number",
+      "source": "function outer(g:number){function f(source:[].<{g:string}>){for(const {g} of source)return g;return \"s\";}const q:number=f([]);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "typed iterable pattern under number: string",
+      "source": "function outer(g:number){function f(source:[].<{g:string}>){for(const {g} of source)return g;return \"s\";}const q:string=f([]);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "iteration contract without outer binding",
+      "source": "function f(source:[].<string>){for(const g of source)return g;return \"s\";}const q:number=f([\"s\"]);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async iteration contract",
+      "source": "async function f(source:[].<string>){for await(const g of source)return g;return \"s\";}const q:Promise.<number>=f([\"s\"]);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "for in key contract",
+      "source": "function f(source:{a:number}){for(const g in source)return g;return \"s\";}const q:number=f({a:1});",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "literal loop supplies no declaration anchor",
+      "source": "function f(){for(const g of [1])return g;return 2;}const q:string=f();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "literal loop inside participating function",
+      "source": "function f(x:string){for(const g of [1])return g;return 2;}const q:string=f(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "initialized var and default parameter: number",
+      "source": "function f(g:string=\"s\"){var g=1;return g;}const q:number=f();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "initialized var and default parameter: string",
+      "source": "function f(g:string=\"s\"){var g=1;return g;}const q:string=f();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "initialized var and simple parameter: number",
+      "source": "function f(g:string){var g=1;return g;}const q:number=f(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "initialized var and simple parameter: string",
+      "source": "function f(g:string){var g=1;return g;}const q:string=f(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "destructuring var and default parameter: number",
+      "source": "function f(g:string=\"s\"){var {g}={g:1};return g;}const q:number=f();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "destructuring var and default parameter: string",
+      "source": "function f(g:string=\"s\"){var {g}={g:1};return g;}const q:string=f();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "destructuring var and simple parameter: number",
+      "source": "function f(g:string){var {g}={g:1};return g;}const q:number=f(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "destructuring var and simple parameter: string",
+      "source": "function f(g:string){var {g}={g:1};return g;}const q:string=f(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    }
+  ]
+}
