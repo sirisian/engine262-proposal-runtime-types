@@ -54,6 +54,7 @@ import { indexTypeRecord } from './index-type.mts';
 import { CanonicalizeType, isTypeObject } from './intern.mts';
 import { elementTypeOfIterable, widenForBinding } from './unify.mts';
 import { CompileTimeEvaluabilityChecker, ResolveBindingDeclaration } from './compile-time-evaluability.mts';
+import { LexicalMutationAnalysis } from './lexical-mutations.mts';
 import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
 } from './iteration-types.mts';
@@ -2972,6 +2973,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * whose elision it invalidates.
    */
   const assignedNames = new Set<string>();
+  const lexicalUnassigned = LexicalMutationAnalysis(root);
   const assignedGlobalProperties = new Set<string>();
   /**
    * Names some FUNCTION BODY assigns to, so a call might change them.
@@ -3021,7 +3023,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           ParenthesizedExpression: ['Expression'],
           AssignmentExpression: ['LeftHandSideExpression'],
           ArrayLiteral: ['ElementList'], ObjectLiteral: ['PropertyDefinitionList'],
-          PropertyDefinition: ['AssignmentExpression'], SpreadElement: ['AssignmentExpression'],
+          PropertyDefinition: ['AssignmentExpression'], CoverInitializedName: ['IdentifierReference'], SpreadElement: ['AssignmentExpression'],
           AssignmentRestElement: ['AssignmentExpression'],
         };
         for (const key of keys[x.type ?? ''] ?? []) {
@@ -3760,7 +3762,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * typed shape, a literal, an operator over stable operands - is checked at
    * its own boundary and stays stable.
    */
-  const immutablyBound = (name: string): boolean => {
+  const immutablyBound = (name: string, reference?: ParseNode): boolean => {
     for (let i = frames.length - 1; i >= 0; i -= 1) {
       if (frames[i].immutableNames.has(name)) {
         return true;
@@ -3778,7 +3780,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // replacement that no program performs. A direct `eval` can assign to any
     // name in scope, so its presence withdraws the judgment for the whole
     // source text.
-    return !assignedNames.has(name) && !hasDirectEval;
+    return !hasDirectEval && ((reference && lexicalUnassigned(reference, name)) ?? !assignedNames.has(name));
   };
 
   const derivationIsStable = (node: ParseNode | null | undefined): boolean => {
@@ -3813,7 +3815,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // not alike). Recorded as a gap rather than closed by a rule that would
       // charge every method call for a hazard this one does not demonstrate.
       if (target && target.type === 'IdentifierReference'
-          && !immutablyBound((target as unknown as { name: string }).name)) {
+          && !immutablyBound((target as unknown as { name: string }).name, target)) {
         return false;
       }
     }
@@ -18111,7 +18113,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         if (callee?.Kind === 'union') {
           const name = patternExpression(node.CallExpression);
-          if (name?.type === 'IdentifierReference' && !immutablyBound(name.name)) return null;
+          if (name?.type === 'IdentifierReference' && !immutablyBound(name.name, name)) return null;
           const returns = callee.Members.map((arm) => callReturnType(callAlternative(node, callableForm(arm))));
           return returns.length && returns.every((type) => type !== null)
             ? CanonicalizeType({ Kind: 'union', Members: returns as TypeRecord[] }) : null;
@@ -18300,7 +18302,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         type?: string, name?: string
       } | undefined);
       if (calleeName?.type === 'IdentifierReference' && typeof calleeName.name === 'string'
-        && !immutablyBound(calleeName.name)) {
+        && !immutablyBound(calleeName.name, calleeName as ParseNode)) {
         // The name may hold a different function by the time the call runs, so
         // neither a declared nor an inferred return can be relied on. The value
         // is still checked where it crosses into the annotation, which is the
@@ -21074,7 +21076,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     ? key : `\u0001${Array.from(key, (character) => character.codePointAt(0)!.toString(16)).join('_')}`);
   const stableStringKey = (expression: ParseNode): string | null => {
     const core = unparenthesized(expression);
-    if (core.type !== 'StringLiteral' && (core.type !== 'IdentifierReference' || !immutablyBound(core.name))) return null;
+    if (core.type !== 'StringLiteral' && (core.type !== 'IdentifierReference' || !immutablyBound(core.name, core))) return null;
     const value = literalValueOf(singleValueOperandType(core) ?? staticType(core));
     return value instanceof JSStringValue ? value.stringValue() : null;
   };
@@ -26330,7 +26332,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // at the return - reading only the initializer would make
             // `let v = g(); v = 5; return v;` throw on a program that runs.
             const kind = (n as unknown as { LetOrConst?: string }).LetOrConst;
-            const cannotChange = kind === 'const' || !assignedNames.has(bname);
+            const cannotChange = kind === 'const' || (lexicalUnassigned(b, bname) ?? !assignedNames.has(bname));
             const init = (bound as unknown as { Initializer?: ParseNode | null }).Initializer;
             if (kind === 'const' && init && isNumericConstantExpression(init)) {
               recordNumericConstant(bname, init, frames[frames.length - 1]);
@@ -26378,7 +26380,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 Initializer?: ParseNode | null,
               };
               const name = el.BindingIdentifier?.name;
-              if (!name || !(kind === 'const' || !assignedNames.has(name))) {
+              if (!name || !(kind === 'const' || (lexicalUnassigned(element, name) ?? !assignedNames.has(name)))) {
                 return;
               }
               // AN ANNOTATED ELEMENT SAYS ITS OWN TYPE - and that type is what
@@ -32861,6 +32863,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         return;
       }
+      case 'ClassStaticBlock':
+        flowBlock(() => {
+          varFrames.push(frames[frames.length - 1]);
+          try {
+            hoistVarBindings(n.ClassStaticBlockBody);
+            predeclareFlowLexicals(n.ClassStaticBlockBody.ClassStaticBlockStatementList);
+            walk(n.ClassStaticBlockBody);
+          } finally {
+            varFrames.pop();
+          }
+        });
+        return;
       case 'WithStatement':
         walk(n.Expression);
         frames.push({ ...emptyFrame(), dynamicBindings: true });
@@ -35217,7 +35231,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const pushedClassScopeForBody = pushTypeParameterScopeOf(n, 'type-only');
         try {
           for (const el of (n as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null }).ClassTail?.ClassBody ?? []) {
-            const self = (el as { static?: boolean }).static
+            const self = el.type === 'ClassStaticBlock' || (el as { static?: boolean }).static
               ? classObjectTypeOfNode(n) : instanceType;
             thisTypeFrames.push(self);
             try {
