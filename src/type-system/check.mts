@@ -26265,6 +26265,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const declareParameters = () => {
       const contextual = contextualParameterTypes.get(fn);
       const records = contextual ? contextualParameterRecords.get(contextual) : undefined;
+      recordBindingKinds(params, true);
       (params ?? []).forEach((prm, i) => declarePatternAnnotations(prm, frames[frames.length - 1],
         parameterBodyType(prm, parameterTypes[i] ?? null, records?.[i])));
     };
@@ -26328,6 +26329,57 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       prepareLexicalBindingContracts(list, hasFlowIndependentInitializers(body!));
       const contributions: TypeRecord[] = [];
       let unknown = false;
+      const initializerType = (expression: ParseNode): Known => {
+        const depth = inferenceDepth;
+        // A source-position store uses ordinary contracts. A private callee
+        // contribution must not become a captured binding contract via a store.
+        inferenceDepth = 0;
+        try {
+          return withCaptureContracts(() => withFlowInputs(() => staticType(expression)));
+        } finally {
+          inferenceDepth = depth;
+        }
+      };
+      const transferExpression = (expression: ParseNode): void => {
+        const node = unparenthesized(expression);
+        if (node.type === 'CommaOperator') {
+          node.ExpressionList.forEach(transferExpression);
+          return;
+        }
+        if (node.type === 'AssignmentExpression' && node.AssignmentOperator === '=') {
+          const target = patternExpression(node.LeftHandSideExpression)!;
+          if (target.type === 'IdentifierReference') {
+            const source = initializerType(node.AssignmentExpression);
+            transferExpression(node.AssignmentExpression);
+            assignmentStoreEffects(target);
+            if (!flowNeedsReplay) withCaptureContracts(() => publishStoredDomain(target, source, node.AssignmentExpression));
+            return;
+          }
+        }
+        previewFlowEffects(node);
+        if (containsPropertyRead(node)) invalidateCapturedReads();
+        // Unsupported transfers establish no new domain. Their stores still
+        // invalidate aliases and conversion-sensitive locations, including a
+        // store nested in a conditional expression that may execute.
+        const invalidateStores = (part: unknown): void => {
+          if (!part || typeof part !== 'object') return;
+          if (Array.isArray(part)) {
+            part.forEach(invalidateStores);
+            return;
+          }
+          const child = part as ParseNode;
+          if (functionBoundary(child) || child.type === 'ClassDeclaration' || child.type === 'ClassExpression') return;
+          if (child.type === 'AssignmentExpression') assignmentStoreEffects(patternExpression(child.LeftHandSideExpression)!);
+          else if (child.type === 'UpdateExpression') {
+            const target = patternExpression((child.LeftHandSideExpression ?? child.UnaryExpression)!);
+            if (target) assignmentStoreEffects(target);
+          }
+          for (const [key, value] of Object.entries(child)) {
+            if (!['parent', 'location', 'strict', 'TypeAnnotation'].includes(key)) invalidateStores(value);
+          }
+        };
+        invalidateStores(node);
+      };
       const collect = (n: ParseNode | null | undefined): void => {
         if (!n || typeof n !== 'object' || unknown) return;
         // Contributions in unreachable source are still inspected, but cannot
@@ -26392,8 +26444,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         if (n.type === 'ExpressionStatement') {
           collect(n.Expression);
-          previewFlowEffects(n.Expression);
-          if (containsPropertyRead(n.Expression)) invalidateCapturedReads();
+          transferExpression(n.Expression);
           if (nonReturningEvaluation(n.Expression)) flowLive = false;
           return;
         }
@@ -26483,6 +26534,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const entry = captureFlow();
             const binding = n.ForDeclaration?.ForBinding ?? n.ForBinding;
             const frame = n.ForDeclaration ? frames[frames.length - 1] : variableFrame;
+            if (binding) recordBindingKinds(binding, n.ForDeclaration?.LetOrConst !== 'const',
+              frame, false, !!n.ForBinding);
             if (binding && (n.ForDeclaration || binding.TypeAnnotation)) declarePatternAnnotations(binding, frame);
             const source = n.type === 'ForInStatement' ? n.Expression : n.AssignmentExpression;
             collect(source);
@@ -26710,13 +26763,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           for (const binding of bindings) {
             collectSimpleBinding(binding);
             collectPatternBinding(binding);
-            const init = (binding as ParseNode.LexicalBinding).TypedInitializer?.AssignmentExpression
-              ?? (binding as ParseNode.LexicalBinding).Initializer;
-            collect((binding as ParseNode.LexicalBinding).BindingPattern);
+            const bound = binding as ParseNode.LexicalBinding;
+            const init = bound.TypedInitializer?.AssignmentExpression ?? bound.Initializer;
+            const source = init && bound.TypeAnnotation && !bound.Ref ? initializerType(init) : null;
+            collect(bound.BindingPattern);
             if (init) {
               collect(init);
-              previewFlowEffects(init);
-              if (containsPropertyRead(init)) invalidateCapturedReads();
+              transferExpression(init);
+              if (bound.BindingIdentifier && bound.TypeAnnotation && !bound.Ref && !flowNeedsReplay) {
+                const domain = storedDomain(source, resolveType(bound.TypeAnnotation.Type));
+                if (domain) declareNarrowed(bound.BindingIdentifier.name, domain);
+              }
             }
           }
           // Process each initializer's contributions and suspension before the
@@ -26883,6 +26940,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Existing entries from the first source pass retain inferred const types.
     for (const declaration of list) {
       if (declaration.type !== 'LexicalDeclaration') continue;
+      recordBindingKinds(declaration, declaration.LetOrConst === 'let');
       for (const binding of declaration.BindingList) {
         if (binding.TypeAnnotation || !binding.BindingIdentifier
             || !frames[frames.length - 1].declaredNames.has(binding.BindingIdentifier.name)) {
