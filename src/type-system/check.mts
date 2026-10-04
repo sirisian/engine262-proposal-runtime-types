@@ -25621,6 +25621,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return null;
     }
     preparingBindings.add(binding);
+    const wasReady = bindingReady(binding);
     const outerDepth = inferenceDepth;
     // Const inference consumes published contracts; a provisional result is
     // private to a participating function's contribution computation.
@@ -25707,6 +25708,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     } finally {
       inferenceDepth = outerDepth;
       preparingBindings.delete(binding);
+      if (!wasReady && bindingReady(binding)) invalidateBindingConsumers(binding);
       if (!binding.type) observeBindingInput(binding);
     }
   };
@@ -26346,6 +26348,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       declareHoistedFunctionSignatures(list, true);
       prepareLexicalBindingContracts(list, hasFlowIndependentInitializers(body!));
       const contributions: TypeRecord[] = [];
+      const contributionQueries: { context: InitializerContext, query: () => void }[] = [];
+      const deferContribution = (query: () => void): void => {
+        // Discover the complete source scope before consuming results that may
+        // depend on a later captured declaration. Each query keeps the flow,
+        // receiver and initialization state of its contributing position.
+        contributionQueries.push({ context: captureInitializerContext(), query });
+      };
       let unknown = false;
       const initializerType = (expression: ParseNode): Known => {
         const depth = inferenceDepth;
@@ -26399,7 +26408,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         invalidateStores(node);
       };
       const collect = (n: ParseNode | null | undefined): void => {
-        if (!n || typeof n !== 'object' || unknown) return;
+        if (!n || typeof n !== 'object') return;
         // Contributions in unreachable source are still inspected, but cannot
         // revive a completed path or export facts to its following statements.
         if (!flowLive) {
@@ -26575,8 +26584,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           });
           return;
         }
-        if (mode === 'yield') {
-          if (n.type === 'YieldExpression') {
+        if (mode === 'yield' && n.type === 'YieldExpression') {
+          deferContribution(() => {
             const y = n as unknown as { AssignmentExpression?: ParseNode | null, hasStar?: boolean };
             if (y.hasStar) {
               const delegated = StaticDelegationContribution(y.AssignmentExpression ? staticType(y.AssignmentExpression) : null,
@@ -26593,13 +26602,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               unknown = true;
               return;
             }
-            if (derivesFromDeclaration(y.AssignmentExpression as ParseNode, t)) {
-              anchorage.anchored = true;
-            }
+            if (derivesFromDeclaration(y.AssignmentExpression as ParseNode, t)) anchorage.anchored = true;
             const yielded = fn.type.startsWith('AsyncGenerator') ? awaitedElementType(t) ?? t : t;
             contributions.push(wanted && yielded.Kind === 'literal' && literalFitsNumericType(yielded, wanted) ? wanted : widen(yielded));
-            // Fall through: a `yield` may contain another in its operand.
-          }
+          });
+          // The operand may itself yield. Its evaluation and suspension remain
+          // in source order even though its type is consumed after discovery.
         }
         if (n.type === 'LexicalDeclaration' || n.type === 'VariableDeclaration') {
           // Declaration contracts and initializer provenance belong to the
@@ -26671,7 +26679,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (cannotChange && init) {
               const initType = staticType(init) ?? objectLiteralShape(init);
               const anchored = derivesFromDeclaration(init, initType);
-              const contract = kind === 'const' ? withCaptureContracts(() =>
+              const prepared = kind === 'const' ? preparedBindings.get(bindingFrame)?.get(bname) : undefined;
+              if (prepared?.contribution && !flowNeedsReplay) prepared.contribution.flow = captureFlow();
+              const contract = prepared ? preparedBindingType(bindingFrame, bname) : kind === 'const' ? withCaptureContracts(() =>
                 constInitializerParticipates(init) ? staticType(init) : null) : null;
               declare(bname, initType ? widen(initType) : null, bindingFrame);
               recordInferenceAnchor(bname, anchored, bindingFrame);
@@ -26802,7 +26812,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         } else if (mode !== 'yield' && n.type === 'ReturnStatement') {
           const expr = (n as { Expression?: ParseNode | null }).Expression;
           if (!expr) {
-            contributions.push(makePrimitive('undefined'));
+            deferContribution(() => {
+              contributions.push(makePrimitive('undefined'));
+            });
             return;
           }
           // Read AT THE WANTED type where the position supplies one, exactly as
@@ -26817,49 +26829,51 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // contribution: `() => { return "wrong"; }` at a `uint8` still reads
           // as a string and is still refused, which is the property the concise
           // path's own comment insists on.
-          const t = wanted ? staticTypeIn(expr, wanted) : staticType(expr);
-          if (!t) {
-            unknown = true;
-            return;
-          }
-          // #sec-anchored-contributions, recorded HERE rather than off the join,
-          // because widening erases what the test reads: `return 's'` has the
-          // literal type of a string and widens to `string`, at which point it
-          // is indistinguishable from a contribution that a declaration
-          // supplied. Anchoring is a property of the contribution, so it is
-          // taken from the contribution.
-          if (derivesFromDeclaration(expr, t)) {
-            anchorage.anchored = true;
-            anchorage.from = anchorage.from ?? anchorDescription(expr);
-          }
-          {
-            // Recorded whether or not it anchors: a literal contribution is
-            // still the answer to "which return produced this member".
-            const origin = anchorDescription(expr) ?? (expr.type === 'StringLiteral' || expr.type === 'NumericLiteral' ? 'a literal' : null);
-            if (origin) {
-              (anchorage.origins ??= []).push({ type: widen(t) as TypeRecord, from: origin });
+          deferContribution(() => {
+            const t = wanted ? staticTypeIn(expr, wanted) : staticType(expr);
+            if (!t) {
+              unknown = true;
+              return;
             }
-          }
-          if ((mode === 'resolve' || mode === 'generator-return' && fn.type.startsWith('AsyncGenerator'))
-              && t.Kind === 'nominal' && t.LibraryName === 'Promise'
-              && t.Arguments.length > 0 && typeof t.Arguments[0] !== 'number') {
-            // A promise contribution contributes what it RESOLVES with: an
-            // async function returning a promise resolves with that promise's
-            // value rather than with the promise, which is the flattening
-            // `await` performs and which the published type must match.
-            contributions.push(t.Arguments[0] as TypeRecord);
-            return;
-          }
-          // #sec-never-type: `never` is the identity of union, so a `never`
-          // contribution vanishes from a join that has any other member. That
-          // is what makes the recursion rule work - the recursive reference
-          // contributes `never` and the base case decides the type - and
-          // without dropping it here the published type read
-          // `never | uint.<32>`, naming a member no value can inhabit.
-          if (t.Kind === 'union' && (t as { Members: readonly TypeRecord[] }).Members.length === 0) {
-            return;
-          }
-          contributions.push(wanted && t.Kind === 'literal' && literalFitsNumericType(t, wanted) ? wanted : widen(t));
+            // #sec-anchored-contributions, recorded HERE rather than off the join,
+            // because widening erases what the test reads: `return 's'` has the
+            // literal type of a string and widens to `string`, at which point it
+            // is indistinguishable from a contribution that a declaration
+            // supplied. Anchoring is a property of the contribution, so it is
+            // taken from the contribution.
+            if (derivesFromDeclaration(expr, t)) {
+              anchorage.anchored = true;
+              anchorage.from = anchorage.from ?? anchorDescription(expr);
+            }
+            {
+              // Recorded whether or not it anchors: a literal contribution is
+              // still the answer to "which return produced this member".
+              const origin = anchorDescription(expr) ?? (expr.type === 'StringLiteral' || expr.type === 'NumericLiteral' ? 'a literal' : null);
+              if (origin) {
+                (anchorage.origins ??= []).push({ type: widen(t) as TypeRecord, from: origin });
+              }
+            }
+            if ((mode === 'resolve' || mode === 'generator-return' && fn.type.startsWith('AsyncGenerator'))
+                && t.Kind === 'nominal' && t.LibraryName === 'Promise'
+                && t.Arguments.length > 0 && typeof t.Arguments[0] !== 'number') {
+              // A promise contribution contributes what it RESOLVES with: an
+              // async function returning a promise resolves with that promise's
+              // value rather than with the promise, which is the flattening
+              // `await` performs and which the published type must match.
+              contributions.push(t.Arguments[0] as TypeRecord);
+              return;
+            }
+            // #sec-never-type: `never` is the identity of union, so a `never`
+            // contribution vanishes from a join that has any other member. That
+            // is what makes the recursion rule work - the recursive reference
+            // contributes `never` and the base case decides the type - and
+            // without dropping it here the published type read
+            // `never | uint.<32>`, naming a member no value can inhabit.
+            if (t.Kind === 'union' && (t as { Members: readonly TypeRecord[] }).Members.length === 0) {
+              return;
+            }
+            contributions.push(wanted && t.Kind === 'literal' && literalFitsNumericType(t, wanted) ? wanted : widen(t));
+          });
           return;
         }
         for (const key of Object.keys(n)) {
@@ -26879,6 +26893,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (const st of list) {
         collect(st);
       }
+      for (const { context, query } of contributionQueries) inInitializerContext(context, query);
       if (unknown) {
         return null;
       }

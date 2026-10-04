@@ -836,8 +836,15 @@
       "name": "captured writer before forward initializer",
       "source": "function outer(){function f(x:string|number){write();return g();function write(){x=\"s\";}function g(){return s;}const s=x;}const q:string=f(\"s\");}",
       "expected": {
-        "completion": "normal",
-        "bodyEntered": true
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
       }
     },
     {
