@@ -3426,7 +3426,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const t = frames[i].bindings.get(name);
       if (t) {
         const prepared = preparedBindings.get(frames[i])?.get(name);
-        if (prepared?.flowIncomplete) observeBindingInput(prepared);
+        if (prepared) observeBindingInput(prepared);
         return t;
       }
       // AN UNTYPED DECLARATION STILL SHADOWS. `declare` records every name in
@@ -3565,6 +3565,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const t = f.bindings.get(name);
       if (t !== undefined) {
+        const prepared = preparedBindings.get(f)?.get(name);
+        if (prepared) observeBindingInput(prepared);
         return t;
       }
       if (f.declaredNames.has(name)) {
@@ -25561,7 +25563,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return changed;
   };
 
-  type PreparedBinding = InferenceScope & { node: ParseNode, expression: ParseNode, constant: boolean, type?: Known, completed?: boolean, flowIncomplete?: boolean };
+  type PreparedBinding = InferenceScope & {
+    node: ParseNode, expression: ParseNode, constant: boolean, owner: Frame, name: string,
+    type?: Known, completed?: boolean, flowIncomplete?: boolean,
+    context?: InitializerContext, inputs?: Set<PreparedBinding>, deferredErrors?: ObjectValue[],
+  };
+  const bindingReady = (binding: PreparedBinding): boolean => !binding.flowIncomplete
+    && !binding.inputs?.size && (!!binding.completed || !!binding.type);
+  const pendingBindingContracts = new Set<PreparedBinding>();
   const preparedBindings = new WeakMap<Frame, Map<string, PreparedBinding>>();
   const preparingBindings = new Set<PreparedBinding>();
   const preparedBindingType = (frame: Frame, name: string): Known => {
@@ -25631,7 +25640,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
   let initializerInputs: Set<PreparedBinding> | undefined;
   const observeBindingInput = (binding: PreparedBinding): void => {
-    if (!binding.flowIncomplete && (binding.completed || binding.type)) return;
+    if (bindingReady(binding)) return;
     initializerInputs?.add(binding);
     for (const inputs of inferenceInputCollectors) inputs.add(binding);
   };
@@ -25643,8 +25652,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const binding = preparedBindings.get(frame)?.get(name);
     if (!binding || binding.completed) return;
     binding.type = type;
-    binding.completed = true;
-    binding.flowIncomplete = flowNeedsReplay || !!bindingWalkInputs.get(binding.node)?.size;
+    binding.inputs = new Set(bindingWalkInputs.get(binding.node));
+    binding.flowIncomplete = flowNeedsReplay;
+    binding.completed = !binding.inputs.size && !binding.flowIncomplete;
+    if (!binding.completed) pendingBindingContracts.add(binding);
+    invalidateBindingConsumers(binding);
+  };
+  const invalidateBindingConsumers = (binding: PreparedBinding): void => {
     // Both published and private results may have used the unavailable input.
     // Every active caller records transitive inputs, so invalidation reaches
     // wrappers as well as the function that directly captured this binding.
@@ -25738,11 +25752,88 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (let index = 0; index < initializerObligations.length; index += 1) {
       const obligation = initializerObligations[index];
       if (incompleteFlows.has(obligation.context.flow)
-        || [...obligation.inputs].some((input) => input.flowIncomplete || !input.completed && !input.type)) continue;
+        || [...obligation.inputs].some((input) => !bindingReady(input))) continue;
       inInitializerContext(obligation.context, () => checkInitializerAssignable(
         obligation.expression, obligation.target, obligation.context,
       ));
     }
+  };
+
+  const requireInferredBindingType = (inferred: Known, node: ParseNode): void => {
+    if (!inferred || inferred.Kind === 'any') {
+      reportType('rt-declaration-inference', node, 'the initializer of a $1 declaration has no static type; annotate the binding or use $2', Value(':='), Value('='));
+    }
+    requireBindingType(inferred);
+  };
+
+  const finishBindingContracts = (): void => {
+    const waiting = new Map<PreparedBinding, Set<PreparedBinding>>();
+    const queue: PreparedBinding[] = [];
+    const queued = new Set<PreparedBinding>();
+    const schedule = (binding: PreparedBinding): void => {
+      if (!pendingBindingContracts.has(binding) || !binding.context || binding.flowIncomplete
+        || incompleteFlows.has(binding.context.flow)) return;
+      let ready = true;
+      for (const input of binding.inputs ?? []) {
+        if (bindingReady(input)) continue;
+        ready = false;
+        if (!waiting.has(input)) waiting.set(input, new Set());
+        waiting.get(input)!.add(binding);
+      }
+      if (ready && !queued.has(binding)) {
+        queue.push(binding);
+        queued.add(binding);
+      }
+    };
+    for (const binding of pendingBindingContracts) schedule(binding);
+    for (let index = 0; index < queue.length; index += 1) {
+      const binding = queue[index];
+      queued.delete(binding);
+      const inputs = new Set<PreparedBinding>();
+      let inferred: Known = null;
+      const mark = errors.length;
+      inInitializerContext(binding.context!, () => {
+        inferenceInputCollectors.push(inputs);
+        try {
+          if (!binding.constant || constInitializerParticipates(binding.expression)) inferred = staticType(binding.expression);
+          if (!inputs.size && !binding.constant) requireInferredBindingType(inferred, binding.node);
+        } finally {
+          inferenceInputCollectors.pop();
+        }
+      });
+      if (invalidTypeGraph) return;
+      binding.inputs = inputs;
+      if (inputs.size) {
+        errors.splice(mark);
+        schedule(binding);
+        continue;
+      }
+      const type: Known = inferred && (inferred as TypeRecord).Kind !== 'any'
+        ? binding.constant ? inferred : widen(inferred) : null;
+      binding.type = type;
+      binding.completed = true;
+      binding.deferredErrors = undefined;
+      pendingBindingContracts.delete(binding);
+      // Update the declaration contract without overwriting a later flow fact
+      // or changing the ordinary initialization state of the value binding.
+      const { owner, name } = binding;
+      if (owner.narrowed?.has(name)) {
+        if (!narrowedDeclarations.has(owner)) narrowedDeclarations.set(owner, new Map());
+        narrowedDeclarations.get(owner)!.set(name, type);
+      } else if (type) owner.bindings.set(name, type);
+      else owner.bindings.delete(name);
+      if (binding.constant) {
+        if (type) inferredConstTypes.set(binding.node, type);
+        else inferredConstTypes.delete(binding.node);
+      }
+      typeRevision += 1;
+      invalidateBindingConsumers(binding);
+      for (const consumer of waiting.get(binding) ?? []) schedule(consumer);
+    }
+    // Keep the existing := validation where a cyclic or unfinished flow input
+    // prevented this contract query from completing. Deferral alone cannot
+    // discharge a declaration's request for a static type.
+    for (const binding of pendingBindingContracts) errors.push(...binding.deferredErrors ?? []);
   };
 
   /** Compute a dependency in its declaration environment, not its caller's. */
@@ -26664,7 +26755,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!preparedBindings.has(frame)) preparedBindings.set(frame, new Map());
           if (preparedBindings.get(frame)!.get(binding.BindingIdentifier.name)?.node === binding) continue;
           preparedBindings.get(frame)!.set(binding.BindingIdentifier.name, {
-            node: binding, expression, constant: !binding.TypedInitializer,
+            node: binding, expression, constant: !binding.TypedInitializer, owner: frame, name: binding.BindingIdentifier.name,
             frames: frames.slice(), varFrames: varFrames.slice(), typeScopes: typeParameterScopes.slice(),
           });
         }
@@ -33487,6 +33578,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const isConstDeclaration = n.type === 'LexicalBinding' && (n.parent as { LetOrConst?: string } | undefined)?.LetOrConst === 'const';
         recordBindingKinds(n, !isConstDeclaration, bindingFrame, false, n.type === 'VariableDeclaration');
         if (n.BindingIdentifier) {
+          const prepared = preparedBindings.get(bindingFrame)?.get(n.BindingIdentifier.name);
+          if (prepared && !prepared.context) prepared.context = captureInitializerContext();
           const origin = n.Initializer ?? n.TypedInitializer?.AssignmentExpression;
           if (origin && !(n as { Ref?: boolean }).Ref) recordInvocationOrigin(bindingFrame, n.BindingIdentifier.name,
             origin, isConstDeclaration, !!n.TypeAnnotation || !!n.TypedInitializer);
@@ -33515,10 +33608,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // `:=` asks for a type, and a type the checker cannot name is not
             // one it can give the binding. `let a = ...` remains the spelling
             // for a binding that does not want one.
-            if (!inferred || inferred.Kind === 'any') {
-              reportType('rt-declaration-inference', (node as ParseNode), 'the initializer of a $1 declaration has no static type; annotate the binding or use $2', Value(':='), Value('='));
+            const validationStart = errors.length;
+            requireInferredBindingType(inferred, n);
+            if (prepared && (bindingWalkInputs.get(n)?.size || flowNeedsReplay)) {
+              prepared.deferredErrors = errors.splice(validationStart);
             }
-            requireBindingType(inferred);
             declare(n.BindingIdentifier.name, inferred ? widen(inferred) : null, bindingFrame);
             completePreparedBinding(bindingFrame, n.BindingIdentifier.name, inferred ? widen(inferred) : null);
             if (isConstDeclaration && booleanType(inferred)) {
@@ -35244,6 +35338,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   hoistVarBindings(statementList);
   sweepTypePositions(statementList);
   walk(statementList);
+  if (!invalidTypeGraph) finishBindingContracts();
   if (!invalidTypeGraph) finishInitializerObligations();
   if (invalidTypeGraph) {
     restoreFlow(new Map());

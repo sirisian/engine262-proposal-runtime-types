@@ -1,0 +1,739 @@
+{
+  "description": "Dependent inferred binding contracts complete before initializer consumers; chain scheduling, declaration contexts, unknown inputs and participation controls.",
+  "specification": [
+    "sec-initializer-inference-obligations",
+    "sec-return-publication-dependencies",
+    "sec-typed-initializers-semantics"
+  ],
+  "cases": [
+    {
+      "name": "const chain 1: number",
+      "source": "function outer(){let u:string|number=\"s\";const q:number=g();function g(){return b0;}const b0=f0();function f0(){return b1;}const b1=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "const chain 1: string",
+      "source": "function outer(){let u:string|number=\"s\";const q:string=g();function g(){return b0;}const b0=f0();function f0(){return b1;}const b1=u;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "inferred chain 1: number",
+      "source": "function outer(){let u:string|number=\"s\";const q:number=g();function g(){return b0;}let b0:=f0();function f0(){return b1;}const b1=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "inferred chain 1: string",
+      "source": "function outer(){let u:string|number=\"s\";const q:string=g();function g(){return b0;}let b0:=f0();function f0(){return b1;}const b1=u;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "const chain 3: number",
+      "source": "function outer(){let u:string|number=\"s\";const q:number=g();function g(){return b0;}const b0=f0();function f0(){return b1;}const b1=f1();function f1(){return b2;}const b2=f2();function f2(){return b3;}const b3=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "const chain 3: string",
+      "source": "function outer(){let u:string|number=\"s\";const q:string=g();function g(){return b0;}const b0=f0();function f0(){return b1;}const b1=f1();function f1(){return b2;}const b2=f2();function f2(){return b3;}const b3=u;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "inferred chain 3: number",
+      "source": "function outer(){let u:string|number=\"s\";const q:number=g();function g(){return b0;}let b0:=f0();function f0(){return b1;}let b1:=f1();function f1(){return b2;}let b2:=f2();function f2(){return b3;}const b3=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "inferred chain 3: string",
+      "source": "function outer(){let u:string|number=\"s\";const q:string=g();function g(){return b0;}let b0:=f0();function f0(){return b1;}let b1:=f1();function f1(){return b2;}let b2:=f2();function f2(){return b3;}const b3=u;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "const chain 12: number",
+      "source": "function outer(){let u:string|number=\"s\";const q:number=g();function g(){return b0;}const b0=f0();function f0(){return b1;}const b1=f1();function f1(){return b2;}const b2=f2();function f2(){return b3;}const b3=f3();function f3(){return b4;}const b4=f4();function f4(){return b5;}const b5=f5();function f5(){return b6;}const b6=f6();function f6(){return b7;}const b7=f7();function f7(){return b8;}const b8=f8();function f8(){return b9;}const b9=f9();function f9(){return b10;}const b10=f10();function f10(){return b11;}const b11=f11();function f11(){return b12;}const b12=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "const chain 12: string",
+      "source": "function outer(){let u:string|number=\"s\";const q:string=g();function g(){return b0;}const b0=f0();function f0(){return b1;}const b1=f1();function f1(){return b2;}const b2=f2();function f2(){return b3;}const b3=f3();function f3(){return b4;}const b4=f4();function f4(){return b5;}const b5=f5();function f5(){return b6;}const b6=f6();function f6(){return b7;}const b7=f7();function f7(){return b8;}const b8=f8();function f8(){return b9;}const b9=f9();function f9(){return b10;}const b10=f10();function f10(){return b11;}const b11=f11();function f11(){return b12;}const b12=u;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "inferred chain 12: number",
+      "source": "function outer(){let u:string|number=\"s\";const q:number=g();function g(){return b0;}let b0:=f0();function f0(){return b1;}let b1:=f1();function f1(){return b2;}let b2:=f2();function f2(){return b3;}let b3:=f3();function f3(){return b4;}let b4:=f4();function f4(){return b5;}let b5:=f5();function f5(){return b6;}let b6:=f6();function f6(){return b7;}let b7:=f7();function f7(){return b8;}let b8:=f8();function f8(){return b9;}let b9:=f9();function f9(){return b10;}let b10:=f10();function f10(){return b11;}let b11:=f11();function f11(){return b12;}const b12=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "inferred chain 12: string",
+      "source": "function outer(){let u:string|number=\"s\";const q:string=g();function g(){return b0;}let b0:=f0();function f0(){return b1;}let b1:=f1();function f1(){return b2;}let b2:=f2();function f2(){return b3;}let b3:=f3();function f3(){return b4;}let b4:=f4();function f4(){return b5;}let b5:=f5();function f5(){return b6;}let b6:=f6();function f6(){return b7;}let b7:=f7();function f7(){return b8;}let b8:=f8();function f8(){return b9;}let b9:=f9();function f9(){return b10;}let b10:=f10();function f10(){return b11;}let b11:=f11();function f11(){return b12;}const b12=u;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "const chain 24: number",
+      "source": "function outer(){let u:string|number=\"s\";const q:number=g();function g(){return b0;}const b0=f0();function f0(){return b1;}const b1=f1();function f1(){return b2;}const b2=f2();function f2(){return b3;}const b3=f3();function f3(){return b4;}const b4=f4();function f4(){return b5;}const b5=f5();function f5(){return b6;}const b6=f6();function f6(){return b7;}const b7=f7();function f7(){return b8;}const b8=f8();function f8(){return b9;}const b9=f9();function f9(){return b10;}const b10=f10();function f10(){return b11;}const b11=f11();function f11(){return b12;}const b12=f12();function f12(){return b13;}const b13=f13();function f13(){return b14;}const b14=f14();function f14(){return b15;}const b15=f15();function f15(){return b16;}const b16=f16();function f16(){return b17;}const b17=f17();function f17(){return b18;}const b18=f18();function f18(){return b19;}const b19=f19();function f19(){return b20;}const b20=f20();function f20(){return b21;}const b21=f21();function f21(){return b22;}const b22=f22();function f22(){return b23;}const b23=f23();function f23(){return b24;}const b24=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "const chain 24: string",
+      "source": "function outer(){let u:string|number=\"s\";const q:string=g();function g(){return b0;}const b0=f0();function f0(){return b1;}const b1=f1();function f1(){return b2;}const b2=f2();function f2(){return b3;}const b3=f3();function f3(){return b4;}const b4=f4();function f4(){return b5;}const b5=f5();function f5(){return b6;}const b6=f6();function f6(){return b7;}const b7=f7();function f7(){return b8;}const b8=f8();function f8(){return b9;}const b9=f9();function f9(){return b10;}const b10=f10();function f10(){return b11;}const b11=f11();function f11(){return b12;}const b12=f12();function f12(){return b13;}const b13=f13();function f13(){return b14;}const b14=f14();function f14(){return b15;}const b15=f15();function f15(){return b16;}const b16=f16();function f16(){return b17;}const b17=f17();function f17(){return b18;}const b18=f18();function f18(){return b19;}const b19=f19();function f19(){return b20;}const b20=f20();function f20(){return b21;}const b21=f21();function f21(){return b22;}const b22=f22();function f22(){return b23;}const b23=f23();function f23(){return b24;}const b24=u;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "inferred chain 24: number",
+      "source": "function outer(){let u:string|number=\"s\";const q:number=g();function g(){return b0;}let b0:=f0();function f0(){return b1;}let b1:=f1();function f1(){return b2;}let b2:=f2();function f2(){return b3;}let b3:=f3();function f3(){return b4;}let b4:=f4();function f4(){return b5;}let b5:=f5();function f5(){return b6;}let b6:=f6();function f6(){return b7;}let b7:=f7();function f7(){return b8;}let b8:=f8();function f8(){return b9;}let b9:=f9();function f9(){return b10;}let b10:=f10();function f10(){return b11;}let b11:=f11();function f11(){return b12;}let b12:=f12();function f12(){return b13;}let b13:=f13();function f13(){return b14;}let b14:=f14();function f14(){return b15;}let b15:=f15();function f15(){return b16;}let b16:=f16();function f16(){return b17;}let b17:=f17();function f17(){return b18;}let b18:=f18();function f18(){return b19;}let b19:=f19();function f19(){return b20;}let b20:=f20();function f20(){return b21;}let b21:=f21();function f21(){return b22;}let b22:=f22();function f22(){return b23;}let b23:=f23();function f23(){return b24;}const b24=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "inferred chain 24: string",
+      "source": "function outer(){let u:string|number=\"s\";const q:string=g();function g(){return b0;}let b0:=f0();function f0(){return b1;}let b1:=f1();function f1(){return b2;}let b2:=f2();function f2(){return b3;}let b3:=f3();function f3(){return b4;}let b4:=f4();function f4(){return b5;}let b5:=f5();function f5(){return b6;}let b6:=f6();function f6(){return b7;}let b7:=f7();function f7(){return b8;}let b8:=f8();function f8(){return b9;}let b9:=f9();function f9(){return b10;}let b10:=f10();function f10(){return b11;}let b11:=f11();function f11(){return b12;}let b12:=f12();function f12(){return b13;}let b13:=f13();function f13(){return b14;}let b14:=f14();function f14(){return b15;}let b15:=f15();function f15(){return b16;}let b16:=f16();function f16(){return b17;}let b17:=f17();function f17(){return b18;}let b18:=f18();function f18(){return b19;}let b19:=f19();function f19(){return b20;}let b20:=f20();function f20(){return b21;}let b21:=f21();function f21(){return b22;}let b22:=f22();function f22(){return b23;}let b23:=f23();function f23(){return b24;}const b24=u;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "TDZ const s=h(); number",
+      "source": "{let u:string|number=\"s\";const q:number=g();function g(){return s;}const s=h();function h(){return t;}const t=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "TDZ const s=h(); string",
+      "source": "{let u:string|number=\"s\";const q:string=g();function g(){return s;}const s=h();function h(){return t;}const t=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "TDZ let s:=h(); number",
+      "source": "{let u:string|number=\"s\";const q:number=g();function g(){return s;}let s:=h();function h(){return t;}const t=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "TDZ let s:=h(); string",
+      "source": "{let u:string|number=\"s\";const q:string=g();function g(){return s;}let s:=h();function h(){return t;}const t=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "TDZ const s=a;const a=h(); number",
+      "source": "{let u:string|number=\"s\";const q:number=g();function g(){return s;}const s=a;const a=h();function h(){return t;}const t=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "TDZ const s=a;const a=h(); string",
+      "source": "{let u:string|number=\"s\";const q:string=g();function g(){return s;}const s=a;const a=h();function h(){return t;}const t=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "if context: number",
+      "source": "function outer(u:string|number){if(typeof u===\"string\"){const q:number=g();function g(){return s;}const s=h();function h(){return t;}const t=u;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "if context: string",
+      "source": "function outer(u:string|number){if(typeof u===\"string\"){const q:string=g();function g(){return s;}const s=h();function h(){return t;}const t=u;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "while context: number",
+      "source": "function outer(u:string|number){while(typeof u===\"string\"){const q:number=g();function g(){return s;}const s=h();function h(){return t;}const t=u; break;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "while context: string",
+      "source": "function outer(u:string|number){while(typeof u===\"string\"){const q:string=g();function g(){return s;}const s=h();function h(){return t;}const t=u; break;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "for context: number",
+      "source": "function outer(u:string|number){for(;typeof u===\"string\";){const q:number=g();function g(){return s;}const s=h();function h(){return t;}const t=u; break;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "for context: string",
+      "source": "function outer(u:string|number){for(;typeof u===\"string\";){const q:string=g();function g(){return s;}const s=h();function h(){return t;}const t=u; break;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "do context: number",
+      "source": "function outer(u:string|number){if(typeof u===\"string\"){do{const q:number=g();function g(){return s;}const s=h();function h(){return t;}const t=u;}while(false);}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "do context: string",
+      "source": "function outer(u:string|number){if(typeof u===\"string\"){do{const q:string=g();function g(){return s;}const s=h();function h(){return t;}const t=u;}while(false);}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "switch context: number",
+      "source": "function outer(u:string|number){switch(u){case \"s\":{const q:number=g();function g(){return s;}const s=h();function h(){return t;}const t=u; break;}}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "switch context: string",
+      "source": "function outer(u:string|number){switch(u){case \"s\":{const q:string=g();function g(){return s;}const s=h();function h(){return t;}const t=u; break;}}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "try context: number",
+      "source": "function outer(u:string|number){if(typeof u===\"string\"){try{const q:number=g();function g(){return s;}const s=h();function h(){return t;}const t=u;}finally{}}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "try context: string",
+      "source": "function outer(u:string|number){if(typeof u===\"string\"){try{const q:string=g();function g(){return s;}const s=h();function h(){return t;}const t=u;}finally{}}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "async: Promise.<string,any>",
+      "source": "function outer(){let u:string|number=\"s\";const q:Promise.<string,any>=g();async function g(){return s;}const s=h();function h(){return t;}const t=u;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "async: Promise.<number,any>",
+      "source": "function outer(){let u:string|number=\"s\";const q:Promise.<number,any>=g();async function g(){return s;}const s=h();function h(){return t;}const t=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generator: Generator.<string,string,void>",
+      "source": "function outer(){let u:string|number=\"s\";const q:Generator.<string,string,void>=g();function* g(){yield s;return s;}const s=h();function h(){return t;}const t=u;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generator: Generator.<number,number,void>",
+      "source": "function outer(){let u:string|number=\"s\";const q:Generator.<number,number,void>=g();function* g(){yield s;return s;}const s=h();function h(){return t;}const t=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async generator: AsyncGenerator.<string,string,void>",
+      "source": "function outer(){let u:string|number=\"s\";const q:AsyncGenerator.<string,string,void>=g();async function* g(){yield s;return s;}const s=h();function h(){return t;}const t=u;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "async generator: AsyncGenerator.<number,number,void>",
+      "source": "function outer(){let u:string|number=\"s\";const q:AsyncGenerator.<number,number,void>=g();async function* g(){yield s;return s;}const s=h();function h(){return t;}const t=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "receiver context: number",
+      "source": "class C{v:string;m(){const q:number=g();function g(){return s;}const s=h();function h(){return t;}const t=this.v;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generic producer: number",
+      "source": "function id<T:type>(v:T):T{return v;}function outer(){let u:string|number=\"s\";const q:number=g();function g(){return s;}const s=id(h());function h(){return t;}const t=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "later store: number",
+      "source": "function outer(){const q:number=g();function g(){return s;}const s=h();function h(){return t;}let u:string|number=\"s\";const t=u;u=1;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "receiver context: string",
+      "source": "class C{v:string;m(){const q:string=g();function g(){return s;}const s=h();function h(){return t;}const t=this.v;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic producer: string",
+      "source": "function id<T:type>(v:T):T{return v;}function outer(){let u:string|number=\"s\";const q:string=g();function g(){return s;}const s=id(h());function h(){return t;}const t=u;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "later store: string",
+      "source": "function outer(){const q:string=g();function g(){return s;}const s=h();function h(){return t;}let u:string|number=\"s\";const t=u;u=1;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "call effects precede producer capture",
+      "source": "function outer(){let u:string|number=\"s\";const q:string=g();function g(){return s;}const s=h();function h(){return t;}const t=u;u=1;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generic declaration identity",
+      "source": "function outer<T:type>(u:T){const q:T=g();function g(){return s;}const s=h();function h(){return t;}const t=u;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic incompatible consumer",
+      "source": "function outer<T:type>(u:T){const q:number=g();function g(){return s;}const s=h();function h(){return t;}const t=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "same-spelled caller binding",
+      "source": "function outer(){let u:string|number=\"s\";const q:number=g(1);function g(t:number){return s;}const s=h();function h(){return t;}const t=u;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "completed unknown const stays dynamic",
+      "source": "function outer(){const q:number=g();function g(){return s;}const s=h();function h(){return t;}const t=unknown();}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "completed unknown inferred declaration still fails",
+      "source": "function outer(){let s:=h();function h(){return t;}const t=unknown();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DECLARATION_INFERENCE",
+          "rule": "rt-declaration-inference",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "unanchored cycle remains private",
+      "source": "function outer(){const s=h();function h(){return s;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "inferred declaration cycle retains required type check",
+      "source": "function outer(){let s:=h();function h(){return s;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DECLARATION_INFERENCE",
+          "rule": "rt-declaration-inference",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "flowDependency remains free of speculative errors",
+      "source": "function outer(u:string|number){u=f();const q:string=g();function f(){return t;}function g(){return s;}const s=u;let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "branchDependency remains free of speculative errors",
+      "source": "function outer(u:string|number){if(u===value()){const q:number=g();function g(){return s;}const s=u;}function value(){return t;}let v:number=0;const t=v;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "switchDependency remains free of speculative errors",
+      "source": "function outer(u:string|number){switch(u){case value():const q:number=g();function g(){return s;}const s=u;}function value(){return t;}let v:number=0;const t=v;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "private literal helper does not acquire an anchor",
+      "source": "function outer(){const q:number=g();function g(){return s;}const s=h();function h(){return \"s\";}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "module chain: number",
+      "modules": {
+        "main": "let u:string|number=\"s\";const q:number=g();function g(){return s;}const s=h();function h(){return t;}const t=u;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "module chain: string",
+      "modules": {
+        "main": "let u:string|number=\"s\";const q:string=g();function g(){return s;}const s=h();function h(){return t;}const t=u;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "legacy TDZ: automatic",
+      "source": "{const q=g();function g(){return s;}const s=h();function h(){return t;}const t=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "legacy TDZ: forced",
+      "source": "{const q=g();function g(){return s;}const s=h();function h(){return t;}const t=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "legacy TDZ: disabled",
+      "source": "{const q=g();function g(){return s;}const s=h();function h(){return t;}const t=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      },
+      "checking": "disabled"
+    }
+  ]
+}
