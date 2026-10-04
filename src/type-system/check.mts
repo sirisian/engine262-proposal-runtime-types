@@ -3428,7 +3428,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const t = frames[i].bindings.get(name);
       if (t) {
         const prepared = preparedBindings.get(frames[i])?.get(name);
-        if (prepared) observeBindingInput(prepared);
+        if (prepared && (!prepared.contribution || inferenceDepth === 0
+          || !inferenceBindingAnchors.get(frames[i])?.has(name))) observeBindingInput(prepared);
         return t;
       }
       // AN UNTYPED DECLARATION STILL SHADOWS. `declare` records every name in
@@ -3568,7 +3569,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const t = f.bindings.get(name);
       if (t !== undefined) {
         const prepared = preparedBindings.get(f)?.get(name);
-        if (prepared) observeBindingInput(prepared);
+        if (prepared && (!prepared.contribution || inferenceDepth === 0
+          || !inferenceBindingAnchors.get(f)?.has(name))) observeBindingInput(prepared);
         return t;
       }
       if (f.declaredNames.has(name)) {
@@ -25599,6 +25601,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   type PreparedBinding = InferenceScope & {
     node: ParseNode, expression: ParseNode, constant: boolean, owner: Frame, name: string,
     type?: Known, completed?: boolean, flowIncomplete?: boolean,
+    contribution?: { flowIndependent: boolean, thisTypes: Known[] },
     context?: InitializerContext, inputs?: Set<PreparedBinding>, deferredErrors?: ObjectValue[],
   };
   const bindingReady = (binding: PreparedBinding): boolean => !binding.flowIncomplete
@@ -25625,6 +25628,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     try {
       return inDeclarationScope(binding, () => {
         const expression = patternExpression(binding.expression)!;
+        if (binding.contribution) {
+          // A source-position-dependent initializer remains pending. Its
+          // operand's declaration contract cannot replace its incoming flow.
+          if (!binding.contribution.flowIndependent) {
+            if (expression.type === 'CallExpression') {
+              const callee = staticType(expression.CallExpression);
+              if (callee?.Kind !== 'function' || callee.Signatures.length !== 1
+                || !callee.Signatures[0].Return || callee.Signatures[0].TypeParameters?.length) return null;
+            } else if (expression.type !== 'TypedConversionExpression') return null;
+          }
+          const receivers = thisTypeFrames.slice();
+          thisTypeFrames.splice(0, thisTypeFrames.length, ...binding.contribution.thisTypes);
+          const inputs = new Set<PreparedBinding>();
+          inferenceInputCollectors.push(inputs);
+          try {
+            return withCaptureContracts(() => {
+              const inferred = !binding.constant || constInitializerParticipates(binding.expression)
+                ? staticType(binding.expression) : null;
+              binding.type = inferred && inferred.Kind !== 'any'
+                ? binding.constant ? inferred : widen(inferred) : null;
+              binding.inputs = inputs;
+              binding.completed = inputs.size === 0;
+              return binding.type;
+            });
+          } finally {
+            inferenceInputCollectors.pop();
+            thisTypeFrames.splice(0, thisTypeFrames.length, ...receivers);
+          }
+        }
         // Preparation may use a contract independent of the initializer's
         // incoming flow. A generic/overloaded call or an ordinary binding read
         // can depend on narrowing at that position; leave it to the normal walk.
@@ -26284,6 +26316,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // outer contract. Predeclare names before reading any contribution.
       predeclareFlowLexicals(list);
       declareHoistedFunctionSignatures(list, true);
+      prepareLexicalBindingContracts(list, hasFlowIndependentInitializers(body!));
       const contributions: TypeRecord[] = [];
       let unknown = false;
       const collect = (n: ParseNode | null | undefined): void => {
@@ -26308,6 +26341,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           pushBlock(() => {
             predeclareFlowLexicals(n.StatementList);
             declareHoistedFunctionSignatures(n.StatementList, true);
+            prepareLexicalBindingContracts(n.StatementList, hasFlowIndependentInitializers(body!));
             n.StatementList.forEach(collect);
           });
           return;
@@ -26321,6 +26355,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const statements = clauses.flatMap((clause) => clause.StatementList);
             predeclareFlowLexicals(statements);
             declareHoistedFunctionSignatures(statements, true);
+            prepareLexicalBindingContracts(statements, hasFlowIndependentInitializers(body!));
             clauses.forEach(collect);
           });
           return;
@@ -26451,6 +26486,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const kind = (n as unknown as { LetOrConst?: string }).LetOrConst;
             const cannotChange = kind === 'const' || (lexicalUnassigned(b, bname) ?? !assignedNames.has(bname));
             const init = (bound as unknown as { Initializer?: ParseNode | null }).Initializer;
+            if ((b as { TypedInitializer?: unknown }).TypedInitializer) {
+              const inferred = preparedBindingType(bindingFrame, bname);
+              declare(bname, inferred, bindingFrame);
+              recordInferenceAnchor(bname, !!inferred && inferred.Kind !== 'any', bindingFrame);
+              continue;
+            }
             if ((b as { Ref?: boolean }).Ref && init) {
               const referent = withCaptureContracts(() => locationType(init));
               declare(bname, referent, bindingFrame);
@@ -26726,6 +26767,64 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         varFrames.pop();
       }
     });
+  };
+
+  const prepareLexicalBindingContracts = (list: readonly ParseNode[], flowIndependent?: boolean): void => {
+    // Prepare contracts without evaluating initializers or initializing values.
+    // Existing entries from the first source pass retain inferred const types.
+    for (const declaration of list) {
+      if (declaration.type !== 'LexicalDeclaration') continue;
+      for (const binding of declaration.BindingList) {
+        if (binding.TypeAnnotation || !binding.BindingIdentifier
+            || !frames[frames.length - 1].declaredNames.has(binding.BindingIdentifier.name)) {
+          declarePatternAnnotations(binding);
+        }
+        const expression = binding.TypedInitializer?.AssignmentExpression ?? binding.Initializer;
+        if (!binding.TypeAnnotation && !binding.Ref && binding.BindingIdentifier && expression
+            && (declaration.LetOrConst === 'const' || binding.TypedInitializer)) {
+          const frame = frames[frames.length - 1];
+          if (!preparedBindings.has(frame)) preparedBindings.set(frame, new Map());
+          if (preparedBindings.get(frame)!.get(binding.BindingIdentifier.name)?.node === binding) continue;
+          preparedBindings.get(frame)!.set(binding.BindingIdentifier.name, {
+            node: binding, expression, constant: !binding.TypedInitializer, owner: frame, name: binding.BindingIdentifier.name,
+            frames: frames.slice(), varFrames: varFrames.slice(), typeScopes: typeParameterScopes.slice(),
+            ...(flowIndependent === undefined ? {} : { contribution: { flowIndependent, thisTypes: thisTypeFrames.slice() } }),
+          });
+        }
+      }
+    }
+  };
+
+  // This proves only the flow-free preparation case. Other contexts retain a
+  // dependency on the ordinary source-position flow computation.
+  const contributionFlowIndependent = new WeakMap<ParseNode, boolean>();
+  const hasFlowIndependentInitializers = (body: ParseNode): boolean => {
+    const cached = contributionFlowIndependent.get(body);
+    if (cached !== undefined) return cached;
+    const inspect = (node: ParseNode): boolean => {
+      if (node !== body && (functionBoundary(node) || node.type === 'ClassDeclaration' || node.type === 'ClassExpression')) return true;
+      if (node.type.endsWith('Statement') && node.type !== 'ReturnStatement'
+        && node.type !== 'ExpressionStatement' && node.type !== 'VariableStatement'
+        && node.type !== 'LabelledStatement' && node.type !== 'EmptyStatement') return false;
+      if (node.type === 'AssignmentExpression' || node.type === 'UpdateExpression'
+        || node.type === 'ConditionalExpression' || node.type === 'LogicalANDExpression'
+        || node.type === 'LogicalORExpression' || node.type === 'CoalesceExpression'
+        || (node as { Ref?: boolean }).Ref) return false;
+      if (node.type === 'VariableDeclaration' && node.Initializer) return false;
+      if (node.type === 'LexicalBinding' && node.TypeAnnotation && node.Initializer) return false;
+      if (node.type === 'IdentifierReference' && ResolveBindingDeclaration(node, node.name)
+        && lexicalUnassigned(node, node.name) !== true) return false;
+      for (const [key, child] of Object.entries(node)) {
+        if (key === 'parent' || key === 'location' || key === 'TypeAnnotation') continue;
+        for (const value of Array.isArray(child) ? child : [child]) {
+          if (value && typeof value === 'object' && typeof value.type === 'string' && !inspect(value)) return false;
+        }
+      }
+      return true;
+    };
+    const result = !hasDirectEval && inspect(body);
+    contributionFlowIndependent.set(body, result);
+    return result;
   };
 
   // Signature construction is shared with the ordinary declaration pass. Local
@@ -27128,28 +27227,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         Object.assign(target, earlyResolved);
       }
     }
-    // Prepare contracts without evaluating initializers or initializing values.
-    // Existing entries from the first source pass retain inferred const types.
-    for (const declaration of list) {
-      if (declaration.type !== 'LexicalDeclaration') continue;
-      for (const binding of declaration.BindingList) {
-        if (binding.TypeAnnotation || !binding.BindingIdentifier
-            || !frames[frames.length - 1].declaredNames.has(binding.BindingIdentifier.name)) {
-          declarePatternAnnotations(binding);
-        }
-        const expression = binding.TypedInitializer?.AssignmentExpression ?? binding.Initializer;
-        if (!binding.TypeAnnotation && !binding.Ref && binding.BindingIdentifier && expression
-            && (declaration.LetOrConst === 'const' || binding.TypedInitializer)) {
-          const frame = frames[frames.length - 1];
-          if (!preparedBindings.has(frame)) preparedBindings.set(frame, new Map());
-          if (preparedBindings.get(frame)!.get(binding.BindingIdentifier.name)?.node === binding) continue;
-          preparedBindings.get(frame)!.set(binding.BindingIdentifier.name, {
-            node: binding, expression, constant: !binding.TypedInitializer, owner: frame, name: binding.BindingIdentifier.name,
-            frames: frames.slice(), varFrames: varFrames.slice(), typeScopes: typeParameterScopes.slice(),
-          });
-        }
-      }
-    }
+    prepareLexicalBindingContracts(list);
     declareHoistedFunctionSignatures(list);
     // Class instance types are recorded over the same list, so a class may be
     // named as a type anywhere in it.
