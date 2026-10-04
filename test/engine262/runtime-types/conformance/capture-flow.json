@@ -1,0 +1,1395 @@
+{
+  "description": "Initializer-position control-flow facts and captured contracts",
+  "cases": [
+    {
+      "name": "guard false edge: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "guard false edge: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "guard true edge: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x===\"string\"){const s=x;return g();function g(){return s;}}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "guard true edge: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x===\"string\"){const s=x;return g();function g(){return s;}}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "else edge: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";else{const s=x;return g();function g(){return s;}}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "else edge: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";else{const s=x;return g();function g(){return s;}}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "throwing guard: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")throw 0;const s=x;return g();function g(){return s;}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "throwing guard: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")throw 0;const s=x;return g();function g(){return s;}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "negated guard: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(!(typeof x===\"string\"))return \"s\";const s=x;return g();function g(){return s;}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "negated guard: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(!(typeof x===\"string\"))return \"s\";const s=x;return g();function g(){return s;}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "disjunctive guard: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\"||flag)return \"s\";const s=x;return g();function g(){return s;}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "disjunctive guard: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\"||flag)return \"s\";const s=x;return g();function g(){return s;}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "conjunctive arm: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x===\"string\"&&flag){const s=x;return g();function g(){return s;}}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "conjunctive arm: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x===\"string\"&&flag){const s=x;return g();function g(){return s;}}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "both normal predecessors: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(flag){if(typeof x!==\"string\")return \"s\";}else{if(typeof x!==\"string\")return \"s\";}const s=x;return g();function g(){return s;}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "both normal predecessors: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(flag){if(typeof x!==\"string\")return \"s\";}else{if(typeof x!==\"string\")return \"s\";}const s=x;return g();function g(){return s;}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "nested blocks: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";{{const s=x;return g();function g(){return s;}}}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "nested blocks: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";{{const s=x;return g();function g(){return s;}}}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "labelled break: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){label:{if(typeof x!==\"string\")break label;const s=x;return g();function g(){return s;}}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "labelled break: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){label:{if(typeof x!==\"string\")break label;const s=x;return g();function g(){return s;}}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "while condition: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){while(typeof x===\"string\"){const s=x;return g();function g(){return s;}}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "while condition: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){while(typeof x===\"string\"){const s=x;return g();function g(){return s;}}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "while continue: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){while(flag){if(typeof x!==\"string\")continue;const s=x;return g();function g(){return s;}}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "while continue: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){while(flag){if(typeof x!==\"string\")continue;const s=x;return g();function g(){return s;}}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "do guarded body: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){do{if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}while(false);}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "do guarded body: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){do{if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}while(false);}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "for condition: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){for(;typeof x===\"string\";){const s=x;return g();function g(){return s;}}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "for condition: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){for(;typeof x===\"string\";){const s=x;return g();function g(){return s;}}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "for break: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){for(;flag;){if(typeof x!==\"string\")break;const s=x;return g();function g(){return s;}}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "for break: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){for(;flag;){if(typeof x!==\"string\")break;const s=x;return g();function g(){return s;}}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "for of continue: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){for(const v of [0]){if(typeof x!==\"string\")continue;const s=x;return g();function g(){return s;}}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "for of continue: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){for(const v of [0]){if(typeof x!==\"string\")continue;const s=x;return g();function g(){return s;}}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "for in continue: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){for(const k in {a:0}){if(typeof x!==\"string\")continue;const s=x;return g();function g(){return s;}}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "for in continue: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){for(const k in {a:0}){if(typeof x!==\"string\")continue;const s=x;return g();function g(){return s;}}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "switch arm guard: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(flag){case true:if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}default:return \"s\";}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "switch arm guard: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(flag){case true:if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}default:return \"s\";}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "try guard: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){try{if(typeof x!==\"string\")throw 0;const s=x;return g();function g(){return s;}}catch{return \"s\";}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "try guard: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){try{if(typeof x!==\"string\")throw 0;const s=x;return g();function g(){return s;}}catch{return \"s\";}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "catch guard: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){try{throw 0;}catch{if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "catch guard: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){try{throw 0;}catch{if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "finally guard: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){try{}finally{if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "finally guard: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){try{}finally{if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "capture before later store: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";const s=x;x=1;return g();function g(){return s;}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "capture before later store: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";const s=x;x=1;return g();function g(){return s;}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "requester parameter shadow: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";const s=x;return g(1);function g(x:number){return s;}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "requester parameter shadow: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";const s=x;return g(1);function g(x:number){return s;}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "nested function result chain: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return h();function h(){return s;}}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "nested function result chain: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return h();function h(){return s;}}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "local initializer chain: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";const t=x;const s=t;return g();function g(){return s;}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "local initializer chain: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";const t=x;const s=t;return g();function g(){return s;}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "same declaration chain: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";const t=x,s=t;return g();function g(){return s;}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "same declaration chain: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";const t=x,s=t;return g();function g(){return s;}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "arrow guarded capture: string",
+      "source": "function outer(){const f=(x:string|number)=>{if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}};const q:string=f(\"s\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "arrow guarded capture: number",
+      "source": "function outer(){const f=(x:string|number)=>{if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}};const q:number=f(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "function expression guarded capture: string",
+      "source": "function outer(){const f=function(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}};const q:string=f(\"s\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "function expression guarded capture: number",
+      "source": "function outer(){const f=function(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}};const q:number=f(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async guarded capture: Promise.<string>",
+      "source": "function outer(){async function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}};const q:Promise.<string>=f(\"s\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "async guarded capture: Promise.<number>",
+      "source": "function outer(){async function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}};const q:Promise.<number>=f(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generator guarded capture: Generator.<string,void,void>",
+      "source": "function outer(){function* f(x:string|number){if(typeof x!==\"string\")return;const s=x;yield g();return;function g(){return s;}};const q:Generator.<string,void,void>=f(\"s\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generator guarded capture: Generator.<number,void,void>",
+      "source": "function outer(){function* f(x:string|number){if(typeof x!==\"string\")return;const s=x;yield g();return;function g(){return s;}};const q:Generator.<number,void,void>=f(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async generator guarded capture: AsyncGenerator.<string,void,void>",
+      "source": "function outer(){async function* f(x:string|number){if(typeof x!==\"string\")return;const s=x;yield g();return;function g(){return s;}};const q:AsyncGenerator.<string,void,void>=f(\"s\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "async generator guarded capture: AsyncGenerator.<number,void,void>",
+      "source": "function outer(){async function* f(x:string|number){if(typeof x!==\"string\")return;const s=x;yield g();return;function g(){return s;}};const q:AsyncGenerator.<number,void,void>=f(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "one arm narrows: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(flag){if(typeof x!==\"string\")return \"s\";}const s=x;return g();function g(){return s;}function write(){x=1;}}const q:string|number=f(\"s\",false);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "one arm narrows: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(flag){if(typeof x!==\"string\")return \"s\";}const s=x;return g();function g(){return s;}function write(){x=1;}}const q:string=f(\"s\",false);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "write invalidation: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";x=1;const s=x;return g();function g(){return s;}function write(){x=1;}}const q:string|number=f(\"s\",false);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "write invalidation: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";x=1;const s=x;return g();function g(){return s;}function write(){x=1;}}const q:string=f(\"s\",false);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "call invalidation: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";write();const s=x;return g();function g(){return s;}function write(){x=1;}}const q:string|number=f(\"s\",false);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "call invalidation: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";write();const s=x;return g();function g(){return s;}function write(){x=1;}}const q:string=f(\"s\",false);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "initializer call invalidation: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";const unused=write();const s=x;return g();function g(){return s;}function write(){x=1;}}const q:string|number=f(\"s\",false);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "initializer call invalidation: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){if(typeof x!==\"string\")return \"s\";const unused=write();const s=x;return g();function g(){return s;}function write(){x=1;}}const q:string=f(\"s\",false);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "opposite loop exit: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){while(typeof x===\"string\"){return \"s\";}const s=x;return g();function g(){return s;}function write(){x=1;}}const q:string|number=f(\"s\",false);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "opposite loop exit: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){while(typeof x===\"string\"){return \"s\";}const s=x;return g();function g(){return s;}function write(){x=1;}}const q:string=f(\"s\",false);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "try predecessor isolation: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){try{if(typeof x!==\"string\")throw 0;}catch{}const s=x;return g();function g(){return s;}function write(){x=1;}}const q:string|number=f(\"s\",false);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "try predecessor isolation: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){try{if(typeof x!==\"string\")throw 0;}catch{}const s=x;return g();function g(){return s;}function write(){x=1;}}const q:string=f(\"s\",false);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "switch predecessor isolation: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(flag){case true:if(typeof x!==\"string\")return \"s\";break;default:break;}const s=x;return g();function g(){return s;}function write(){x=1;}}const q:string|number=f(\"s\",false);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "switch predecessor isolation: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(flag){case true:if(typeof x!==\"string\")return \"s\";break;default:break;}const s=x;return g();function g(){return s;}function write(){x=1;}}const q:string=f(\"s\",false);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "same declaration call invalidation: string|number",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const unused=write(),s=x;return g();function g(){return s;}function write(){x=1;}}const q:string|number=f(\"s\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "same declaration call invalidation: string",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const unused=write(),s=x;return g();function g(){return s;}function write(){x=1;}}const q:string=f(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "captured parameter does not freeze caller narrowing",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";return g();function g(){return x;}}const q:string=f(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "ordinary mutable capture stays unknown",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";let s=x;return g();function g(){return s;}}const q:number=f(\"s\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "guarded function executes with its capture",
+      "source": "function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}f(\"ok\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "guarded initializer executes once",
+      "source": "let count=0;function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;count++;return g();function g(){return s;}}f(\"ok\");String(count);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "legacy guarded local: automatic",
+      "source": "function f(x){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}f(\"ok\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "legacy guarded local: forced",
+      "source": "function f(x){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}f(\"ok\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "legacy guarded local: disabled",
+      "source": "function f(x){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}f(\"ok\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      },
+      "checking": "disabled"
+    },
+    {
+      "name": "let typed initializer under guard: string",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";let s:=x;return g();function g(){return s;}}const q:string=f(\"s\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "let typed initializer under guard: number",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";let s:=x;return g();function g(){return s;}}const q:number=f(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "const typed initializer under guard: string",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s:=x;return g();function g(){return s;}}const q:string=f(\"s\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "const typed initializer under guard: number",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s:=x;return g();function g(){return s;}}const q:number=f(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "inferred capture consumer if false: automatic",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}if(typeof f(\"s\")===\"number\")return 1;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "inferred capture consumer if false: forced",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}if(typeof f(\"s\")===\"number\")return 1;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "inferred capture consumer if true: automatic",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}if(typeof f(\"s\")===\"string\")return 1;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "inferred capture consumer if true: forced",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}if(typeof f(\"s\")===\"string\")return 1;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "inferred capture consumer conditional: automatic",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}const q=typeof f(\"s\")===\"number\"?1:2;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "inferred capture consumer conditional: forced",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}const q=typeof f(\"s\")===\"number\"?1:2;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "inferred capture consumer while: automatic",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}while(typeof f(\"s\")===\"number\"){}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "inferred capture consumer while: forced",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}while(typeof f(\"s\")===\"number\"){}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "inferred capture consumer for: automatic",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}for(;typeof f(\"s\")===\"number\";){}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "inferred capture consumer for: forced",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}for(;typeof f(\"s\")===\"number\";){}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "inferred capture consumer do: automatic",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}do{}while(typeof f(\"s\")===\"number\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "inferred capture consumer do: forced",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}do{}while(typeof f(\"s\")===\"number\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "inferred capture consumer nullish: automatic",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}const q=f(\"s\")??\"fallback\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "inferred capture consumer nullish: forced",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}const q=f(\"s\")??\"fallback\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "inferred capture consumer optional: automatic",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}const q=f(\"s\")?.length;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "inferred capture consumer optional: forced",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";const s=x;return g();function g(){return s;}}const q=f(\"s\")?.length;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "await invalidates captured writer facts: string|number",
+      "source": "function outer(){async function f(x:string|number){if(typeof x!==\"string\")return \"s\";await 0;const s=x;return g();function g(){return s;}function write(){x=1;}}const q:Promise.<string|number>=f(\"s\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "await invalidates captured writer facts: string",
+      "source": "function outer(){async function f(x:string|number){if(typeof x!==\"string\")return \"s\";await 0;const s=x;return g();function g(){return s;}function write(){x=1;}}const q:Promise.<string>=f(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "reference capture retains location union",
+      "source": "function outer(){function f(x:string|number){if(typeof x!==\"string\")return \"s\";let ref s=x;return g();function g(){return s;}}const q:string=f(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "yield contribution inside if condition: string",
+      "source": "function outer(){function* f(x:string,flag:boolean){if((yield x,flag))return;}const q:Generator.<string,void,void>=f(\"s\",false);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "yield contribution inside if condition: number",
+      "source": "function outer(){function* f(x:string,flag:boolean){if((yield x,flag))return;}const q:Generator.<number,void,void>=f(\"s\",false);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "yield contribution inside while condition: string",
+      "source": "function outer(){function* f(x:string,flag:boolean){while((yield x,flag)){break;}}const q:Generator.<string,void,void>=f(\"s\",false);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "yield contribution inside while condition: number",
+      "source": "function outer(){function* f(x:string,flag:boolean){while((yield x,flag)){break;}}const q:Generator.<number,void,void>=f(\"s\",false);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "yield contribution inside for condition: string",
+      "source": "function outer(){function* f(x:string,flag:boolean){for(;(yield x,flag);){break;}}const q:Generator.<string,void,void>=f(\"s\",false);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "yield contribution inside for condition: number",
+      "source": "function outer(){function* f(x:string,flag:boolean){for(;(yield x,flag);){break;}}const q:Generator.<number,void,void>=f(\"s\",false);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "yield contribution inside do condition: string",
+      "source": "function outer(){function* f(x:string,flag:boolean){do{}while((yield x,flag));}const q:Generator.<string,void,void>=f(\"s\",false);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "yield contribution inside do condition: number",
+      "source": "function outer(){function* f(x:string,flag:boolean){do{}while((yield x,flag));}const q:Generator.<number,void,void>=f(\"s\",false);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "await initializer precedes following binding: string|number",
+      "source": "function outer(){async function f(x:string|number){if(typeof x!==\"string\")return \"s\";const unused=await 0,s=x;return g();function g(){return s;}function write(){x=1;}}const q:Promise.<string|number>=f(\"s\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "yield initializer precedes following binding: string|number",
+      "source": "function outer(){function* f(x:string|number){if(typeof x!==\"string\")return;const unused=yield \"pause\",s=x;yield g();return;function g(){return s;}function write(){x=1;}}const q:Generator.<string|number,void,void>=f(\"s\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "await initializer precedes following binding: string",
+      "source": "function outer(){async function f(x:string|number){if(typeof x!==\"string\")return \"s\";const unused=await 0,s=x;return g();function g(){return s;}function write(){x=1;}}const q:Promise.<string>=f(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "yield initializer precedes following binding: string",
+      "source": "function outer(){function* f(x:string|number){if(typeof x!==\"string\")return;const unused=yield \"pause\",s=x;yield g();return;function g(){return s;}function write(){x=1;}}const q:Generator.<string,void,void>=f(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    }
+  ]
+}

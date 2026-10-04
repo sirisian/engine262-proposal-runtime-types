@@ -25601,7 +25601,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   type PreparedBinding = InferenceScope & {
     node: ParseNode, expression: ParseNode, constant: boolean, owner: Frame, name: string,
     type?: Known, completed?: boolean, flowIncomplete?: boolean,
-    contribution?: { flowIndependent: boolean, thisTypes: Known[] },
+    contribution?: { flowIndependent: boolean, thisTypes: Known[], flow?: FlowFacts },
     context?: InitializerContext, inputs?: Set<PreparedBinding>, deferredErrors?: ObjectValue[],
   };
   const bindingReady = (binding: PreparedBinding): boolean => !binding.flowIncomplete
@@ -25631,7 +25631,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (binding.contribution) {
           // A source-position-dependent initializer remains pending. Its
           // operand's declaration contract cannot replace its incoming flow.
-          if (!binding.contribution.flowIndependent) {
+          if (!binding.contribution.flowIndependent && !binding.contribution.flow) {
             if (expression.type === 'CallExpression') {
               const callee = staticType(expression.CallExpression);
               if (callee?.Kind !== 'function' || callee.Signatures.length !== 1
@@ -25639,6 +25639,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             } else if (expression.type !== 'TypedConversionExpression') return null;
           }
           const receivers = thisTypeFrames.slice();
+          const flow = captureFlow();
+          if (binding.contribution.flow) restoreFlow(binding.contribution.flow);
           thisTypeFrames.splice(0, thisTypeFrames.length, ...binding.contribution.thisTypes);
           const inputs = new Set<PreparedBinding>();
           inferenceInputCollectors.push(inputs);
@@ -25655,6 +25657,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           } finally {
             inferenceInputCollectors.pop();
             thisTypeFrames.splice(0, thisTypeFrames.length, ...receivers);
+            restoreFlow(flow);
           }
         }
         // Preparation may use a contract independent of the initializer's
@@ -26201,7 +26204,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // of the enclosing walk. Preserve the declared contracts and restore the
     // caller's flow state even if inference exits abruptly.
     const outerFlow = captureFlow();
+    const outerLive = flowLive;
+    const outerExits = flowExits;
     restoreFlow();
+    flowLive = true;
+    flowExits = [];
     // A literal's contextual result query is a contribution computation too;
     // it may read an unparticipating local function's provisional answer.
     inferenceDepth += 1;
@@ -26218,6 +26225,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (ownReceiver) thisTypeFrames.pop();
       inferenceDepth -= 1;
       restoreFlow(outerFlow);
+      flowLive = outerLive;
+      flowExits = outerExits;
     }
   };
 
@@ -26320,9 +26329,38 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const contributions: TypeRecord[] = [];
       let unknown = false;
       const collect = (n: ParseNode | null | undefined): void => {
-        if (!n || typeof n !== 'object' || unknown) {
+        if (!n || typeof n !== 'object' || unknown) return;
+        // Contributions in unreachable source are still inspected, but cannot
+        // revive a completed path or export facts to its following statements.
+        if (!flowLive) {
+          const saved = captureFlow();
+          const exits = flowExits;
+          flowLive = true;
+          flowExits = [];
+          try {
+            collect(n);
+          } finally {
+            restoreFlow(saved);
+            flowExits = exits;
+            flowLive = false;
+          }
           return;
         }
+        collectNode(n);
+        if (n.type === 'AwaitExpression' || n.type === 'YieldExpression') {
+          for (const name of assignedInsideFunction) invalidateNarrowing(name);
+          invalidateCapturedAliases();
+          invalidateCapturedReads();
+        }
+        if (flowLive && ['ReturnStatement', 'ThrowStatement', 'BreakStatement', 'ContinueStatement'].includes(n.type)) {
+          const kind = n.type === 'ReturnStatement' ? 'return' : n.type === 'ThrowStatement' ? 'throw'
+            : n.type === 'BreakStatement' ? 'break' : 'continue';
+          const target = n.type === 'BreakStatement' || n.type === 'ContinueStatement' ? flowTarget(n) : undefined;
+          flowExits.push({ kind, target, facts: captureFlow() });
+          flowLive = false;
+        }
+      };
+      const collectNode = (n: ParseNode): void => {
         if (PatternScopeOf(n).length && !activePatternScopes.has(n)) {
           withPatternScope(n, () => collect(n));
           return;
@@ -26337,8 +26375,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           || n.type === 'DoExpression' && n.star) {
           return;
         }
+        if (n.type === 'IfStatement') {
+          // Reuse the ordinary edge algebra without walking function bodies or
+          // reporting the deciding-test diagnostic a second time.
+          collect(n.Expression);
+          const test = walkTest(n.Expression, false, false, false);
+          const yes = runFlow(test.whenTrue, () => flowBlock(() => collect(n.Statement_a)));
+          const no = runFlow(test.whenFalse, () => flowBlock(() => collect(n.Statement_b)));
+          resumeFlow(joinFlow([yes, no]));
+          return;
+        }
+        if (n.type === 'LabelledStatement') {
+          collect(n.LabelledItem);
+          resumeFlow(joinFlow([normalFlow(), ...takeFlowExits(n, 'break')]));
+          return;
+        }
+        if (n.type === 'ExpressionStatement') {
+          collect(n.Expression);
+          previewFlowEffects(n.Expression);
+          if (containsPropertyRead(n.Expression)) invalidateCapturedReads();
+          if (nonReturningEvaluation(n.Expression)) flowLive = false;
+          return;
+        }
         if (n.type === 'Block') {
-          pushBlock(() => {
+          flowBlock(() => {
             predeclareFlowLexicals(n.StatementList);
             declareHoistedFunctionSignatures(n.StatementList, true);
             prepareLexicalBindingContracts(n.StatementList, hasFlowIndependentInitializers(body!));
@@ -26348,7 +26408,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         if (n.type === 'SwitchStatement') {
           collect(n.Expression);
-          pushBlock(() => {
+          previewFlowEffects(n);
+          const entry = captureFlow();
+          flowBlock(() => {
             const clauses = [...n.CaseBlock.CaseClauses_a ?? [],
               ...n.CaseBlock.DefaultClause ? [n.CaseBlock.DefaultClause] : [],
               ...n.CaseBlock.CaseClauses_b ?? []];
@@ -26356,13 +26418,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             predeclareFlowLexicals(statements);
             declareHoistedFunctionSignatures(statements, true);
             prepareLexicalBindingContracts(statements, hasFlowIndependentInitializers(body!));
-            clauses.forEach(collect);
+            const normal = clauses.map((clause) => runFlow(entry, () => collect(clause)));
+            resumeFlow(joinFlow([entry, ...normal, ...takeFlowExits(n, 'break')]));
           });
           return;
         }
         if (n.type === 'TryStatement') {
-          collect(n.Block);
-          for (const clause of n.CatchClauses ?? (n.Catch ? [n.Catch] : [])) collect(clause);
+          // Exceptional entry may follow any effect in the protected block.
+          // Do not transfer the last visited branch's facts to a different one.
+          previewFlowEffects(n);
+          const entry = captureFlow();
+          const normal = [runFlow(entry, () => collect(n.Block))];
+          for (const clause of n.CatchClauses ?? (n.Catch ? [n.Catch] : [])) {
+            normal.push(runFlow(entry, () => collect(clause)));
+          }
+          resumeFlow(joinFlow([entry, ...normal]));
           collect(n.Finally);
           return;
         }
@@ -26375,21 +26445,42 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           });
           return;
         }
-        if (n.type === 'ForStatement') {
-          pushBlock(() => {
-            if (n.LexicalDeclaration) {
-              predeclareFlowLexicals([n.LexicalDeclaration]);
-              collect(n.LexicalDeclaration);
-            } else n.VariableDeclarationList?.forEach(collect);
-            collect(n.Expression_a);
-            collect(n.Expression_b);
-            collect(n.Expression_c);
+        if (n.type === 'ForStatement' || n.type === 'WhileStatement' || n.type === 'DoWhileStatement') {
+          flowBlock(() => {
+            if (n.type === 'ForStatement') {
+              if (n.LexicalDeclaration) {
+                predeclareFlowLexicals([n.LexicalDeclaration]);
+                collect(n.LexicalDeclaration);
+              } else n.VariableDeclarationList?.forEach(collect);
+              if (!n.LexicalDeclaration && !n.VariableDeclarationList) collect(n.Expression_a);
+            }
+            widenForLoop(n);
+            const entry = captureFlow();
+            const condition = n.type === 'ForStatement' ? ForPatternPositions(n).test : n.Expression;
+            let test: TestFlow | undefined;
+            if (n.type !== 'DoWhileStatement' && condition) {
+              collect(condition);
+              test = walkTest(condition, false, false, false);
+              resumeFlow(test.whenTrue);
+            }
             collect(n.Statement);
+            const back = joinFlow([normalFlow(), ...takeFlowExits(n, 'continue')]);
+            if (back) resumeFlow(back);
+            if (n.type === 'DoWhileStatement') {
+              collect(condition);
+              if (back) test = walkTest(condition!, false, false, false);
+            } else if (n.type === 'ForStatement') collect(ForPatternPositions(n).update);
+            // A loop may change a place between visits. Keep only facts that
+            // survived widening and the condition on the exit being consumed.
+            const unbounded = !condition || condition.type === 'BooleanLiteral' && condition.value === true;
+            resumeFlow(joinFlow([unbounded ? undefined : test?.whenFalse ?? entry, ...takeFlowExits(n, 'break')]));
           });
           return;
         }
         if (n.type === 'ForInStatement' || n.type === 'ForOfStatement' || n.type === 'ForAwaitStatement') {
-          pushBlock(() => {
+          flowBlock(() => {
+            widenForLoop(n);
+            const entry = captureFlow();
             const binding = n.ForDeclaration?.ForBinding ?? n.ForBinding;
             const frame = n.ForDeclaration ? frames[frames.length - 1] : variableFrame;
             if (binding && (n.ForDeclaration || binding.TypeAnnotation)) declarePatternAnnotations(binding, frame);
@@ -26409,6 +26500,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               } });
             }
             collect(n.Statement);
+            resumeFlow(joinFlow([entry, normalFlow(), ...takeFlowExits(n, 'continue'), ...takeFlowExits(n, 'break')]));
           });
           return;
         }
@@ -26443,25 +26535,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // binding's owner, which can outlive the current lexical block.
           const bindingFrame = n.type === 'LexicalDeclaration' ? frames[frames.length - 1] : variableFrame;
           const bindings = n.type === 'LexicalDeclaration' ? n.BindingList : [n];
-          for (const b of bindings) {
+          const collectSimpleBinding = (b: ParseNode): void => {
             const bound = b as unknown as {
               BindingIdentifier?: { name?: string } | null,
               TypeAnnotation?: ParseNode.TypeAnnotation | null,
             };
             const bname = bound.BindingIdentifier?.name;
             if (!bname) {
-              continue;
+              return;
             }
             if (bound.TypeAnnotation) {
               const bt = resolveType(bound.TypeAnnotation.Type);
               declare(bname, bt, bindingFrame);
               recordInferenceAnchor(bname, !!bt && bt.Kind !== 'any', bindingFrame);
-              continue;
+              return;
             }
             // An unannotated var has already been hoisted. A bare redeclaration
             // must not erase a shared parameter's contract, and var initializers
             // are not transparent aliases under #sec-anchored-contributions.
-            if (n.type === 'VariableDeclaration') continue;
+            if (n.type === 'VariableDeclaration') return;
             // An UNANNOTATED local that cannot change is a name for its
             // initializer's value, and a contribution that reads it is the
             // initializer's type widened. Without this, extracting a
@@ -26487,16 +26579,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const cannotChange = kind === 'const' || (lexicalUnassigned(b, bname) ?? !assignedNames.has(bname));
             const init = (bound as unknown as { Initializer?: ParseNode | null }).Initializer;
             if ((b as { TypedInitializer?: unknown }).TypedInitializer) {
+              const prepared = preparedBindings.get(bindingFrame)?.get(bname);
+              if (prepared?.contribution && !flowNeedsReplay) prepared.contribution.flow = captureFlow();
               const inferred = preparedBindingType(bindingFrame, bname);
               declare(bname, inferred, bindingFrame);
               recordInferenceAnchor(bname, !!inferred && inferred.Kind !== 'any', bindingFrame);
-              continue;
+              return;
             }
             if ((b as { Ref?: boolean }).Ref && init) {
               const referent = withCaptureContracts(() => locationType(init));
               declare(bname, referent, bindingFrame);
               recordInferenceAnchor(bname, !!referent && referent.Kind !== 'any', bindingFrame);
-              continue;
+              return;
             }
             if (kind === 'const' && init && isNumericConstantExpression(init)) {
               recordNumericConstant(bname, init, frames[frames.length - 1]);
@@ -26513,7 +26607,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               declare(bname, null, bindingFrame);
               recordInferenceAnchor(bname, false, bindingFrame);
             }
-          }
+          };
           // A DESTRUCTURING pattern binds names too, and each takes the type of
           // the position it destructures: a property's type for an object
           // pattern, the element type for an array pattern. The same condition
@@ -26526,15 +26620,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // default's, and a rest element of an object pattern collects a
           // remainder this proposal may not be able to write; guessing at either
           // would state something the program does not.
-          for (const b of bindings) {
+          const collectPatternBinding = (b: ParseNode): void => {
             const pattern = (b as unknown as { BindingPattern?: ParseNode | null }).BindingPattern;
             const init = (b as unknown as { Initializer?: ParseNode | null }).Initializer;
             if (!pattern || !init) {
-              continue;
+              return;
             }
             const sourceType = staticType(init);
             if (!sourceType) {
-              continue;
+              return;
             }
             const kind = (n as unknown as { LetOrConst?: string }).LetOrConst;
             const bindElement = (element: ParseNode | null | undefined, positionType: Known): void => {
@@ -26582,7 +26676,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const props = (pattern as unknown as { BindingPropertyList?: readonly ParseNode[] }).BindingPropertyList ?? [];
               const shape = structureOf(sourceType);
               if (!shape || shape.Kind !== 'object') {
-                continue;
+                return;
               }
               for (const prop of props) {
                 const pr = prop as unknown as {
@@ -26612,9 +26706,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 }
               });
             }
+          };
+          for (const binding of bindings) {
+            collectSimpleBinding(binding);
+            collectPatternBinding(binding);
+            const init = (binding as ParseNode.LexicalBinding).TypedInitializer?.AssignmentExpression
+              ?? (binding as ParseNode.LexicalBinding).Initializer;
+            collect((binding as ParseNode.LexicalBinding).BindingPattern);
+            if (init) {
+              collect(init);
+              previewFlowEffects(init);
+              if (containsPropertyRead(init)) invalidateCapturedReads();
+            }
           }
-          // Fall through to the walk, so an initializer containing a function
-          // literal is still skipped and a nested return is still found.
+          // Process each initializer's contributions and suspension before the
+          // next binding, without visiting its nested function bodies.
+          return;
         } else if (mode !== 'yield' && n.type === 'ReturnStatement') {
           const expr = (n as { Expression?: ParseNode | null }).Expression;
           if (!expr) {
@@ -26749,11 +26856,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return voidType as Known;
       }
       const Members: TypeRecord[] = [];
-      for (const c of contributions) {
-        if (!Members.some((m) => SameType(m, c))) {
-          Members.push(c);
-        }
-      }
+      const addContribution = (type: TypeRecord): void => {
+        // Flatten a union-valued contribution before comparing members. Keep
+        // first-contribution order for the existing diagnostic presentation.
+        if (type.Kind === 'union') type.Members.forEach(addContribution);
+        else if (!Members.some((member) => SameType(member, type) && SameType(type, member))) Members.push(type);
+      };
+      contributions.forEach(addContribution);
       return Members.length === 1 ? Members[0]! : { Kind: 'union', Members };
     };
     return pushBlock(() => {
