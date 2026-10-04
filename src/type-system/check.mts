@@ -25433,6 +25433,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     inferenceBindingAnchors.get(frame)!.set(name, anchored);
   };
 
+  const inferenceCaptureContracts = new WeakMap<Frame, Map<string, { type: Known, anchored: boolean }>>();
+  const recordInferenceCapture = (name: string, type: Known, anchored: boolean, frame = frames[frames.length - 1]): void => {
+    if (!inferenceCaptureContracts.has(frame)) inferenceCaptureContracts.set(frame, new Map());
+    inferenceCaptureContracts.get(frame)!.set(name, { type, anchored });
+  };
+  const withCaptureContracts = <T,>(action: () => T): T => {
+    const saved: { frame: Frame, name: string, type: Known, anchored: boolean | undefined }[] = [];
+    for (const frame of frames) {
+      for (const [name, contract] of inferenceCaptureContracts.get(frame) ?? []) {
+        saved.push({ frame, name, type: frame.bindings.get(name) ?? null,
+          anchored: inferenceBindingAnchors.get(frame)?.get(name) });
+        if (contract.type) frame.bindings.set(name, contract.type);
+        else frame.bindings.delete(name);
+        recordInferenceAnchor(name, contract.anchored, frame);
+      }
+    }
+    if (saved.length) typeRevision += 1;
+    try {
+      return action();
+    } finally {
+      for (const { frame, name, type, anchored } of saved) {
+        if (type) frame.bindings.set(name, type);
+        else frame.bindings.delete(name);
+        if (anchored === undefined) inferenceBindingAnchors.get(frame)?.delete(name);
+        else recordInferenceAnchor(name, anchored, frame);
+      }
+      if (saved.length) typeRevision += 1;
+    }
+  };
+
   /**
    * #sec-inference-fixpoint: the signatures whose inference is running right
    * now. A contribution that reaches one of them is a recursive reference, and
@@ -25471,6 +25501,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     fn: ParseNode,
     parameterTypes: readonly Known[],
     signatureTyped: boolean,
+    /** Recreated within a contribution scope; changes are observed by its consumer. */
+    local?: boolean,
     /** A generator, whose inference computes _Y_ and rebuilds its Generator type. */
     generator?: { asyncGenerator: boolean },
     /** An async function, whose inference is of the type its result RESOLVES with. */
@@ -25921,7 +25953,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (item.asyncFunction && !mentionsTypeParameter(result)) publishedReturnTypes.set(item.fn, result);
           }
         }
-        if (changed) changedInferences?.add(item);
+        if (changed && !item.local) changedInferences?.add(item);
       });
       inferenceWave?.add(only);
       return item.signature.ProvisionalReturn ?? null;
@@ -26138,9 +26170,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // caller's flow state even if inference exits abruptly.
     const outerFlow = captureFlow();
     restoreFlow();
+    // A literal's contextual result query is a contribution computation too;
+    // it may read an unparticipating local function's provisional answer.
+    inferenceDepth += 1;
+    const ownReceiver = fn.type.endsWith('Declaration') || fn.type.endsWith('Expression');
+    if (ownReceiver) {
+      const adopted = contextualThisTypes.get(fn);
+      const owner = contextualThisOwners.get(fn);
+      thisTypeFrames.push(adopted && owner && adopted.Kind === 'nominal'
+        && (adopted.Declaration as { type?: string })?.type === 'SelfThisMarker' ? owner : adopted ?? null);
+    }
     try {
-      return inferredReturnTypeInScope(fn, parameterTypes, wanted, anchorage, mode);
+      return withCaptureContracts(() => inferredReturnTypeInScope(fn, parameterTypes, wanted, anchorage, mode));
     } finally {
+      if (ownReceiver) thisTypeFrames.pop();
+      inferenceDepth -= 1;
       restoreFlow(outerFlow);
     }
   };
@@ -26239,6 +26283,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // #sec-contribution-environments: an unknown local still shadows an
       // outer contract. Predeclare names before reading any contribution.
       predeclareFlowLexicals(list);
+      declareHoistedFunctionSignatures(list, true);
       const contributions: TypeRecord[] = [];
       let unknown = false;
       const collect = (n: ParseNode | null | undefined): void => {
@@ -26262,6 +26307,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (n.type === 'Block') {
           pushBlock(() => {
             predeclareFlowLexicals(n.StatementList);
+            declareHoistedFunctionSignatures(n.StatementList, true);
             n.StatementList.forEach(collect);
           });
           return;
@@ -26272,7 +26318,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const clauses = [...n.CaseBlock.CaseClauses_a ?? [],
               ...n.CaseBlock.DefaultClause ? [n.CaseBlock.DefaultClause] : [],
               ...n.CaseBlock.CaseClauses_b ?? []];
-            predeclareFlowLexicals(clauses.flatMap((clause) => clause.StatementList));
+            const statements = clauses.flatMap((clause) => clause.StatementList);
+            predeclareFlowLexicals(statements);
+            declareHoistedFunctionSignatures(statements, true);
             clauses.forEach(collect);
           });
           return;
@@ -26403,14 +26451,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const kind = (n as unknown as { LetOrConst?: string }).LetOrConst;
             const cannotChange = kind === 'const' || (lexicalUnassigned(b, bname) ?? !assignedNames.has(bname));
             const init = (bound as unknown as { Initializer?: ParseNode | null }).Initializer;
+            if ((b as { Ref?: boolean }).Ref && init) {
+              const referent = withCaptureContracts(() => locationType(init));
+              declare(bname, referent, bindingFrame);
+              recordInferenceAnchor(bname, !!referent && referent.Kind !== 'any', bindingFrame);
+              continue;
+            }
             if (kind === 'const' && init && isNumericConstantExpression(init)) {
               recordNumericConstant(bname, init, frames[frames.length - 1]);
             }
             if (cannotChange && init) {
               const initType = staticType(init) ?? objectLiteralShape(init);
               const anchored = derivesFromDeclaration(init, initType);
+              const contract = kind === 'const' ? withCaptureContracts(() =>
+                constInitializerParticipates(init) ? staticType(init) : null) : null;
               declare(bname, initType ? widen(initType) : null, bindingFrame);
               recordInferenceAnchor(bname, anchored, bindingFrame);
+              recordInferenceCapture(bname, contract, !!contract && contract.Kind !== 'any' && anchored, bindingFrame);
             } else {
               declare(bname, null, bindingFrame);
               recordInferenceAnchor(bname, false, bindingFrame);
@@ -26476,6 +26533,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
               declare(name, widen(positionType), bindingFrame);
               recordInferenceAnchor(name, derivesFromDeclaration(init, sourceType), bindingFrame);
+              // Source-derived destructuring contributions do not annotate an
+              // ordinary binding. Its own written annotations were handled above.
+              recordInferenceCapture(name, null, false, bindingFrame);
             };
             if (pattern.type === 'ObjectBindingPattern') {
               const props = (pattern as unknown as { BindingPropertyList?: readonly ParseNode[] }).BindingPropertyList ?? [];
@@ -26668,222 +26728,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     });
   };
 
-  /**
-   * A DECLARED function's signature, which the checker did not have: function
-   * types were built only from FunctionType annotations, so `function f(v:
-   * uint8) {}` put nothing in scope and no call to it was argument-checked at
-   * all. A parameter with no annotation is
-   * ~any~, which makes the signature usable even when only some parameters are
-   * typed, and a rest parameter suppresses the signature entirely rather than
-   * inviting an arity mistake.
-   */
-  const declareFunctionSignatures = (outerList: readonly ParseNode[]) => {
-    // An `export`ed declaration is wrapped, and the collection below reads the
-    // list positionally, so `export function f(): uint32 {}` was never
-    // collected: its signature existed nowhere, and a call of it was ~any~ in
-    // its own module as much as in an importing one. Unwrapping here rather
-    // than in each of the loops keeps the three collection passes reading one
-    // list.
-    const list: ParseNode[] = [];
-    for (const item of outerList) {
-      if (item.type === 'ExportDeclaration') {
-        const ed = item as unknown as {
-          Declaration?: ParseNode | null,
-          HoistableDeclaration?: ParseNode | null,
-          ClassDeclaration?: ParseNode | null,
-          VariableStatement?: ParseNode | null,
-        };
-        const inner = ed.HoistableDeclaration ?? ed.Declaration ?? ed.ClassDeclaration ?? ed.VariableStatement;
-        if (inner) {
-          list.push(inner);
-          continue;
-        }
-      }
-      list.push(item);
-    }
-    const invocationDeclarations = new Set<string>();
-    for (const declaration of list) {
-      if (declaration.type === 'LexicalDeclaration') {
-        recordBindingKinds(declaration, declaration.LetOrConst === 'let');
-        for (const binding of declaration.BindingList) {
-          if (binding.BindingIdentifier && binding.Initializer && !(binding as { Ref?: boolean }).Ref) {
-            recordInvocationOrigin(frames[frames.length - 1], binding.BindingIdentifier.name, binding.Initializer,
-              declaration.LetOrConst === 'const', !!binding.TypeAnnotation);
-          }
-        }
-      } else if (['FunctionDeclaration', 'GeneratorDeclaration', 'AsyncFunctionDeclaration', 'AsyncGeneratorDeclaration',
-        'ClassDeclaration', 'EnumDeclaration', 'TypeAliasDeclaration', 'InterfaceDeclaration'].includes(declaration.type)
-          && 'BindingIdentifier' in declaration && declaration.BindingIdentifier) {
-        recordBindingKinds(declaration.BindingIdentifier as ParseNode.BindingIdentifier, true);
-        if (['FunctionDeclaration', 'GeneratorDeclaration', 'AsyncFunctionDeclaration', 'AsyncGeneratorDeclaration', 'ClassDeclaration'].includes(declaration.type)) {
-          const name = (declaration.BindingIdentifier as ParseNode.BindingIdentifier).name;
-          // An overload dispatcher may have a different invocation kind from
-          // its individual implementations. Do not select the last declaration.
-          if (invocationDeclarations.has(name)) invocationOrigins.get(frames[frames.length - 1])?.delete(name);
-          else recordInvocationOrigin(frames[frames.length - 1], name, declaration, false);
-          invocationDeclarations.add(name);
-        }
-      }
-    }
-    // Key identities must precede signatures and aliases that mention them.
-    // A declared `const s = Symbol()` used in type position IS the unique
-    // symbol type, without a keyword. A checker has no
-    // VALUES, so that identity is carried by the DECLARATION - two consts are
-    // two types, and one const named twice is one type, which is exactly what
-    // that identity rule means where no symbol can be held.
-    for (const n of list) {
-      if (n.type !== 'LexicalDeclaration' || (n as ParseNode.LexicalDeclaration).LetOrConst !== 'const') {
-        continue;
-      }
-      for (const binding of (n as ParseNode.LexicalDeclaration).BindingList) {
-        const b = binding as unknown as {
-          BindingIdentifier?: { name?: string } | null,
-          Initializer?: { type?: string, CallExpression?: { type?: string, name?: string } } | null,
-        };
-        const bound = b.BindingIdentifier?.name;
-        const callee = b.Initializer?.type === 'CallExpression' ? b.Initializer.CallExpression : undefined;
-        if (typeof bound === 'string' && callee?.type === 'IdentifierReference' && callee.name === 'Symbol'
-            && !frames.some((frame) => frame.declaredNames.has('Symbol') || frame.bindingKinds.has('Symbol') || frame.dynamicBindings)) {
-          frames[frames.length - 1].constPropertyKeys.set(bound, symbolKeyFor(binding));
-        }
-      }
-    }
-    // OVERLOADS ACCUMULATE. A name may be declared more than once - that is
-    // this proposal's function overloading - so the signatures are collected
-    // per name and declared together: declared one at a time, the last
-    // declaration would clobber the earlier ones and turn every call matching
-    // an earlier overload into a spurious Early Error.
-    // The argument check at a call site fires only for a SINGLE-signature
-    // type, so an overloaded name keeps resolving where it did before, at run
-    // time, until the checker learns to rank signatures.
+  // Signature construction is shared with the ordinary declaration pass. Local
+  // contribution queries register every sibling before following dependencies.
+  const declareHoistedFunctionSignatures = (list: readonly ParseNode[], local = false): void => {
     const collected = new Map<string, { Parameters: ParameterRecord[], Return: Known, Untyped: boolean }[]>();
     const rejected = new Set<string>();
-    // A class name must be in `classNodes` BEFORE any signature resolves its
-    // parameter annotations, or `resolveType` finds nothing and the parameter
-    // falls back to `any` - which is why `function f(p: A)` was not checked at
-    // its call site while `function g(q: uint8)` was, and why declaration order
-    // made no difference: the collection below runs after every signature in the
-    // list, not after every statement.
-    //
-    // Names only. The instance type is still built lazily and memoised by
-    // `instanceTypeOf`, so nothing is resolved earlier than before - only found.
-    for (const n of list) {
-      if (IsPartialDeclaration(n)) {
-        partialDeclarations.add(n);
-        continue;
-      }
-      if (n.type === 'ClassDeclaration') {
-        const className = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
-        // A case joins its family and never names it.
-        const isCase = ((n as unknown as { TypeParameters?: { ListKind?: string } | null }).TypeParameters?.ListKind ?? 'parameters') !== 'parameters';
-        if (className && !classNodes.has(className) && !isCase) {
-          classNodes.set(className, n);
-        }
-      } else if (n.type === 'InterfaceDeclaration') {
-        // Interfaces too, and for a sharper reason than symmetry: resolving a
-        // class annotation here BUILDS that class's instance type, which is
-        // memoised. A class with `implements I` would be built before `I` was
-        // known and would memoise without the members it inherits, so a name
-        // pre-pass that collected only classes silently un-checked
-        // `class C implements I { }`.
-        const interfaceName = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
-        // An interface case refines its family: it is neither
-        // recorded under the family's name nor registered as it.
-        const interfaceCase = ((n as unknown as { TypeParameters?: { ListKind?: string } | null }).TypeParameters?.ListKind ?? 'parameters') !== 'parameters';
-        if (interfaceName && !interfaceCase) {
-          recordInterfaceDeclaration(interfaceName, n);
-          if (!interfaceNodes.has(interfaceName)) {
-            interfaceNodes.set(interfaceName, n);
-          }
-        }
-      } else if (n.type === 'TypeAliasDeclaration') {
-        // AND ALIASES, for the reason the interface note above gives. An alias
-        // was registered during the WALK, and a function declaration's signature
-        // is built before the walk reaches it - so `type U = uint8; function
-        // f(p: U) {}` gave the parameter ~any~, while the same annotation
-        // written inline, or naming a CLASS or an INTERFACE, resolved.
-        //
-        // Everything downstream was then innocent and looked broken: `f(300)`
-        // fell through to the run time because ~any~ admits it, and
-        // #sec-literal-freshness never ran at such a parameter because there was
-        // no object type to be fresh against.
-        //
-        // Names only, as above: the alias's own type is still resolved lazily,
-        // so nothing is computed earlier than before - only found.
-        const aliasName = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
-        // An alias case joins its family and never names it.
-        const aliasCase = ((n as unknown as { TypeParameters?: { ListKind?: string } | null }).TypeParameters?.ListKind ?? 'parameters') !== 'parameters';
-        if (aliasName && !aliasNodes.has(aliasName) && !aliasCase) {
-          aliasNodes.set(aliasName, n);
-        }
-      }
-    }
-    // A plain alias is PUBLISHED to the frame before the signatures that may
-    // name it are built.
-    //
-    // The scan above records the alias NODE, and the walk publishes the TYPE
-    // when it reaches the declaration - which for a NESTED list is after the
-    // signatures in that list have been read. Without this, a lookup of `L`
-    // from a signature finds NOTHING at any frame when the alias is declared
-    // inside a function, `p: L` resolves through a fallback the argument check
-    // does not use, and `f({ v: "s", next: null })` is accepted where the same
-    // program at the top level is refused.
-    //
-    // A BINDING at the same alias refuses either way, because it is walked
-    // after the declaration; only a SIGNATURE is read early. A NON-recursive
-    // alias is unaffected for the same reason it needs no placeholder.
-    for (const n of list) {
-      if (n.type !== 'TypeAliasDeclaration') {
-        continue;
-      }
-      const early = n as unknown as { BindingIdentifier?: { name: string } | null, TypeParameters?: unknown, Type?: ParseNode.Type | null };
-      const earlyName = early.BindingIdentifier?.name;
-      if (!earlyName || early.TypeParameters || !early.Type) {
-        continue;
-      }
-      const scope = frames[frames.length - 1].aliases;
-      if (scope.has(earlyName)) {
-        continue;
-      }
-      // Published as a placeholder and filled, so a self-reference in the body
-      // lands on the record the frame already holds.
-      const early_placeholder = { Kind: 'object', Properties: [], IndexSignatures: [] } as unknown as TypeRecord;
-      scope.set(earlyName, early_placeholder);
-      const earlyResolved = resolveType(early.Type);
-      if (!earlyResolved) {
-        scope.delete(earlyName);
-        continue;
-      }
-      if (earlyResolved !== early_placeholder) {
-        const target = early_placeholder as unknown as Record<string, unknown>;
-        for (const k of Object.keys(target)) {
-          delete target[k];
-        }
-        Object.assign(target, earlyResolved);
-      }
-    }
-    // Prepare contracts without evaluating initializers or initializing values.
-    // Existing entries from the first source pass retain inferred const types.
-    for (const declaration of list) {
-      if (declaration.type !== 'LexicalDeclaration') continue;
-      for (const binding of declaration.BindingList) {
-        if (binding.TypeAnnotation || !binding.BindingIdentifier
-            || !frames[frames.length - 1].declaredNames.has(binding.BindingIdentifier.name)) {
-          declarePatternAnnotations(binding);
-        }
-        const expression = binding.TypedInitializer?.AssignmentExpression ?? binding.Initializer;
-        if (!binding.TypeAnnotation && !binding.Ref && binding.BindingIdentifier && expression
-            && (declaration.LetOrConst === 'const' || binding.TypedInitializer)) {
-          const frame = frames[frames.length - 1];
-          if (!preparedBindings.has(frame)) preparedBindings.set(frame, new Map());
-          if (preparedBindings.get(frame)!.get(binding.BindingIdentifier.name)?.node === binding) continue;
-          preparedBindings.get(frame)!.set(binding.BindingIdentifier.name, {
-            node: binding, expression, constant: !binding.TypedInitializer, owner: frame, name: binding.BindingIdentifier.name,
-            frames: frames.slice(), varFrames: varFrames.slice(), typeScopes: typeParameterScopes.slice(),
-          });
-        }
-      }
-    }
+    const tasks: ReturnInference[] = [];
     for (const n of list) {
       // #sec-generator-types. A generator
       // declaration was skipped entirely, so a call of one had no type at all.
@@ -27036,7 +26886,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // Generator and async tasks retain their function form so publication
       // builds the corresponding protocol type from their contributions.
       if (!fn.TypeAnnotation && isGenerator) {
-        pendingInferences.push({
+        tasks.push({
           signature,
           frames: frames.slice(),
           varFrames: varFrames.slice(),
@@ -27049,7 +26899,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         });
       }
       if (!fn.TypeAnnotation && isAsyncFunction) {
-        pendingInferences.push({
+        tasks.push({
           signature,
           frames: frames.slice(),
           varFrames: varFrames.slice(),
@@ -27062,7 +26912,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         });
       }
       if (!fn.TypeAnnotation && !isGenerator && n.type === 'FunctionDeclaration') {
-        pendingInferences.push({
+        tasks.push({
           signature,
           frames: frames.slice(),
           varFrames: varFrames.slice(),
@@ -27087,6 +26937,220 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       });
       declare(name, { Kind: 'function', Signatures: overloads ? Signatures : Signatures.slice(-1) } as unknown as Known);
     }
+    if (local) {
+      for (const task of tasks) {
+        task.local = true;
+        pendingBySignature.set(task.signature, task);
+      }
+    } else pendingInferences.push(...tasks);
+  };
+
+  const declareFunctionSignatures = (outerList: readonly ParseNode[]) => {
+    // An `export`ed declaration is wrapped, and the collection below reads the
+    // list positionally, so `export function f(): uint32 {}` was never
+    // collected: its signature existed nowhere, and a call of it was ~any~ in
+    // its own module as much as in an importing one. Unwrapping here rather
+    // than in each of the loops keeps the three collection passes reading one
+    // list.
+    const list: ParseNode[] = [];
+    for (const item of outerList) {
+      if (item.type === 'ExportDeclaration') {
+        const ed = item as unknown as {
+          Declaration?: ParseNode | null,
+          HoistableDeclaration?: ParseNode | null,
+          ClassDeclaration?: ParseNode | null,
+          VariableStatement?: ParseNode | null,
+        };
+        const inner = ed.HoistableDeclaration ?? ed.Declaration ?? ed.ClassDeclaration ?? ed.VariableStatement;
+        if (inner) {
+          list.push(inner);
+          continue;
+        }
+      }
+      list.push(item);
+    }
+    const invocationDeclarations = new Set<string>();
+    for (const declaration of list) {
+      if (declaration.type === 'LexicalDeclaration') {
+        recordBindingKinds(declaration, declaration.LetOrConst === 'let');
+        for (const binding of declaration.BindingList) {
+          if (binding.BindingIdentifier && binding.Initializer && !(binding as { Ref?: boolean }).Ref) {
+            recordInvocationOrigin(frames[frames.length - 1], binding.BindingIdentifier.name, binding.Initializer,
+              declaration.LetOrConst === 'const', !!binding.TypeAnnotation);
+          }
+        }
+      } else if (['FunctionDeclaration', 'GeneratorDeclaration', 'AsyncFunctionDeclaration', 'AsyncGeneratorDeclaration',
+        'ClassDeclaration', 'EnumDeclaration', 'TypeAliasDeclaration', 'InterfaceDeclaration'].includes(declaration.type)
+          && 'BindingIdentifier' in declaration && declaration.BindingIdentifier) {
+        recordBindingKinds(declaration.BindingIdentifier as ParseNode.BindingIdentifier, true);
+        if (['FunctionDeclaration', 'GeneratorDeclaration', 'AsyncFunctionDeclaration', 'AsyncGeneratorDeclaration', 'ClassDeclaration'].includes(declaration.type)) {
+          const name = (declaration.BindingIdentifier as ParseNode.BindingIdentifier).name;
+          // An overload dispatcher may have a different invocation kind from
+          // its individual implementations. Do not select the last declaration.
+          if (invocationDeclarations.has(name)) invocationOrigins.get(frames[frames.length - 1])?.delete(name);
+          else recordInvocationOrigin(frames[frames.length - 1], name, declaration, false);
+          invocationDeclarations.add(name);
+        }
+      }
+    }
+    // Key identities must precede signatures and aliases that mention them.
+    // A declared `const s = Symbol()` used in type position IS the unique
+    // symbol type, without a keyword. A checker has no
+    // VALUES, so that identity is carried by the DECLARATION - two consts are
+    // two types, and one const named twice is one type, which is exactly what
+    // that identity rule means where no symbol can be held.
+    for (const n of list) {
+      if (n.type !== 'LexicalDeclaration' || (n as ParseNode.LexicalDeclaration).LetOrConst !== 'const') {
+        continue;
+      }
+      for (const binding of (n as ParseNode.LexicalDeclaration).BindingList) {
+        const b = binding as unknown as {
+          BindingIdentifier?: { name?: string } | null,
+          Initializer?: { type?: string, CallExpression?: { type?: string, name?: string } } | null,
+        };
+        const bound = b.BindingIdentifier?.name;
+        const callee = b.Initializer?.type === 'CallExpression' ? b.Initializer.CallExpression : undefined;
+        if (typeof bound === 'string' && callee?.type === 'IdentifierReference' && callee.name === 'Symbol'
+            && !frames.some((frame) => frame.declaredNames.has('Symbol') || frame.bindingKinds.has('Symbol') || frame.dynamicBindings)) {
+          frames[frames.length - 1].constPropertyKeys.set(bound, symbolKeyFor(binding));
+        }
+      }
+    }
+    // OVERLOADS ACCUMULATE. A name may be declared more than once - that is
+    // this proposal's function overloading - so the signatures are collected
+    // per name and declared together: declared one at a time, the last
+    // declaration would clobber the earlier ones and turn every call matching
+    // an earlier overload into a spurious Early Error.
+    // The argument check at a call site fires only for a SINGLE-signature
+    // type, so an overloaded name keeps resolving where it did before, at run
+    // time, until the checker learns to rank signatures.
+    // A class name must be in `classNodes` BEFORE any signature resolves its
+    // parameter annotations, or `resolveType` finds nothing and the parameter
+    // falls back to `any` - which is why `function f(p: A)` was not checked at
+    // its call site while `function g(q: uint8)` was, and why declaration order
+    // made no difference: the collection below runs after every signature in the
+    // list, not after every statement.
+    //
+    // Names only. The instance type is still built lazily and memoised by
+    // `instanceTypeOf`, so nothing is resolved earlier than before - only found.
+    for (const n of list) {
+      if (IsPartialDeclaration(n)) {
+        partialDeclarations.add(n);
+        continue;
+      }
+      if (n.type === 'ClassDeclaration') {
+        const className = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
+        // A case joins its family and never names it.
+        const isCase = ((n as unknown as { TypeParameters?: { ListKind?: string } | null }).TypeParameters?.ListKind ?? 'parameters') !== 'parameters';
+        if (className && !classNodes.has(className) && !isCase) {
+          classNodes.set(className, n);
+        }
+      } else if (n.type === 'InterfaceDeclaration') {
+        // Interfaces too, and for a sharper reason than symmetry: resolving a
+        // class annotation here BUILDS that class's instance type, which is
+        // memoised. A class with `implements I` would be built before `I` was
+        // known and would memoise without the members it inherits, so a name
+        // pre-pass that collected only classes silently un-checked
+        // `class C implements I { }`.
+        const interfaceName = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
+        // An interface case refines its family: it is neither
+        // recorded under the family's name nor registered as it.
+        const interfaceCase = ((n as unknown as { TypeParameters?: { ListKind?: string } | null }).TypeParameters?.ListKind ?? 'parameters') !== 'parameters';
+        if (interfaceName && !interfaceCase) {
+          recordInterfaceDeclaration(interfaceName, n);
+          if (!interfaceNodes.has(interfaceName)) {
+            interfaceNodes.set(interfaceName, n);
+          }
+        }
+      } else if (n.type === 'TypeAliasDeclaration') {
+        // AND ALIASES, for the reason the interface note above gives. An alias
+        // was registered during the WALK, and a function declaration's signature
+        // is built before the walk reaches it - so `type U = uint8; function
+        // f(p: U) {}` gave the parameter ~any~, while the same annotation
+        // written inline, or naming a CLASS or an INTERFACE, resolved.
+        //
+        // Everything downstream was then innocent and looked broken: `f(300)`
+        // fell through to the run time because ~any~ admits it, and
+        // #sec-literal-freshness never ran at such a parameter because there was
+        // no object type to be fresh against.
+        //
+        // Names only, as above: the alias's own type is still resolved lazily,
+        // so nothing is computed earlier than before - only found.
+        const aliasName = (n as unknown as { BindingIdentifier?: { name: string } | null }).BindingIdentifier?.name;
+        // An alias case joins its family and never names it.
+        const aliasCase = ((n as unknown as { TypeParameters?: { ListKind?: string } | null }).TypeParameters?.ListKind ?? 'parameters') !== 'parameters';
+        if (aliasName && !aliasNodes.has(aliasName) && !aliasCase) {
+          aliasNodes.set(aliasName, n);
+        }
+      }
+    }
+    // A plain alias is PUBLISHED to the frame before the signatures that may
+    // name it are built.
+    //
+    // The scan above records the alias NODE, and the walk publishes the TYPE
+    // when it reaches the declaration - which for a NESTED list is after the
+    // signatures in that list have been read. Without this, a lookup of `L`
+    // from a signature finds NOTHING at any frame when the alias is declared
+    // inside a function, `p: L` resolves through a fallback the argument check
+    // does not use, and `f({ v: "s", next: null })` is accepted where the same
+    // program at the top level is refused.
+    //
+    // A BINDING at the same alias refuses either way, because it is walked
+    // after the declaration; only a SIGNATURE is read early. A NON-recursive
+    // alias is unaffected for the same reason it needs no placeholder.
+    for (const n of list) {
+      if (n.type !== 'TypeAliasDeclaration') {
+        continue;
+      }
+      const early = n as unknown as { BindingIdentifier?: { name: string } | null, TypeParameters?: unknown, Type?: ParseNode.Type | null };
+      const earlyName = early.BindingIdentifier?.name;
+      if (!earlyName || early.TypeParameters || !early.Type) {
+        continue;
+      }
+      const scope = frames[frames.length - 1].aliases;
+      if (scope.has(earlyName)) {
+        continue;
+      }
+      // Published as a placeholder and filled, so a self-reference in the body
+      // lands on the record the frame already holds.
+      const early_placeholder = { Kind: 'object', Properties: [], IndexSignatures: [] } as unknown as TypeRecord;
+      scope.set(earlyName, early_placeholder);
+      const earlyResolved = resolveType(early.Type);
+      if (!earlyResolved) {
+        scope.delete(earlyName);
+        continue;
+      }
+      if (earlyResolved !== early_placeholder) {
+        const target = early_placeholder as unknown as Record<string, unknown>;
+        for (const k of Object.keys(target)) {
+          delete target[k];
+        }
+        Object.assign(target, earlyResolved);
+      }
+    }
+    // Prepare contracts without evaluating initializers or initializing values.
+    // Existing entries from the first source pass retain inferred const types.
+    for (const declaration of list) {
+      if (declaration.type !== 'LexicalDeclaration') continue;
+      for (const binding of declaration.BindingList) {
+        if (binding.TypeAnnotation || !binding.BindingIdentifier
+            || !frames[frames.length - 1].declaredNames.has(binding.BindingIdentifier.name)) {
+          declarePatternAnnotations(binding);
+        }
+        const expression = binding.TypedInitializer?.AssignmentExpression ?? binding.Initializer;
+        if (!binding.TypeAnnotation && !binding.Ref && binding.BindingIdentifier && expression
+            && (declaration.LetOrConst === 'const' || binding.TypedInitializer)) {
+          const frame = frames[frames.length - 1];
+          if (!preparedBindings.has(frame)) preparedBindings.set(frame, new Map());
+          if (preparedBindings.get(frame)!.get(binding.BindingIdentifier.name)?.node === binding) continue;
+          preparedBindings.get(frame)!.set(binding.BindingIdentifier.name, {
+            node: binding, expression, constant: !binding.TypedInitializer, owner: frame, name: binding.BindingIdentifier.name,
+            frames: frames.slice(), varFrames: varFrames.slice(), typeScopes: typeParameterScopes.slice(),
+          });
+        }
+      }
+    }
+    declareHoistedFunctionSignatures(list);
     // Class instance types are recorded over the same list, so a class may be
     // named as a type anywhere in it.
     for (const n of list) {
