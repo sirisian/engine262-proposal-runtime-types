@@ -25599,7 +25599,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   type PreparedBinding = InferenceScope & {
-    node: ParseNode, expression: ParseNode, constant: boolean, owner: Frame, name: string,
+    node: ParseNode, expression: ParseNode, constant: boolean, reference?: boolean, owner: Frame, name: string,
     type?: Known, completed?: boolean, flowIncomplete?: boolean,
     contribution?: { flowIndependent: boolean, thisTypes: Known[], flow?: FlowFacts },
     context?: InitializerContext, inputs?: Set<PreparedBinding>, deferredErrors?: ObjectValue[],
@@ -25628,6 +25628,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     try {
       return inDeclarationScope(binding, () => {
         const expression = patternExpression(binding.expression)!;
+        if (binding.reference) {
+          // A named location's declared contract does not depend on its current
+          // value. Resolve it in the reference declaration's scope, without
+          // borrowing the requester's narrowing or initializing the reference.
+          const inputs = new Set<PreparedBinding>();
+          inferenceInputCollectors.push(inputs);
+          try {
+            return withCaptureContracts(() => {
+              binding.type = locationType(expression);
+              binding.inputs = inputs;
+              binding.completed = inputs.size === 0;
+              return binding.type;
+            });
+          } finally {
+            inferenceInputCollectors.pop();
+          }
+        }
         if (binding.contribution) {
           // A source-position-dependent initializer remains pending. Its
           // operand's declaration contract cannot replace its incoming flow.
@@ -25904,8 +25921,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       inInitializerContext(binding.context!, () => {
         inferenceInputCollectors.push(inputs);
         try {
-          if (!binding.constant || constInitializerParticipates(binding.expression)) inferred = staticType(binding.expression);
-          if (!inputs.size && !binding.constant) requireInferredBindingType(inferred, binding.node);
+          if (binding.reference) inferred = locationType(binding.expression);
+          else if (!binding.constant || constInitializerParticipates(binding.expression)) inferred = staticType(binding.expression);
+          if (!inputs.size && !binding.constant && !binding.reference) requireInferredBindingType(inferred, binding.node);
         } finally {
           inferenceInputCollectors.pop();
         }
@@ -25918,7 +25936,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         continue;
       }
       const type: Known = inferred && (inferred as TypeRecord).Kind !== 'any'
-        ? binding.constant ? inferred : widen(inferred) : null;
+        ? binding.constant || binding.reference ? inferred : widen(inferred) : null;
       binding.type = type;
       binding.completed = true;
       binding.deferredErrors = undefined;
@@ -26640,7 +26658,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               return;
             }
             if ((b as { Ref?: boolean }).Ref && init) {
-              const referent = withCaptureContracts(() => locationType(init));
+              const prepared = preparedBindings.get(bindingFrame)?.get(bname);
+              const referent = prepared?.reference ? preparedBindingType(bindingFrame, bname)
+                : withCaptureContracts(() => locationType(init));
               declare(bname, referent, bindingFrame);
               recordInferenceAnchor(bname, !!referent && referent.Kind !== 'any', bindingFrame);
               return;
@@ -26947,13 +26967,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           declarePatternAnnotations(binding);
         }
         const expression = binding.TypedInitializer?.AssignmentExpression ?? binding.Initializer;
-        if (!binding.TypeAnnotation && !binding.Ref && binding.BindingIdentifier && expression
-            && (declaration.LetOrConst === 'const' || binding.TypedInitializer)) {
+        const reference = !!binding.Ref && expression && patternExpression(expression)?.type === 'IdentifierReference';
+        if (!binding.TypeAnnotation && binding.BindingIdentifier && expression
+            && (reference || !binding.Ref && (declaration.LetOrConst === 'const' || binding.TypedInitializer))) {
           const frame = frames[frames.length - 1];
           if (!preparedBindings.has(frame)) preparedBindings.set(frame, new Map());
           if (preparedBindings.get(frame)!.get(binding.BindingIdentifier.name)?.node === binding) continue;
           preparedBindings.get(frame)!.set(binding.BindingIdentifier.name, {
-            node: binding, expression, constant: !binding.TypedInitializer, owner: frame, name: binding.BindingIdentifier.name,
+            node: binding, expression, constant: !binding.TypedInitializer && !reference, reference: !!reference,
+            owner: frame, name: binding.BindingIdentifier.name,
             frames: frames.slice(), varFrames: varFrames.slice(), typeScopes: typeParameterScopes.slice(),
             ...(flowIndependent === undefined ? {} : { contribution: { flowIndependent, thisTypes: thisTypeFrames.slice() } }),
           });
@@ -34213,6 +34235,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const referent = locationType(newInit);
             if (referent) {
               declare(n.BindingIdentifier.name, referent, bindingFrame);
+              completePreparedBinding(bindingFrame, n.BindingIdentifier.name, referent);
               // AND RECORD WHETHER IT CARRIES A CONTRACT, as every other binding form
               // does where it is declared. A binding's static type alone is no longer
               // taken as a contract - #sec-unary-operators-for-typed-values: "an
