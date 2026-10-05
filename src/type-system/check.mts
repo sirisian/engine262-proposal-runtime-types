@@ -26485,19 +26485,57 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return;
         }
         if (n.type === 'SwitchStatement') {
-          collect(n.Expression);
-          previewFlowEffects(n);
-          const entry = captureFlow();
+          const expression = n.Expression;
+          const booleanDiscriminant = booleanSingleton(singleValueOperandType(expression) ?? staticType(expression));
+          collect(expression);
+          transferExpression(expression);
+          const discriminant = expression.type === 'UnaryExpression' && expression.operator === 'typeof'
+            ? expression.UnaryExpression : expression;
+          const name = narrowableName(discriminant);
+          const owner = name === null ? undefined : flowOwner(name);
           flowBlock(() => {
-            const clauses = [...n.CaseBlock.CaseClauses_a ?? [],
-              ...n.CaseBlock.DefaultClause ? [n.CaseBlock.DefaultClause] : [],
-              ...n.CaseBlock.CaseClauses_b ?? []];
-            const statements = clauses.flatMap((clause) => clause.StatementList);
+            const block = n.CaseBlock;
+            const clauses = [...block.CaseClauses_a ?? [],
+              ...block.DefaultClause ? [block.DefaultClause] : [], ...block.CaseClauses_b ?? []];
+            // Empty clauses retain their labels and fallthrough edges, but do
+            // not contribute a declaration to the shared case-block scope.
+            const statements = clauses.flatMap((clause) => clause.StatementList ?? []);
             predeclareFlowLexicals(statements);
             declareHoistedFunctionSignatures(statements, true);
             prepareLexicalBindingContracts(statements, hasFlowIndependentInitializers(body!));
-            const normal = clauses.map((clause) => runFlow(entry, () => collect(clause)));
-            resumeFlow(joinFlow([entry, ...normal, ...takeFlowExits(n, 'break')]));
+            const entries = new Map<ParseNode, FlowFacts | undefined>();
+            let failed: FlowFacts | undefined = captureFlow();
+            let stable = name !== null && flowOwner(name) === owner;
+            for (const clause of clauses) {
+              if (clause.type === 'DefaultClause') continue;
+              resumeFlow(failed);
+              collect(clause.Expression);
+              if (booleanDiscriminant !== undefined) {
+                const reachable = flowLive;
+                const test = walkTest(clause.Expression, false, false, false);
+                entries.set(clause, reachable ? booleanDiscriminant ? test.whenTrue : test.whenFalse : undefined);
+                failed = reachable ? booleanDiscriminant ? test.whenFalse : test.whenTrue : undefined;
+                continue;
+              }
+              transferExpression(clause.Expression);
+              if (name !== null && (flowWrites(clause.Expression).has(name.split('.')[0])
+                || containsCall(clause.Expression) && assignedInsideFunction.has(name.split('.')[0]))) stable = false;
+              const comparison = { type: 'EqualityExpression', operator: '===', EqualityExpression: expression,
+                RelationalExpression: clause.Expression } as ParseNode.EqualityExpression;
+              const fact = stable ? withFlowInputs(() => narrowingFactOf(comparison)) : undefined;
+              const after = normalFlow();
+              entries.set(clause, after && fact ? factFlow(fact, true) : after);
+              if (after) restoreFlow(after);
+              failed = after && fact ? factFlow(fact, false) : after;
+            }
+            if (block.DefaultClause) entries.set(block.DefaultClause, failed);
+            let fallthrough: FlowFacts | undefined;
+            for (const clause of clauses) {
+              const entry = joinFlow([entries.get(clause), fallthrough]);
+              fallthrough = runFlow(entry, () => clause.StatementList?.forEach(collect));
+            }
+            resumeFlow(joinFlow([fallthrough, ...takeFlowExits(n, 'break'),
+              !block.DefaultClause && !switchCoversDiscriminant(n) ? failed : undefined]));
           });
           return;
         }
