@@ -1,0 +1,1140 @@
+{
+  "description": "Boolean and optional discriminant relations in switch contributions",
+  "cases": [
+    {
+      "name": "typeof Boolean result: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(typeof x===\"string\"){case true:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "typeof Boolean result: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(typeof x===\"string\"){case true:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "is Boolean result: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(x is string){case true:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "is Boolean result: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(x is string){case true:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "negative Boolean result: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(x is number){case false:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "negative Boolean result: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(x is number){case false:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "negated Boolean result: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(!(x is string)){case false:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "negated Boolean result: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(!(x is string)){case false:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "parenthesized Boolean result: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(((x is string))){case true:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "parenthesized Boolean result: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(((x is string))){case true:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "comma Boolean result: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch((flag,x is string)){case true:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "comma Boolean result: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch((flag,x is string)){case true:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "conditional Boolean result: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(flag?(x is string):(x is string)){case true:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "conditional Boolean result: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(flag?(x is string):(x is string)){case true:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "logical Boolean result: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch((x is string)&&flag){case true:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "logical Boolean result: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch((x is string)&&flag){case true:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "Boolean default after false case: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(x is string){case false:return \"s\";default:return g();function g(){return s;}const s=x;}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Boolean default after false case: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(x is string){case false:return \"s\";default:return g();function g(){return s;}const s=x;}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "Boolean middle default: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(x is string){default:return g();function g(){return s;}const s=x;case false:return \"s\";}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Boolean middle default: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(x is string){default:return g();function g(){return s;}const s=x;case false:return \"s\";}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "Boolean break successor: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(x is string){case false:return \"s\";case true:break;}return g();function g(){return s;}const s=x;}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Boolean break successor: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(x is string){case false:return \"s\";case true:break;}return g();function g(){return s;}const s=x;}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "Boolean false edge of disjunction: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch((x is string)||flag){case false:return g();function g(){return s;}const s=x;default:return 0;}}const q:number=f(1,false);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Boolean false edge of disjunction: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch((x is string)||flag){case false:return g();function g(){return s;}const s=x;default:return 0;}}const q:string=f(1,false);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "Boolean fallthrough retains alternatives: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(x is string){case true:case false:return g();function g(){return s;}const s=x;}return \"s\";}const q:string|number=f(1,true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Boolean fallthrough retains alternatives: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(x is string){case true:case false:return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(1,true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "Boolean later store preserves earlier entry: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(x is string){case true:return x;case(x=\"s\",false):return x;default:return \"s\";}}const q:string|number=f(1,true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Boolean later store preserves earlier entry: boolean",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(x is string){case true:return x;case(x=\"s\",false):return x;default:return \"s\";}}const q:boolean=f(1,true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "Boolean label store invalidates source: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(x is string){case(x=0,true):return g();function g(){return s;}const s=x;default:return \"s\";}}const q:string|number=f(1,true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Boolean label store invalidates source: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(x is string){case(x=0,true):return g();function g(){return s;}const s=x;default:return \"s\";}}const q:string=f(1,true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "Boolean captured storage retains union: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(x is string){case true:return g();function g(){return x;}default:return \"s\";}}const q:string|number=f(1,true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Boolean captured storage retains union: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){switch(x is string){case true:return g();function g(){return x;}default:return \"s\";}}const q:string=f(1,true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "optional member before default: {tag:string}",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){switch(o?.tag){case \"a\":return g();function g(){return s;}const s=o;default:return fallback;}}const q:{tag:string}=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "optional member before default: null",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){switch(o?.tag){case \"a\":return g();function g(){return s;}const s=o;default:return fallback;}}const q:null=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "optional member after default: {tag:string}",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){switch(o?.tag){default:return fallback;case \"a\":return g();function g(){return s;}const s=o;}}const q:{tag:string}=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "optional member after default: null",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){switch(o?.tag){default:return fallback;case \"a\":return g();function g(){return s;}const s=o;}}const q:null=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "parenthesized optional member before default: {tag:string}",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){switch((o?.tag)){case \"a\":return g();function g(){return s;}const s=o;default:return fallback;}}const q:{tag:string}=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "parenthesized optional member before default: null",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){switch((o?.tag)){case \"a\":return g();function g(){return s;}const s=o;default:return fallback;}}const q:null=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "parenthesized optional member after default: {tag:string}",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){switch((o?.tag)){default:return fallback;case \"a\":return g();function g(){return s;}const s=o;}}const q:{tag:string}=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "parenthesized optional member after default: null",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){switch((o?.tag)){default:return fallback;case \"a\":return g();function g(){return s;}const s=o;}}const q:null=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "optional computed member before default: {tag:string}",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){switch(o?.[\"tag\"]){case \"a\":return g();function g(){return s;}const s=o;default:return fallback;}}const q:{tag:string}=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "optional computed member before default: null",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){switch(o?.[\"tag\"]){case \"a\":return g();function g(){return s;}const s=o;default:return fallback;}}const q:null=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "optional computed member after default: {tag:string}",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){switch(o?.[\"tag\"]){default:return fallback;case \"a\":return g();function g(){return s;}const s=o;}}const q:{tag:string}=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "optional computed member after default: null",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){switch(o?.[\"tag\"]){default:return fallback;case \"a\":return g();function g(){return s;}const s=o;}}const q:null=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "typeof optional member before default: {tag:string}",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){switch(typeof o?.tag){case \"string\":return g();function g(){return s;}const s=o;default:return fallback;}}const q:{tag:string}=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "typeof optional member before default: null",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){switch(typeof o?.tag){case \"string\":return g();function g(){return s;}const s=o;default:return fallback;}}const q:null=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "typeof optional member after default: {tag:string}",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){switch(typeof o?.tag){default:return fallback;case \"string\":return g();function g(){return s;}const s=o;}}const q:{tag:string}=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "typeof optional member after default: null",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){switch(typeof o?.tag){default:return fallback;case \"string\":return g();function g(){return s;}const s=o;}}const q:null=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "optional skipped first then residual: {tag:string}",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){switch(o?.tag){case undefined:return fallback;default:return g();function g(){return s;}const s=o;}}const q:{tag:string}=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "optional skipped first then residual: null",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){switch(o?.tag){case undefined:return fallback;default:return g();function g(){return s;}const s=o;}}const q:null=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "optional grouped fallthrough retains null: {tag:string}|null",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){switch(o?.tag){case undefined:case \"a\":return o;default:return fallback;}}const q:{tag:string}|null=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "optional grouped fallthrough retains null: {tag:string}",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){switch(o?.tag){case undefined:case \"a\":return o;default:return fallback;}}const q:{tag:string}=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "optional label store invalidates source: {tag:string}|null",
+      "source": "function outer(){function f(o:{tag:string}|null,y:{tag:string}|null,fallback:{tag:string}){switch(o?.tag){case(o=y,\"a\"):return o;default:return fallback;}}const q:{tag:string}|null=f(null,null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "optional label store invalidates source: {tag:string}",
+      "source": "function outer(){function f(o:{tag:string}|null,y:{tag:string}|null,fallback:{tag:string}){switch(o?.tag){case(o=y,\"a\"):return o;default:return fallback;}}const q:{tag:string}=f(null,null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "optional nested receiver: {inner:{tag:string}|null}",
+      "source": "function outer(){function f(o:{inner:{tag:string}|null}|null,fallback:{inner:{tag:string}|null}){switch(o?.inner?.tag){case \"a\":return o;default:return fallback;}}const q:{inner:{tag:string}|null}=f(null,{inner:null});}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "optional nested receiver: null",
+      "source": "function outer(){function f(o:{inner:{tag:string}|null}|null,fallback:{inner:{tag:string}|null}){switch(o?.inner?.tag){case \"a\":return o;default:return fallback;}}const q:null=f(null,{inner:null});}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "optional callable receiver: ()=>string",
+      "source": "function outer(){function f(fn:(()=>string)|null,fallback:()=>string){switch(fn?.()){case \"a\":return fn;default:return fallback;}}const q:()=>string=f(null,()=>\"s\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "optional callable receiver: null",
+      "source": "function outer(){function f(fn:(()=>string)|null,fallback:()=>string){switch(fn?.()){case \"a\":return fn;default:return fallback;}}const q:null=f(null,()=>\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "ordered optional labels exhaust present values: null",
+      "source": "function outer(){function f(o:{tag:\"a\"|\"b\"}|null){switch(o?.tag){case \"a\":return null;case \"b\":return null;default:return o;}}const q:null=f(null);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "ordered optional labels exhaust present values: {tag:\"a\"|\"b\"}",
+      "source": "function outer(){function f(o:{tag:\"a\"|\"b\"}|null){switch(o?.tag){case \"a\":return null;case \"b\":return null;default:return o;}}const q:{tag:\"a\"|\"b\"}=f(null);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "ordered typeof optional labels exhaust present tags: null",
+      "source": "function outer(){function f(o:{tag:string|number}|null){switch(typeof o?.tag){case \"string\":return null;case \"number\":return null;default:return o;}}const q:null=f(null);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "ordered typeof optional labels exhaust present tags: {tag:string|number}",
+      "source": "function outer(){function f(o:{tag:string|number}|null){switch(typeof o?.tag){case \"string\":return null;case \"number\":return null;default:return o;}}const q:{tag:string|number}=f(null);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "nonsingleton optional label preserves unmatched value: {tag:\"a\"|\"b\"}|null",
+      "source": "function outer(){function f(o:{tag:\"a\"|\"b\"}|null,label:\"a\"|\"b\"){switch(o?.tag){case label:return null;default:return o;}}const q:{tag:\"a\"|\"b\"}|null=f(null,\"a\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "nonsingleton optional label preserves unmatched value: null",
+      "source": "function outer(){function f(o:{tag:\"a\"|\"b\"}|null,label:\"a\"|\"b\"){switch(o?.tag){case label:return null;default:return o;}}const q:null=f(null,\"a\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "label effect invalidates optional residual origin: {tag:\"a\"|\"b\"}|null",
+      "source": "function outer(){function f(o:{tag:\"a\"|\"b\"}|null,y:{tag:\"a\"|\"b\"}|null){switch(o?.tag){case(o=y,\"a\"):return null;case \"b\":return null;default:return o;}}const q:{tag:\"a\"|\"b\"}|null=f(null,null);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "label effect invalidates optional residual origin: null",
+      "source": "function outer(){function f(o:{tag:\"a\"|\"b\"}|null,y:{tag:\"a\"|\"b\"}|null){switch(o?.tag){case(o=y,\"a\"):return null;case \"b\":return null;default:return o;}}const q:null=f(null,null);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "optional residual impossible test: automatic",
+      "source": "function f(o:{tag:\"a\"|\"b\"}|null){switch(o?.tag){case \"a\":break;case \"b\":break;default:if(o is null){}break;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "optional residual impossible test: forced",
+      "source": "function f(o:{tag:\"a\"|\"b\"}|null){switch(o?.tag){case \"a\":break;case \"b\":break;default:if(o is null){}break;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "arrow Boolean switch: string",
+      "source": "function outer(){const f=(x:string|number)=>{switch(x is string){case true:return g();function g(){return s;}const s=x;default:return \"s\";}};const q:string=f(\"s\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "arrow Boolean switch: number",
+      "source": "function outer(){const f=(x:string|number)=>{switch(x is string){case true:return g();function g(){return s;}const s=x;default:return \"s\";}};const q:number=f(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "expression Boolean switch: string",
+      "source": "function outer(){const f=function(x:string|number){switch(x is string){case true:return g();function g(){return s;}const s=x;default:return \"s\";}};const q:string=f(\"s\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "expression Boolean switch: number",
+      "source": "function outer(){const f=function(x:string|number){switch(x is string){case true:return g();function g(){return s;}const s=x;default:return \"s\";}};const q:number=f(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async Boolean switch: string",
+      "source": "async function outer(){async function f(x:string|number){switch(x is string){case true:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:string=await f(\"s\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "async Boolean switch: number",
+      "source": "async function outer(){async function f(x:string|number){switch(x is string){case true:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:number=await f(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generator Boolean switch: string",
+      "source": "function outer(){function* f(x:string|number){switch(x is string){case true:yield x;return \"s\";default:yield \"s\";return \"s\";}}const q:string=f(\"s\").next().value;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generator Boolean switch: number",
+      "source": "function outer(){function* f(x:string|number){switch(x is string){case true:yield x;return \"s\";default:yield \"s\";return \"s\";}}const q:number=f(\"s\").next().value;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async generator Boolean switch: string",
+      "source": "async function outer(){async function* f(x:string|number){switch(x is string){case true:yield x;return \"s\";default:yield \"s\";return \"s\";}}const q:string=(await f(\"s\").next()).value;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "async generator Boolean switch: number",
+      "source": "async function outer(){async function* f(x:string|number){switch(x is string){case true:yield x;return \"s\";default:yield \"s\";return \"s\";}}const q:number=(await f(\"s\").next()).value;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "unknown optional result stays gradual",
+      "source": "function outer(){function f(o:any,fallback:any){switch(o?.tag){case \"a\":return o;default:return fallback;}}const q:number=f(null,1);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "mutable Boolean does not replay a predicate",
+      "source": "function outer(){function f(x:string|number,flag:boolean){let p=x is string;p=flag;switch(p){case true:return x;default:return \"s\";}}const q:string|number=f(1,true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "runtime Boolean captures value once",
+      "source": "function f(x:string|number){let n:number=0;switch((n++,x is string)){case true:return String(n)+x;default:return \"other\";}}f(\"ok\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1ok"
+      }
+    },
+    {
+      "name": "runtime optional receiver evaluated once",
+      "source": "function f(){let n:number=0;function read():{tag:string}|null{n++;return {tag:\"a\"};}switch(read()?.tag){case \"a\":return String(n);default:return \"other\";}}f();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "runtime optional labels retain order",
+      "source": "function f(o:{tag:string}|null){let n:number=0;switch(o?.tag){case(n++,\"a\"):return String(n);case(n++,\"b\"):return String(n);default:return String(n);}}f({tag:\"b\"});",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "runtime optional label stops after selection",
+      "source": "function f(o:{tag:string}|null){let n:number=0;switch(o?.tag){case(n++,\"a\"):return String(n);case(n++,\"b\"):return String(n);default:return String(n);}}f({tag:\"a\"});",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "runtime optional capture retains temporal dead zone",
+      "source": "function f(o:{tag:string}|null,fallback:{tag:string}){switch(o?.tag){case \"a\":return g();function g(){return s;}const s=o;default:return fallback;}}f({tag:\"a\"},{tag:\"b\"});",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "legacy optional switch: automatic",
+      "source": "function f(o){switch(o?.tag){case \"a\":return \"ok\";default:return \"other\";}}f({tag:\"a\"});",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "legacy optional switch: forced",
+      "source": "function f(o){switch(o?.tag){case \"a\":return \"ok\";default:return \"other\";}}f({tag:\"a\"});",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "legacy optional switch: disabled",
+      "source": "function f(o){switch(o?.tag){case \"a\":return \"ok\";default:return \"other\";}}f({tag:\"a\"});",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      },
+      "checking": "disabled"
+    },
+    {
+      "name": "ordered numeric literals exhaust present values: null",
+      "source": "function outer(){function f(o:{tag:1|2}|null){switch(o?.tag){case 1:return null;case 2:return null;default:return o;}}const q:null=f(null);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "ordered numeric literals exhaust present values: {tag:1|2}",
+      "source": "function outer(){function f(o:{tag:1|2}|null){switch(o?.tag){case 1:return null;case 2:return null;default:return o;}}const q:{tag:1|2}=f(null);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "broad numeric result retains other values: {tag:number}|null",
+      "source": "function outer(){function f(o:{tag:number}|null){switch(o?.tag){case 1:return null;case 2:return null;default:return o;}}const q:{tag:number}|null=f(null);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "broad numeric result retains other values: null",
+      "source": "function outer(){function f(o:{tag:number}|null){switch(o?.tag){case 1:return null;case 2:return null;default:return o;}}const q:null=f(null);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "present undefined is not receiver absence: {tag:\"a\"|undefined}|null",
+      "source": "function outer(){function f(o:{tag:\"a\"|undefined}|null){switch(o?.tag){case \"a\":return null;default:return o;}}const q:{tag:\"a\"|undefined}|null=f(null);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "present undefined is not receiver absence: null",
+      "source": "function outer(){function f(o:{tag:\"a\"|undefined}|null){switch(o?.tag){case \"a\":return null;default:return o;}}const q:null=f(null);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "null result is distinct from skipped undefined: null",
+      "source": "function outer(){function f(o:{tag:\"a\"|null}|null){switch(o?.tag){case \"a\":return null;case null:return null;default:return o;}}const q:null=f(null);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "null result is distinct from skipped undefined: {tag:\"a\"|null}",
+      "source": "function outer(){function f(o:{tag:\"a\"|null}|null){switch(o?.tag){case \"a\":return null;case null:return null;default:return o;}}const q:{tag:\"a\"|null}=f(null);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "strict zero selection excludes both signs: null",
+      "source": "function outer(){function f(o:{tag:0|-0}|null){switch(o?.tag){case 0:return null;default:return o;}}const q:null=f(null);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "strict zero selection excludes both signs: {tag:0|-0}",
+      "source": "function outer(){function f(o:{tag:0|-0}|null){switch(o?.tag){case 0:return null;default:return o;}}const q:{tag:0|-0}=f(null);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "typed numeric domain is not one label: {tag:uint8}|null",
+      "source": "function outer(){function f(o:{tag:uint8}|null){switch(o?.tag){case 1:return null;default:return o;}}const q:{tag:uint8}|null=f(null);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "typed numeric domain is not one label: null",
+      "source": "function outer(){function f(o:{tag:uint8}|null){switch(o?.tag){case 1:return null;default:return o;}}const q:null=f(null);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    }
+  ]
+}

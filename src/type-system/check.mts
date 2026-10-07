@@ -23708,17 +23708,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     return result;
   };
+  const singletonValueType = (type: TypeRecord): boolean => type.Kind === 'literal'
+    || SameType(type, undefinedType) || SameType(type, makePrimitive('null'));
+  const sameStrictSingleton = (left: TypeRecord, right: TypeRecord): boolean => {
+    if (!singletonValueType(left) || !singletonValueType(right)) return false;
+    if (left.Kind === 'literal' && right.Kind === 'literal') {
+      const a = numericValueOf(left.Value);
+      const b = numericValueOf(right.Value);
+      if (Number.isNaN(a) || Number.isNaN(b)) return false;
+      if (a === 0 && b === 0) return SameType(left.Base, right.Base);
+    }
+    return SameType(left, right);
+  };
   const optionalSelection = (result: OptionalResult, selected: Known, operator: string): TestFlow | null => {
     const members = strictDomainMembers(selected, operator);
-    const evaluated = strictDomainMembers(result.type, operator);
+    const evaluated = result.evaluated ? strictDomainMembers(result.type, operator) : [];
     if (!members || !evaluated) return null;
     const skippedType = result.skippedType ?? undefinedType;
     const skippedCanMatch = members.some((member) => equalityCompatible(skippedType, member));
-    const evaluatedCanMatch = commonEqualityDomain(evaluated, members) !== empty;
-    const singleton = (member: TypeRecord) => member.Kind === 'literal' || SameType(member, undefinedType)
-      || SameType(member, makePrimitive('null'));
+    const evaluatedCanMatch = evaluated.some((a) => members.some((b) => singletonValueType(a) && singletonValueType(b)
+      ? sameStrictSingleton(a, b) : equalityCompatible(a, b)));
     const sameValue = (left: readonly TypeRecord[], right: readonly TypeRecord[]) => left.length > 0 && right.length > 0
-      && left.every((a) => singleton(a) && right.every((b) => singleton(b) && SameType(a, b)));
+      && left.every((a) => right.every((b) => sameStrictSingleton(a, b)));
     const evaluatedAlwaysMatches = sameValue(evaluated, members);
     const skippedAlwaysMatches = sameValue([skippedType], members);
     return {
@@ -23727,6 +23738,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         skippedAlwaysMatches ? undefined : result.skipped]),
     };
   };
+  const selectOptionalSwitchLabel = (result: OptionalResult, selected: Known): TestFlow | null => {
+    const selection = optionalSelection(result, selected, '===');
+    if (!selection || !selected) return selection;
+    // Only a singleton label excludes that value on a failed comparison. A
+    // label with several possible values does not exclude its entire domain.
+    if (singletonValueType(selected)) {
+      if (sameStrictSingleton(selected, result.skippedType ?? undefinedType)) result.skipped = undefined;
+      if (result.type) {
+        const members = result.type.Kind === 'union' ? result.type.Members : [result.type];
+        // Strict equality covers both zero signs, but never matches NaN.
+        // A broad member still admits values other than the selected value.
+        const remaining = unionOf(members.filter((member) => !sameStrictSingleton(member, selected)));
+        result.type = remaining === empty ? neverType : remaining;
+        if (remaining === empty) result.evaluated = undefined;
+      }
+      selection.whenFalse = joinFlow([result.evaluated, result.skipped]);
+    }
+    return selection;
+  };
+
   const replayOptionalEffects = (result: OptionalResult, node: ParseNode): void => {
     const changed = effectOnTest({ whenTrue: result.evaluated, whenFalse: result.skipped }, () => {
       previewFlowEffects(node);
@@ -26488,7 +26519,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const expression = n.Expression;
           const booleanDiscriminant = booleanSingleton(singleValueOperandType(expression) ?? staticType(expression));
           collect(expression);
-          transferExpression(expression);
+          const switchType = withFlowInputs(() => staticType(expression));
+          let savedBoolean = savedPredicateResult(expression);
+          const producer = optionalProducer(expression);
+          const optionalResult = producer ? withFlowInputs(() => visitOptionalProducer(producer, false)) : undefined;
+          if (optionalResult) resumeFlow(joinFlow([optionalResult.evaluated, optionalResult.skipped]));
+          else if (!savedBoolean && narrowableName(expression) === null && (booleanType(switchType)
+            || expression.type === 'CallExpression' && !!numericPredicateFact(expression, false))) {
+            savedBoolean = walkTest(expression, false, false, false);
+            resumeFlow(joinFlow([savedBoolean.whenTrue, savedBoolean.whenFalse]));
+          } else transferExpression(expression);
           const discriminant = expression.type === 'UnaryExpression' && expression.operator === 'typeof'
             ? expression.UnaryExpression : expression;
           const name = narrowableName(discriminant);
@@ -26518,6 +26558,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 continue;
               }
               transferExpression(clause.Expression);
+              const reachable = flowLive;
+              if (savedBoolean) {
+                savedBoolean = effectOnTest(savedBoolean, () => previewFlowEffects(clause.Expression));
+                const selected = booleanSingleton(singleValueOperandType(clause.Expression) ?? staticType(clause.Expression));
+                if (selected !== undefined) {
+                  entries.set(clause, reachable ? selected ? savedBoolean.whenTrue : savedBoolean.whenFalse : undefined);
+                  failed = reachable ? selected ? savedBoolean.whenFalse : savedBoolean.whenTrue : undefined;
+                  if (selected) savedBoolean.whenTrue = undefined;
+                  else savedBoolean.whenFalse = undefined;
+                  continue;
+                }
+              }
+              if (optionalResult) {
+                replayOptionalEffects(optionalResult, clause.Expression);
+                const selection = selectOptionalSwitchLabel(optionalResult,
+                  singleValueOperandType(clause.Expression) ?? staticType(clause.Expression));
+                if (selection) {
+                  entries.set(clause, reachable ? selection.whenTrue : undefined);
+                  failed = reachable ? selection.whenFalse : undefined;
+                  continue;
+                }
+              }
               if (name !== null && (flowWrites(clause.Expression).has(name.split('.')[0])
                 || containsCall(clause.Expression) && assignedInsideFunction.has(name.split('.')[0]))) stable = false;
               const comparison = { type: 'EqualityExpression', operator: '===', EqualityExpression: expression,
@@ -26537,6 +26599,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             resumeFlow(joinFlow([fallthrough, ...takeFlowExits(n, 'break'),
               !block.DefaultClause && !switchCoversDiscriminant(n) ? failed : undefined]));
           });
+          if (optionalResult) {
+            const released = releaseCapturedPlaces({ whenTrue: normalFlow(), whenFalse: undefined }, optionalResult.origins);
+            resumeFlow(released.whenTrue);
+          }
           return;
         }
         if (n.type === 'TryStatement') {
@@ -34032,13 +34098,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             if (optionalResult) {
               replayOptionalEffects(optionalResult, label);
-              const selection = optionalSelection(optionalResult, singleValueOperandType(label) ?? staticType(label), '===');
+              const selection = selectOptionalSwitchLabel(optionalResult, singleValueOperandType(label) ?? staticType(label));
               if (selection) {
                 entries.set(clause, selection.whenTrue);
-                // Ordered failures are a constraint on each alternative, too.
-                // A label for undefined removes the skipped alternative.
-                const labelType = singleValueOperandType(label) ?? staticType(label);
-                if (labelType && SameType(labelType, optionalResult.skippedType ?? undefinedType)) optionalResult.skipped = undefined;
                 failed = selection.whenFalse;
                 continue;
               }
