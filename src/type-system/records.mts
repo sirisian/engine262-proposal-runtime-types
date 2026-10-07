@@ -2054,6 +2054,7 @@ export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): b
   };
   if (withSignatures.Signatures?.some((sig) => (sig.Parameters ?? []).some((prm) => !!prm?.Type && mentionsTypeParameter(prm.Type, seen))
     || (!!sig.Return && mentionsTypeParameter(sig.Return, seen))
+    || (!!sig.InferredReturn && mentionsTypeParameter(sig.InferredReturn, seen))
     || (!!sig.ThisType && mentionsTypeParameter(sig.ThisType, seen))
     || sig.Narrows?.some((rule) => mentionsTypeParameter(rule.Type, seen)))) {
     return true;
@@ -2272,6 +2273,7 @@ const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string
             ? { ...prm, Type: apply(prm.Type) }
             : prm)),
           Return: sig.Return ? apply(sig.Return) : sig.Return,
+          ...(sig.InferredReturn ? { InferredReturn: apply(sig.InferredReturn) } : {}),
           ...(sig.ThisType ? { ThisType: apply(sig.ThisType) } : {}),
           ...(sig.Narrows ? { Narrows: sig.Narrows.map((rule) => ({ ...rule, Type: apply(rule.Type)! })) } : {}),
         };
