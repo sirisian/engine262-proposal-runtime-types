@@ -2973,7 +2973,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * whose elision it invalidates.
    */
   const assignedNames = new Set<string>();
-  const lexicalUnassigned = LexicalMutationAnalysis(root);
+  const lexicalMutations = LexicalMutationAnalysis(root);
+  const lexicalUnassigned = lexicalMutations.unassigned;
   const assignedGlobalProperties = new Set<string>();
   /**
    * Names some FUNCTION BODY assigns to, so a call might change them.
@@ -2982,13 +2983,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * `function clob() { v = null; } if (v !== null) { clob(); v.x; }` typechecks
    * and fails at run time. That is the same hole the loop back-edge had, reached
    * through a call rather than through an iteration, and it needs the same
-   * treatment - the walk cannot see into the callee, so the conservative fact is
-   * whether ANY function assigns the name at all.
+   * treatment. This spelling inventory is filtered by lexical ownership when
+   * available: writes in the binding's own invocation are not captured writes.
    *
    * A name only this function assigns straight-line is still covered by ordinary
-   * invalidation; this set is what a CALL has to widen.
+   * invalidation. Exposed mapped arguments also permit writes to parameter cells
+   * without a lexical assignment. This set supplies candidates for call effects.
    */
-  const assignedInsideFunction = new Set<string>();
+  const assignedInsideFunction = new Set<string>(lexicalMutations.exposedParameters);
   let functionDepth = 0;
 
   let hasDirectEval = false;
@@ -3194,7 +3196,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // REACHES the call, and a read placed before it has already been typed.
     // `for (…) { n = v.x; clob(); }` is exactly that order.
     if (containsCall(node)) {
-      for (const name of assignedInsideFunction) {
+      for (const name of capturedMutationNames()) {
         assigned.add(name);
       }
     }
@@ -3429,6 +3431,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (prepared) finishReadyBindingContract(prepared);
       const t = frames[i].bindings.get(name);
       if (t) {
+        const store = deferredStoredTypes.get(t);
+        if (store) {
+          finishReadyBindingContract(store);
+          observeBindingInput(store);
+          return bindingReady(store) ? store.type ?? null : null;
+        }
         if (prepared && (!prepared.contribution || inferenceDepth === 0
           || !inferenceBindingAnchors.get(frames[i])?.has(name))) observeBindingInput(prepared);
         return t;
@@ -3484,6 +3492,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return false;
   };
 
+  const bindingSites = new WeakMap<Frame, Map<string, ParseNode>>();
+  const capturedMutationMayAffect = (name: string, owner = flowOwner(name)): boolean => {
+    if (!assignedInsideFunction.has(name)) return false;
+    const site = bindingSites.get(owner)?.get(name);
+    return !site || lexicalMutations.capturedWrite(site, name) !== false;
+  };
+  const capturedMutationNames = (): string[] => [...assignedInsideFunction].filter((name) => capturedMutationMayAffect(name));
+
   const recordBindingKinds = (node: ParseNode | readonly ParseNode[] | null | undefined,
     mutable: boolean, frame = frames[frames.length - 1], borrowed = false, preserveExisting = false): void => {
     if (!node) return;
@@ -3496,6 +3512,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const name = binding.BindingIdentifier?.name ?? (binding.type === 'BindingIdentifier' ? binding.name : undefined);
     if (name && (!preserveExisting || !frame.bindingKinds.has(name))) {
       frame.bindingKinds.set(name, ref ? (mutable ? 'mutable-ref' : 'immutable-ref') : 'ordinary');
+      if (!bindingSites.has(frame)) bindingSites.set(frame, new Map());
+      bindingSites.get(frame)!.set(name, binding);
       if (ref) referenceSlot(frame, name, binding);
     }
     // Binding children only: expressions, property names, and annotations do
@@ -3615,6 +3633,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // A transfer evaluated with an unavailable inference input is not a final
   // proof. Completing the input alone does not recompute that transfer.
   const incompleteFlows = new WeakSet<FlowFacts>();
+  const deferredStoredTypes = new WeakMap<TypeRecord, PreparedBinding>();
+  const completedFlowType = (type: TypeRecord): TypeRecord => {
+    const store = deferredStoredTypes.get(type);
+    return store && bindingReady(store) && store.type ? store.type : type;
+  };
   let flowNeedsReplay = false;
   type FlowExit = { kind: 'break' | 'continue' | 'return' | 'throw', target?: ParseNode, facts: FlowFacts };
   let flowLive = true;
@@ -3636,7 +3659,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (!type) continue;
         const owner = flowOwner(name, index);
         if (!result.has(owner)) result.set(owner, new Map());
-        result.get(owner)!.set(name, type);
+        result.get(owner)!.set(name, completedFlowType(type));
       }
     });
     if (flowNeedsReplay) incompleteFlows.add(result);
@@ -3676,9 +3699,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const live = incoming.filter((facts): facts is FlowFacts => facts !== undefined);
     if (!live.length) return undefined;
     const joined: FlowFacts = new Map();
+    // Different unfinished stores require the incoming-edge transfer as well
+    // as a completed source contract. Do not join their placeholders as any.
+    for (const facts of live) for (const [owner, entries] of facts) for (const [name, type] of entries) {
+      if (deferredStoredTypes.has(completedFlowType(type))
+        && live.some((edge) => edge.get(owner)?.get(name) !== type)) incompleteFlows.add(joined);
+    }
     for (const [owner, entries] of live[0]) {
       for (const [name] of entries) {
-        const types = live.map((facts) => facts.get(owner)?.get(name));
+        const types = live.map((facts) => {
+          const type = facts.get(owner)?.get(name);
+          return type && completedFlowType(type);
+        });
         // A missing fact is an unknown predecessor, not an impossible path.
         if (types.some((type) => !type)) continue;
         if (!joined.has(owner)) joined.set(owner, new Map());
@@ -4401,7 +4433,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const frame = frames[i]!;
         if (!frame.bindings.has(expression.name) && !frame.bindingKinds.has(expression.name)) continue;
         const fact = metadataValueFacts.get(frame)?.get(expression.name);
-        return fact && (!fact.mutable || (fact.depth === returnTypes.length && !assignedInsideFunction.has(expression.name))) ? fact.type : undefined;
+        return fact && (!fact.mutable || (fact.depth === returnTypes.length && !capturedMutationMayAffect(expression.name))) ? fact.type : undefined;
       }
       return undefined;
     }
@@ -23370,9 +23402,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return outgoing;
   };
   const invalidateCapturedReads = (): void => {
-    for (const name of assignedInsideFunction) invalidateNarrowing(name);
+    for (const name of capturedMutationNames()) invalidateNarrowing(name);
     for (const origin of capturedPlaces) {
-      if ([...assignedInsideFunction].some((name) => origin.name === name || origin.name.startsWith(`${name}.`))) {
+      if ([...assignedInsideFunction].some((name) => capturedMutationMayAffect(name, origin.owner)
+        && (origin.name === name || origin.name.startsWith(`${name}.`)))) {
         invalidateNarrowing(origin.marker);
       }
     }
@@ -23658,7 +23691,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const previewFlowEffects = (node: ParseNode): void => {
     for (const name of flowWrites(node)) invalidateNarrowing(name);
     if (containsCall(node)) {
-      for (const name of assignedInsideFunction) invalidateNarrowing(name);
+      for (const name of capturedMutationNames()) invalidateNarrowing(name);
       invalidateCapturedAliases();
     }
     if (node.type === 'MemberExpression' || node.type === 'SuperProperty') invalidateCapturedReads();
@@ -23746,7 +23779,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const changesPlace = (node: ParseNode, name: string, prefixesOnly = false): boolean => {
     const affects = (written: string): boolean => (!prefixesOnly && written === name) || name.startsWith(`${written}.`);
     return [...flowWrites(node)].some(affects)
-      || (containsCall(node) && [...assignedInsideFunction].some(affects));
+      || (containsCall(node) && capturedMutationNames().some(affects));
   };
 
   // Strict equality shares value domains only for a proved built-in operation.
@@ -24277,9 +24310,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
       for (const origin of capturedPlaces) if (origin.name.includes('.')) invalidateNarrowing(origin.marker);
-      for (const name of assignedInsideFunction) invalidateNarrowing(name);
+      for (const name of capturedMutationNames()) invalidateNarrowing(name);
     } else if (locationWriteTypes(target).some((type) => type.Kind === 'parameterized' || conversionHasEffect(type))) {
-      for (const name of assignedInsideFunction) invalidateNarrowing(name);
+      for (const name of capturedMutationNames()) invalidateNarrowing(name);
     }
   };
 
@@ -25730,7 +25763,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   type PreparedBinding = InferenceScope & {
     node: ParseNode, expression: ParseNode, constant: boolean, reference?: boolean, owner: Frame, name: string,
-    type?: Known, completed?: boolean, flowIncomplete?: boolean,
+    type?: Known, completed?: boolean, flowIncomplete?: boolean, storeTarget?: TypeRecord,
     contribution?: { flowIndependent: boolean, thisTypes: Known[], flow?: FlowFacts },
     context?: InitializerContext, inputs?: Set<PreparedBinding>, deferredErrors?: ObjectValue[],
   };
@@ -25876,6 +25909,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!binding.completed) pendingBindingContracts.add(binding);
     invalidateBindingConsumers(binding);
   };
+  const prepareDeferredStore = (assignment: ParseNode.AssignmentExpression): PreparedBinding | undefined => {
+    if (flowNeedsReplay || inferenceDepth !== 0 || assignment.AssignmentOperator !== '=' || assignmentTests.has(assignment)) return;
+    const target = unparenthesized(patternExpression(assignment.LeftHandSideExpression)!);
+    if (target.type !== 'IdentifierReference' || bindingKindOf(target.name)?.endsWith('-ref')) return;
+    const contract = lookupDeclared(target.name);
+    if (!contract || !(contract.Kind === 'union' ? contract.Members : [contract]).every((member) => member.Kind === 'primitive')) return;
+    const context = captureInitializerContext();
+    return { ...context, context, node: assignment, expression: assignment.AssignmentExpression,
+      constant: true, owner: flowOwner(target.name), name: target.name, storeTarget: contract };
+  };
+  const retainDeferredStore = (binding: PreparedBinding, inputs: Set<PreparedBinding>): void => {
+    binding.inputs = inputs;
+    pendingBindingContracts.add(binding);
+    const marker: TypeRecord = { Kind: 'any' };
+    deferredStoredTypes.set(marker, binding);
+    // The ordinary write already applied its effects. Keep only its pending
+    // value-domain transfer; later writes invalidate this fact normally.
+    declareNarrowed(binding.name, marker);
+    invalidateBindingConsumers(binding);
+  };
   let bindingContractRevision = 0;
   const invalidateBindingConsumers = (binding: PreparedBinding): void => {
     bindingContractRevision += 1;
@@ -25914,7 +25967,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         else table.delete(frame);
       };
     };
-    const restore = [mapState(narrowedDeclarations), mapState(invocationOrigins), mapState(unaryBindingParticipation),
+    const restore = [mapState(narrowedDeclarations), mapState(bindingSites), mapState(invocationOrigins), mapState(unaryBindingParticipation),
       mapState(referenceSlots), mapState(metadataValueFacts), mapState(savedTags), mapState(savedPredicates),
       mapState(inferenceBindingAnchors), mapState(preparedBindings), setState(uninitializedVars), setState(patternBindingFrames)];
     return () => {
@@ -26089,7 +26142,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       inInitializerContext(binding.context!, () => {
         inferenceInputCollectors.push(inputs);
         try {
-          if (binding.reference) inferred = locationType(binding.expression);
+          if (binding.storeTarget) {
+            const target = binding.storeTarget;
+            const source = staticTypeIn(binding.expression, target);
+            if (!inputs.size) withProvenance(binding.expression, () => requireAssignable(source, target, binding.expression));
+            inferred = storedDomain(source, target) ?? target;
+          } else if (binding.reference) inferred = locationType(binding.expression);
           else if (!binding.constant || constInitializerParticipates(binding.expression)) inferred = staticType(binding.expression);
           if (!inputs.size && !binding.constant && !binding.reference) requireInferredBindingType(inferred, binding.node);
         } finally {
@@ -26112,12 +26170,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // Update the declaration contract without overwriting a later flow fact
       // or changing the ordinary initialization state of the value binding.
       const { owner, name } = binding;
-      if (owner.narrowed?.has(name)) {
+      if (binding.storeTarget) {
+        // Saved flows retain this store's identity. Do not rewrite the binding
+        // contract or a different value established by a later store.
+      } else if (owner.narrowed?.has(name)) {
         if (!narrowedDeclarations.has(owner)) narrowedDeclarations.set(owner, new Map());
         narrowedDeclarations.get(owner)!.set(name, type);
       } else if (type) owner.bindings.set(name, type);
       else owner.bindings.delete(name);
-      if (binding.constant) {
+      if (binding.constant && !binding.storeTarget) {
         if (type) inferredConstTypes.set(binding.node, type);
         else inferredConstTypes.delete(binding.node);
       }
@@ -26601,7 +26662,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         collectNode(n);
         if (n.type === 'AwaitExpression' || n.type === 'YieldExpression') {
-          for (const name of assignedInsideFunction) invalidateNarrowing(name);
+          for (const name of capturedMutationNames()) invalidateNarrowing(name);
           invalidateCapturedAliases();
           invalidateCapturedReads();
         }
@@ -26724,7 +26785,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 }
               }
               if (name !== null && (flowWrites(clause.Expression).has(name.split('.')[0])
-                || containsCall(clause.Expression) && assignedInsideFunction.has(name.split('.')[0]))) stable = false;
+                || containsCall(clause.Expression) && capturedMutationMayAffect(name.split('.')[0]))) stable = false;
               const comparison = { type: 'EqualityExpression', operator: '===', EqualityExpression: expression,
                 RelationalExpression: clause.Expression } as ParseNode.EqualityExpression;
               const fact = stable ? withFlowInputs(() => narrowingFactOf(comparison)) : undefined;
@@ -32091,12 +32152,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             checkArgumentSpreads(chain.Arguments);
           }
           walk(chain.Arguments);
-          for (const name of assignedInsideFunction) invalidateNarrowing(name);
+          for (const name of capturedMutationNames()) invalidateNarrowing(name);
           invalidateCapturedAliases();
           applyAssertionNarrowing(call);
         } else if (tested) {
           chain.Arguments.forEach(previewFlowEffects);
-          for (const name of assignedInsideFunction) invalidateNarrowing(name);
+          for (const name of capturedMutationNames()) invalidateNarrowing(name);
           invalidateCapturedAliases();
         }
         if (active && neverReturns) flowLive = false;
@@ -32115,7 +32176,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           walk(chain.Expression);
         } else if (tested && chain.Expression) previewFlowEffects(chain.Expression);
-        if (active) for (const name of assignedInsideFunction) invalidateNarrowing(name);
+        if (active) for (const name of capturedMutationNames()) invalidateNarrowing(name);
         view.expression = unreachable ? typedExpressionView(member, neverType) : member;
         view.origin = origin;
       }
@@ -32559,6 +32620,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (single?.type === 'AssignmentExpression') handledStoreEffects.delete(single);
     const gateSaved = gateNode;
     if (single?.location) gateNode = single;
+    const deferredStore = single?.type === 'AssignmentExpression' ? prepareDeferredStore(single) : undefined;
     const inputs = single && ['LexicalBinding', 'VariableDeclaration', 'AssignmentExpression'].includes(single.type)
       ? new Set<PreparedBinding>() : undefined;
     if (inputs) {
@@ -32571,7 +32633,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (inputs) {
         inferenceInputCollectors.pop();
         bindingWalkInputs.delete(single!);
-        if (single!.type === 'AssignmentExpression' && inputs.size) flowNeedsReplay = true;
+        if (single!.type === 'AssignmentExpression' && inputs.size) {
+          if (deferredStore && !flowNeedsReplay) retainDeferredStore(deferredStore, inputs);
+          else flowNeedsReplay = true;
+        }
       }
       gateNode = gateSaved;
     }
@@ -33168,7 +33233,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const sourceOwner = sourceName === null ? undefined : flowOwner(sourceName);
       const sourcePresent = enumerating && source && sourceName !== null && enumerationSourceStable(source)
         && !changesPlace(node as ParseNode, sourceName)
-        && ![...assignedInsideFunction].some((name) => name === sourceName || sourceName.startsWith(`${name}.`))
+        && !capturedMutationNames().some((name) => name === sourceName || sourceName.startsWith(`${name}.`))
         ? NarrowFrom(staticType(source) ?? anyTypeRecord, nullishType()) : null;
       const walkBody = () => {
         const binding = (f.ForDeclaration as ParseNode.ForDeclaration | undefined)?.ForBinding ?? f.ForBinding;
@@ -33325,7 +33390,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         neverAwaitResults.set(n, neverResumes);
         walk(operand);
         invalidateCapturedAliases();
-        for (const name of assignedInsideFunction) invalidateNarrowing(name);
+        for (const name of capturedMutationNames()) invalidateNarrowing(name);
         if (neverResumes) flowLive = false;
         return;
       }
@@ -33879,7 +33944,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // entry cannot assume a particular explicit throw was the only source.
         restoreFlow(entry);
         for (const name of flowWrites(n.Block)) invalidateNarrowing(name);
-        if (containsCall(n.Block)) for (const name of assignedInsideFunction) invalidateNarrowing(name);
+        if (containsCall(n.Block)) for (const name of capturedMutationNames()) invalidateNarrowing(name);
         const exceptional = captureFlow();
         const thrown = flowExits.filter((exit) => exit.kind === 'throw');
         if (handlers.some((clause) => !clause.TypeAnnotation)) flowExits = flowExits.filter((exit) => exit.kind !== 'throw');
@@ -33918,7 +33983,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!finalNormal) return undefined;
           restoreFlow(facts);
           for (const name of flowWrites(n.Finally)) invalidateNarrowing(name);
-          if (containsCall(n.Finally)) for (const name of assignedInsideFunction) invalidateNarrowing(name);
+          if (containsCall(n.Finally)) for (const name of capturedMutationNames()) invalidateNarrowing(name);
           const result = captureFlow();
           for (const [owner, entries] of finalNormal) {
             if (!result.has(owner)) result.set(owner, new Map());
@@ -34268,7 +34333,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
             }
             if (name !== null && (flowWrites(label).has(name.split('.')[0])
-              || (containsCall(label) && assignedInsideFunction.has(name.split('.')[0])))) stable = false;
+              || (containsCall(label) && capturedMutationMayAffect(name.split('.')[0])))) stable = false;
             const after = captureFlow();
             const comparison = { type: 'EqualityExpression', operator: '===', EqualityExpression: expression,
               RelationalExpression: label } as ParseNode.EqualityExpression;
@@ -34690,14 +34755,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // never asked for (a call statement), so its errors are reported.
         if (IsSelectableCall(n)) staticCaseSelection(n);
         checkProxyTarget(n.CallExpression, n.Arguments ?? [], true);
-        // A CALL may reassign a binding some function body assigns to, and the
-        // walk cannot see into the callee, so every such name loses its
-        // narrowing here. Without this, `function clob() { v = null; }` followed
+        // A CALL may reassign a binding captured by callable code. The lexical
+        // write inventory distinguishes those writes from this invocation's
+        // own stores and unrelated same-spelled bindings. Without this,
+        // `function clob() { v = null; }` followed
         // by `if (v !== null) { clob(); v.x; }` typechecked and failed at run
         // time - the loop back-edge hole reached through a call instead of an
-        // iteration. A name no function assigns is untouched, which is what
-        // keeps an ordinary call from widening anything.
-        for (const name of assignedInsideFunction) {
+        // iteration. Exposed mapped arguments can also change parameter cells.
+        for (const name of capturedMutationNames()) {
           invalidateNarrowing(name);
         }
         // With no context from the position: the diagnostics of the numeric
@@ -34867,7 +34932,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         walk(c.CallExpression);
         walk(c.Arguments);
-        for (const name of assignedInsideFunction) invalidateNarrowing(name);
+        for (const name of capturedMutationNames()) invalidateNarrowing(name);
         invalidateCapturedAliases();
         applyAssertionNarrowing(n);
         // A selected immediate `never` result supplies no normal value. The
@@ -35073,6 +35138,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         walk(ne.MemberExpression);
         walk(ne.Arguments);
         walk(ne.PlacementArguments);
+        // Construction can run a constructor and instance field initializers.
+        invalidateCapturedReads();
+        invalidateCapturedAliases();
         return;
       }
       case 'ConditionalExpression': {
@@ -35094,14 +35162,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'TaggedTemplateExpression': {
         const call = templateCallView(n);
         const neverReturns = establishedNeverCall(call);
-        for (const name of assignedInsideFunction) invalidateNarrowing(name);
+        for (const name of capturedMutationNames()) invalidateNarrowing(name);
         checkInvocation(n.MemberExpression, false);
         const callee = callableForm(staticType(call.CallExpression));
         checkCallable(callee, (node as ParseNode));
         checkCallArguments(call, callee, call);
         walk(n.MemberExpression);
         walk(n.TemplateLiteral);
-        for (const name of assignedInsideFunction) invalidateNarrowing(name);
+        for (const name of capturedMutationNames()) invalidateNarrowing(name);
         invalidateCapturedAliases();
         applyAssertionNarrowing(call);
         if (neverReturns) flowLive = false;

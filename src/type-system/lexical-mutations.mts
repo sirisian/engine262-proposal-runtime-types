@@ -1,12 +1,17 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ContainsExpression } from '../static-semantics/ContainsExpression.mts';
+import { IsSimpleParameterList } from '../static-semantics/IsSimpleParameterList.mts';
 
 type Node = ParseNode & Record<string, unknown>;
 interface Scope {
   readonly outer?: Scope;
   readonly names: Set<string>;
   readonly writes: Set<string>;
+  readonly capturedWrites: Set<string>;
   variable: Scope;
+  callable: Scope;
+  argumentsOwner?: Scope;
+  mappedParameters?: Set<string>;
 }
 const isNode = (value: unknown): value is Node => !!value && typeof value === 'object'
   && typeof (value as { type?: unknown }).type === 'string';
@@ -38,15 +43,22 @@ function bindingNames(value: unknown, result: string[] = []): string[] {
  * shadowing do not depend on traversal order. No program value is inspected.
  * Undefined leaves the caller's existing conservative screen in place.
  */
-export function LexicalMutationAnalysis(root: ParseNode): (node: ParseNode, name: string) => boolean | undefined {
+export function LexicalMutationAnalysis(root: ParseNode): {
+  unassigned: (node: ParseNode, name: string) => boolean | undefined,
+  capturedWrite: (node: ParseNode, name: string) => boolean | undefined,
+  exposedParameters: ReadonlySet<string>,
+} {
   const scopes = new WeakMap<ParseNode, Scope>();
   const writes: { node: ParseNode, name: string }[] = [];
   const uncertain = new Set<string>();
   const globalObjectNames = new Set<string>();
   let dynamic = false;
+  const argumentsExposed = new Set<Scope>();
   const makeScope = (outer?: Scope, variable = false): Scope => {
-    const scope = { outer, names: new Set<string>(), writes: new Set<string>() } as Scope;
+    const scope = { outer, names: new Set<string>(), writes: new Set<string>(), capturedWrites: new Set<string>() } as Scope;
     scope.variable = variable || !outer ? scope : outer.variable;
+    scope.callable = outer?.callable ?? scope;
+    scope.argumentsOwner = outer?.argumentsOwner;
     return scope;
   };
   const declare = (target: unknown, scope: Scope): void => {
@@ -78,6 +90,9 @@ export function LexicalMutationAnalysis(root: ParseNode): (node: ParseNode, name
     }
     if (!isNode(value)) return;
     const node = value;
+    if (node.type === 'IdentifierReference' && node.name === 'arguments' && enclosing.argumentsOwner) {
+      argumentsExposed.add(enclosing.argumentsOwner);
+    }
     let scope = enclosing;
     if (node.type === 'WithStatement' || node.type === 'RefExpression' || node.type === 'RefRebindingStatement' || node.Ref) dynamic = true;
     if (node.type === 'CallExpression' && isNode(node.CallExpression)
@@ -101,8 +116,15 @@ export function LexicalMutationAnalysis(root: ParseNode): (node: ParseNode, name
         declare(node.BindingIdentifier, scope);
       }
       const parameterScope = makeScope(scope, true);
+      parameterScope.callable = parameterScope;
       declare((node.TypeParameters as { TypeParameterList?: unknown } | null)?.TypeParameterList, parameterScope);
       const formals = parameters.flatMap((key) => node[key] ? [node[key]] : []);
+      if (node.type !== 'ArrowFunction' && node.type !== 'AsyncArrowFunction') {
+        parameterScope.argumentsOwner = parameterScope;
+        if (!node.strict && formals.every((list) => IsSimpleParameterList(list as ParseNode | readonly ParseNode[]))) {
+          parameterScope.mappedParameters = new Set(formals.flatMap((list) => bindingNames(list)));
+        }
+      }
       formals.forEach((list) => declare(list, parameterScope));
       scopes.set(node, parameterScope);
       formals.forEach((list) => visit(list, parameterScope));
@@ -119,6 +141,9 @@ export function LexicalMutationAnalysis(root: ParseNode): (node: ParseNode, name
     if (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') {
       visit(node.Decorators, scope);
       scope = makeScope(scope);
+      // Instance initializers may execute later through construction. Treat
+      // class-owned writes conservatively as crossing a callable boundary.
+      scope.callable = scope;
       declare(node.BindingIdentifier, scope);
       declare((node.TypeParameters as { TypeParameterList?: unknown } | null)?.TypeParameterList, scope);
       scopes.set(node, scope);
@@ -127,6 +152,7 @@ export function LexicalMutationAnalysis(root: ParseNode): (node: ParseNode, name
     }
     if (node.type === 'Block' || node.type === 'CaseBlock' || node.type === 'Catch' || loops.has(node.type)) scope = makeScope(scope);
     if (node.type === 'ClassStaticBlock' || node.type === 'DoExpression' && node.star) scope = makeScope(scope, true);
+    if (node.type === 'DoExpression' && node.star) scope.callable = scope;
     scopes.set(node, scope);
     if (node.type === 'Catch') declare(node.CatchParameter, scope);
     if (node.type === 'LexicalDeclaration' || node.type === 'ForDeclaration') declare(node, scope);
@@ -160,12 +186,30 @@ export function LexicalMutationAnalysis(root: ParseNode): (node: ParseNode, name
     for (let scope = scopes.get(node); scope; scope = scope.outer) if (scope.names.has(name)) return scope;
     return undefined;
   };
-  for (const write of writes) binding(write.node, write.name)?.writes.add(write.name);
-  return (node, name) => {
+  for (const write of writes) {
+    const owner = binding(write.node, write.name);
+    owner?.writes.add(write.name);
+    if (owner && scopes.get(write.node)?.callable !== owner.callable) owner.capturedWrites.add(write.name);
+  }
+  const knownBinding = (node: ParseNode, name: string): Scope | undefined => {
     if (dynamic || uncertain.has(name)) return undefined;
     const scope = binding(node, name);
     // Script var/function bindings can also be replaced through the global
     // object. A lexical-write inventory alone is not a proof for those cells.
-    return scope && !(scope === rootScope && globalObjectNames.has(name)) ? !scope.writes.has(name) : undefined;
+    return scope && !(scope === rootScope && globalObjectNames.has(name)) ? scope : undefined;
+  };
+  return {
+    exposedParameters: new Set([...argumentsExposed].flatMap((scope) => [...scope.mappedParameters ?? []])),
+    unassigned: (node, name) => {
+      const scope = knownBinding(node, name);
+      return scope ? !scope.writes.has(name) : undefined;
+    },
+    // A mapped arguments object can expose parameter cells without a lexical
+    // write in a nested function. Do not infer isolation from this inventory.
+    capturedWrite: (node, name) => {
+      const scope = knownBinding(node, name);
+      if (scope?.mappedParameters?.has(name) && argumentsExposed.has(scope)) return true;
+      return scope?.capturedWrites.has(name);
+    },
   };
 }

@@ -540,7 +540,7 @@
     },
     {
       "name": "call effects precede producer capture",
-      "source": "function outer(){let u:string|number=\"s\";const q:string=g();function g(){return s;}const s=h();function h(){return t;}const t=u;u=1;}",
+      "source": "function outer(){let u:string|number=\"s\";const q:string=g();function g(){return s;}function change(){u=1;}const s=h();function h(){return t;}const t=u;u=1;}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,

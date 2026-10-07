@@ -355,8 +355,8 @@ test("assignment-result: invalid-store", () => {
   expectStaticTypeError("function f(x:uint8|string,b:uint8){if(b=(x is uint8)){}}");
 });
 
-test("assignment-result: left-key-write", () => {
-  evaluated("function f(x:uint8|string,y:uint8|string,o:{b:boolean}){if(o[(x=y,\"b\")]=(x is uint8)){if(x is string){}}}");
+test("assignment-result: left key precedes the result producer", () => {
+  expectStaticTypeError("function f(x:uint8|string,y:uint8|string,o:{b:boolean}){if(o[(x=y,\"b\")]=(x is uint8)){if(x is string){}}}");
 });
 
 test("optional-result: nested-base", () => {

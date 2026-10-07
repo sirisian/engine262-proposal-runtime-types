@@ -1,0 +1,777 @@
+{
+  "description": "Deferred named-store domains and lexical call invalidation",
+  "specSections": [
+    "sec-deferred-store-flow",
+    "sec-initializer-inference-obligations",
+    "sec-narrowing-flow"
+  ],
+  "cases": [
+    {
+      "name": "deferred store: incompatible captured consumer",
+      "source": "function outer(u:string|number){u=f();const q:number=g();function f(){return t;}function g(){return s;}const s=u;let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "deferred store: compatible captured consumer",
+      "source": "function outer(u:string|number){u=f();const q:string=g();function f(){return t;}function g(){return s;}const s=u;let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "runtime initialization stays separate",
+      "source": "function outer(u:string|number){u=f();const q:string=g();function f(){return t;}function g(){return s;}const s=u;let v:string|number=\"s\";const t=v;}outer(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "completed store judgment: if false",
+      "source": "function outer(u:string|number):string{u=f(false);const s=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;if(typeof u===\"number\"){}return q;}outer(\"start\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "completed store judgment: if true",
+      "source": "function outer(u:string|number):string{u=f(false);const s=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;if(typeof u===\"string\"){}return q;}outer(\"start\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "completed store judgment: is",
+      "source": "function outer(u:string|number):string{u=f(false);const s=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;if(u is number){}return q;}outer(\"start\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "completed store judgment: while",
+      "source": "function outer(u:string|number):string{u=f(false);const s=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;while(typeof u===\"number\"){break;}return q;}outer(\"start\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "completed store judgment: do while",
+      "source": "function outer(u:string|number):string{u=f(false);const s=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;do{}while(typeof u===\"number\");return q;}outer(\"start\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "completed store judgment: for",
+      "source": "function outer(u:string|number):string{u=f(false);const s=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;for(;typeof u===\"number\";){}return q;}outer(\"start\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "completed store judgment: conditional",
+      "source": "function outer(u:string|number):string{u=f(false);const s=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;const x=typeof u===\"number\"?1:2;return q;}outer(\"start\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "completed store judgment: and",
+      "source": "function outer(u:string|number):string{u=f(false);const s=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;const x=(typeof u===\"number\")&&u;return q;}outer(\"start\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "completed store judgment: or",
+      "source": "function outer(u:string|number):string{u=f(false);const s=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;const x=(typeof u===\"string\")||u;return q;}outer(\"start\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "completed store judgment: coalesce",
+      "source": "function outer(u:string|number):string{u=f(false);const s=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;const x=u??\"x\";return q;}outer(\"start\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "completed store judgment: switch",
+      "source": "function outer(u:string|number):string{u=f(false);const s=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;switch(typeof u){case \"number\":break;}return q;}outer(\"start\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "completed store judgment: logical assignment",
+      "source": "function outer(u:string|number):string{u=f(false);const s=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;let x:string|undefined=u;x??=\"x\";return q;}outer(\"start\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "completed store judgment: captured constant",
+      "source": "function outer(u:string|number):string{u=f(false);const s=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;if(typeof s===\"number\"){}return q;}outer(\"start\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "completed store judgment: transitive result",
+      "source": "function outer(u:string|number):string{u=f(false);const s=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;if(typeof q===\"number\"){}return q;}outer(\"start\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "completed store judgment: try",
+      "source": "function outer(u:string|number):string{u=f(false);const s=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;try{if(typeof u===\"number\") {}}finally{}return q;}outer(\"start\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "completed store judgment: negation",
+      "source": "function outer(u:string|number):string{u=f(false);const s=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;if(!(typeof u!==\"number\")){}return q;}outer(\"start\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "control: value query",
+      "source": "function outer(u:string|number):string{u=f(false);const s=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;const answer=typeof u===\"number\";return q;}outer(\"start\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "control: open String truthiness",
+      "source": "function outer(u:string|number):string{u=f(false);const s=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;if(u){}return q;}outer(\"start\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "control: later write",
+      "source": "function outer(u:string|number):string{u=f(false);const s=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;u=1;return q;}outer(\"start\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "control: later source write",
+      "source": "function outer(u:string|number):string{u=f(false);const s=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;v=1;return q;}outer(\"start\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "deferred store: direct incompatible write",
+      "source": "function outer(u:number){u=f();function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "independent later store replaces pending fact",
+      "source": "function outer(u:string|number){u=f();u=1;const q:number=g();function f(){return t;}function g(){return s;}const s=u;let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "earlier capture retains original pending store",
+      "source": "function outer(u:string|number){u=f();const s=u;u=1;const q:number=g();function f(){return t;}function g(){return s;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "inferred mutable initializer consumes store",
+      "source": "function outer(u:string|number):string{u=f(false);let s:=u;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;if(typeof q===\"number\"){}return q;}outer(\"start\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "deferred store alias chain 1",
+      "source": "function outer(u:string|number):string{u=f(false);const a0=u;const s=a0;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;if(typeof q===\"number\"){}return q;}outer(\"start\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "deferred store alias chain 12",
+      "source": "function outer(u:string|number):string{u=f(false);const a0=u;const a1=a0;const a2=a1;const a3=a2;const a4=a3;const a5=a4;const a6=a5;const a7=a6;const a8=a7;const a9=a8;const a10=a9;const a11=a10;const s=a11;const q:string=g();function f(flag:boolean){return flag?t:\"s\";}function g(){return s;}let v:string|number=\"s\";const t=v;if(typeof q===\"number\"){}return q;}outer(\"start\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "two pending stores retain independent identities",
+      "source": "function outer(u:string|number,w:string|number){u=f();const a=u;w=h();const b=w;const qa:number=a;const qb:number=b;function f(){return t;}function h(){return v;}let x:string=\"s\";const t=x;let y:string=\"y\";const v=y;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "lexical call fact: empty callee",
+      "source": "function outer(u:string|number){u=\"s\";touch();if(typeof u===\"number\"){}function touch(){}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "lexical call fact: same-spelled parameter",
+      "source": "function outer(u:string|number){u=\"s\";touch();if(typeof u===\"number\"){}function touch(u:string|number=\"x\"){u=1;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "lexical call fact: same-spelled local",
+      "source": "function outer(u:string|number){u=\"s\";touch();if(typeof u===\"number\"){}function touch(){let u:string|number=\"x\";u=1;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "lexical call fact: same-spelled catch",
+      "source": "function outer(u:string|number){u=\"s\";touch();if(typeof u===\"number\"){}function touch(){try{throw 1;}catch(u){u=2;}}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "lexical call fact: nested same-spelled closure",
+      "source": "function outer(u:string|number){u=\"s\";touch();if(typeof u===\"number\"){}function touch(){let u:string|number=\"x\";function change(){u=1;}change();}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "lexical call fact: class-owned same-spelled parameter",
+      "source": "function outer(u:string|number){u=\"s\";touch();if(typeof u===\"number\"){}function touch(){class C{m(u:string|number){u=1;}}}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "capture invalidation: direct closure",
+      "source": "function outer(u:string|number):string{function change(){u=1;}u=\"s\";change();if(typeof u===\"number\"){}return typeof u;}outer(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "number"
+      }
+    },
+    {
+      "name": "capture invalidation: arrow closure",
+      "source": "function outer(u:string|number):string{const change=()=>{u=1;};u=\"s\";change();if(typeof u===\"number\"){}return typeof u;}outer(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "number"
+      }
+    },
+    {
+      "name": "capture invalidation: destructuring closure",
+      "source": "function outer(u:string|number):string{function change(){[u]=[1];}u=\"s\";change();if(typeof u===\"number\"){}return typeof u;}outer(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "number"
+      }
+    },
+    {
+      "name": "capture invalidation: instance initializer",
+      "source": "function outer(u:string|number):string{class C{field=(u=1);}u=\"s\";new C();if(typeof u===\"number\"){}return typeof u;}outer(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "number"
+      }
+    },
+    {
+      "name": "capture invalidation: method closure",
+      "source": "function outer(u:string|number):string{class C{m(){u=1;}}u=\"s\";new C().m();if(typeof u===\"number\"){}return typeof u;}outer(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "number"
+      }
+    },
+    {
+      "name": "dynamic eval keeps conservative invalidation",
+      "source": "function outer(u:string|number):string{u=\"s\";eval(\"u=1\");if(typeof u===\"number\"){}return typeof u;}outer(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "number"
+      }
+    },
+    {
+      "name": "reference write keeps location contract",
+      "source": "function outer(u:string|number):string{let ref r=u;u=\"s\";function change(){r=1;}change();if(typeof u===\"number\"){}return typeof u;}outer(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "number"
+      }
+    },
+    {
+      "name": "captured source remains mutable",
+      "source": "function outer(u:string|number){u=f();const q:string=g();function f(){return t;}function g(){return u;}let v:string=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "own later write is not a call effect",
+      "source": "function outer(){let u:string|number=\"s\";const q:string=g();function g(){return s;}const s=h();function h(){return t;}const t=u;u=1;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "captured write precedes producer capture",
+      "source": "function outer(){let u:string|number=\"s\";const q:string=g();function change(){u=1;}function g(){return s;}const s=h();function h(){return t;}const t=u;u=1;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "typed Number result keeps numeric domain",
+      "source": "function outer(u:uint8|string){u=f();function f(){return t;}let v:number=5;const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "completed unknown source retains open target",
+      "source": "function outer(u:string|number,value){u=f(false);function f(flag:boolean){return flag?t:value;}const t=value;if(typeof u===\"number\"){}return \"ok\";}outer(\"s\",\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "ordinary mutable remains dynamic: automatic",
+      "source": "function outer(){let u=\"s\";function typed(x:string){return x;}u=\"s\";typed(\"s\");if(typeof u===\"number\"){}return u;}outer();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "ordinary mutable remains dynamic: forced",
+      "source": "function outer(){let u=\"s\";function typed(x:string){return x;}u=\"s\";typed(\"s\");if(typeof u===\"number\"){}return u;}outer();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "capture invalidation: constructor body",
+      "source": "function outer(u:string|number):string{class C{constructor(){u=1;}}u=\"s\";new C();if(typeof u===\"number\"){}return typeof u;}outer(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "number"
+      }
+    },
+    {
+      "name": "recursive invocation has distinct parameter cells",
+      "source": "function outer(u:string|number,n:boolean){u=\"s\";if(n)outer(1,false);if(typeof u===\"number\") {}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "mapped arguments keep conservative invalidation",
+      "source": "function outer(u){if(typeof u===\"string\"){change(arguments);if(typeof u===\"number\"){} }return typeof u;}function change(args){args[0]=1;}outer(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "number"
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "local fact survives suspension without captured writes",
+      "source": "async function outer(u:string|number){u=\"s\";await 0;if(typeof u===\"number\") {}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "left key precedes guarded result",
+      "source": "function f(x:uint8|string,y:uint8|string,o:{b:boolean}){if(o[(x=y,\"b\")]=(x is uint8)){if(x is string){}}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "setter after key invalidates guarded source",
+      "source": "function f(x:uint8|string,y:uint8|string){let o={set b(v:boolean){x=\"s\";}};if(o[(x=y,\"b\")]=(x is uint8)){if(x is string){}}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "strict arguments do not alias parameters",
+      "source": "function outer(u:string|number){\"use strict\";u=\"s\";change(arguments);if(typeof u===\"number\") {}}function change(args){args[0]=1;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "default arguments do not alias parameters",
+      "source": "function outer(u:string|number=\"s\"){u=\"s\";change(arguments);if(typeof u===\"number\") {}}function change(args){args[0]=1;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "arrow exposes enclosing mapped arguments",
+      "source": "function outer(u){if(typeof u===\"string\"){change(()=>arguments);if(typeof u===\"number\"){} }return typeof u;}function change(get){get()[0]=1;}outer(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "number"
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "typed parameters imply unmapped arguments",
+      "source": "function outer(u:string|number){u=\"s\";change(arguments);if(typeof u===\"number\") {}}function change(args){args[0]=1;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    }
+  ]
+}
