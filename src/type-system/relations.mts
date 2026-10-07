@@ -12,6 +12,7 @@ import {
   substituteTypeParameters, mentionsTypeParameter,
 } from './records.mts';
 import { builtinImplements, libraryExtends, iterationInterfaceRecord } from './iteration-types.mts';
+import { matchesFamilyPattern } from './family-patterns.mts';
 
 /**
  * proposal-runtime-types #sec-structural-identity and #sec-subtyping-and-assignability
@@ -2477,5 +2478,3 @@ export function AreDisjoint(s: TypeRecord, t: TypeRecord): boolean {
   // deliberately does not answer.
   return false;
 }
-
-import { matchesFamilyPattern } from './family-patterns.mts';

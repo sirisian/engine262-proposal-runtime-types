@@ -1,5 +1,3 @@
-import { TypeDiagnosticOf, CreateTypeDiagnostic, ReportTypeDiagnostic } from './diagnostics.mts';
-import type { TypeDiagnosticRule } from './diagnostic-catalog.mts';
 import type { Formattable } from '../host-defined/error-messages.mts';
 import { SelectCase, ValueArityAdmits, CaseParameters, CaseArgumentsAdmit, PlaceCaseArguments } from '../abstract-ops/callable-selection.mts';
 import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
@@ -18,6 +16,8 @@ import { refineLeftHandSideExpression } from '../runtime-semantics/AssignmentExp
 import { firstUnreadableControl, readClassControls, readFieldControls } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
 import { isRangeObject, endpointOf, type RangeObject } from '../intrinsics/Range.mts';
+import { TypeDiagnosticOf, CreateTypeDiagnostic, ReportTypeDiagnostic } from './diagnostics.mts';
+import type { TypeDiagnosticRule } from './diagnostic-catalog.mts';
 import { ClassifyDynamicFunction, IsCheckedCode } from './checked-code.mts';
 import { ProvenArrayMembers } from './array-intrinsics.mts';
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
@@ -2676,7 +2676,7 @@ export function RecheckAfterTypeEvaluation(root: ParseNode.Script | ParseNode.Mo
   const outer = importedBuilderNodes;
   importedBuilderNodes = inputs?.builders;
   try {
-    return checkInTwoPasses(root.ModuleBody?.ModuleItemList ?? null, root, session, true);
+    return checkCompletedDeclarations(root.ModuleBody?.ModuleItemList ?? null, root, session, true);
   } finally {
     importedBuilderNodes = outer;
   }
@@ -2716,12 +2716,12 @@ export function CheckDynamicFunction(expression: ParseNode): ObjectValue[] {
   const statement = { type: 'ExpressionStatement', Expression: expression } as unknown as ParseNode;
   const root = { type: 'Script', ScriptBody: { type: 'ScriptBody', StatementList: [statement] } } as unknown as ParseNode.Script;
   dynamicFunctionRoots.set(expression, root);
-  const errors = checkInTwoPasses([statement] as never, root, CreateCheckSession());
+  const errors = checkCompletedDeclarations([statement] as never, root, CreateCheckSession());
   return errors.length > 0 && TakeNarrowingRequests(root).length > 0 ? [] : errors;
 }
 
 export function CheckScript(script: ParseNode.Script, afterTypeEvaluation = false): ObjectValue[] {
-  return checkInTwoPasses(script.ScriptBody?.StatementList ?? null, script, CreateCheckSession(), afterTypeEvaluation);
+  return checkCompletedDeclarations(script.ScriptBody?.StatementList ?? null, script, CreateCheckSession(), afterTypeEvaluation);
 }
 
 /**
@@ -2731,7 +2731,8 @@ export function CheckScript(script: ParseNode.Script, afterTypeEvaluation = fals
  * The caller commits `next` only if it accepts the entry - a rejected entry must
  * leave no declarations behind - which is why the session is not mutated here.
  *
- * Two passes, as CheckScript runs, and for the reason checkInTwoPasses gives:
+ * The declaration preparation used by CheckScript, for the reason
+ * checkCompletedDeclarations gives:
  * an entry is a statement list whose own bindings anchor inferences within it.
  * `let arr: [].<uint8> = [1]; function f() { return arr[0]; } let s: string =
  * f();` as ONE entry is refused exactly as it is at script scope; a single pass
@@ -2740,7 +2741,7 @@ export function CheckScript(script: ParseNode.Script, afterTypeEvaluation = fals
  */
 export function CheckScriptInSession(script: ParseNode.Script, session: CheckSession): { errors: ObjectValue[], next: CheckSession } {
   const next: CheckSession = { frame: cloneFrame(session.frame), enumNodes: new Map(session.enumNodes) };
-  const errors = checkInTwoPasses(script.ScriptBody?.StatementList ?? null, script, next);
+  const errors = checkCompletedDeclarations(script.ScriptBody?.StatementList ?? null, script, next);
   return { errors, next };
 }
 
@@ -2773,9 +2774,10 @@ interface ReferenceSyntaxIdentities {
  * So the declarations are made by a whole first pass, in order, with its
  * diagnostics discarded; the frame it produces is the one the second pass
  * starts with, so every inference in the second pass is decided over the
- * list's complete bindings and every type in its final form. The second pass
- * reports. Everything else a pass accumulates is local to the call, so the
- * second starts clean. Where that completed walk finds known alias-store
+ * list's complete bindings and every type in its final form. Further checks
+ * consume only completed, portable local contracts discovered by a preceding
+ * check. Source flow and diagnostics start afresh; they are not cached as
+ * declaration contracts. Where the completed walk finds known alias-store
  * destinations, one final walk checks those stores in their lexical contexts.
  * It consumes the flow facts rather than making the read type a write contract.
  *
@@ -2783,28 +2785,59 @@ interface ReferenceSyntaxIdentities {
  * holds every top-level declaration of _statementList_, which is what a
  * module's importer reads.
  */
-function checkInTwoPasses(statementList: readonly ParseNode[] | null, root: ParseNode, session: CheckSession, afterTypeEvaluation = false): ObjectValue[] {
+function checkCompletedDeclarations(statementList: readonly ParseNode[] | null, root: ParseNode, session: CheckSession, afterTypeEvaluation = false): ObjectValue[] {
   const identities: ReferenceSyntaxIdentities = { nodes: new WeakMap(), alternatives: new WeakMap() };
   const initialErrors = CheckStatementList(statementList, root, session, afterTypeEvaluation, undefined, undefined, identities);
   if (initialErrors.some((error) => TypeDiagnosticOf(error)?.rule === 'rt-layout'
     || TypeDiagnosticOf(error)?.rule === 'rt-unproductive-type')) return initialErrors;
-  const referenceStores = new Map<ParseNode, TypeRecord[]>();
-  const errors = CheckStatementList(statementList, root, session, afterTypeEvaluation, undefined, referenceStores, identities);
-  // Flow is computed over the completed declarations. A final walk checks
-  // alias stores in their original lexical/contextual environment, rather
-  // than re-evaluating their expressions after their scopes have been popped.
-  return referenceStores.size ? CheckStatementList(statementList, root, session, afterTypeEvaluation, referenceStores, undefined, identities) : errors;
+  const sourceBindings = new WeakSet<ParseNode>();
+  const collectSourceBindings = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      node.forEach(collectSourceBindings);
+      return;
+    }
+    if (typeof (node as ParseNode).type !== 'string') return;
+    if ((node as ParseNode).type === 'LexicalBinding') sourceBindings.add(node as ParseNode);
+    for (const [key, child] of Object.entries(node)) {
+      if (!['parent', 'location', 'sourceText'].includes(key)) collectSourceBindings(child);
+    }
+  };
+  collectSourceBindings(statementList);
+  const contracts = new Map<ParseNode, TypeRecord>();
+  for (;;) {
+    const bindings: BindingContractPass = { sourceBindings, available: new Map(contracts), completed: new Map(), pending: false };
+    const referenceStores = new Map<ParseNode, TypeRecord[]>();
+    const errors = CheckStatementList(statementList, root, session, afterTypeEvaluation, undefined, referenceStores, identities, bindings);
+    const previousSize = contracts.size;
+    for (const [node, type] of bindings.completed) if (!contracts.has(node)) contracts.set(node, type);
+    // Rebuild every transfer and diagnostic from source. A newly completed
+    // declaration is progress; the number of source declarations bounds this
+    // worklist. Unresolved cycles do not manufacture a seed or a retry budget.
+    if (bindings.pending && contracts.size !== previousSize) continue;
+    // Alias targets belong to the completed flow of this pass. Reuse exactly
+    // its available contracts, not a different set discovered afterward.
+    return referenceStores.size ? CheckStatementList(statementList, root, session, afterTypeEvaluation,
+      referenceStores, undefined, identities, { ...bindings, completed: new Map(), pending: false }) : errors;
+  }
+}
+
+interface BindingContractPass {
+  sourceBindings: WeakSet<ParseNode>;
+  available: ReadonlyMap<ParseNode, TypeRecord>;
+  completed: Map<ParseNode, TypeRecord>;
+  pending: boolean;
 }
 
 export function CheckModule(module: ParseNode.Module, specifier?: string): ObjectValue[] {
   // Module items are a superset of statements; import/export wrappers are
   // walked structurally, and their inner declarations checked as usual. The
-  // two passes are the script's (see checkInTwoPasses): a module's own
+  // declaration preparation is the script's (see checkCompletedDeclarations). Its own
   // top-level bindings are invisible to a single pass's inference for the same
   // reason a script's are. The session is kept because its final frame is what
   // an importer reads.
   const session = CreateCheckSession();
-  const errors = checkInTwoPasses(module.ModuleBody?.ModuleItemList ?? null, module, session);
+  const errors = checkCompletedDeclarations(module.ModuleBody?.ModuleItemList ?? null, module, session);
   // Every top-level declaration of the module, keyed by its LOCAL name. An
   // importer resolves an import to the exporting module and a binding name -
   // which is that local name - so nothing here needs to read export syntax, and
@@ -2857,7 +2890,7 @@ export function CheckModule(module: ParseNode.Module, specifier?: string): Objec
  * first pass found errors never reaches linking. Every error this pass finds is
  * one that needed an import to see.
  *
- * Two passes here as well (checkInTwoPasses): an import can be what TYPES a
+ * Declaration preparation (checkCompletedDeclarations): an import can TYPE a
  * module's own binding - `let c: C = new C()` for an imported class `C` - and
  * an inference anchored by that binding is decided from the frame the pass
  * starts with. The imports are seeded into it below; the module's own
@@ -2888,7 +2921,7 @@ export function CheckModuleWithImports(module: ParseNode.Module, imported: Reado
   const outerBuilders = importedBuilderNodes;
   importedBuilderNodes = builders;
   try {
-    const errors = checkInTwoPasses(module.ModuleBody?.ModuleItemList ?? null, module, session);
+    const errors = checkCompletedDeclarations(module.ModuleBody?.ModuleItemList ?? null, module, session);
     // Recorded HERE and not only on the plain path: this pass has the module's
     // imports, so it is the one that can resolve a type built over one, and its
     // answer is the complete one.
@@ -2901,7 +2934,8 @@ export function CheckModuleWithImports(module: ParseNode.Module, imported: Reado
 
 function CheckStatementList(statementList: readonly ParseNode[] | null, root: ParseNode, session?: CheckSession, afterTypeEvaluation = false,
   referenceStoreTargets?: ReadonlyMap<ParseNode, readonly TypeRecord[]>, collectedReferenceStores?: Map<ParseNode, TypeRecord[]>,
-  referenceSyntax: ReferenceSyntaxIdentities = { nodes: new WeakMap(), alternatives: new WeakMap() }): ObjectValue[] {
+  referenceSyntax: ReferenceSyntaxIdentities = { nodes: new WeakMap(), alternatives: new WeakMap() },
+  bindingContracts?: BindingContractPass): ObjectValue[] {
   const unresolvedTypes = new Map<object, DeferredTypeCheck>();
   deferredTypeChecks.set(root, unresolvedTypes);
 
@@ -25814,6 +25848,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const pendingBindingContracts = new Set<PreparedBinding>();
   const preparedBindings = new WeakMap<Frame, Map<string, PreparedBinding>>();
   const preparingBindings = new Set<PreparedBinding>();
+  const sourceBindings = new Set<PreparedBinding>();
+  // These contracts carry no nominal, contextual, reference or generic
+  // identity across passes. More general dependencies stay in their original
+  // context until they can be completed by the local worklist.
+  const portableBindingScope = (node: ParseNode): boolean => {
+    for (let scope: ParseNode | undefined = node; scope; scope = scope.parent) {
+      if (scope.type === 'ClassDeclaration' || scope.type === 'ClassExpression') return false;
+      if (functionBoundary(scope)) {
+        if (!['FunctionDeclaration', 'AsyncFunctionDeclaration', 'GeneratorDeclaration', 'AsyncGeneratorDeclaration'].includes(scope.type)
+          || (scope as { TypeParameters?: unknown }).TypeParameters) return false;
+      }
+    }
+    return true;
+  };
+  const collectCompletedBindings = (): void => {
+    if (!bindingContracts) return;
+    const ambiguous = new Set<ParseNode>();
+    for (const binding of sourceBindings) {
+      const { node, type } = binding;
+      if (!binding.completed || !binding.context || !bindingReady(binding) || !type
+        || !(type.Kind === 'union' ? type.Members : [type]).every((member) => {
+          const base = member.Kind === 'literal' ? member.Base : member;
+          return base.Kind === 'primitive' && base.Arguments.length === 0 && base.Name !== 'symbol';
+        })) {
+        ambiguous.add(node);
+        continue;
+      }
+      const previous = bindingContracts.completed.get(node);
+      if (previous && !SameType(previous, type)) ambiguous.add(node);
+      else bindingContracts.completed.set(node, type);
+    }
+    for (const node of ambiguous) bindingContracts.completed.delete(node);
+  };
   const preparedBindingType = (frame: Frame, name: string): Known => {
     const binding = preparedBindings.get(frame)?.get(name);
     if (!binding) return null;
@@ -25938,6 +26005,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   let initializerInputs: Set<PreparedBinding> | undefined;
   const observeBindingInput = (binding: PreparedBinding): void => {
     if (bindingReady(binding)) return;
+    if (bindingContracts) bindingContracts.pending = true;
     initializerInputs?.add(binding);
     for (const inputs of inferenceInputCollectors) inputs.add(binding);
   };
@@ -25960,14 +26028,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!binding.completed) pendingBindingContracts.add(binding);
     invalidateBindingConsumers(binding);
   };
-  const prepareDeferredStore = (assignment: ParseNode.AssignmentExpression): PreparedBinding | undefined => {
-    if (flowNeedsReplay || inferenceDepth !== 0 || assignment.AssignmentOperator !== '=' || assignmentTests.has(assignment)) return;
-    const target = unparenthesized(patternExpression(assignment.LeftHandSideExpression)!);
-    if (target.type !== 'IdentifierReference' || bindingKindOf(target.name)?.endsWith('-ref')) return;
+  const prepareDeferredStore = (node: ParseNode.AssignmentExpression | ParseNode.LexicalBinding | ParseNode.VariableDeclaration): PreparedBinding | undefined => {
+    if (flowNeedsReplay || inferenceDepth !== 0) return;
+    const assignment = node.type === 'AssignmentExpression';
+    if (assignment && (node.AssignmentOperator !== '=' || assignmentTests.has(node))) return;
+    if (!assignment && (!node.TypeAnnotation || !node.Initializer || (node as { Ref?: boolean }).Ref)) return;
+    const target = assignment ? unparenthesized(patternExpression(node.LeftHandSideExpression)!) : node.BindingIdentifier;
+    if (!target || (target.type !== 'IdentifierReference' && target.type !== 'BindingIdentifier')
+      || bindingKindOf(target.name)?.endsWith('-ref')) return;
     const contract = lookupDeclared(target.name);
     if (!contract || !(contract.Kind === 'union' ? contract.Members : [contract]).every((member) => member.Kind === 'primitive')) return;
     const context = captureInitializerContext();
-    return { ...context, context, node: assignment, expression: assignment.AssignmentExpression,
+    return { ...context, context, node, expression: assignment ? node.AssignmentExpression : node.Initializer!,
       constant: true, owner: flowOwner(target.name), name: target.name, storeTarget: contract };
   };
   const retainDeferredStore = (binding: PreparedBinding, inputs: Set<PreparedBinding>): void => {
@@ -27396,12 +27468,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const frame = frames[frames.length - 1];
           if (!preparedBindings.has(frame)) preparedBindings.set(frame, new Map());
           if (preparedBindings.get(frame)!.get(binding.BindingIdentifier.name)?.node === binding) continue;
-          preparedBindings.get(frame)!.set(binding.BindingIdentifier.name, {
+          const portable = !reference && typeParameterScopes.length === 0
+            && !!bindingContracts?.sourceBindings.has(binding) && portableBindingScope(binding);
+          const prepared: PreparedBinding = {
             node: binding, expression, constant: !binding.TypedInitializer && !reference, reference: !!reference,
             owner: frame, name: binding.BindingIdentifier.name,
             frames: frames.slice(), varFrames: varFrames.slice(), typeScopes: typeParameterScopes.slice(),
             ...(flowIndependent === undefined ? {} : { contribution: { flowIndependent, thisTypes: thisTypeFrames.slice() } }),
-          });
+            type: portable ? bindingContracts?.available.get(binding) : undefined,
+          };
+          preparedBindings.get(frame)!.set(binding.BindingIdentifier.name, prepared);
+          if (portable && flowIndependent === undefined) sourceBindings.add(prepared);
         }
       }
     }
@@ -32715,7 +32792,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (single?.type === 'AssignmentExpression') handledStoreEffects.delete(single);
     const gateSaved = gateNode;
     if (single?.location) gateNode = single;
-    const deferredStore = single?.type === 'AssignmentExpression' ? prepareDeferredStore(single) : undefined;
+    const deferredStore = single && (single.type === 'AssignmentExpression' || single.type === 'LexicalBinding'
+      || single.type === 'VariableDeclaration') ? prepareDeferredStore(single) : undefined;
     const inputs = single && ['LexicalBinding', 'VariableDeclaration', 'AssignmentExpression'].includes(single.type)
       ? new Set<PreparedBinding>() : undefined;
     const reads = { incomplete: false };
@@ -32733,9 +32811,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         flowReadCollectors.pop();
         bindingFlowReads.delete(single!);
         bindingWalkInputs.delete(single!);
-        if (single!.type === 'AssignmentExpression' && inputs.size) {
+        if (inputs.size) {
           if (deferredStore && !flowNeedsReplay) retainDeferredStore(deferredStore, inputs);
-          else flowNeedsReplay = true;
+          else if (single!.type === 'AssignmentExpression') flowNeedsReplay = true;
         }
         if (flowNeedsReplay && !inputs.size && !reads.incomplete) {
           const destination = single!.type === 'AssignmentExpression'
@@ -35613,7 +35691,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // being an error.
           for (const target of locationWriteTypes(a.LeftHandSideExpression)) {
             if (compoundChecksLikeAssignment(a.AssignmentOperator, target)) {
-              requireAssignable(compoundStoreSource(a, target), target);
+              const source = compoundStoreSource(a, target);
+              if (a.AssignmentOperator === '=') withProvenance(a.AssignmentExpression,
+                () => requireAssignable(source, target, a.AssignmentExpression));
+              else requireAssignable(source, target);
             }
           }
         } else if (judgedAssignmentOperator(a.AssignmentOperator) && a.LeftHandSideExpression.type === 'SuperProperty') {
@@ -36297,6 +36378,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   if (!invalidTypeGraph) finishBindingContracts();
   if (!invalidTypeGraph) finishTestObligations();
   if (!invalidTypeGraph) finishInitializerObligations();
+  if (!invalidTypeGraph) collectCompletedBindings();
   if (invalidTypeGraph) {
     restoreFlow(new Map());
     return errors;
