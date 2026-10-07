@@ -17568,6 +17568,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // something else - a local binding wins, as it does for every other
         // name.
         const bound = lookup(referenced);
+        // #sec-callable-value-publication: a function value carries its
+        // published result even when the contribution never calls it.
+        let use: ParseNode = node;
+        while ((use.parent?.type === 'ParenthesizedExpression' || use.parent?.type === 'TypeArgumentsExpression')
+          && use.parent.Expression === use) use = use.parent;
+        const called = use.parent?.type === 'CallExpression' && use.parent.CallExpression === use;
+        // Direct calls complete their selected signature after overload selection.
+        if (!called && bound?.Kind === 'function' && immutablyBound(referenced, node)) {
+          for (const signature of bound.Signatures) {
+            const task = pendingBySignature.get(signature);
+            if (!signature.Return && task?.local) {
+              // A stable alias does not prove that its initializer still
+              // denoted the original declaration after a captured write.
+              const origin = nameOfDeclaration(task.fn);
+              if (!origin || hasDirectEval
+                || !(lexicalUnassigned(task.fn.parent ?? task.fn, origin) ?? !assignedNames.has(origin))) continue;
+              driveInference(signature);
+              observeInferenceInputs(signature);
+            }
+          }
+        }
         return bound ?? classObjectTypeOf(referenced) ?? valueParameterDomainOf(referenced);
       }
       // `super.x` NAMES A MEMBER OF THE BASE CLASS. It is its own node - not a
@@ -25551,8 +25572,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /**
    * #sec-inference-fixpoint: the queued inference for a signature, so that a
-   * contribution which CALLS a not-yet-published function can drive that
-   * function's inference on demand.
+   * contribution which calls or retains a not-yet-published function value
+   * can drive that function's inference on demand.
    *
    * This is what settles a mutual cycle. Computing `a`, the call to `b` runs
    * `b`'s inference with `a` already marked; `b`'s own call to `a` then reaches
