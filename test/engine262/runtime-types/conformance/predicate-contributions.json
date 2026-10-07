@@ -1,0 +1,1455 @@
+{
+  "description": "Immutable Boolean predicate aliases in source flow and contribution inference",
+  "cases": [
+    {
+      "name": "inferred const: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;if(p){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "inferred const: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;if(p){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "annotated const: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p:boolean=x is string;if(p){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "annotated const: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p:boolean=x is string;if(p){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "typed initializer const: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p:=x is string;if(p){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "typed initializer const: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p:=x is string;if(p){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "typeof predicate: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=typeof x===\"string\";if(p){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "typeof predicate: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=typeof x===\"string\";if(p){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "negated predicate: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=!(x is string);if(!p){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "negated predicate: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=!(x is string);if(!p){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "copied predicate: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;if(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "copied predicate: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;if(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "annotated copy: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q:boolean=p;if(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "annotated copy: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q:boolean=p;if(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "negated copy: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=!p;if(!q){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "negated copy: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=!p;if(!q){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "double negated copy: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=!!p;if(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "double negated copy: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=!!p;if(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "parenthesized copy: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=((p));if(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "parenthesized copy: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=((p));if(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "logical copy: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p&&flag;if(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "logical copy: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p&&flag;if(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "conditional copy: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=flag?p:p;if(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "conditional copy: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=flag?p:p;if(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "comma copy: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=(flag,p);if(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "comma copy: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=(flag,p);if(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "alias chain length 4: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p0=x is string;const p1=p0;const p2=p1;const p3=p2;if(p3){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "alias chain length 4: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p0=x is string;const p1=p0;const p2=p1;const p3=p2;if(p3){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "alias chain length 12: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p0=x is string;const p1=p0;const p2=p1;const p3=p2;const p4=p3;const p5=p4;const p6=p5;const p7=p6;const p8=p7;const p9=p8;const p10=p9;const p11=p10;if(p11){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "alias chain length 12: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p0=x is string;const p1=p0;const p2=p1;const p3=p2;const p4=p3;const p5=p4;const p6=p5;const p7=p6;const p8=p7;const p9=p8;const p10=p9;const p11=p10;if(p11){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "guard successor: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;if(!q)return \"s\";return g();function g(){return s;}const s=x;}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "guard successor: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;if(!q)return \"s\";return g();function g(){return s;}const s=x;}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "else branch: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;if(!q)return \"s\";else{return g();function g(){return s;}const s=x;}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "else branch: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;if(!q)return \"s\";else{return g();function g(){return s;}const s=x;}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "while entry: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;while(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "while entry: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;while(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "for entry: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;for(;q;){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "for entry: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;for(;q;){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "do body guarded successor: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;do{if(!q)return \"s\";return g();function g(){return s;}const s=x;}while(flag);}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "do body guarded successor: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;do{if(!q)return \"s\";return g();function g(){return s;}const s=x;}while(flag);}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "labelled break successor: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;outer:{if(!q)break outer;return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "labelled break successor: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;outer:{if(!q)break outer;return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "switch result true: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;switch(q){case true:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "switch result true: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;switch(q){case true:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "switch result default: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;switch(q){case false:return \"s\";default:return g();function g(){return s;}const s=x;}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "switch result default: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;switch(q){case false:return \"s\";default:return g();function g(){return s;}const s=x;}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "switch middle default: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;switch(q){default:return g();function g(){return s;}const s=x;case false:return \"s\";}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "switch middle default: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;switch(q){default:return g();function g(){return s;}const s=x;case false:return \"s\";}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "switch singleton subject: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;switch(true){case q:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "switch singleton subject: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;switch(true){case q:return g();function g(){return s;}const s=x;default:return \"s\";}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "logical deciding position: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;if(q&&flag){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "logical deciding position: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;if(q&&flag){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "conditional result: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;return q?x:\"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "conditional result: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;return q?x:\"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "direct conditional source completion: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){return x is string?x:\"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "direct conditional source completion: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){return x is string?x:\"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "conditional contribution before later return: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;if(flag)return q?x:\"s\";return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "conditional contribution before later return: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;if(flag)return q?x:\"s\";return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "conditional alias initializer contract: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;const s=q?x:\"s\";return g();function g(){return s;}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "conditional alias initializer contract: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;const s=q?x:\"s\";return g();function g(){return s;}}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "conditional alias false branch: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is number;const q=p;return q?\"s\":x;}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "conditional alias false branch: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is number;const q=p;return q?\"s\":x;}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "multiple bindings left to right: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string,q=p;if(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "multiple bindings left to right: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string,q=p;if(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "captured mutable storage stays broad: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;if(q){return g();function g(){return x;}}return \"s\";}const q:string|number=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "captured mutable storage stays broad: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;if(q){return g();function g(){return x;}}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "captured predicate does not freeze its source: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;function g(){if(q)return x;return \"s\";}return g();}const q:string|number=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "captured predicate does not freeze its source: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;function g(){if(q)return x;return \"s\";}return g();}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "source store before alias use: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;x=0;if(q)return x;return \"s\";}const q:string|number=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "source store before alias use: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;x=0;if(q)return x;return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "source store before alias copy: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;x=0;const q=p;if(q)return x;return \"s\";}const q:string|number=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "source store before alias copy: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;x=0;const q=p;if(q)return x;return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "source store inside alias copy: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=(x=0,p);if(q)return x;return \"s\";}const q:string|number=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "source store inside alias copy: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=(x=0,p);if(q)return x;return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "writer call invalidates alias: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;function write(){x=0;}write();if(q)return x;return \"s\";}const q:string|number=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "writer call invalidates alias: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;function write(){x=0;}write();if(q)return x;return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "switch label store invalidates alias: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;switch(q){case(x=0,true):return x;default:return \"s\";}}const q:string|number=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "switch label store invalidates alias: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;switch(q){case(x=0,true):return x;default:return \"s\";}}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "mutable alias: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){let p=x is string;if(p)return x;return \"s\";}const q:string|number=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "mutable alias: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){let p=x is string;if(p)return x;return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "mutable typed alias: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){let p:boolean=x is string;if(p)return x;return \"s\";}const q:string|number=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "mutable typed alias: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){let p:boolean=x is string;if(p)return x;return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "mutable typed initializer: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){let p:=x is string;if(p)return x;return \"s\";}const q:string|number=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "mutable typed initializer: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){let p:=x is string;if(p)return x;return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "explicit any alias: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p:any=x is string;if(p)return x;return \"s\";}const q:string|number=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "explicit any alias: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p:any=x is string;if(p)return x;return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "explicit any copy: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const old=x is string;const p:any=old;if(p)return x;return \"s\";}const q:string|number=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "explicit any copy: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const old=x is string;const p:any=old;if(p)return x;return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "replaced Boolean alias: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){let p:boolean=x is string;p=flag;if(p)return x;return \"s\";}const q:string|number=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "replaced Boolean alias: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){let p:boolean=x is string;p=flag;if(p)return x;return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "shadowed alias uses local binding: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;{const q:boolean=flag;if(q)return x;}return \"s\";}const q:string|number=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "shadowed alias uses local binding: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;{const q:boolean=flag;if(q)return x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "shadowed source does not receive outer facts: string|number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;{const x:number=1;if(q)return x;}return \"s\";}const q:string|number=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "shadowed source does not receive outer facts: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;{const x:number=1;if(q)return x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "outer alias survives nested shadow scope: string",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;{const q:boolean=flag;}if(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=f(\"s\",true);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "outer alias survives nested shadow scope: number",
+      "source": "function outer(){function f(x:string|number,flag:boolean){const p=x is string;const q=p;{const q:boolean=flag;}if(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=f(\"s\",true);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "open property alias does not prove repeated read: string|number",
+      "source": "function outer(){function f(o:{x:string|number}){const p=o.x is string;const q=p;if(q)return o.x;return \"s\";}const q:string|number=f({x:\"s\"});}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "open property alias does not prove repeated read: string",
+      "source": "function outer(){function f(o:{x:string|number}){const p=o.x is string;const q=p;if(q)return o.x;return \"s\";}const q:string=f({x:\"s\"});}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "optional presence predicate: {tag:string}",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){const p=o?.tag===\"a\";const q=p;if(q){return g();function g(){return s;}const s=o;}return fallback;}const q:{tag:string}=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "optional presence predicate: null",
+      "source": "function outer(){function f(o:{tag:string}|null,fallback:{tag:string}){const p=o?.tag===\"a\";const q=p;if(q){return g();function g(){return s;}const s=o;}return fallback;}const q:null=f(null,{tag:\"s\"});}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "if copied predicate: automatic",
+      "source": "function f(x:string|number){const p=x is string;const q=p;if(q){if(x is string){}}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "if copied predicate: forced",
+      "source": "function f(x:string|number){const p=x is string;const q=p;if(q){if(x is string){}}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "switch copied predicate: automatic",
+      "source": "function f(x:string|number){const p=x is string;const q=p;switch(q){case true:if(x is string){}break;default:break;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "switch copied predicate: forced",
+      "source": "function f(x:string|number){const p=x is string;const q=p;switch(q){case true:if(x is string){}break;default:break;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "while copied predicate: automatic",
+      "source": "function f(x:string|number){const p=x is string;const q=p;while(q){if(x is string){}break;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "while copied predicate: forced",
+      "source": "function f(x:string|number){const p=x is string;const q=p;while(q){if(x is string){}break;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "for copied predicate: automatic",
+      "source": "function f(x:string|number){const p=x is string;const q=p;for(;q;){if(x is string){}break;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "for copied predicate: forced",
+      "source": "function f(x:string|number){const p=x is string;const q=p;for(;q;){if(x is string){}break;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "arrow copied predicate: string",
+      "source": "function outer(){const f=(x:string|number)=>{const p=x is string;const q=p;if(q){return g();function g(){return s;}const s=x;}return \"s\";};const q:string=f(\"s\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "arrow copied predicate: number",
+      "source": "function outer(){const f=(x:string|number)=>{const p=x is string;const q=p;if(q){return g();function g(){return s;}const s=x;}return \"s\";};const q:number=f(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "expression copied predicate: string",
+      "source": "function outer(){const f=function(x:string|number){const p=x is string;const q=p;if(q){return g();function g(){return s;}const s=x;}return \"s\";};const q:string=f(\"s\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "expression copied predicate: number",
+      "source": "function outer(){const f=function(x:string|number){const p=x is string;const q=p;if(q){return g();function g(){return s;}const s=x;}return \"s\";};const q:number=f(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async copied predicate: string",
+      "source": "async function outer(){async function f(x:string|number){const p=x is string;const q=p;if(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:string=await f(\"s\");}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "async copied predicate: number",
+      "source": "async function outer(){async function f(x:string|number){const p=x is string;const q=p;if(q){return g();function g(){return s;}const s=x;}return \"s\";}const q:number=await f(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generator copied predicate: string",
+      "source": "function outer(){function* f(x:string|number){const p=x is string;const q=p;if(q){yield x;return \"s\";}yield \"s\";return \"s\";}const q:string=f(\"s\").next().value;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generator copied predicate: number",
+      "source": "function outer(){function* f(x:string|number){const p=x is string;const q=p;if(q){yield x;return \"s\";}yield \"s\";return \"s\";}const q:number=f(\"s\").next().value;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async generator copied predicate: string",
+      "source": "async function outer(){async function* f(x:string|number){const p=x is string;const q=p;if(q){yield x;return \"s\";}yield \"s\";return \"s\";}const q:string=(await f(\"s\").next()).value;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "async generator copied predicate: number",
+      "source": "async function outer(){async function* f(x:string|number){const p=x is string;const q=p;if(q){yield x;return \"s\";}yield \"s\";return \"s\";}const q:number=(await f(\"s\").next()).value;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "runtime initializer evaluated once",
+      "source": "function f(x:string|number){let n:number=0;const p=(n++,x is string);const q=p;if(q)return String(n)+x;return \"other\";}f(\"ok\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1ok"
+      }
+    },
+    {
+      "name": "runtime predicate copy keeps captured Boolean",
+      "source": "function f(x:string|number){const p=x is string;x=0;const q=p;if(q)return String(x);return \"other\";}f(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "0"
+      }
+    },
+    {
+      "name": "runtime captured constant retains temporal dead zone",
+      "source": "function f(x:string|number){const p=x is string;const q=p;if(q){return g();function g(){return s;}const s=x;}return \"s\";}f(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "legacy predicate copies: automatic",
+      "source": "function f(x){const p=typeof x===\"string\";const q=p;if(q)return x;return \"other\";}f(\"ok\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "legacy predicate copies: forced",
+      "source": "function f(x){const p=typeof x===\"string\";const q=p;if(q)return x;return \"other\";}f(\"ok\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "legacy predicate copies: disabled",
+      "source": "function f(x){const p=typeof x===\"string\";const q=p;if(q)return x;return \"other\";}f(\"ok\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      },
+      "checking": "disabled"
+    }
+  ]
+}

@@ -23404,27 +23404,45 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const savedPredicates = new WeakMap<Frame, Map<string, SavedPredicate>>();
   const rememberPredicate = (owner: Frame, name: string, initializer: ParseNode, result: TestFlow): void => {
     const origins: CapturedPlace[] = [];
-    const names = new Set([...result.whenTrue ?? [], ...result.whenFalse ?? []].flatMap(([, entries]) => [...entries.keys()]));
-    const subjectExpression = (node: unknown, subject: string): ParseNode | undefined => {
+    const subjectOrigin = (node: unknown, subject: string, sourceOwner: Frame): CapturedPlace | undefined => {
       if (!node || typeof node !== 'object') return undefined;
-      if (Array.isArray(node)) return node.map((child) => subjectExpression(child, subject)).find(Boolean);
+      if (Array.isArray(node)) {
+        for (const child of node) {
+          const found = subjectOrigin(child, subject, sourceOwner);
+          if (found) return found;
+        }
+        return undefined;
+      }
       const candidate = node as ParseNode;
       if (typeof candidate.type !== 'string') return undefined;
       if (['IdentifierReference', 'MemberExpression', 'ThisExpression', 'TopicReference'].includes(candidate.type)
-        && narrowableName(candidate) === subject && dataValuePlace(candidate)) return candidate;
+        && narrowableName(candidate) === subject && flowOwner(subject) === sourceOwner && dataValuePlace(candidate)) {
+        return capturePlace(candidate);
+      }
+      if (candidate.type === 'IdentifierReference') {
+        // Copy the preserved source relation of an immutable predicate alias,
+        // rather than treating its Boolean binding as the original subject.
+        const saved = savedPredicates.get(flowOwner(candidate.name))?.get(candidate.name);
+        const inherited = saved?.origins.find((origin) => origin.owner === sourceOwner && origin.name === subject
+          && placeStillCaptured(origin));
+        if (inherited) return inherited;
+      }
       for (const [key, child] of Object.entries(candidate)) {
         if (['parent', 'location', 'sourceText', 'TypeAnnotation'].includes(key)) continue;
-        const found = subjectExpression(child, subject);
+        const found = subjectOrigin(child, subject, sourceOwner);
         if (found) return found;
       }
       return undefined;
     };
-    for (const key of names) {
-      const subject = key.split('.\u0000')[0];
-      if (subject === name || origins.some((origin) => origin.name === subject) || changesPlace(initializer, subject)) continue;
-      const expression = subjectExpression(initializer, subject);
-      const origin = expression ? capturePlace(expression) : undefined;
-      if (origin) origins.push(origin);
+    for (const [sourceOwner, entries] of [...result.whenTrue ?? [], ...result.whenFalse ?? []]) {
+      for (const key of entries.keys()) {
+        const subject = key.split('.\u0000')[0];
+        if (sourceOwner === owner && subject === name
+          || origins.some((origin) => origin.owner === sourceOwner && origin.name === subject)
+          || changesPlace(initializer, subject)) continue;
+        const origin = subjectOrigin(initializer, subject, sourceOwner);
+        if (origin) origins.push(origin);
+      }
     }
     if (!origins.length) return;
     if (!savedPredicates.has(owner)) savedPredicates.set(owner, new Map());
@@ -25823,7 +25841,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   type InitializerContext = InferenceScope & {
-    flow: FlowFacts,
+    flow: FlowFacts, live: boolean,
     uninitialized: Map<Frame, Set<string> | undefined>,
     parameters: Map<Frame, () => void>,
     thisTypes: Known[], classes: ParseNode[], returns: Known[], generators: Known[],
@@ -25834,7 +25852,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const captureInitializerContext = (): InitializerContext => ({
     frames: frames.slice(), varFrames: varFrames.slice(), typeScopes: typeParameterScopes.slice(),
     parameters: new Map(frames.filter((frame) => activeParameterFrames.has(frame)).map((frame) => [frame, captureParameterScope(frame)])),
-    flow: captureFlow(), uninitialized: new Map(frames.map((frame) => {
+    flow: captureFlow(), live: flowLive, uninitialized: new Map(frames.map((frame) => {
       const names = uninitializedVars.get(frame);
       return [frame, names && new Set(names)];
     })),
@@ -25866,6 +25884,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       typeRevision += 1;
       apply(context);
       restoreFlow(context.flow);
+      // A deferred expression is queried at its source completion state, not
+      // after the enclosing return or a later abrupt statement was collected.
+      flowLive = context.live;
       for (const [frame, names] of context.uninitialized) {
         if (names) uninitializedVars.set(frame, new Set(names));
         else uninitializedVars.delete(frame);
@@ -26903,7 +26924,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             collect(bound.BindingPattern);
             if (init) {
               collect(init);
-              transferExpression(init);
+              const predicateType = bound.BindingIdentifier && n.type === 'LexicalDeclaration' && n.LetOrConst === 'const' && !bound.Ref
+                ? bound.TypeAnnotation ? resolveType(bound.TypeAnnotation.Type)
+                  : withCaptureContracts(() => bound.TypedInitializer || constInitializerParticipates(init) ? staticType(init) : null)
+                : null;
+              if (booleanType(predicateType)) {
+                const result = walkTest(init, false, false, false);
+                resumeFlow(joinFlow([result.whenTrue, result.whenFalse]));
+                if (!flowNeedsReplay) rememberPredicate(bindingFrame, bound.BindingIdentifier!.name, init, result);
+              } else transferExpression(init);
               if (bound.BindingIdentifier && bound.TypeAnnotation && !bound.Ref && !flowNeedsReplay) {
                 const domain = storedDomain(source, resolveType(bound.TypeAnnotation.Type));
                 if (domain) declareNarrowed(bound.BindingIdentifier.name, domain);
