@@ -1748,8 +1748,9 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
         const thisEntry = thisType
           ? [`this: ${(thisType as { Declaration?: { type?: string } }).Declaration?.type === 'SelfThisMarker' ? 'its receiver' : displayType(thisType)}`]
           : [];
-        // A null Return is representable and must not print as `null`.
-        return `${generic}(${[...thisEntry, ...params].join(', ')}) => ${s.Return ? displayType(s.Return) : 'void'}`;
+        // Diagnostics describe the effective result without changing identity.
+        const result = s.Return ?? s.InferredReturn;
+        return `${generic}(${[...thisEntry, ...params].join(', ')}) => ${result ? displayType(result) : 'void'}`;
       };
       // Overloads join with `&`, which is how an overloaded function type is
       // written, and matches the intersection case above.

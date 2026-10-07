@@ -1,0 +1,803 @@
+{
+  "description": "Completed inferred results at callable conformance boundaries, including generic instantiation and covariance",
+  "cases": [
+    {
+      "name": "interface receiver result: compatible",
+      "source": "interface I{m():string;}class C implements I{x:string=\"s\";m(){return this.x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "interface receiver result: incompatible",
+      "source": "interface I{m():number;}class C implements I{x:string=\"s\";m(){return this.x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "interface forward helper: compatible",
+      "source": "interface I{m():string;}class C implements I{m(){return this.f();}f(){return this.x;}x:string=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "interface forward helper: incompatible",
+      "source": "interface I{m():number;}class C implements I{m(){return this.f();}f(){return this.x;}x:string=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "interface typed parameter: compatible",
+      "source": "interface I{m(x:string):string;}class C implements I{m(x:string){return x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "interface typed parameter: incompatible",
+      "source": "interface I{m(x:string):number;}class C implements I{m(x:string){return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "interface captured annotation: compatible",
+      "source": "interface I{m():string;}let s:string=\"s\";class C implements I{m(){return s;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "interface captured annotation: incompatible",
+      "source": "interface I{m():number;}let s:string=\"s\";class C implements I{m(){return s;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "interface inherited method: compatible",
+      "source": "interface I{m():string;}class B{x:string=\"s\";m(){return this.x;}}class C extends B implements I{}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "interface inherited method: incompatible",
+      "source": "interface I{m():number;}class B{x:string=\"s\";m(){return this.x;}}class C extends B implements I{}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "interface inherited field: compatible",
+      "source": "interface I{m():string;}class B{x:string=\"s\";}class C extends B implements I{m(){return this.x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "interface inherited field: incompatible",
+      "source": "interface I{m():number;}class B{x:string=\"s\";}class C extends B implements I{m(){return this.x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "specialized interface: compatible",
+      "source": "interface I<T:type>{m():T;}class C implements I.<string>{x:string=\"s\";m(){return this.x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "specialized interface: incompatible",
+      "source": "interface I<T:type>{m():T;}class C implements I.<number>{x:string=\"s\";m(){return this.x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generic interface method: compatible",
+      "source": "interface I{m<T:type>(x:T):T;}class C implements I{m<T:type>(x:T){return x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic interface method: incompatible",
+      "source": "interface I{m<T:type>(x:T):number;}class C implements I{m<T:type>(x:T){return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generic class interface: compatible",
+      "source": "interface I<T:type>{m():T;}class C<T:type> implements I.<T>{x:T;m(){return this.x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic class interface: incompatible",
+      "source": "interface I<T:type>{m():T;}class C<T:type> implements I.<number>{x:T;m(){return this.x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "interface async result: compatible",
+      "source": "interface I{m():Promise.<string>;}class C implements I{x:string=\"s\";async m(){return this.x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "interface async result: incompatible",
+      "source": "interface I{m():Promise.<number>;}class C implements I{x:string=\"s\";async m(){return this.x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "interface generator yield: compatible",
+      "source": "interface I{m():Generator.<string,void,void>;}class C implements I{x:string=\"s\";*m(){yield this.x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "interface generator yield: incompatible",
+      "source": "interface I{m():Generator.<number,void,void>;}class C implements I{x:string=\"s\";*m(){yield this.x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "interface async generator yield: compatible",
+      "source": "interface I{m():AsyncGenerator.<string,void,void>;}class C implements I{x:string=\"s\";async *m(){yield this.x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "interface async generator yield: incompatible",
+      "source": "interface I{m():AsyncGenerator.<number,void,void>;}class C implements I{x:string=\"s\";async *m(){yield this.x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "interface generator completion: compatible",
+      "source": "interface I{m(a:number):Generator.<number,string,void>;}class C implements I{x:string=\"s\";*m(a:number){yield a;return this.x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "interface generator completion: incompatible",
+      "source": "interface I{m(a:number):Generator.<number,number,void>;}class C implements I{x:string=\"s\";*m(a:number){yield a;return this.x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "interface overload result: compatible",
+      "source": "interface I{m(x:string):string;}class C implements I{m(x:string){return x;}m(x:number){return x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "interface overload result: incompatible",
+      "source": "interface I{m(x:string):number;}class C implements I{m(x:string){return x;}m(x:number){return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "interface result callable field: compatible",
+      "source": "interface I{m():(x:string)=>string;}class C implements I{f:(x:string)=>string=(x)=>x;m(){return this.f;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "interface result callable field: incompatible",
+      "source": "interface I{m():(x:string)=>number;}class C implements I{f:(x:string)=>string=(x)=>x;m(){return this.f;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "function binding: compatible",
+      "source": "function unused(){function f(x:string){return x;}const q:(x:string)=>string=f;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "function binding: incompatible",
+      "source": "function unused(){function f(x:string){return x;}const q:(x:string)=>number=f;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "function callback: compatible",
+      "source": "function unused(){function take(f:(x:string)=>string){}function f(x:string){return x;}take(f);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "function callback: incompatible",
+      "source": "function unused(){function take(f:(x:string)=>number){}function f(x:string){return x;}take(f);}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "function returned callback: compatible",
+      "source": "function unused(){function f(x:string){return x;}function g(){return f;}const q:()=>((x:string)=>string)=g;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "function returned callback: incompatible",
+      "source": "function unused(){function f(x:string){return x;}function g(){return f;}const q:()=>((x:string)=>number)=g;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generic callable binding: compatible",
+      "source": "function unused(){function f<T:type>(x:T){return x;}const q:(x:string)=>string=f;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic callable binding: incompatible",
+      "source": "function unused(){function f<T:type>(x:T){return x;}const q:(x:string)=>number=f;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generic callable interface: compatible",
+      "source": "interface I{<T:type>(x:T):T;}function unused(){function f<T:type>(x:T){return x;}const q:I=f;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic callable interface: incompatible",
+      "source": "interface I{<T:type>(x:T):number;}function unused(){function f<T:type>(x:T){return x;}const q:I=f;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generic result only: compatible",
+      "source": "function unused(){function f<T:type>(){let x:T;return x;}const q:()=>string=f;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "fixed tuple rests: compatible",
+      "source": "function unused(){function f(...a:[string],...b:[number]){let s:string=\"s\";return s;}const q:(a:string,b:number)=>string=f;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "fixed tuple rests: incompatible",
+      "source": "function unused(){function f(...a:[string],...b:[number]){let s:string=\"s\";return s;}const q:(a:string,b:number)=>number=f;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "source multiple dynamic rests: compatible",
+      "source": "function unused(){function f(...a:[].<string>,...b:[].<number>){let s:string=\"s\";return s;}const q:(a:string,b:number)=>string=f;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "source multiple dynamic rests: incompatible",
+      "source": "function unused(){function f(...a:[].<string>,...b:[].<number>){let s:string=\"s\";return s;}const q:(a:string,b:number)=>number=f;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "target multiple dynamic rests: compatible",
+      "source": "function unused(){function f(...a:[].<string>,...b:[].<number>){let s:string=\"s\";return s;}const q:(...a:[].<string>,...b:[].<number>)=>string=f;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "target multiple dynamic rests: incompatible",
+      "source": "function unused(){function f(...a:[].<string>,...b:[].<number>){let s:string=\"s\";return s;}const q:(...a:[].<string>,...b:[].<number>)=>number=f;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generic covariance return x; to void",
+      "source": "function unused(){function f<T:type>(x:T){return x;}const q:(x:string)=>(void)=f;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic covariance return x; to any",
+      "source": "function unused(){function f<T:type>(x:T){return x;}const q:(x:string)=>(any)=f;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic covariance return x; to string|number",
+      "source": "function unused(){function f<T:type>(x:T){return x;}const q:(x:string)=>(string|number)=f;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic covariance let s:string=\"s\";return s; to void",
+      "source": "function unused(){function f<T:type>(x:T){let s:string=\"s\";return s;}const q:(x:string)=>(void)=f;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic covariance let s:string=\"s\";return s; to any",
+      "source": "function unused(){function f<T:type>(x:T){let s:string=\"s\";return s;}const q:(x:string)=>(any)=f;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic covariance let s:string=\"s\";return s; to string|number",
+      "source": "function unused(){function f<T:type>(x:T){let s:string=\"s\";return s;}const q:(x:string)=>(string|number)=f;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "interface covariance to void",
+      "source": "interface I{m():void;}class C implements I{x:string=\"s\";m(){return this.x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "interface covariance to any",
+      "source": "interface I{m():any;}class C implements I{x:string=\"s\";m(){return this.x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "interface covariance to string|number",
+      "source": "interface I{m():string|number;}class C implements I{x:string=\"s\";m(){return this.x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "unanchored literal remains dynamic",
+      "source": "interface I{m():number;}class C implements I{m(){return \"s\";}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "unknown member remains dynamic",
+      "source": "interface I{m():number;}class C implements I{x:any;m(){return this.x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "void consumer ignores result",
+      "source": "interface I{m():void;}class C implements I{x:string=\"s\";m(){return this.x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "explicit annotation overrides inference",
+      "source": "interface I{m():number;}class C implements I{m():number{return 1;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "ordinary untyped catch all",
+      "source": "function unused(){function f(a,b,c){}const q:(x:string)=>number=f;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "explicit any is not an unknown result",
+      "source": "interface I{m():number;}class C implements I{m():any{return \"s\";}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "legacy callables automatic",
+      "source": "function f(){return \"s\";}const g=f;g();",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "legacy callables forced",
+      "source": "function f(){return \"s\";}const g=f;g();",
+      "checking": "forced",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "legacy callables disabled",
+      "source": "function f(){return \"s\";}const g=f;g();",
+      "checking": "disabled",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "executed interface implementation",
+      "source": "interface I{m():string;}class C implements I{x:string=\"s\";m(){return this.x;}}const c:I=new C();c.m();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "executed generic callback",
+      "source": "function f<T:type>(x:T){return x;}const q:(x:string)=>string=f;q(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "declaration identity remains unchanged",
+      "source": "type A=<T:type>(x:T)=>T;type B=<U:type>(x:U)=>U;String(A===B);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "callable storage and renaming: replacement",
+      "source": "{function g(p:uint32){return \"s\";}g=function(p){return 1;};const q:number=g((1:=uint32));String(q);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "callable storage and renaming: explicit replacement",
+      "source": "{function g(p:uint32):string{return \"s\";}g=function(p){let n:number=1;return n;};}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "callable storage and renaming: inferred slot",
+      "source": "function unused(){function f(x:string){return x;}let g:=f;function h(x:string){let n:number=1;return n;}g=h;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "callable storage and renaming: renamed inferred",
+      "source": "function unused(){function id<T:type>(x:T){return x;}let h:<U:type>(x:U)=>U=id;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "callable storage and renaming: renamed incompatible",
+      "source": "function unused(){function id<T:type>(x:T){return x;}let h:<U:type>(x:U)=>number=id;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "callable storage and renaming: renamed distinct",
+      "source": "function unused(){function id<T:type,U:type>(x:T,y:U){return x;}let h:<V:type,W:type>(x:V,y:W)=>W=id;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    }
+  ]
+}

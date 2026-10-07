@@ -980,6 +980,12 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
       && IsSubtype(s.Arguments[0] as TypeRecord, t.Arguments[0] as TypeRecord, assumptions)) {
     return true;
   }
+  // #sec-published-return-types: declaration identity excludes inferred
+  // results, so it cannot discharge a callable's result obligation.
+  if (s.Kind === 'function' && t.Kind === 'function' && s !== t) {
+    if (assumed(assumptions, s, t)) return true;
+    return IsFunctionSubtype(s, t, [...assumptions, { First: s, Second: t }]);
+  }
   if (SameTypeWithAssumptions(s, t, assumptions)) {
     return true;
   }
@@ -1769,9 +1775,12 @@ function identifyTypeParameters(a: SignatureRecord, b: SignatureRecord, assumpti
     // NAME otherwise (the checker mints a fresh ~parameter~ record per
     // reference, so its records have no stable identity to pair). The
     // parameter-vs-parameter branch of SameTypeWithAssumptions honours both.
-    out.push(u.Parameter && w.Parameter
+    const pair = u.Parameter && w.Parameter
       ? { First: u.Parameter, Second: w.Parameter }
-      : { First: { Kind: 'parameter', Name: u.Name, Arity: u.Arity } as TypeRecord, Second: { Kind: 'parameter', Name: w.Name, Arity: w.Arity } as TypeRecord });
+      : { First: { Kind: 'parameter', Name: u.Name, Arity: u.Arity } as TypeRecord, Second: { Kind: 'parameter', Name: w.Name, Arity: w.Arity } as TypeRecord };
+    // Alpha-renaming identifies parameters in both comparison directions,
+    // including contravariant inputs. Ordinary subtype assumptions stay directed.
+    out.push(pair, { First: pair.Second, Second: pair.First });
   }
   for (let k = 0; k < ap.length; k += 1) {
     const u = ap[k].Constraint;
@@ -1819,6 +1828,13 @@ export function HasSlotInsideApplication(pattern: TypeRecord): boolean {
   return walk(pattern, false);
 }
 
+/** The result contract consulted by conformance, never by overload identity. */
+function signatureResult(signature: SignatureRecord): TypeRecord | null {
+  // A completed any join publishes no contract. Keep it distinct from a
+  // written any annotation, which is a declared result promise.
+  return signature.Return ?? (signature.InferredReturn?.Kind === 'any' ? null : signature.InferredReturn) ?? null;
+}
+
 export function matchTypeStructurally(pattern: TypeRecord, target: TypeRecord, bindings: Map<TypeRecord, TypeRecord>): boolean {
   if (pattern.Kind === 'parameter') {
     const prior = bindings.get(pattern);
@@ -1843,9 +1859,11 @@ export function matchTypeStructurally(pattern: TypeRecord, target: TypeRecord, b
       const tsigs = (target as typeof pattern).Signatures;
       return pattern.Signatures.length === tsigs.length && pattern.Signatures.every((g, i) => {
         const h = tsigs[i]!;
+        const sourceResult = signatureResult(g);
+        const targetResult = signatureResult(h);
         return g.Parameters.length === h.Parameters.length
           && g.Parameters.every((q, j) => matchTypeStructurally(q.Type, h.Parameters[j]!.Type, bindings))
-          && (g.Return === null || h.Return === null || matchTypeStructurally(g.Return, h.Return, bindings));
+          && (!sourceResult || !targetResult || matchTypeStructurally(sourceResult, targetResult, bindings));
       });
     }
     case 'nominal': {
@@ -1900,6 +1918,7 @@ export function substituteParameterRecords(t: TypeRecord, bindings: Map<TypeReco
           ...g,
           Parameters: g.Parameters.map((q) => ({ ...q, Type: substituteParameterRecords(q.Type, bindings) })),
           Return: g.Return === null ? null : substituteParameterRecords(g.Return, bindings),
+          ...(g.InferredReturn ? { InferredReturn: substituteParameterRecords(g.InferredReturn, bindings) } : {}),
           TypeParameters: undefined,
         })),
       } as TypeRecord;
@@ -1925,7 +1944,7 @@ export function substituteParameterRecords(t: TypeRecord, bindings: Map<TypeReco
  */
 function IsSignatureSubtypeGeneric(sg: SignatureRecord, tg: SignatureRecord, assumptions: readonly Assumption[], preserveReferences = true): boolean {
   if ((sg as { Untyped?: boolean }).Untyped === true
-      && (sg as { InferredReturn?: unknown }).InferredReturn === undefined
+      && (!sg.InferredReturn || sg.InferredReturn.Kind === 'any')
       && !(tg.Narrows?.length)
       && (!preserveReferences || ![...sg.Parameters, ...tg.Parameters].some((p) => p.Ref))) {
     return true;
@@ -1942,18 +1961,26 @@ function IsSignatureSubtypeGeneric(sg: SignatureRecord, tg: SignatureRecord, ass
         return false;
       }
     }
-    if (sg.Return !== null && tg.Return !== null && !matchTypeStructurally(sg.Return, tg.Return, bindings)) {
-      return false;
-    }
-    // #sec-issignaturesubtype: inference does not discharge the declaration's
-    // bounds. Resolve dependent bounds under the same inferred environment.
     const byName = new Map<string, TypeRecord>();
-    for (const [pattern, bound] of bindings) {
-      if (pattern.Kind !== 'parameter') continue;
-      const prior = byName.get(pattern.Name);
-      if (prior && !SameTypeWithAssumptions(prior, bound, assumptions)) return false;
-      byName.set(pattern.Name, bound);
-    }
+    const collectBindings = (): boolean => {
+      for (const [pattern, bound] of bindings) {
+        if (pattern.Kind !== 'parameter') continue;
+        const prior = byName.get(pattern.Name);
+        if (prior && !SameTypeWithAssumptions(prior, bound, assumptions)) return false;
+        byName.set(pattern.Name, bound);
+      }
+      return true;
+    };
+    if (!collectBindings()) return false;
+    const sourceResult = substituteTypeParameters(signatureResult(sg), byName);
+    const targetResult = signatureResult(tg);
+    // Inputs already fixed these parameters. A wider expected result must not
+    // rebind them or turn result covariance into an equality constraint.
+    if (sourceResult && targetResult && !returnRequiredOfNothing(targetResult)
+        && mentionsTypeParameter(sourceResult)
+        && !matchTypeStructurally(sourceResult, targetResult, bindings)) return false;
+    if (!collectBindings()) return false;
+    // Inference does not discharge bounds, including dependent constraints.
     for (const u of sTP) {
       const bound = u.Parameter ? bindings.get(u.Parameter) : byName.get(u.Name);
       if (!bound) return false;
@@ -2070,8 +2097,8 @@ export function SignatureNarrowingsSubtype(sg: SignatureRecord, tg: SignatureRec
 }
 
 function IsSignatureSubtypeCore(sgIn: SignatureRecord, tgIn: SignatureRecord, assumptions: readonly Assumption[], preserveReferences = true): boolean {
-    const sg = { ...sgIn, Parameters: expandTupleRests(sgIn.Parameters) } as SignatureRecord;
-    const tg = { ...tgIn, Parameters: expandTupleRests(tgIn.Parameters) } as SignatureRecord;
+    const sg = { ...sgIn, Return: signatureResult(sgIn), Parameters: expandTupleRests(sgIn.Parameters) } as SignatureRecord;
+    const tg = { ...tgIn, Return: signatureResult(tgIn), Parameters: expandTupleRests(tgIn.Parameters) } as SignatureRecord;
     // #sec-issignaturesubtype step 1: "If a.[[Untyped]] is true, return true."
     //
     // FIRST, before the arity and parameter steps, because an untyped signature
@@ -2098,7 +2125,7 @@ function IsSignatureSubtypeCore(sgIn: SignatureRecord, tgIn: SignatureRecord, as
     // So the catch-all is for a signature with nothing to judge it BY, which is
     // what step 1 means and what [[Untyped]] alone does not establish.
     if ((sg as { Untyped?: boolean }).Untyped === true
-        && (sg as { InferredReturn?: unknown }).InferredReturn === undefined
+        && (!sg.InferredReturn || sg.InferredReturn.Kind === 'any')
         && !(tg.Narrows?.length)
         && (!preserveReferences || ![...sg.Parameters, ...tg.Parameters].some((p) => p.Ref))) {
       return true;

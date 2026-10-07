@@ -27924,7 +27924,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // while compatibility and stores concern the value at that location.
   const locationType = (expression: ParseNode): Known => {
     const target = patternExpression(expression)!;
-    if (target.type === 'IdentifierReference') return lookupDeclared(target.name);
+    if (target.type === 'IdentifierReference') {
+      const declared = lookupDeclared(target.name);
+      // #sec-effectivesignaturereturn: publication describes the function
+      // value, not an unwritten storage promise on its replaceable binding.
+      if (declared?.Kind === 'function' && ResolveBindingDeclaration(target, target.name)?.kind === 'function') {
+        return { ...declared, Signatures: declared.Signatures.map((signature) => ({ ...signature, InferredReturn: undefined })) };
+      }
+      return declared;
+    }
     const type = target.type === 'CallExpression' ? callReturnType(target) : staticType(target);
     if (target.type !== 'CallExpression') return type;
     if (!type || type.Kind === 'any') return null;
