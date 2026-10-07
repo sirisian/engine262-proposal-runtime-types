@@ -1,0 +1,639 @@
+{
+  "description": "Deciding-test obligations and independent producers after unfinished flow",
+  "specSections": [
+    "sec-dependent-test-obligations",
+    "sec-deferred-store-flow",
+    "sec-narrowing-flow"
+  ],
+  "cases": [
+    {
+      "name": "pending test: if false",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(typeof u===\"number\"){}function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "pending test: if true",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(typeof u===\"string\"){}function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "pending test: negated",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(!(typeof u===\"number\")){}function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "pending test: parenthesized",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(((typeof u)===\"number\")){}function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "pending test: is",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(u is number){}function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "pending test: while",
+      "source": "function outer(u:string|number,flag:boolean){u=f();while(typeof u===\"number\"){}function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "pending test: do while",
+      "source": "function outer(u:string|number,flag:boolean){u=f();do{}while(typeof u===\"number\");function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "pending test: for",
+      "source": "function outer(u:string|number,flag:boolean){u=f();for(;typeof u===\"number\";){}function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "pending test: and",
+      "source": "function outer(u:string|number,flag:boolean){u=f();(typeof u===\"number\")&&0;function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "pending test: or",
+      "source": "function outer(u:string|number,flag:boolean){u=f();(typeof u===\"string\")||0;function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "pending test: conditional",
+      "source": "function outer(u:string|number,flag:boolean){u=f();const answer=(typeof u===\"number\")?0:1;function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "pending test: labelled",
+      "source": "function outer(u:string|number,flag:boolean){u=f();label: {if(typeof u===\"number\")break label;}function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "pending test: try",
+      "source": "function outer(u:string|number,flag:boolean){u=f();try{if(typeof u===\"number\"){} }finally{}function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "pending test: finally",
+      "source": "function outer(u:string|number,flag:boolean){u=f();try{}finally{if(typeof u===\"number\"){} }function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "pending test: return conditional",
+      "source": "function outer(u:string|number,flag:boolean){u=f();return typeof u===\"number\" ? \"a\" : \"b\";function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "pending test: logical composition",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(flag && typeof u===\"number\"){}function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "old test ignores later destination write",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(typeof u===\"number\"){}u=1;function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "old test ignores later captured call",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(typeof u===\"number\"){}change();function change(){u=1;}function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "old test ignores later source write",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(typeof u===\"number\"){}function f(){return t;}let v:string|number=\"s\";const t=v;v=1;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "same-spelled inner source keeps its own scope",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(typeof u===\"number\"){}function f(){return t;}{let v:number=1;const t=v;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "fresh stored Number supplies its own domain",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(typeof u===\"string\"){}function f(){return t;}let v:string|number=1;const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "fresh null supplies its own domain",
+      "source": "function outer(u:string|null){u=f();if(typeof u===\"string\"){}function f(){return t;}let v:null=null;const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "nullish result consumer",
+      "source": "function outer(u:string|undefined,fallback:string){u=f();if(u??fallback){}function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "fresh source alias chain 1",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(typeof u===\"number\"){}function f(){return t;}let v:string|number=\"s\";const a0=v;const a1=a0;const t=a1;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "fresh source alias chain 16",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(typeof u===\"number\"){}function f(){return t;}let v:string|number=\"s\";const a0=v;const a1=a0;const a2=a1;const a3=a2;const a4=a3;const a5=a4;const a6=a5;const a7=a6;const a8=a7;const a9=a8;const a10=a9;const a11=a10;const a12=a11;const a13=a12;const a14=a13;const a15=a14;const a16=a15;const t=a16;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "inferred mutable fresh source",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(typeof u===\"number\"){}function f(){return t;}let v:string|number=\"s\";let a:=v;const t=a;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "typed fresh source contract",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(typeof u===\"number\"){}function f(){return t;}let v:string=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "value query remains a value query",
+      "source": "function outer(u:string|number,flag:boolean){u=f();const answer=typeof u===\"number\";function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "open String truthiness remains possible",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(u){}function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "later write does not make earlier open truthiness constant",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(u){}u=0;function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "write before test replaces pending fact",
+      "source": "function outer(u:string|number,flag:boolean){u=f();u=flag?\"s\":1;if(typeof u===\"number\"){}function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "captured call before test invalidates pending fact",
+      "source": "function outer(u:string|number,flag:boolean){u=f();change();function change(){u=1;}if(typeof u===\"number\"){}function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "constructor before test invalidates pending fact",
+      "source": "function outer(u:string|number,flag:boolean){u=f();class C{constructor(){u=1;}}new C();if(typeof u===\"number\"){}function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "fresh union source retains both alternatives",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(typeof u===\"number\"){}function f(){return t;}let v:string|number=flag?\"s\":1;const t=v;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "fresh dynamic source supplies no invented domain",
+      "source": "function outer(u:string|number,flag:boolean,value){u=f();if(typeof u===\"number\"){}function f(){return t;}let v:string|number=value;const t=v;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "callee does not inherit the caller value",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(typeof u===\"number\"){}function f(){return t;}let v:string|number=\"s\";function change(){v=1;}change();const t=v;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "same-spelled parameter remains independent",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(typeof u===\"number\"){}function f(){return t;}function other(v:number){v=1;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "compatible deferred truthiness executes",
+      "source": "function outer(u:string|number):string{u=f(false);if(u){}function f(flag:boolean){return flag?t:\"s\";}let v:string|number=\"s\";const t=v;return u;}outer(\"start\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "deferred value query executes",
+      "source": "function outer(u:string|number):string{u=f(false);const answer=typeof u===\"number\";function f(flag:boolean){return flag?t:\"s\";}let v:string|number=\"s\";const t=v;return String(answer);}outer(\"start\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "compatible program retains runtime TDZ",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(u){}function f(){return t;}let v:string|number=\"s\";const t=v;}outer(\"start\",false);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "legacy automatic retains compatibility",
+      "source": "function outer(u){u=f();if(typeof u===\"number\"){}function f(){return t;}const t=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "legacy disabled retains compatibility",
+      "source": "function outer(u){u=f();if(typeof u===\"number\"){}function f(){return t;}const t=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "disabled"
+    },
+    {
+      "name": "legacy forced ordinary storage stays dynamic",
+      "source": "function outer(u){u=f();if(typeof u===\"number\"){}function f(){return t;}const t=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "nested function is not executed during completion",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(u){}function never(){throw \"not executed\";}function f(){return t;}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "independent declaration error is retained",
+      "source": "function outer(u:string|number,flag:boolean){u=f();if(u){}function f(){return t;}let v:string|number=\"s\";const t=v;const wrong:number=\"bad\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "test snapshot preserves parameter shadowing",
+      "source": "function outer(u:string|number){u=f();if(typeof u===\"number\"){}function f(){return t;}function other(u:number){if(u){}}let v:string|number=\"s\";const t=v;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "unreachable stores do not join a returned arm",
+      "source": "function f(flag:boolean,u:string|number){u=\"s\";if(flag){return;u=1;}if(typeof u===\"number\") {}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "unreachable stores do not replace a labelled break",
+      "source": "function f(u:string|number){u=\"s\";label:{break label;u=1;}if(typeof u===\"number\") {}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "unreachable fresh capture remains compatible",
+      "source": "function f(){return;let v:string|number=\"s\";const t=v;const q:string=t;}f();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "successive unreachable segments preserve source contracts",
+      "source": "function f(){return;let v:string|number=\"s\";const a=v;return;const t=a;const q:string=t;}f();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    }
+  ]
+}
