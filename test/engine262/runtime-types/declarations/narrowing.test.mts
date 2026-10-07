@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, expectThrown, runFlagOff } from '../harness.mts';
+import { evaluated, expectThrown, expectStaticTypeError, runFlagOff } from '../harness.mts';
 
 /**
  * Extension coverage - the narrowing framework.
@@ -41,9 +41,13 @@ test('narrowing: a nullish test on a value that can never be nullish is a type e
 
 // -- A test that genuinely narrows is accepted ---------------------------------
 test('narrowing: a test that can both succeed and fail is accepted', () => {
-  // a union has members on each side of the question
-  expect(evaluated('let a: uint8 | string = "x"; let r = "no"; if (a instanceof uint8) { r = "num"; } else { r = "str"; } r;')).toBe('str');
-  expect(evaluated('let d: uint8 | null = null; String(d ?? 5);')).toBe('5');
+  // Parameters retain both alternatives; a known initializer narrows a local.
+  expect(evaluated('function f(a: uint8 | string) { if (a instanceof uint8) { return "num"; } else { return "str"; } } f("x");')).toBe('str');
+  expect(evaluated('function f(a: uint8 | string) { if (a instanceof uint8) { return "num"; } else { return "str"; } } f(1 := uint8);')).toBe('num');
+  expectStaticTypeError('let a: uint8 | string = "x"; let r = "no"; if (a instanceof uint8) { r = "num"; } else { r = "str"; } r;');
+  expect(evaluated('function f(d: uint8 | null) { return d ?? 5; } String(f(null));')).toBe('5');
+  expect(evaluated('function f(d: uint8 | null) { return d ?? 5; } String(f(1 := uint8));')).toBe('1');
+  expectStaticTypeError('let d: uint8 | null = null; String(d ?? 5);');
   // a type the checker does not know is `any`, which narrows to itself both ways
   // and so never reports
   expect(evaluated('let x = 5; let r = "no"; if (x instanceof uint8) { r = "yes"; } r;')).toBe('no');

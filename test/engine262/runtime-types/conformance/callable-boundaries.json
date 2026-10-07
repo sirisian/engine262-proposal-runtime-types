@@ -1,0 +1,626 @@
+{
+  "description": "Numeric expression provenance and object callable contributions",
+  "cases": [
+    {
+      "name": "fixed Number: let store",
+      "source": "let n:number=5;let x:uint8=n;",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "fixed Number: const store",
+      "source": "const n:number=5;let x:uint8=n;",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "fixed Number: alias",
+      "source": "let n:number=5;const a=n;let x:uint8=a;",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "fixed Number: assignment",
+      "source": "let n:number=5;let x:uint8=1;x=n;",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "fixed Number: call argument",
+      "source": "function take(x:uint8){}let n:number=5;take(n);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "fixed Number: return",
+      "source": "function f():uint8{let n:number=5;return n;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "fixed Number: readonly property",
+      "source": "let n:number=5;const o:{readonly x:uint8}={x:n};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "fixed Number: tuple element",
+      "source": "let n:number=5;const o:[uint8]=[n];",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "fixed Number: branch singleton",
+      "source": "function f(n:number){if(n===5){let x:uint8=n;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "fixed Number: union local",
+      "source": "let n:number|string=5;let x:uint8=n;",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "fixed Number: joined values",
+      "source": "function f(b:boolean){let n:number=5;if(b){n=6;}let x:uint8=n;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "fixed Number: conditional stored arm",
+      "source": "function f(b:boolean){let n:number=5;let x:uint8=b?n:6;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "fixed Number: generic literal type",
+      "source": "function f<T:uint8>(x:T){}let n:number=5;f(n);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "numeric control: fresh literal",
+      "source": "let x:uint8=5;String(x);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "5"
+      }
+    },
+    {
+      "name": "numeric control: unannotated constant",
+      "source": "const n=5;let x:uint8=n;String(x);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "5"
+      }
+    },
+    {
+      "name": "numeric control: constant alias",
+      "source": "const n=5;const a=n;let x:uint8=a;String(x);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "5"
+      }
+    },
+    {
+      "name": "numeric control: constant arithmetic",
+      "source": "const n=2+3;let x:uint8=n;String(x);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "5"
+      }
+    },
+    {
+      "name": "numeric control: fresh conditional",
+      "source": "function f(b:boolean):uint8{return b?5:6;}String(f(true));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "5"
+      }
+    },
+    {
+      "name": "numeric control: explicit conversion",
+      "source": "let n:number=5;let x:uint8=(n := uint8);String(x);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "5"
+      }
+    },
+    {
+      "name": "numeric control: Number store",
+      "source": "let n:number=5;let x:number=n;String(x);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "5"
+      }
+    },
+    {
+      "name": "numeric control: exact value query",
+      "source": "let n:number=5;String(n===5);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "numeric control: dynamic legacy",
+      "source": "let n=5;let x:uint8=n;String(x);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "5"
+      }
+    },
+    {
+      "name": "fixed Number keeps exact guard fact",
+      "source": "let n:number=5;if(n===5){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "object contract: ordinary method: string",
+      "source": "function outer(){const box={m(x:string){return x;}};const target:{readonly m:(x:string)=>string}=box;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "object contract: ordinary method: number",
+      "source": "function outer(){const box={m(x:string){return x;}};const target:{readonly m:(x:string)=>number}=box;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "object contract: async method: string",
+      "source": "function outer(){const box={async m(x:string){return x;}};const target:{readonly m:(x:string)=>Promise.<string>}=box;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "object contract: async method: number",
+      "source": "function outer(){const box={async m(x:string){return x;}};const target:{readonly m:(x:string)=>Promise.<number>}=box;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "object contract: generator method: string",
+      "source": "function outer(){const box={*m(x:string){yield x;}};const target:{readonly m:(x:string)=>Generator.<string,void,void>}=box;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "object contract: generator method: number",
+      "source": "function outer(){const box={*m(x:string){yield x;}};const target:{readonly m:(x:string)=>Generator.<number,void,void>}=box;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "object contract: async generator method: string",
+      "source": "function outer(){const box={async *m(x:string){yield x;}};const target:{readonly m:(x:string)=>AsyncGenerator.<string,void,void>}=box;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "object contract: async generator method: number",
+      "source": "function outer(){const box={async *m(x:string){yield x;}};const target:{readonly m:(x:string)=>AsyncGenerator.<number,void,void>}=box;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "object contract: shorthand function: string",
+      "source": "function outer(){function f(x:string){return x;}const box={f};const target:{readonly f:(x:string)=>string}=box;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "object contract: shorthand function: number",
+      "source": "function outer(){function f(x:string){return x;}const box={f};const target:{readonly f:(x:string)=>number}=box;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "object contract: forward shorthand: string",
+      "source": "function outer(){const box={f};function f(x:string){return x;}const target:{readonly f:(x:string)=>string}=box;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "object contract: forward shorthand: number",
+      "source": "function outer(){const box={f};function f(x:string){return x;}const target:{readonly f:(x:string)=>number}=box;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "object contract: shorthand alias: string",
+      "source": "function outer(){function f(x:string){return x;}const a=f;const box={f:a};const target:{readonly f:(x:string)=>string}=box;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "object contract: shorthand alias: number",
+      "source": "function outer(){function f(x:string){return x;}const a=f;const box={f:a};const target:{readonly f:(x:string)=>number}=box;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "object contract: nested shorthand: string",
+      "source": "function outer(){function f(x:string){return x;}const inner={f};const box={inner};const target:{readonly inner:{readonly f:(x:string)=>string}}=box;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "object contract: nested shorthand: number",
+      "source": "function outer(){function f(x:string){return x;}const inner={f};const box={inner};const target:{readonly inner:{readonly f:(x:string)=>number}}=box;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "object contract: captured method: string",
+      "source": "function outer(){let s:string=\"s\";const box={m(){return s;}};const target:{readonly m:()=>string}=box;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "object contract: captured method: number",
+      "source": "function outer(){let s:string=\"s\";const box={m(){return s;}};const target:{readonly m:()=>number}=box;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "object contract: explicit result method: string",
+      "source": "function outer(){const box={m():string{return \"s\";}};const target:{readonly m:()=>string}=box;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "object contract: explicit result method: number",
+      "source": "function outer(){const box={m():string{return \"s\";}};const target:{readonly m:()=>number}=box;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "returned shorthand: string",
+      "source": "interface I{m(a:number):{readonly f:(x:string)=>string};}class C implements I{m(a:number){function f(x:string){return x;}const box={f};return box;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "returned shorthand: number",
+      "source": "interface I{m(a:number):{readonly f:(x:string)=>number};}class C implements I{m(a:number){function f(x:string){return x;}const box={f};return box;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "ordinary method runtime",
+      "source": "const box={m(x:string){return x;}};const target:{readonly m:(x:string)=>string}=box;target.m(\"ok\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "shorthand runtime",
+      "source": "function f(x:string){return x;}const box={f};const target:{readonly f:(x:string)=>string}=box;target.f(\"ok\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "writable callable remains invariant",
+      "source": "function f(x:string){return x;}const box={f};const target:{f:(x:string)=>string|number}=box;",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "shorthand then replacement",
+      "source": "function f(x:string){return x;}const box={f,f:1};const target:{readonly f:number}=box;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "replacement then shorthand",
+      "source": "function f(x:string){return x;}const box={f:1,f};const target:{readonly f:(x:string)=>string}=box;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "unanchored method remains dynamic",
+      "source": "const box={m(){return 1;}};function unused(){const target:{readonly m:()=>string}=box;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "legacy ordinary object",
+      "source": "const box={m(x){return x;}};box.m(\"ok\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "legacy disabled object",
+      "source": "const box={m(x){return x;}};box.m(\"ok\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      },
+      "checking": "disabled"
+    }
+  ]
+}

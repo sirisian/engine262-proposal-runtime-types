@@ -68,7 +68,7 @@ export const literalFitsNumericType = (sourceRaw: TypeRecord, targetRaw: TypeRec
   // all rather than left unchecked to keep the peace.
   const source = sourceRaw.Kind === 'shared' ? sourceRaw.Target as TypeRecord : sourceRaw;
   const target = targetRaw.Kind === 'shared' ? targetRaw.Target as TypeRecord : targetRaw;
-  if (source.Kind === 'literal' && target.Kind === 'primitive'
+  if (source.Kind === 'literal' && !source.FixedNumericDomain && target.Kind === 'primitive'
       && ['uint', 'int', 'float16', 'float32', 'float64', 'float128', 'bigint', 'rational'].includes(target.Name)
       && source.Value instanceof NumberValue
       && fitsNumericType(R(source.Value) as number, target.Name, target.Arguments)) {

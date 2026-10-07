@@ -586,7 +586,9 @@ export type TypeRecord =
     readonly Arity?: number,
   }
   | { readonly Kind: 'primitive', readonly Name: string, readonly Arguments: readonly (TypeRecord | number)[] }
-  | { readonly Kind: 'literal', readonly Value: Value, readonly Base: TypeRecord, readonly SourceText?: string }
+  | { readonly Kind: 'literal', readonly Value: Value, readonly Base: TypeRecord, readonly SourceText?: string,
+      /** Expression provenance only: a known stored Number is not an adaptable literal. */
+      readonly FixedNumericDomain?: true }
   // proposal-runtime-types (table-metadata-values): a pattern, carried as its
   // source and flags so that one pattern written in two modules is one type. A
   // RegExp object is materialized only where a hook receives the metadata.

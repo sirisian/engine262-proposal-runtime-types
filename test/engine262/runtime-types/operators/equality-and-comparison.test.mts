@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
+import { expectStaticTypeError } from '../harness.mts';
 
 // Spec: #sec-equality-and-comparison (Equality and Comparison).
 //
@@ -34,8 +35,10 @@ test('a typed number is never strictly equal to a plain Number', () => {
 });
 
 test('typed numbers of different types are not strictly equal', () => {
-  expect(evaluated('(5 := uint8) === (5 := uint16) ? "eq" : "neq";')).toBe('neq');
-  expect(evaluated('(5 := uint8) === (5 := int8) ? "eq" : "neq";')).toBe('neq');
+  expectStaticTypeError('(5 := uint8) === (5 := uint16) ? "eq" : "neq";');
+  expect(evaluated('String((5 := uint8) === (5 := uint16));')).toBe('false');
+  expectStaticTypeError('(5 := uint8) === (5 := int8) ? "eq" : "neq";');
+  expect(evaluated('String((5 := uint8) === (5 := int8));')).toBe('false');
 });
 
 test('typed numbers of the same type and payload are strictly equal', () => {

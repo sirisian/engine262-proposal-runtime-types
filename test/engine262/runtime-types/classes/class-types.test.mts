@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
+import { expectStaticTypeError } from '../harness.mts';
 
 /**
  * Spec: #sec-typed-classes (Typed Classes) - a class name in a type position.
@@ -68,7 +69,8 @@ test('class types work as annotations and are enforced', () => {
 
 test('class types compose with is and unions', () => {
   expect(evaluated('class A {} class B {} type U = A | B; [new A() is U, new B() is U, {} is U].join();')).toBe('true,true,false');
-  expect(evaluated('class A {} (new A() is A) === true && ({} is A) === false ? "ok" : "no";')).toBe('ok');
+  expectStaticTypeError('class A {} (new A() is A) === true && ({} is A) === false ? "ok" : "no";');
+  expect(evaluated('class A {} [(new A() is A) === true, ({} is A) === false].join();')).toBe('true,true');
 });
 
 test('class expressions bind class types too', () => {

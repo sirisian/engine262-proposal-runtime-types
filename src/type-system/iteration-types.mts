@@ -10,7 +10,7 @@
 
 import type { TypeRecord } from './records.mts';
 import {
-  anyType, makePrimitive, parameter, iterationArguments,
+  anyType, makePrimitive, parameter, iterationArguments, libraryTypeRecord,
 } from './records.mts';
 import { wellKnownSymbols, Value, surroundingAgent } from '#self';
 
@@ -288,9 +288,9 @@ export function iterationInterfaceRecord(name: string, args: readonly (TypeRecor
 }
 
 function promiseOf(t: TypeRecord): TypeRecord {
-  return {
-    Kind: 'nominal', Declaration: undefined, Arguments: [t, anyType], LibraryName: 'Promise',
-  } as unknown as TypeRecord;
+  // Preserve the library declaration identity when this protocol contribution
+  // becomes a published runtime return contract.
+  return libraryTypeRecord('Promise', [t, anyType])!;
 }
 
 // REMAINDER — one symptom left.

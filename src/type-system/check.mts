@@ -3425,9 +3425,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (inferenceDepth === 0 && frames[i] === varFrames[varFrames.length - 1] && uninitializedVars.get(frames[i])?.has(name)) {
         return undefinedType;
       }
+      const prepared = preparedBindings.get(frames[i])?.get(name);
+      if (prepared) finishReadyBindingContract(prepared);
       const t = frames[i].bindings.get(name);
       if (t) {
-        const prepared = preparedBindings.get(frames[i])?.get(name);
         if (prepared && (!prepared.contribution || inferenceDepth === 0
           || !inferenceBindingAnchors.get(frames[i])?.has(name))) observeBindingInput(prepared);
         return t;
@@ -17157,9 +17158,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return true;
   };
 
+  // #sec-numeric-value-provenance: exact flow facts preserve their numeric
+  // domain. Only literal syntax and the specified constant propagation adapt.
+  const fixedNumericDomain = (type: Known, seen = new Map<TypeRecord, TypeRecord>()): Known => {
+    if (!type) return type;
+    const prior = seen.get(type);
+    if (prior) return prior;
+    let result = type;
+    if (type.Kind === 'literal' && type.Value instanceof NumberValue && !type.FixedNumericDomain) {
+      result = { ...type, FixedNumericDomain: true };
+    } else if (type.Kind === 'union') {
+      seen.set(type, type);
+      const Members = type.Members.map((member) => fixedNumericDomain(member, seen)!);
+      if (Members.some((member, index) => member !== type.Members[index])) result = { ...type, Members };
+    }
+    seen.set(type, result);
+    return result;
+  };
   const staticType = (node: ParseNode): Known => withPatternScope(node, () => {
     const type = withPartialStructure(inferStaticType(node));
-    return node.type === 'CallExpression' ? callValueType(type) : type;
+    const value = node.type === 'CallExpression' ? callValueType(type) : type;
+    if (value?.Kind !== 'literal' && value?.Kind !== 'union') return value;
+    return isNumericConstantExpression(node) ? value : fixedNumericDomain(value);
   });
 
   const resolvedLibraryArguments = (name: string, written: readonly ParseNode.Type[]): readonly TypeRecord[] | null => {
@@ -20759,16 +20779,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             if (expected) signature.Return = expected.Return;
           }
-          Properties.push({ key: methodKey, type: { Kind: 'function', Signatures: [signature] }, optional: false, readonly: false });
+          // #sec-constructor-overloading: a typed method set exposes every
+          // applicable signature; an entirely untyped duplicate keeps the last.
+          const previous = Properties.findIndex((property) => property.key === methodKey);
+          const previousType = previous === -1 ? null : Properties[previous].type;
+          const priorSignatures = previousType?.Kind === 'function' ? previousType.Signatures : [];
+          const Signatures = signature.Untyped && priorSignatures.every((entry) => (entry as SignatureRecord & { Untyped?: boolean }).Untyped)
+            ? [signature] : [...priorSignatures, signature];
+          if (previous !== -1) Properties.splice(previous, 1);
+          Properties.push({ key: methodKey, type: { Kind: 'function', Signatures }, optional: false, readonly: false });
         } finally {
           if (scope) typeParameterScopes.pop();
         }
         continue;
       }
-      if (!member || member.type !== 'PropertyDefinition') {
+      if (!member || member.type !== 'PropertyDefinition' && member.type !== 'IdentifierReference') {
         return null;
       }
-      const prop = member as unknown as {
+      // #sec-object-callable-contributions: shorthand carries the same value
+      // contract as an explicitly named property, without invoking that value.
+      const prop = (member.type === 'IdentifierReference'
+        ? { PropertyName: { type: 'PropertyName', name: member.name }, AssignmentExpression: member }
+        : member) as unknown as {
         PropertyName?: { name?: string, value?: string, type?: string } | null,
         AssignmentExpression?: ParseNode | null,
         TypeAnnotation?: ParseNode.TypeAnnotation | null,
@@ -20983,6 +21015,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // question: a single or intersection target reaches
       // `checkObjectLiteralAgainst`, which compares members individually and
       // never asks whether the whole literal is the SAME TYPE.
+      // A later data definition replaces the earlier descriptor, including a
+      // shorthand definition. Retaining both would invent two required values.
+      for (let prior = Properties.length - 1; prior >= 0; prior -= 1) {
+        if (Properties[prior].key === key) Properties.splice(prior, 1);
+      }
       Properties.push({ key, type: adapted, optional: false, readonly: false });
     }
     return { Kind: 'object', Properties, IndexSignatures: [] } as unknown as Known;
@@ -25705,6 +25742,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const preparedBindingType = (frame: Frame, name: string): Known => {
     const binding = preparedBindings.get(frame)?.get(name);
     if (!binding) return null;
+    finishReadyBindingContract(binding);
     if (binding.completed || binding.type) {
       observeBindingInput(binding);
       return binding.type ?? null;
@@ -25838,7 +25876,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!binding.completed) pendingBindingContracts.add(binding);
     invalidateBindingConsumers(binding);
   };
+  let bindingContractRevision = 0;
   const invalidateBindingConsumers = (binding: PreparedBinding): void => {
+    bindingContractRevision += 1;
     // Both published and private results may have used the unavailable input.
     // Every active caller records transitive inputs, so invalidation reaches
     // wrappers as well as the function that directly captured this binding.
@@ -25990,7 +26030,37 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     requireBindingType(inferred);
   };
 
-  const finishBindingContracts = (): void => {
+  let finishingBindingContracts = false;
+  let finishedBindingContractRevision = -1;
+  const completedBindingErrors: ObjectValue[] = [];
+  const finishReadyBindingContract = (binding: PreparedBinding): void => {
+    if (inferenceDepth !== 0 || finishingBindingContracts || bindingReady(binding)
+      || !pendingBindingContracts.has(binding) || !binding.context || binding.flowIncomplete
+      || incompleteFlows.has(binding.context.flow)
+      || finishedBindingContractRevision === bindingContractRevision) return;
+    // A completed dependency must be visible to the next consumer. Recompute
+    // the contract at its initializer's saved source state, not at this read.
+    finishBindingContracts(false);
+  };
+  const finishBindingContracts = (final = true): void => {
+    if (finishingBindingContracts) return;
+    finishingBindingContracts = true;
+    const mark = errors.length;
+    try {
+      finishBindingContractsWork();
+    } finally {
+      // A read can occur inside a speculative query that discards diagnostics.
+      // Keep completed declaration errors for the final validation boundary.
+      completedBindingErrors.push(...errors.splice(mark));
+      finishedBindingContractRevision = bindingContractRevision;
+      finishingBindingContracts = false;
+    }
+    if (final) {
+      errors.push(...completedBindingErrors);
+      for (const binding of pendingBindingContracts) errors.push(...binding.deferredErrors ?? []);
+    }
+  };
+  const finishBindingContractsWork = (): void => {
     const waiting = new Map<PreparedBinding, Set<PreparedBinding>>();
     const queue: PreparedBinding[] = [];
     const queued = new Set<PreparedBinding>();
@@ -26055,10 +26125,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       invalidateBindingConsumers(binding);
       for (const consumer of waiting.get(binding) ?? []) schedule(consumer);
     }
-    // Keep the existing := validation where a cyclic or unfinished flow input
-    // prevented this contract query from completing. Deferral alone cannot
-    // discharge a declaration's request for a static type.
-    for (const binding of pendingBindingContracts) errors.push(...binding.deferredErrors ?? []);
   };
 
   /** Compute a dependency in its declaration environment, not its caller's. */
@@ -28130,6 +28196,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           || (p.type === 'MethodDefinition' && !p.UniqueFormalParameters && !p.PropertySetParameterList
             && !!publishedReturnTypes.get(p))
           || (p.type === 'MethodDefinition' && (p.PropertySetParameterList ?? []).some((parameter) => !!(parameter as { TypeAnnotation?: unknown }).TypeAnnotation))
+          || ((p.type === 'MethodDefinition' || p.type === 'AsyncMethod' || p.type === 'GeneratorMethod' || p.type === 'AsyncGeneratorMethod')
+            && ((p.UniqueFormalParameters ?? []).some((parameter) => !!parameter.TypeAnnotation)
+              || !!publishedReturnTypes.get(p)))
           || (p.type === 'PropertyDefinition' && constInitializerParticipates(p.AssignmentExpression))
           || (p.type === 'IdentifierReference' && constInitializerParticipates(p)));
       case 'ArrayLiteral':
