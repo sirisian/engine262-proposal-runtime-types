@@ -290,8 +290,12 @@ test('the OVERLOADED globals are left alone', () => {
   // `table-numeric-library-signatures` gives them literal results per family. A
   // fixed `boolean` would displace an overload - the mistake made once with
   // `Math.*` and again with the `Number` predicates.
-  expect(ok('let n: string = isNaN(1);')).toBe(true);
-  expect(ok('let n: string = isFinite(1);')).toBe(true);
+  expectStaticTypeError('let n: string = isNaN(1);');
+  expect(ok('let n: boolean = isNaN(1);')).toBe(true);
+  expect(ok('const x: uint8 = 1; let n: false = isNaN(x);')).toBe(true);
+  expectStaticTypeError('let n: string = isFinite(1);');
+  expect(ok('let n: boolean = isFinite(1);')).toBe(true);
+  expect(ok('const x: uint8 = 1; let n: true = isFinite(x);')).toBe(true);
   // `eval` has no type to claim, and is not given one.
   expect(ok('let n: uint8 = eval("1");')).toBe(true);
 });

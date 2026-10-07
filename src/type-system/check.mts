@@ -23933,7 +23933,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const walkTest = (test: ParseNode, deciding = true, truthiness = deciding, visit = true): TestFlow => {
     const incomplete = flowNeedsReplay;
     const defer = visit && inferenceDepth === 0 && deferredTestDepth === 0 && !incomplete
-      && flowWrites(test).size === 0 && !containsCall(test) && !containsPropertyRead(test)
+      && flowWrites(test).size === 0 && !containsPropertyRead(test)
       && !containsDeferredTestBoundary(test);
     const context = defer ? captureInitializerContext() : undefined;
     const mark = errors.length;
@@ -26087,10 +26087,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   });
   const inInitializerContext = (context: InitializerContext, action: () => void): void => {
     const outer = captureInitializerContext();
+    // A dependency query can temporarily leave an active parameter frame out
+    // of frames. Preserve that suspended activity as well as visible snapshots.
+    const outerParameters = new Set(activeParameterFrames);
     const live = flowLive;
-    const apply = (state: InitializerContext): void => {
+    const apply = (state: InitializerContext, parameters: Iterable<Frame> = state.parameters.keys()): void => {
       activeParameterFrames.clear();
-      for (const frame of state.parameters.keys()) activeParameterFrames.add(frame);
+      for (const frame of parameters) activeParameterFrames.add(frame);
       thisTypeFrames.splice(0, thisTypeFrames.length, ...state.thisTypes);
       classContext.splice(0, classContext.length, ...state.classes);
       returnTypes.splice(0, returnTypes.length, ...state.returns);
@@ -26126,7 +26129,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         restoreFlow(displaced);
         for (const restore of parameters) restore();
-        apply(outer);
+        apply(outer, outerParameters);
         flowLive = live;
         typeRevision += 1;
       }
@@ -32117,8 +32120,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     });
   };
 
-  const checkInvocation = (expression: ParseNode, construct: boolean): void => {
-    const fact = invocationFact(expression);
+  const checkInvocation = (expression: ParseNode, construct: boolean, site = expression, fact = invocationFact(expression)): void => {
     if (fact?.typed && !(construct ? fact.constructible : fact.callable)) {
       // The class-constructor wording is TRUE ONLY OF A CLASS - a target that is
       // constructible and not callable. It was chosen on `!callable` alone, so
@@ -32135,7 +32137,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         : fact.constructible
           ? 'a typed class constructor cannot be invoked without new'
           : 'this value is not callable';
-      reportType(construct ? 'rt-proposal-construction' : fact.constructible ? 'rt-declared-call' : 'rt-not-callable', expression, message);
+      reportType(construct ? 'rt-proposal-construction' : fact.constructible ? 'rt-declared-call' : 'rt-not-callable', site, message);
     }
   };
 
@@ -32207,6 +32209,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     let view = node.MemberExpression.type === 'OptionalExpression'
       ? optionalChainView(node.MemberExpression, visit, shortCircuitExits, tested, origins)
       : { expression: node.MemberExpression as ParseNode, shortCircuits: false, origin: remember(node.MemberExpression) };
+    // The selected value keeps its invocation identity through the nullish
+    // split, even when that split cannot establish a complete Static Type.
+    let invocation = visit ? invocationFact(view.expression) : null;
     const base = staticType(view.expression);
     if (node.MemberExpression.type !== 'OptionalExpression') {
       if (visit) walk(node.MemberExpression);
@@ -32236,7 +32241,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const callee = callableForm(receiver);
             checkCallable(callee, chain);
             checkCallReceiver(view.expression, callee);
-            checkInvocation(view.expression, false);
+            checkInvocation(view.expression, false, node, invocation);
             checkCallArguments(call, callee, node);
             checkArgumentSpreads(chain.Arguments);
           }
@@ -32269,6 +32274,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         view.expression = unreachable ? typedExpressionView(member, neverType) : member;
         view.origin = origin;
       }
+      invocation = visit ? invocationFact(view.expression) : null;
     };
     append(node.OptionalChain);
     if (active && !skipped) {

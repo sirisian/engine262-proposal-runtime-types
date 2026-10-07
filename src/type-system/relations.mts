@@ -2217,7 +2217,17 @@ function IsSignatureSubtypeCore(sgIn: SignatureRecord, tgIn: SignatureRecord, as
       }
       return !sg.Return || returnRequiredOfNothing(tg.Return) || IsSubtype(sg.Return, tg.Return!, assumptions);
     }
-    const positionsOk = tg.Parameters.every((tp, j) => {
+    // Equal parameter contracts admit the same argument sequences, including a
+    // rest before a fixed tail. Parameter indices are not argument positions
+    // once a rest can consume more than one item. This proof does not bypass
+    // receiver, narrowing, omission, reference or result compatibility.
+    const identicalParameters = sg.Parameters.length === tg.Parameters.length
+      && sg.Parameters.every((sp, i) => {
+        const tp = tg.Parameters[i];
+        return sp.Rest === tp.Rest && !!sp.Ref === !!tp.Ref && sp.Optional === tp.Optional
+          && hasDefault(sp) === hasDefault(tp) && SameTypeWithAssumptions(sp.Type, tp.Type, assumptions);
+      });
+    const positionsOk = identicalParameters || tg.Parameters.every((tp, j) => {
       // A source with several rests may receive a position at more than one
       // parameter, and EACH of them must accept what the target supplies there.
       const candidates: ParameterRecord[] = [];

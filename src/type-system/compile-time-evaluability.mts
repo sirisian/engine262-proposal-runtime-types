@@ -172,7 +172,8 @@ function hoistedVarIn(root: unknown, name: string): AnyNode | undefined {
  * *undefined* where no enclosing scope declares it.
  */
 export function ResolveBindingDeclaration(reference: ParseNode, name: string): BindingDeclaration | undefined {
-  for (let at = (reference as { parent?: ParseNode }).parent as AnyNode | undefined; at; at = at.parent as AnyNode | undefined) {
+  let child: ParseNode = reference;
+  for (let at = (reference as { parent?: ParseNode }).parent as AnyNode | undefined; at; child = at, at = at.parent as AnyNode | undefined) {
     for (const key of Object.keys(at)) {
       if (skipKey(key)) continue;
       const value = at[key];
@@ -193,8 +194,10 @@ export function ResolveBindingDeclaration(reference: ParseNode, name: string): B
         || at.type === 'AsyncGeneratorExpression') && (at.BindingIdentifier as { name?: string } | null)?.name === name) {
         return { kind: 'function', node: at };
       }
-      const body = at.FunctionBody ?? at.ConciseBody ?? at.GeneratorBody ?? at.AsyncFunctionBody ?? at.AsyncGeneratorBody;
-      const hoisted = hoistedVarIn(body, name);
+      // Body var declarations are not in the environment of a parameter
+      // initializer, including a closure created by that initializer.
+      const body = at.FunctionBody ?? at.ConciseBody ?? at.GeneratorBody ?? at.AsyncBody ?? at.AsyncGeneratorBody ?? at.AsyncConciseBody;
+      const hoisted = child === body ? hoistedVarIn(body, name) : undefined;
       if (hoisted) return { kind: 'var', node: hoisted };
     }
     if (at.type === 'Catch' && isNode(at.CatchParameter) && boundNamesOf(at.CatchParameter).includes(name)) {

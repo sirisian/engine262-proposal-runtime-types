@@ -1,21 +1,10 @@
 import { expect, test } from 'vitest';
-import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
+import { evaluated, expectStaticTypeError, ok } from '../harness.mts';
 
-/**
- * #sec-declared-narrowing: a
- * signature may carry [[Narrows]], and "a binding declared of a constructed
- * guard type narrows at every call through it". The engine built the field,
- * reflected it and checked its variance, and consumed it nowhere - the built-in
- * `v is T` drove the same machinery, which is what hid the gap.
- *
- * Written against whole SCRIPTS rather than the probe harness: the harness
- * wraps a program in a block, and a type declaration nested in one is not
- * pre-evaluated, so the alias never resolves there.
- */
-function realm(): ManagedRealm {
-  setSurroundingAgent(new Agent({ features: ['runtime-types'] }));
-  return new ManagedRealm();
-}
+// #sec-declared-narrowing: use open parameter domains so the guard supplies
+// the fact under test. A known initializer already narrows its stored value.
+const scoped = (setup: string, body: string, parameters = 'box: uint8 | string') =>
+  `${setup} function check(${parameters}) { ${body} }`;
 
 const GUARD = 'function makeGuard() { return Reflect.makeType({ kind: "function", signatures: [{ '
   + 'parameters: [{ name: "v", type: type any }], return: { type: type boolean }, '
@@ -23,41 +12,34 @@ const GUARD = 'function makeGuard() { return Reflect.makeType({ kind: "function"
   + 'type Guard = makeGuard(); '
   + 'const isU8: Guard = (v) => typeof v === "number"; ';
 
-function run(src: string) {
-  const r = realm();
-  return r.evaluateScriptSkipDebugger(src) as { Type?: string };
-}
-
 test('a declared guard narrows the argument it names', () => {
-  expect(run(`${GUARD} let box: uint8 | string = (5 := uint8); if (isU8(box)) { let n: uint8 = box; }`).Type).toBe('normal');
+  expect(ok(scoped(GUARD, 'if (isU8(box)) { let n: uint8 = box; }'))).toBe(true);
   // And it narrows only under the guard: the same binding outside it is not.
-  expect(run(`${GUARD} let box: uint8 | string = (5 := uint8); let n: uint8 = box;`).Type).toBe('throw');
+  expectStaticTypeError(scoped(GUARD, 'let n: uint8 = box;'));
 });
 
 test('the narrowing follows the sense of the test', () => {
   // `!guard(x)` narrows in the OTHER branch.
-  expect(run(`${GUARD} let box: uint8 | string = (5 := uint8); if (!isU8(box)) { } else { let n: uint8 = box; }`).Type).toBe('normal');
-  expect(run(`${GUARD} let box: uint8 | string = (5 := uint8); if (!isU8(box)) { let n: uint8 = box; }`).Type).toBe('throw');
+  expect(ok(scoped(GUARD, 'if (!isU8(box)) { } else { let n: uint8 = box; }'))).toBe(true);
+  expectStaticTypeError(scoped(GUARD, 'if (!isU8(box)) { let n: uint8 = box; }'));
 });
 
 test('what the guard does not name is not narrowed', () => {
   // A call whose argument is not a name has nothing to narrow, and must not
   // crash the pass.
-  expect(run(`${GUARD} let o = {}; o.v = 1; if (isU8(o.v)) { } globalThis.ok = 1;`).Type).toBe('normal');
+  expect(ok(scoped(GUARD, 'let o = {}; o.v = 1; if (isU8(o.v)) { } globalThis.ok = 1;'))).toBe(true);
   // A second binding is untouched by a guard on the first.
-  expect(run(`${GUARD} let a: uint8 | string = (5 := uint8); let b: uint8 | string = (5 := uint8); `
-    + 'if (isU8(a)) { let n: uint8 = b; }').Type).toBe('throw');
+  expectStaticTypeError(scoped(GUARD, 'if (isU8(a)) { let n: uint8 = b; }', 'a: uint8 | string, b: uint8 | string'));
 });
 
 test('the deferral does not swallow ordinary errors', () => {
   // The first walk defers only where the callee has NO static type - a call it
   // may yet learn to narrow. An ORDINARY guard, whose type is known and carries
   // no [[Narrows]], is judged as it always was.
-  expect(run('function plain(v) { return true; } '
-    + 'let box: uint8 | string = (5 := uint8); if (plain(box)) { let n: uint8 = box; }').Type).toBe('throw');
+  expectStaticTypeError(scoped('function plain(v) { return true; }', 'if (plain(box)) { let n: uint8 = box; }'));
   // And a mistake unrelated to narrowing, inside a DEFERRED branch, is still
   // caught - by the later walk, which is what the deferral hands it to.
-  expect(run(`${GUARD} let box: uint8 | string = (5 := uint8); if (isU8(box)) { let s: string = (5 := uint8); }`).Type).toBe('throw');
+  expectStaticTypeError(scoped(GUARD, 'if (isU8(box)) { let s: string = (5 := uint8); }'));
 });
 
 test('a guard narrows only the argument its [[Target]] names', () => {
@@ -67,10 +49,8 @@ test('a guard narrows only the argument its [[Target]] names', () => {
     + 'parameters: [{ name: "a", type: type any }, { name: "b", type: type any }], '
     + 'return: { type: type boolean }, narrows: [{ target: "b", type: type uint8 }] }] }); } '
     + 'type G2 = makeGuard2(); const pair: G2 = (a, b) => true; ';
-  expect(run(`${two} let x: uint8 | string = (5 := uint8); let y: uint8 | string = (5 := uint8); `
-    + 'if (pair(x, y)) { let n: uint8 = y; }').Type).toBe('normal');
-  expect(run(`${two} let x: uint8 | string = (5 := uint8); let y: uint8 | string = (5 := uint8); `
-    + 'if (pair(x, y)) { let n: uint8 = x; }').Type).toBe('throw');
+  expect(ok(scoped(two, 'if (pair(x, y)) { let n: uint8 = y; }', 'x: uint8 | string, y: uint8 | string'))).toBe(true);
+  expectStaticTypeError(scoped(two, 'if (pair(x, y)) { let n: uint8 = x; }', 'x: uint8 | string, y: uint8 | string'));
 });
 
 const ASSERT = 'function makeAssert() { return Reflect.makeType({ kind: "function", signatures: [{ '
@@ -83,19 +63,18 @@ test('a void assertion narrows the positions it dominates', () => {
   // TEST and narrows a branch; the ~void~ one is an ASSERTION and narrows
   // "every position the call dominates", which for a straight-line block is the
   // statements after it.
-  expect(run(`${ASSERT} { let box: uint8 | string = (5 := uint8); assertU8(box); let n: uint8 = box; }`).Type).toBe('normal');
+  expect(ok(scoped(ASSERT, '{ assertU8(box); let n: uint8 = box; }'))).toBe(true);
   // Before the call it dominates nothing, so it narrows nothing.
-  expect(run(`${ASSERT} { let box: uint8 | string = (5 := uint8); let n: uint8 = box; assertU8(box); }`).Type).toBe('throw');
+  expectStaticTypeError(scoped(ASSERT, '{ let n: uint8 = box; assertU8(box); }'));
 });
 
 test('an assertion narrows only what it names, and only when it asserts', () => {
   // A second binding is untouched.
-  expect(run(`${ASSERT} { let a: uint8 | string = (5 := uint8); let b: uint8 | string = (5 := uint8); `
-    + 'assertU8(a); let n: uint8 = b; }').Type).toBe('throw');
+  expectStaticTypeError(scoped(ASSERT, '{ assertU8(a); let n: uint8 = b; }', 'a: uint8 | string, b: uint8 | string'));
   // A `boolean` guard CALLED AS A STATEMENT asserts nothing - its answer was
   // discarded - so it must not narrow. This is the case that separates the two
   // forms, and reading the signature's return is what separates them.
-  expect(run(`${GUARD} { let box: uint8 | string = (5 := uint8); isU8(box); let n: uint8 = box; }`).Type).toBe('throw');
+  expectStaticTypeError(scoped(GUARD, '{ isU8(box); let n: uint8 = box; }'));
 });
 
 test('the assertion deferral does not swallow errors after an ordinary call', () => {
@@ -104,10 +83,10 @@ test('the assertion deferral does not swallow errors after an ordinary call', ()
   // whose callee is untyped for reasons that have nothing to do with
   // narrowing, must keep reporting what follows it: suppressing after one hid
   // real rejections in the span suite, which is how this restriction was found.
-  expect(run('let a: [4].<uint32> = [1, 2, 3, 4]; let b = {}; b.v = 1; '
-    + 'a.slice(); let s: string = (5 := uint8);').Type).toBe('throw');
+  expectStaticTypeError('let a: [4].<uint32> = [1, 2, 3, 4]; let b = {}; b.v = 1; '
+    + 'a.slice(); let s: string = (5 := uint8);');
   // And a call through a name whose type IS known keeps reporting too.
-  expect(run('function plain(v) { return 1; } plain(1); let s: string = (5 := uint8);').Type).toBe('throw');
+  expectStaticTypeError('function plain(v) { return 1; } plain(1); let s: string = (5 := uint8);');
 });
 
 test('a narrowing predicate is the SOURCE SPELLING of [[Narrows]]', () => {
@@ -117,21 +96,21 @@ test('a narrowing predicate is the SOURCE SPELLING of [[Narrows]]', () => {
   // the feature's own stated use - a guard a program can write - was unreachable.
   const G = 'function isU8(v: uint8 | string): v is uint8 { return typeof v === "number"; } ';
   // The call narrows in the branch it guards, and the else branch the other way.
-  expect(run(`${G} let x: uint8 | string = (4 := uint8); if (isU8(x)) { let n: uint8 = x; }`).Type).toBe('normal');
-  expect(run(`${G} let x: uint8 | string = "s"; if (isU8(x)) { } else { let t: string = x; }`).Type).toBe('normal');
+  expect(ok(scoped(G, 'if (isU8(x)) { let n: uint8 = x; }', 'x: uint8 | string'))).toBe(true);
+  expect(ok(scoped(G, 'if (isU8(x)) { } else { let t: string = x; }', 'x: uint8 | string'))).toBe(true);
   // Outside the guard it narrows nothing.
-  expect(run(`${G} let x: uint8 | string = (4 := uint8); let n: uint8 = x;`).Type).toBe('throw');
+  expectStaticTypeError(scoped(G, 'let n: uint8 = x;', 'x: uint8 | string'));
   // The signature's own return is `boolean` - the predicate says what a true
   // answer PROVES, not what the function returns - so the body returning a
   // boolean is correct and the value reaches the caller.
-  expect(run(`${G} let b: boolean = isU8(3 := uint8);`).Type).toBe('normal');
+  expect(evaluated(`${G} String(isU8(3 := uint8));`)).toBe('true');
   // The named target must be a parameter of this signature: a claim about
   // anything else is one no caller could act on.
-  expect(run('function bad(v: uint8): q is uint8 { return true; }').Type).toBe('throw');
+  expectStaticTypeError('function bad(v: uint8): q is uint8 { return true; }');
   // An ordinary boolean predicate still narrows nothing, which is what makes the
   // declaration the thing that carries the claim.
-  expect(run('function p(v: uint8 | string): boolean { return true; } '
-    + 'let x: uint8 | string = "s"; if (p(x)) { let n: uint8 = x; }').Type).toBe('throw');
+  expectStaticTypeError(scoped('function p(v: uint8 | string): boolean { return true; }',
+    'if (p(box)) { let n: uint8 = box; }'));
   // A type that happens to be named like an identifier still parses as a type.
-  expect(run('type pet = uint8; function g(): pet { return (1 := uint8); }').Type).toBe('normal');
+  expect(ok('type pet = uint8; function g(): pet { return (1 := uint8); }')).toBe(true);
 });

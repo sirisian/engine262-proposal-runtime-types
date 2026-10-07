@@ -253,8 +253,11 @@ test('destructuring transparency keeps the same guards', () => {
   // A destructured `let` that the function assigns publishes nothing, for the
   // reason a plain one does: the published type is enforced at the return.
   expectNotInferred('const o: { p: string } = { p: "s" }; let { p } = o; p = 5; return p;');
-  // A source whose type is unknown yields nothing to read.
-  expectNotInferred('function legacy() { return { p: "s" }; } const { p } = legacy(); return p;');
+  // A local legacy helper contributes its provisional result inside a
+  // participating function. Destructuring preserves that contribution.
+  expectInferred('function legacy() { return { p: "s" }; } const { p } = legacy(); return p;');
+  // A source whose type is genuinely unknown still yields nothing to read.
+  expectNotInferred('function legacy(v) { return v; } const { p } = legacy({ p: "s" }); return p;');
   // A DEFAULTED element is left alone: its type is the union of
   // the position's and the default's, and guessing at one of them would state
   // something the program does not.

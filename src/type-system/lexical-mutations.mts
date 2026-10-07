@@ -17,7 +17,7 @@ const isNode = (value: unknown): value is Node => !!value && typeof value === 'o
   && typeof (value as { type?: unknown }).type === 'string';
 const skip = new Set(['parent', 'location', 'sourceText', 'strict']);
 const parameters = ['FormalParameters', 'ArrowParameters', 'UniqueFormalParameters', 'PropertySetParameterList'];
-const bodies = ['FunctionBody', 'ConciseBody', 'AsyncConciseBody', 'GeneratorBody', 'AsyncFunctionBody', 'AsyncGeneratorBody'];
+const bodies = ['FunctionBody', 'ConciseBody', 'AsyncConciseBody', 'GeneratorBody', 'AsyncBody', 'AsyncGeneratorBody'];
 const functions = new Set(['FunctionDeclaration', 'GeneratorDeclaration', 'AsyncFunctionDeclaration', 'AsyncGeneratorDeclaration']);
 const expressions = new Set(['FunctionExpression', 'GeneratorExpression', 'AsyncFunctionExpression', 'AsyncGeneratorExpression']);
 const declarations = new Set(['ClassDeclaration', 'TypeAliasDeclaration', 'InterfaceDeclaration', 'EnumDeclaration', 'MetaDeclaration']);

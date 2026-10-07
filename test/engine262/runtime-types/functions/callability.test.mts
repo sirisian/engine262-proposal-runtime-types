@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectThrown, ok, expectThrownKind, expectStaticTypeError } from '../harness.mts';
+import { evaluated, expectThrown, ok, expectThrownKind, expectStaticTypeError, expectEarlyError } from '../harness.mts';
 
 /**
  * Spec: #sec-type-errors. A determinable type violation is an Early Error, so
@@ -130,7 +130,7 @@ test('a UNION is not callable when no member is', () => {
   expectThrown(dead('let u: uint8 | int32 = uint8(1); let q = u();'), 'is not callable');
   expectThrown(dead('let u: uint8 | string = uint8(1); let q = u();'), 'is not callable');
   // Narrowing reaches the member, and the member is judged.
-  expectThrown(dead('let u: uint8 | string = uint8(1); if (u is uint8) { let q = u(); }'),
+  expectThrown(dead('function check(u: uint8 | string) { if (u is uint8) { let q = u(); } }'),
     'is not callable');
 
   // A call checks each known callable alternative; a non-callable arm requires
@@ -188,19 +188,19 @@ test('every call syntax reaches the rule', () => {
   expectThrown(dead(`${N}let q = n |> %();`), 'is not callable');
   expectThrown(dead(`${N}let q = n\`x\`;`), 'is not callable');
   // A nullable base, so the optional call is live and the callee is judged.
-  expectThrown(dead('let n: uint8 | null = uint8(1); let q = n?.();'), 'is not callable');
+  expectThrown(dead('function check(n: uint8 | null) { let q = n?.(); }'), 'is not callable');
   expectThrown(dead(`${N}let q = new n();`), 'is not a constructor');
 });
 
 test('an OPTIONAL call still tolerates absence, which is its point', () => {
   // The optional part is whether the BASE is nullish, not whether what it holds
   // can be called. A nullable callee is exactly what `?.` is for.
-  expect(ok(dead('let f: (() => uint8) | null = null; let q = f?.();'))).toBe(true);
-  expect(ok(dead('let f: (() => uint8) | undefined = undefined; let q = f?.();'))).toBe(true);
+  expect(ok(dead('function check(f: (() => uint8) | null) { let q = f?.(); }'))).toBe(true);
+  expect(ok(dead('function check(f: (() => uint8) | undefined) { let q = f?.(); }'))).toBe(true);
   // #sec-narrowing lists `?.` with `??`: on a base that can never be nullish
   // the optional branch is dead, so these are refused for that rather than
   // for callability.
-  expectThrown(dead('function f() { return 1; } let q = f?.();'), 'can never succeed');
+  expectEarlyError(dead('function f() { return 1; } let q = f?.();'), 'StaticTypeError', 'forced');
   expectThrown(dead('let n: uint8 = uint8(1); let q = n?.x;'), 'can never succeed');
   expectThrown(dead('let o: { m(): uint8 } = { m() { return uint8(1); } }; let q = o?.m();'), 'can never succeed');
   expectThrown(dead('let o: { m(): uint8 } = { m() { return uint8(1); } }; let q = o?.m?.();'), 'can never succeed');
