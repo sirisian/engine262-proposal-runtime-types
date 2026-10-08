@@ -1,0 +1,926 @@
+{
+  "cases": [
+    {
+      "name": "2 captured helpers consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let last:string|number=\"s\";const t1=last;function id(x:string|number){u0=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "2 captured helpers consumer number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:number=f0();function f0(){return t0;}function f1(){return t1;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let last:string|number=\"s\";const t1=last;function id(x:string|number){u0=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "2 captured helpers consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let last:string|number=\"s\";const t1=last;function id(x:string|number){u0=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "4 captured helpers consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "4 captured helpers consumer number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "4 captured helpers consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "12 captured helpers consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}function f8(){return t8;}function f9(){return t9;}function f10(){return t10;}function f11(){return t11;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let u3:string|number=f4();if(id(u3)){}const t3=u3;let u4:string|number=f5();if(id(u4)){}const t4=u4;let u5:string|number=f6();if(id(u5)){}const t5=u5;let u6:string|number=f7();if(id(u6)){}const t6=u6;let u7:string|number=f8();if(id(u7)){}const t7=u7;let u8:string|number=f9();if(id(u8)){}const t8=u8;let u9:string|number=f10();if(id(u9)){}const t9=u9;let u10:string|number=f11();if(id(u10)){}const t10=u10;let last:string|number=\"s\";const t11=last;function id(x:string|number){u0=1;u1=1;u2=1;u3=1;u4=1;u5=1;u6=1;u7=1;u8=1;u9=1;u10=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "12 captured helpers consumer number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}function f8(){return t8;}function f9(){return t9;}function f10(){return t10;}function f11(){return t11;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let u3:string|number=f4();if(id(u3)){}const t3=u3;let u4:string|number=f5();if(id(u4)){}const t4=u4;let u5:string|number=f6();if(id(u5)){}const t5=u5;let u6:string|number=f7();if(id(u6)){}const t6=u6;let u7:string|number=f8();if(id(u7)){}const t7=u7;let u8:string|number=f9();if(id(u8)){}const t8=u8;let u9:string|number=f10();if(id(u9)){}const t9=u9;let u10:string|number=f11();if(id(u10)){}const t10=u10;let last:string|number=\"s\";const t11=last;function id(x:string|number){u0=1;u1=1;u2=1;u3=1;u4=1;u5=1;u6=1;u7=1;u8=1;u9=1;u10=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "12 captured helpers consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}function f8(){return t8;}function f9(){return t9;}function f10(){return t10;}function f11(){return t11;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let u3:string|number=f4();if(id(u3)){}const t3=u3;let u4:string|number=f5();if(id(u4)){}const t4=u4;let u5:string|number=f6();if(id(u5)){}const t5=u5;let u6:string|number=f7();if(id(u6)){}const t6=u6;let u7:string|number=f8();if(id(u7)){}const t7=u7;let u8:string|number=f9();if(id(u8)){}const t8=u8;let u9:string|number=f10();if(id(u9)){}const t9=u9;let u10:string|number=f11();if(id(u10)){}const t10=u10;let last:string|number=\"s\";const t11=last;function id(x:string|number){u0=1;u1=1;u2=1;u3=1;u4=1;u5=1;u6=1;u7=1;u8=1;u9=1;u10=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "no initial guard consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "no initial guard consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "all match consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match all(subject){when _ if(f0()):0;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "all match consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match all(subject){when _ if(f0()):0;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "negated match consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){if(!match(subject){when _ if(f0()):flag;default:flag;}){}const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "negated match consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){if(!match(subject){when _ if(f0()):flag;default:flag;}){}const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "while initial guard consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){while(flag){match(subject){when _ if(f0()):0;default:1;};break;}const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "while initial guard consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){while(flag){match(subject){when _ if(f0()):0;default:1;};break;}const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "switch initial guard consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){switch(subject){case f0():break;default:break;}const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "switch initial guard consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){switch(subject){case f0():break;default:break;}const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "conditional initial guard consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){if(flag?f0():f0()){}const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "conditional initial guard consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){if(flag?f0():f0()){}const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "logical initial guard consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){if(flag&&f0()){}const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "logical initial guard consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){if(flag&&f0()){}const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "label initial guard consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){done:{match(subject){when _ if(f0()):0;default:1;};break done;}const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "label initial guard consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){done:{match(subject){when _ if(f0()):0;default:1;};break done;}const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "finally initial guard consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){try{match(subject){when _ if(f0()):0;default:1;};}finally{}const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "finally initial guard consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){try{match(subject){when _ if(f0()):0;default:1;};}finally{}const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "match after producers consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";match(subject){when _ if(f0()):0;default:1;};}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "match after producers consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";match(subject){when _ if(f0()):0;default:1;};}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "call statement consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();id(u0);const t0=u0;let u1:string|number=f2();id(u1);const t1=u1;let u2:string|number=f3();id(u2);const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "call statement consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();id(u0);const t0=u0;let u1:string|number=f2();id(u1);const t1=u1;let u2:string|number=f3();id(u2);const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "negated call consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(!id(u0)){}const t0=u0;let u1:string|number=f2();if(!id(u1)){}const t1=u1;let u2:string|number=f3();if(!id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "negated call consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(!id(u0)){}const t0=u0;let u1:string|number=f2();if(!id(u1)){}const t1=u1;let u2:string|number=f3();if(!id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "Boolean call consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(Boolean(id(u0))){}const t0=u0;let u1:string|number=f2();if(Boolean(id(u1))){}const t1=u1;let u2:string|number=f3();if(Boolean(id(u2))){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "Boolean call consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(Boolean(id(u0))){}const t0=u0;let u1:string|number=f2();if(Boolean(id(u1))){}const t1=u1;let u2:string|number=f3();if(Boolean(id(u2))){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "while call consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();while(id(u0)){break;}const t0=u0;let u1:string|number=f2();while(id(u1)){break;}const t1=u1;let u2:string|number=f3();while(id(u2)){break;}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "while call consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();while(id(u0)){break;}const t0=u0;let u1:string|number=f2();while(id(u1)){break;}const t1=u1;let u2:string|number=f3();while(id(u2)){break;}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "do while call consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();do{}while(id(u0));const t0=u0;let u1:string|number=f2();do{}while(id(u1));const t1=u1;let u2:string|number=f3();do{}while(id(u2));const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "do while call consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();do{}while(id(u0));const t0=u0;let u1:string|number=f2();do{}while(id(u1));const t1=u1;let u2:string|number=f3();do{}while(id(u2));const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "for call consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();for(;id(u0);){break;}const t0=u0;let u1:string|number=f2();for(;id(u1);){break;}const t1=u1;let u2:string|number=f3();for(;id(u2);){break;}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "for call consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();for(;id(u0);){break;}const t0=u0;let u1:string|number=f2();for(;id(u1);){break;}const t1=u1;let u2:string|number=f3();for(;id(u2);){break;}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "switch call consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();switch(id(u0)){default:break;}const t0=u0;let u1:string|number=f2();switch(id(u1)){default:break;}const t1=u1;let u2:string|number=f3();switch(id(u2)){default:break;}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "switch call consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();switch(id(u0)){default:break;}const t0=u0;let u1:string|number=f2();switch(id(u1)){default:break;}const t1=u1;let u2:string|number=f3();switch(id(u2)){default:break;}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "conditional call consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag?id(u0):id(u0)){}const t0=u0;let u1:string|number=f2();if(flag?id(u1):id(u1)){}const t1=u1;let u2:string|number=f3();if(flag?id(u2):id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "conditional call consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag?id(u0):id(u0)){}const t0=u0;let u1:string|number=f2();if(flag?id(u1):id(u1)){}const t1=u1;let u2:string|number=f3();if(flag?id(u2):id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "logical call consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "match call consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();match(subject){when _ if(id(u0)):0;default:1;};const t0=u0;let u1:string|number=f2();match(subject){when _ if(id(u1)):0;default:1;};const t1=u1;let u2:string|number=f3();match(subject){when _ if(id(u2)):0;default:1;};const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "match call consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();match(subject){when _ if(id(u0)):0;default:1;};const t0=u0;let u1:string|number=f2();match(subject){when _ if(id(u1)):0;default:1;};const t1=u1;let u2:string|number=f3();match(subject){when _ if(id(u2)):0;default:1;};const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "match all call consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();match all(subject){when _ if(id(u0)):0;};const t0=u0;let u1:string|number=f2();match all(subject){when _ if(id(u1)):0;};const t1=u1;let u2:string|number=f3();match all(subject){when _ if(id(u2)):0;};const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "match all call consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();match all(subject){when _ if(id(u0)):0;};const t0=u0;let u1:string|number=f2();match all(subject){when _ if(id(u1)):0;};const t1=u1;let u2:string|number=f3();match all(subject){when _ if(id(u2)):0;};const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "finally call consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();try{}finally{id(u0);}const t0=u0;let u1:string|number=f2();try{}finally{id(u1);}const t1=u1;let u2:string|number=f3();try{}finally{id(u2);}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "finally call consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();try{}finally{id(u0);}const t0=u0;let u1:string|number=f2();try{}finally{id(u1);}const t1=u1;let u2:string|number=f3();try{}finally{id(u2);}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "labelled call consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();done:{id(u0);break done;}const t0=u0;let u1:string|number=f2();done:{id(u1);break done;}const t1=u1;let u2:string|number=f3();done:{id(u2);break done;}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "labelled call consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();done:{id(u0);break done;}const t0=u0;let u1:string|number=f2();done:{id(u1);break done;}const t1=u1;let u2:string|number=f3();done:{id(u2);break done;}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "both branch calls consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag){id(u0);}else{id(u0);}const t0=u0;let u1:string|number=f2();if(flag){id(u1);}else{id(u1);}const t1=u1;let u2:string|number=f3();if(flag){id(u2);}else{id(u2);}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "both branch calls consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag){id(u0);}else{id(u0);}const t0=u0;let u1:string|number=f2();if(flag){id(u1);}else{id(u1);}const t1=u1;let u2:string|number=f3();if(flag){id(u2);}else{id(u2);}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "annotated helper consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "annotated helper consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "numeric final store consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=1;const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "numeric final store consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=1;const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "shadowed match binding consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when let seed if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "shadowed match binding consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when let seed if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "pure helper consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "pure helper consumer number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "pure helper consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "fresh store after call consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}u0=\"s\";const t0=u0;let u1:string|number=f2();if(id(u1)){}u1=\"s\";const t1=u1;let u2:string|number=f3();if(id(u2)){}u2=\"s\";const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "fresh store after call consumer number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}u0=\"s\";const t0=u0;let u1:string|number=f2();if(id(u1)){}u1=\"s\";const t1=u1;let u2:string|number=f3();if(id(u2)){}u2=\"s\";const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "runtime TDZ unchanged",
+      "source": "function f(){return value;}f();const value:string=\"s\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "legacy deciding check automatic",
+      "source": "let x=\"s\";if(typeof x===\"number\"){}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "legacy constant check automatic",
+      "source": "if(\"s\"){}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "legacy deciding check forced",
+      "source": "let x=\"s\";if(typeof x===\"number\"){}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "legacy constant check forced",
+      "source": "if(\"s\"){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_CONSTANT_CONDITION",
+          "phase": "static",
+          "checked": true
+        }
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "legacy deciding check disabled",
+      "source": "let x=\"s\";if(typeof x===\"number\"){}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "disabled"
+    },
+    {
+      "name": "legacy constant check disabled",
+      "source": "if(\"s\"){}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "disabled"
+    },
+    {
+      "name": "for of effect consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();for(const item of [1]){id(u0);}const t0=u0;let u1:string|number=f2();for(const item of [1]){id(u1);}const t1=u1;let u2:string|number=f3();for(const item of [1]){id(u2);}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "for in effect consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();for(const key in subject){id(u0);}const t0=u0;let u1:string|number=f2();for(const key in subject){id(u1);}const t1=u1;let u2:string|number=f3();for(const key in subject){id(u2);}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "catch effect consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();try{throw 0;}catch(e){id(u0);}const t0=u0;let u1:string|number=f2();try{throw 0;}catch(e){id(u1);}const t1=u1;let u2:string|number=f3();try{throw 0;}catch(e){id(u2);}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "catch effect consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();try{throw 0;}catch(e){id(u0);}const t0=u0;let u1:string|number=f2();try{throw 0;}catch(e){id(u1);}const t1=u1;let u2:string|number=f3();try{throw 0;}catch(e){id(u2);}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "nested block effect consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();{if(id(u0)){} }const t0=u0;let u1:string|number=f2();{if(id(u1)){} }const t1=u1;let u2:string|number=f3();{if(id(u2)){} }const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "nested block effect consumer string|number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();{if(id(u0)){} }const t0=u0;let u1:string|number=f2();{if(id(u1)){} }const t1=u1;let u2:string|number=f3();{if(id(u2)){} }const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "shadowed local store consumer string",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){let u0:string|number=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "shadowed local store consumer number",
+      "source": "function outer(flag:boolean,subject,kind:string){match(subject){when _ if(f0()):0;default:1;};const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){let u0:string|number=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "captured assignment observable",
+      "source": "let x:string|number=\"s\";function change(){x=1;}change();String(typeof x);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "number"
+      }
+    },
+    {
+      "name": "completed effect keeps both tests open",
+      "source": "function outer(flag:boolean){let x:string|number=\"s\";function change(){x=1;}change();if(typeof x===\"number\"){}if(typeof x===\"string\"){} }",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "fresh store restores deciding error",
+      "source": "function outer(){let x:string|number=\"s\";function change(){x=1;}change();x=\"s\";if(typeof x===\"number\"){} }",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    }
+  ]
+}

@@ -3645,7 +3645,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /** Drop any narrowing of a name, which an assignment to it invalidates. */
-  const invalidateNarrowing = (name: string) => {
+  const invalidateNarrowing = (name: string, completedEffect = false) => {
     typeRevision += 1;
     // A PREFIX SWEEP, not an exact match: a narrowing is keyed by place, so
     // assigning `b` unseats `b.a` and `b.a.c` with it. Assigning `b.a.c` leaves
@@ -3673,6 +3673,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       if (f.declaredNames.has(name)) {
         break;
+      }
+    }
+    if (completedEffect) {
+      // #sec-dependent-flow-completion: an applied effect can finish a
+      // widened domain without waiting for the value or test it invalidates.
+      // Keep that domain explicit on this edge; removing a fact alone would
+      // let a saved pre-effect domain stand in for it at the test boundary.
+      const owner = flowOwner(name);
+      const type = owner.bindings.get(name);
+      const portable = (candidate: TypeRecord): boolean => candidate.Kind === 'primitive'
+        && candidate.Name !== 'symbol' && candidate.Arguments.length === 0
+        || candidate.Kind === 'union' && candidate.Members.every(portable);
+      const binding = preparedBindings.get(owner)?.get(name);
+      if (!name.includes('.') && type && portable(type) && owner.declaredNames.has(name)
+        && !owner.unresolvedAnnotations.has(name) && !owner.bindingKinds.get(name)?.endsWith('-ref')
+        && !uninitializedVars.get(owner)?.has(name) && (!binding || bindingReady(binding))) {
+        declareNarrowed(name, type);
+        if (!independentFlowFacts.has(owner)) independentFlowFacts.set(owner, new Set());
+        independentFlowFacts.get(owner)!.add(name);
       }
     }
   };
@@ -23518,7 +23537,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return outgoing;
   };
   const invalidateCapturedReads = (): void => {
-    for (const name of capturedMutationNames()) invalidateNarrowing(name);
+    for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
     for (const origin of capturedPlaces) {
       if ([...assignedInsideFunction].some((name) => capturedMutationMayAffect(name, origin.owner)
         && (origin.name === name || origin.name.startsWith(`${name}.`)))) {
@@ -23831,7 +23850,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const previewFlowEffects = (node: ParseNode): void => {
     for (const name of flowWrites(node)) invalidateNarrowing(name);
     if (containsCall(node)) {
-      for (const name of capturedMutationNames()) invalidateNarrowing(name);
+      for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
       invalidateCapturedAliases();
     }
     if (node.type === 'MemberExpression' || node.type === 'SuperProperty') invalidateCapturedReads();
@@ -24190,6 +24209,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const mark = errors.length;
     if (context) deferredTestDepth += 1;
     let result: TestFlow;
+    // Input proofs remain available to operand reads through the active
+    // snapshot. Remove subjects from carried outputs before evaluating the
+    // test, so an unfinished relation cannot pass its old proof through.
+    // Effects and component transfers may establish fresh output proofs.
+    discardTestSubjects(test, independentFlowFacts);
     if (independent) independentTestInputs.push(independent);
     flowReadCollectors.push(reads);
     try {
@@ -24219,13 +24243,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           pendingTestEdgesOf.set(edge, new Set([...pendingTestEdgesOf.get(edge) ?? [], {}]));
         }
         if (independent) {
-          independentFactsOf.set(edge, independent);
-          independentDomainsOf.set(edge, new Map([...independent].map(([owner, names]) => [owner,
-            new Map([...names].flatMap((name) => {
-              const type = edge.get(owner)?.get(name) ?? domains?.get(owner)?.get(name);
-              return type ? [[name, type] as const] : [];
-            })),
-          ])));
+          // Entry subjects were removed before the walk. Preserve newly
+          // justified component outputs as well as surviving input proofs.
+          const outputs = new Map([...(independentFactsOf.get(edge) ?? [])]
+            .map(([owner, names]) => [owner, new Set(names)]));
+          const outputDomains = new Map([...(independentDomainsOf.get(edge) ?? [])]
+            .map(([owner, types]) => [owner, new Map(types)]));
+          for (const [owner, names] of independent) for (const name of names) {
+            const type = edge.get(owner)?.get(name) ?? domains?.get(owner)?.get(name);
+            if (!type) continue;
+            if (!outputs.has(owner)) outputs.set(owner, new Set());
+            if (!outputDomains.has(owner)) outputDomains.set(owner, new Map());
+            outputs.get(owner)!.add(name);
+            outputDomains.get(owner)!.set(name, type);
+          }
+          independentFactsOf.set(edge, outputs);
+          independentDomainsOf.set(edge, outputDomains);
         }
         // A structured test can already have proofs from its component
         // transfers. No outer input snapshot is needed to retain those
@@ -24635,9 +24668,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
       for (const origin of capturedPlaces) if (origin.name.includes('.')) invalidateNarrowing(origin.marker);
-      for (const name of capturedMutationNames()) invalidateNarrowing(name);
+      for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
     } else if (locationWriteTypes(target).some((type) => type.Kind === 'parameterized' || conversionHasEffect(type))) {
-      for (const name of capturedMutationNames()) invalidateNarrowing(name);
+      for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
     }
   };
 
@@ -27080,7 +27113,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         collectNode(n);
         if (n.type === 'AwaitExpression' || n.type === 'YieldExpression') {
-          for (const name of capturedMutationNames()) invalidateNarrowing(name);
+          for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
           invalidateCapturedAliases();
           invalidateCapturedReads();
         }
@@ -32591,12 +32624,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             checkArgumentSpreads(chain.Arguments);
           }
           walk(chain.Arguments);
-          for (const name of capturedMutationNames()) invalidateNarrowing(name);
+          for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
           invalidateCapturedAliases();
           applyAssertionNarrowing(call);
         } else if (tested) {
           chain.Arguments.forEach(previewFlowEffects);
-          for (const name of capturedMutationNames()) invalidateNarrowing(name);
+          for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
           invalidateCapturedAliases();
         }
         if (active && neverReturns) flowLive = false;
@@ -32615,7 +32648,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           walk(chain.Expression);
         } else if (tested && chain.Expression) previewFlowEffects(chain.Expression);
-        if (active) for (const name of capturedMutationNames()) invalidateNarrowing(name);
+        if (active) for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
         view.expression = unreachable ? typedExpressionView(member, neverType) : member;
         view.origin = origin;
       }
@@ -33867,7 +33900,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         neverAwaitResults.set(n, neverResumes);
         walk(operand);
         invalidateCapturedAliases();
-        for (const name of capturedMutationNames()) invalidateNarrowing(name);
+        for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
         if (neverResumes) flowLive = false;
         return;
       }
@@ -34421,7 +34454,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // entry cannot assume a particular explicit throw was the only source.
         restoreFlow(entry);
         for (const name of flowWrites(n.Block)) invalidateNarrowing(name);
-        if (containsCall(n.Block)) for (const name of capturedMutationNames()) invalidateNarrowing(name);
+        if (containsCall(n.Block)) for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
         const exceptional = captureFlow();
         const thrown = flowExits.filter((exit) => exit.kind === 'throw');
         if (handlers.some((clause) => !clause.TypeAnnotation)) flowExits = flowExits.filter((exit) => exit.kind !== 'throw');
@@ -34460,7 +34493,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!finalNormal) return undefined;
           restoreFlow(facts);
           for (const name of flowWrites(n.Finally)) invalidateNarrowing(name);
-          if (containsCall(n.Finally)) for (const name of capturedMutationNames()) invalidateNarrowing(name);
+          if (containsCall(n.Finally)) for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
           const result = captureFlow();
           for (const [owner, entries] of finalNormal) {
             if (!result.has(owner)) result.set(owner, new Map());
@@ -35251,7 +35284,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // time - the loop back-edge hole reached through a call instead of an
         // iteration. Exposed mapped arguments can also change parameter cells.
         for (const name of capturedMutationNames()) {
-          invalidateNarrowing(name);
+          invalidateNarrowing(name, true);
         }
         // With no context from the position: the diagnostics of the numeric
         // resolution (mixed families, a family with no row, an unfitting
@@ -35420,7 +35453,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         walk(c.CallExpression);
         walk(c.Arguments);
-        for (const name of capturedMutationNames()) invalidateNarrowing(name);
+        for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
         invalidateCapturedAliases();
         applyAssertionNarrowing(n);
         // A selected immediate `never` result supplies no normal value. The
@@ -35650,14 +35683,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'TaggedTemplateExpression': {
         const call = templateCallView(n);
         const neverReturns = establishedNeverCall(call);
-        for (const name of capturedMutationNames()) invalidateNarrowing(name);
+        for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
         checkInvocation(n.MemberExpression, false);
         const callee = callableForm(staticType(call.CallExpression));
         checkCallable(callee, (node as ParseNode));
         checkCallArguments(call, callee, call);
         walk(n.MemberExpression);
         walk(n.TemplateLiteral);
-        for (const name of capturedMutationNames()) invalidateNarrowing(name);
+        for (const name of capturedMutationNames()) invalidateNarrowing(name, true);
         invalidateCapturedAliases();
         applyAssertionNarrowing(call);
         if (neverReturns) flowLive = false;
