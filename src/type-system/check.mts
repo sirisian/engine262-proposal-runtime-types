@@ -24063,6 +24063,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     return proofs;
   };
+  const captureLoopEntry = (): FlowFacts => {
+    // Preserve completed domains on the zero-iteration predecessor before a
+    // body can introduce unfinished flow. Callers first apply loop widening
+    // and any initializer or iterable effects that precede this entry.
+    independentFlowFacts = independentTestFacts();
+    return captureFlow();
+  };
   const discardTestSubjects = (test: ParseNode, proofs: Map<Frame, Set<string>>): void => {
     const affected = new Map<Frame, Set<string>>();
     const include = (owner: Frame, name: string): boolean => {
@@ -24111,12 +24118,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  /** Evaluate each operand once, retaining separate facts for both answers. */
-  const walkTest = (test: ParseNode, deciding = true, truthiness = deciding, visit = true): TestFlow => {
-    const incomplete = flowNeedsReplay;
-    // A test can retain completed values while unrelated flow is unfinished.
-    // Calls apply their ordinary effects, revoking affected input proofs.
-    // An unfinished result cannot change a fact unrelated to its subjects.
+  const independentInputsFor = (test: ParseNode): Map<Frame, Set<string>> | undefined => {
     const independent = !containsPropertyRead(test) && !containsDeferredTestBoundary(test)
       ? independentTestFacts() : undefined;
     // A store elsewhere in the expression does not invalidate every input.
@@ -24126,6 +24128,58 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (name === written || name.startsWith(`${written}.`)) names.delete(name);
       }
     }
+    return independent;
+  };
+
+  const withIndependentFlowValue = <T,>(expression: ParseNode, action: () => T): { value: T, pending: boolean } => {
+    const independent = independentInputsFor(expression);
+    const reads = { incomplete: false };
+    let pending = false;
+    let value: T;
+    if (independent) independentTestInputs.push(independent);
+    flowReadCollectors.push(reads);
+    try {
+      value = withFlowInputs(action, () => {
+        pending = true;
+      });
+    } finally {
+      flowReadCollectors.pop();
+      if (independent) independentTestInputs.pop();
+    }
+    pending ||= reads.incomplete;
+    if (independent && flowNeedsReplay) {
+      if (pending) discardTestSubjects(expression, independent);
+      // Only the surviving source proofs are carried through an unfinished
+      // value evaluation. Its result and selected predecessors still wait.
+      for (const [owner, names] of independent) {
+        if (!independentFlowFacts.has(owner)) independentFlowFacts.set(owner, new Set());
+        for (const name of names) independentFlowFacts.get(owner)!.add(name);
+      }
+    }
+    return { value, pending };
+  };
+
+  const switchSelectionEdge = (facts: FlowFacts | undefined, pending: boolean): FlowFacts | undefined => {
+    if (!facts || !pending) return facts;
+    // Selected, failed and fallthrough edges have different provenance even
+    // when their current value facts happen to be identical.
+    const edge = new Map([...facts].map(([owner, entries]) => [owner, new Map(entries)]));
+    incompleteFlows.add(edge);
+    const independent = independentFactsOf.get(facts);
+    const domains = independentDomainsOf.get(facts);
+    if (independent) independentFactsOf.set(edge, independent);
+    if (domains) independentDomainsOf.set(edge, domains);
+    pendingTestEdgesOf.set(edge, new Set([...pendingTestEdgesOf.get(facts) ?? [], {}]));
+    return edge;
+  };
+
+  /** Evaluate each operand once, retaining separate facts for both answers. */
+  const walkTest = (test: ParseNode, deciding = true, truthiness = deciding, visit = true): TestFlow => {
+    const incomplete = flowNeedsReplay;
+    // A test can retain completed values while unrelated flow is unfinished.
+    // Calls apply their ordinary effects, revoking affected input proofs.
+    // An unfinished result cannot change a fact unrelated to its subjects.
+    const independent = independentInputsFor(test);
     const domains = independent && independentDomains(independent);
     const reads = { incomplete: false };
     let pending = false;
@@ -27081,17 +27135,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (n.type === 'SwitchStatement') {
           const expression = n.Expression;
           const booleanDiscriminant = booleanSingleton(singleValueOperandType(expression) ?? staticType(expression));
-          collect(expression);
-          const switchType = withFlowInputs(() => staticType(expression));
-          let savedBoolean = savedPredicateResult(expression);
-          const producer = optionalProducer(expression);
-          const optionalResult = producer ? withFlowInputs(() => visitOptionalProducer(producer, false)) : undefined;
-          if (optionalResult) resumeFlow(joinFlow([optionalResult.evaluated, optionalResult.skipped]));
-          else if (!savedBoolean && narrowableName(expression) === null && (booleanType(switchType)
-            || expression.type === 'CallExpression' && !!numericPredicateFact(expression, false))) {
-            savedBoolean = walkTest(expression, false, false, false);
-            resumeFlow(joinFlow([savedBoolean.whenTrue, savedBoolean.whenFalse]));
-          } else transferExpression(expression);
+          const evaluated = withIndependentFlowValue(expression, () => {
+            collect(expression);
+            const switchType = staticType(expression);
+            let savedBoolean = savedPredicateResult(expression);
+            const producer = optionalProducer(expression);
+            const optionalResult = producer ? visitOptionalProducer(producer, false) : undefined;
+            if (optionalResult) resumeFlow(joinFlow([optionalResult.evaluated, optionalResult.skipped]));
+            else if (!savedBoolean && narrowableName(expression) === null && (booleanType(switchType)
+              || expression.type === 'CallExpression' && !!numericPredicateFact(expression, false))) {
+              savedBoolean = walkTest(expression, false, false, false);
+              resumeFlow(joinFlow([savedBoolean.whenTrue, savedBoolean.whenFalse]));
+            } else transferExpression(expression);
+            return { savedBoolean, optionalResult };
+          });
+          const { optionalResult } = evaluated.value;
+          let { savedBoolean } = evaluated.value;
           const discriminant = expression.type === 'UnaryExpression' && expression.operator === 'typeof'
             ? expression.UnaryExpression : expression;
           const name = narrowableName(discriminant);
@@ -27112,22 +27171,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             for (const clause of clauses) {
               if (clause.type === 'DefaultClause') continue;
               resumeFlow(failed);
-              collect(clause.Expression);
               if (booleanDiscriminant !== undefined) {
+                collect(clause.Expression);
                 const reachable = flowLive;
                 const test = walkTest(clause.Expression, false, false, false);
-                entries.set(clause, reachable ? booleanDiscriminant ? test.whenTrue : test.whenFalse : undefined);
-                failed = reachable ? booleanDiscriminant ? test.whenFalse : test.whenTrue : undefined;
+                entries.set(clause, switchSelectionEdge(reachable ? booleanDiscriminant ? test.whenTrue : test.whenFalse : undefined, evaluated.pending));
+                failed = switchSelectionEdge(reachable ? booleanDiscriminant ? test.whenFalse : test.whenTrue : undefined, evaluated.pending);
                 continue;
               }
-              transferExpression(clause.Expression);
+              const label = withIndependentFlowValue(clause.Expression, () => {
+                collect(clause.Expression);
+                transferExpression(clause.Expression);
+              });
+              const pending = evaluated.pending || label.pending;
               const reachable = flowLive;
               if (savedBoolean) {
                 savedBoolean = effectOnTest(savedBoolean, () => previewFlowEffects(clause.Expression));
                 const selected = booleanSingleton(singleValueOperandType(clause.Expression) ?? staticType(clause.Expression));
                 if (selected !== undefined) {
-                  entries.set(clause, reachable ? selected ? savedBoolean.whenTrue : savedBoolean.whenFalse : undefined);
-                  failed = reachable ? selected ? savedBoolean.whenFalse : savedBoolean.whenTrue : undefined;
+                  entries.set(clause, switchSelectionEdge(reachable ? selected ? savedBoolean.whenTrue : savedBoolean.whenFalse : undefined, pending));
+                  failed = switchSelectionEdge(reachable ? selected ? savedBoolean.whenFalse : savedBoolean.whenTrue : undefined, pending);
                   if (selected) savedBoolean.whenTrue = undefined;
                   else savedBoolean.whenFalse = undefined;
                   continue;
@@ -27138,8 +27201,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 const selection = selectOptionalSwitchLabel(optionalResult,
                   singleValueOperandType(clause.Expression) ?? staticType(clause.Expression));
                 if (selection) {
-                  entries.set(clause, reachable ? selection.whenTrue : undefined);
-                  failed = reachable ? selection.whenFalse : undefined;
+                  entries.set(clause, switchSelectionEdge(reachable ? selection.whenTrue : undefined, pending));
+                  failed = switchSelectionEdge(reachable ? selection.whenFalse : undefined, pending);
                   continue;
                 }
               }
@@ -27147,11 +27210,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 || containsCall(clause.Expression) && capturedMutationMayAffect(name.split('.')[0]))) stable = false;
               const comparison = { type: 'EqualityExpression', operator: '===', EqualityExpression: expression,
                 RelationalExpression: clause.Expression } as ParseNode.EqualityExpression;
-              const fact = stable ? withFlowInputs(() => narrowingFactOf(comparison)) : undefined;
+              const selected = stable ? withIndependentFlowValue(comparison, () => narrowingFactOf(comparison)) : undefined;
+              const fact = selected?.value;
               const after = normalFlow();
-              entries.set(clause, after && fact ? factFlow(fact, true) : after);
+              entries.set(clause, switchSelectionEdge(after && fact ? factFlow(fact, true) : after, pending || !!selected?.pending));
               if (after) restoreFlow(after);
-              failed = after && fact ? factFlow(fact, false) : after;
+              failed = switchSelectionEdge(after && fact ? factFlow(fact, false) : after, pending || !!selected?.pending);
             }
             if (block.DefaultClause) entries.set(block.DefaultClause, failed);
             let fallthrough: FlowFacts | undefined;
@@ -27200,7 +27264,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (!n.LexicalDeclaration && !n.VariableDeclarationList) collect(n.Expression_a);
             }
             widenForLoop(n);
-            const entry = captureFlow();
+            const entry = captureLoopEntry();
             const condition = n.type === 'ForStatement' ? ForPatternPositions(n).test : n.Expression;
             let test: TestFlow | undefined;
             if (n.type !== 'DoWhileStatement' && condition) {
@@ -27225,7 +27289,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (n.type === 'ForInStatement' || n.type === 'ForOfStatement' || n.type === 'ForAwaitStatement') {
           flowBlock(() => {
             widenForLoop(n);
-            const entry = captureFlow();
             const binding = n.ForDeclaration?.ForBinding ?? n.ForBinding;
             const frame = n.ForDeclaration ? frames[frames.length - 1] : variableFrame;
             if (binding) recordBindingKinds(binding, n.ForDeclaration?.LetOrConst !== 'const',
@@ -27233,6 +27296,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (binding && (n.ForDeclaration || binding.TypeAnnotation)) declarePatternAnnotations(binding, frame);
             const source = n.type === 'ForInStatement' ? n.Expression : n.AssignmentExpression;
             collect(source);
+            const entry = captureLoopEntry();
             collect(n.LeftHandSideExpression);
             if (binding && n.ForDeclaration) {
               const sourceType = staticType(source);
@@ -33616,7 +33680,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         bindingType = { ...(bindingType as object) } as Known;
         literalDerivedNumbers.add(bindingType as object);
       }
-      const iterationEntry = captureFlow();
+      const iterationEntry = captureLoopEntry();
       const sourceName = source ? narrowableName(source) : null;
       const sourceOwner = sourceName === null ? undefined : flowOwner(sourceName);
       const sourcePresent = enumerating && source && sourceName !== null && enumerationSourceStable(source)
@@ -34670,16 +34734,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const booleanDiscriminant = booleanSingleton(singleValueOperandType(expression) ?? staticType(expression));
         const switchOrigin = capturePlace(expression);
         const switchOrigins = switchOrigin ? [switchOrigin] : [];
-        const switchType = withFlowInputs(() => staticType(expression));
-        let savedBoolean = savedPredicateResult(expression);
-        const producer = optionalProducer(expression);
-        const optionalResult = producer ? visitOptionalProducer(producer, true) : undefined;
-        if (optionalResult) resumeFlow(joinFlow([optionalResult.evaluated, optionalResult.skipped]));
-        else if (!savedBoolean && narrowableName(expression) === null && (booleanType(switchType)
-          || expression.type === 'CallExpression' && !!numericPredicateFact(expression, false))) {
-          savedBoolean = walkTest(expression, false, false);
-          resumeFlow(joinFlow([savedBoolean.whenTrue, savedBoolean.whenFalse]));
-        } else walk(expression);
+        const evaluated = withIndependentFlowValue(expression, () => {
+          const switchType = staticType(expression);
+          let savedBoolean = savedPredicateResult(expression);
+          const producer = optionalProducer(expression);
+          const optionalResult = producer ? visitOptionalProducer(producer, true) : undefined;
+          if (optionalResult) resumeFlow(joinFlow([optionalResult.evaluated, optionalResult.skipped]));
+          else if (!savedBoolean && narrowableName(expression) === null && (booleanType(switchType)
+            || expression.type === 'CallExpression' && !!numericPredicateFact(expression, false))) {
+            savedBoolean = walkTest(expression, false, false);
+            resumeFlow(joinFlow([savedBoolean.whenTrue, savedBoolean.whenFalse]));
+          } else walk(expression);
+          return { switchType, savedBoolean, producer, optionalResult };
+        });
+        const { switchType, producer, optionalResult } = evaluated.value;
+        let { savedBoolean } = evaluated.value;
         const discriminant = expression.type === 'UnaryExpression' && expression.operator === 'typeof'
           ? expression.UnaryExpression : expression;
         const name = narrowableName(discriminant);
@@ -34701,8 +34770,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             resumeFlow(failed);
             if (booleanDiscriminant !== undefined) {
               const test = walkTest(clause.Expression);
-              entries.set(clause, booleanDiscriminant ? test.whenTrue : test.whenFalse);
-              failed = booleanDiscriminant ? test.whenFalse : test.whenTrue;
+              entries.set(clause, switchSelectionEdge(booleanDiscriminant ? test.whenTrue : test.whenFalse, evaluated.pending));
+              failed = switchSelectionEdge(booleanDiscriminant ? test.whenFalse : test.whenTrue, evaluated.pending);
               continue;
             }
             const label = clause.Expression;
@@ -34718,14 +34787,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             const labelOrigin = capturePlace(label);
             if (labelOrigin) switchOrigins.push(labelOrigin);
-            const labelTypeBefore = withFlowInputs(() => staticType(label));
-            walk(label);
+            const labelValue = withIndependentFlowValue(label, () => {
+              const type = staticType(label);
+              walk(label);
+              return type;
+            });
+            const labelTypeBefore = labelValue.value;
+            const pending = evaluated.pending || labelValue.pending;
             if (savedBoolean) {
               savedBoolean = effectOnTest(savedBoolean, () => previewFlowEffects(label));
               const selected = booleanSingleton(singleValueOperandType(label) ?? staticType(label));
               if (selected !== undefined) {
-                entries.set(clause, selected ? savedBoolean.whenTrue : savedBoolean.whenFalse);
-                failed = selected ? savedBoolean.whenFalse : savedBoolean.whenTrue;
+                entries.set(clause, switchSelectionEdge(selected ? savedBoolean.whenTrue : savedBoolean.whenFalse, pending));
+                failed = switchSelectionEdge(selected ? savedBoolean.whenFalse : savedBoolean.whenTrue, pending);
                 if (selected) savedBoolean.whenTrue = undefined;
                 else savedBoolean.whenFalse = undefined;
                 continue;
@@ -34735,17 +34809,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               replayOptionalEffects(optionalResult, label);
               const selection = selectOptionalSwitchLabel(optionalResult, singleValueOperandType(label) ?? staticType(label));
               if (selection) {
-                entries.set(clause, selection.whenTrue);
-                failed = selection.whenFalse;
+                entries.set(clause, switchSelectionEdge(selection.whenTrue, pending));
+                failed = switchSelectionEdge(selection.whenFalse, pending);
                 continue;
               }
             }
             if (name !== null && (flowWrites(label).has(name.split('.')[0])
               || (containsCall(label) && capturedMutationMayAffect(name.split('.')[0])))) stable = false;
-            const after = captureFlow();
             const comparison = { type: 'EqualityExpression', operator: '===', EqualityExpression: expression,
               RelationalExpression: label } as ParseNode.EqualityExpression;
-            let fact = stable ? narrowingFactOf(comparison) : undefined;
+            const selectedFact = stable ? withIndependentFlowValue(comparison, () => narrowingFactOf(comparison)) : undefined;
+            let fact = selectedFact?.value;
             const range = unparenthesized(label);
             if (stable && name !== null && range.type === 'RangeExpression'
               && !(expression.type === 'UnaryExpression' && expression.operator === 'typeof')) {
@@ -34760,6 +34834,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const type = atom?.type ?? (label.type === 'IdentifierReference' ? classTypeOf(label.name) : null);
               if (type) fact = { name, type, subjectType, negated: false };
             }
+            const after = captureFlow();
             let selected: FlowFacts | undefined = fact ? factFlow(fact, true) : after;
             if (!fact && !producer) {
               const left = strictDomainMembers(switchType, '===');
@@ -34780,9 +34855,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               selected = released.whenTrue;
               restoreFlow(released.whenFalse);
             }
-            entries.set(clause, selected);
+            entries.set(clause, switchSelectionEdge(selected, pending || !!selectedFact?.pending));
             restoreFlow(after);
-            failed = fact ? factFlow(fact, false) : after;
+            failed = switchSelectionEdge(fact ? factFlow(fact, false) : after, pending || !!selectedFact?.pending);
             if (labelOrigin) failed?.get(labelOrigin.owner)?.delete(labelOrigin.marker);
           }
           if (block.DefaultClause) entries.set(block.DefaultClause, failed);
@@ -35666,7 +35741,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             walk(n.LexicalDeclaration ?? n.VariableDeclarationList ?? n.Expression_a);
           }
           widenForLoop(n);
-          const entry = captureFlow();
+          const entry = captureLoopEntry();
           let test: TestFlow | undefined;
           if (n.type !== 'DoWhileStatement' && condition) {
             staticType(condition);
