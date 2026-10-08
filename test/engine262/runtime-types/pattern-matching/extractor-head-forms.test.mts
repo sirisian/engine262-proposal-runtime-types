@@ -45,9 +45,16 @@ test('a qualified head is not yet written, and that is the open gap', () => {
 test('a type query in `is` position keeps its reading', () => {
   // What the qualified-head attempt broke. `Reflect.typeOf(s)` is a type, and
   // the pattern grammar reaches it through `TypePattern : Type`.
-  expect(evaluated('let s = "hi"; ("world" is Reflect.typeOf(s)) ? "yes" : "no";')).toBe('yes');
-  expect(evaluated('let s = "hi"; (42 is Reflect.typeOf(s)) ? "yes" : "no";')).toBe('no');
-  expect(evaluated('let x = (5 := uint8); ((6 := uint8) is Reflect.typeOf(x)) ? "yes" : "no";')).toBe('yes');
+  // Type-position builders need compile-time-evaluable inputs. Keep these
+  // as value queries so the test isolates the qualified type-pattern reading.
+  expect(evaluated('const s = "hi"; String("world" is Reflect.typeOf(s));')).toBe('true');
+  expect(evaluated('const s = "hi"; String(42 is Reflect.typeOf(s));')).toBe('false');
+  expect(evaluated('const x = (5 := uint8); String((6 := uint8) is Reflect.typeOf(x));')).toBe('true');
+});
+
+test('type-query patterns do not make mutable builder inputs compile-time evaluable', () => {
+  expectThrownKind('let s = "hi"; String("world" is Reflect.typeOf(s));', 'TypeError');
+  expectThrownKind('let x = (5 := uint8); String((6 := uint8) is Reflect.typeOf(x));', 'TypeError');
 });
 
 test('the plain name pattern takes both forms, as it always did', () => {

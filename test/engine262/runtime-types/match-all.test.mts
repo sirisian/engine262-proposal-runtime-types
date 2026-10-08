@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectThrown } from './harness.mts';
+import { evaluated, expectThrown, expectStaticTypeError } from './harness.mts';
 
 /**
  * `match all (subject) { ... }` - every arm that matched, rather than the first.
@@ -27,10 +27,11 @@ test('every matching arm contributes, in arm order', () => {
 });
 
 test('no arm matching is an answer, not a missing case', () => {
-  // The case exhaustiveness would refuse in a `match`. Here it is an empty list.
-  expect(evaluated('JSON.stringify(match all (99) { when 1: "a"; when 2: "b"; });')).toBe('[]');
-  // And the same clauses under `match` throw, since nothing covers the subject.
-  expectThrown('match (99) { when 1: "a"; when 2: "b"; };');
+  // Each pattern can match the open Number domain; this invocation matches none.
+  expect(evaluated('function collect(n: number) { return match all (n) { when 1: "a"; when 2: "b"; }; }'
+    + ' JSON.stringify(collect(99));')).toBe('[]');
+  // The same open domain needs exhaustive coverage under ordinary `match`.
+  expectStaticTypeError('function select(n: number) { return match (n) { when 1: "a"; when 2: "b"; }; }');
 });
 
 test('`when _` always contributes, alongside arms that also matched', () => {
@@ -47,7 +48,9 @@ test('`default` is refused, and the message names what to write instead', () => 
 });
 
 test('guards run per arm and a false guard skips only that arm', () => {
-  expect(evaluated('JSON.stringify(match all (7) { when _ if (7 > 5): "big"; when _ if (7 > 100): "huge"; when _: "any"; });'))
+  expect(evaluated('function collect(n: number) { return match all (n) {'
+    + ' when _ if (n > 5): "big"; when _ if (n > 100): "huge"; when _: "any"; }; }'
+    + ' JSON.stringify(collect(7));'))
     .toBe('["big","any"]');
 });
 
@@ -106,7 +109,14 @@ test('a LineTerminator before `all` forbids the form', () => {
 
 test('a plain `match` is unchanged', () => {
   expect(evaluated('String(match (7) { when 7: "seven"; });')).toBe('seven');
-  expect(evaluated('String(match (8) { when 7: "seven"; default: "other"; });')).toBe('other');
+  expect(evaluated('function select(n: number) { return match (n) { when 7: "seven"; default: "other"; }; }'
+    + ' String(select(8));')).toBe('other');
+});
+
+test('known-impossible clauses and constant guards remain early errors', () => {
+  expectStaticTypeError('match all (99) { when 1: "a"; when 2: "b"; };');
+  expectStaticTypeError('match all (7) { when _ if (7 > 5): "big"; when _ if (7 > 100): "huge"; when _: "any"; };');
+  expectStaticTypeError('match (8) { when 7: "seven"; default: "other"; };');
 });
 
 test('the forms nest in each other', () => {

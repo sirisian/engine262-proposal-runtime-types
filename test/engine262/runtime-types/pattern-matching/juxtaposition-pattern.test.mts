@@ -110,7 +110,7 @@ test('every form that already worked is unchanged', () => {
   expect(evaluated("type T = { a: uint8 }; let v: any = (1 := uint8); "
     + 'let r = match (v) { when T[\'a\']: "y"; default: "n"; }; r;')).toBe('y');
   expect(evaluated("type T = { a: uint8 }; let x: T['a'] = (1 := uint8); String(x);")).toBe('1');
-  expect(evaluated("let s = 'hi'; String('world' is Reflect.typeOf(s));")).toBe('true');
+  expect(evaluated("const s = 'hi'; String('world' is Reflect.typeOf(s));")).toBe('true');
 });
 
 test('the bracketed form is claimed only where no type could be written', () => {

@@ -24051,9 +24051,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       || type.Kind === 'primitive' && type.Name !== 'symbol' && type.Arguments.length === 0
       || type.Kind === 'literal' && portable(type.Base as TypeRecord)
       || type.Kind === 'union' && type.Members.every(portable);
-    for (const frame of frames) for (const name of new Set([...frame.bindings.keys(), ...frame.declaredNames])) {
+    for (const [index, frame] of frames.entries()) for (const name of new Set([...frame.bindings.keys(), ...frame.declaredNames])) {
       const type = frame.bindings.get(name);
-      if (name.includes('.') || type && (!portable(type) || deferredStoredTypes.has(type)) || flowOwner(name) !== frame
+      if (name.includes('.') || type && (!portable(type) || deferredStoredTypes.has(type)) || flowOwner(name, index) !== frame
         || frame.unresolvedAnnotations.has(name)
         || frame.bindingKinds.get(name)?.endsWith('-ref') || uninitializedVars.get(frame)?.has(name)) continue;
       const binding = preparedBindings.get(frame)?.get(name);
@@ -24063,10 +24063,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     return proofs;
   };
-  const captureLoopEntry = (): FlowFacts => {
-    // Preserve completed domains on the zero-iteration predecessor before a
-    // body can introduce unfinished flow. Callers first apply loop widening
-    // and any initializer or iterable effects that precede this entry.
+  const captureIndependentFlow = (): FlowFacts => {
+    // Preserve completed domains on an entry before a later transfer can
+    // introduce unfinished flow. Callers first apply any widening and
+    // expression effects that precede the captured source position.
     independentFlowFacts = independentTestFacts();
     return captureFlow();
   };
@@ -24226,10 +24226,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               return type ? [[name, type] as const] : [];
             })),
           ])));
-        } else {
-          independentFactsOf.delete(edge);
-          independentDomainsOf.delete(edge);
         }
+        // A structured test can already have proofs from its component
+        // transfers. No outer input snapshot is needed to retain those
+        // justified outputs; each component applies its own effects.
       }
     }
     return result;
@@ -24482,6 +24482,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       };
     }
     if (test.type === 'ConditionalExpression') {
+      // Both alternatives retain entry proofs when only one introduces an
+      // unfinished component, such as a guarded match.
+      captureIndependentFlow();
+      // Judge the whole value in its source environment, before visiting an
+      // arm leaves behind facts for just one of that arm's outcomes.
+      if (visit && deciding && truthiness) judgeTruthiness(test);
       const condition = walkTest(test.ShortCircuitExpression, visit, visit, visit);
       resumeFlow(condition.whenTrue);
       // #sec-void-type: an arm's value is judged where it is used, so the
@@ -24490,7 +24496,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const yes = walkTest(test.AssignmentExpression_a, deciding, false, visit);
       resumeFlow(condition.whenFalse);
       const no = walkTest(test.AssignmentExpression_b, deciding, false, visit);
-      if (visit && deciding && truthiness) judgeTruthiness(test);
       return { whenTrue: joinFlow([yes.whenTrue, no.whenTrue])!, whenFalse: joinFlow([yes.whenFalse, no.whenFalse])! };
     }
     const saved = savedPredicateResult(test);
@@ -25253,7 +25258,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       walk(me.Expression as ParseNode);
       const subjectType = staticType(me.Expression as ParseNode);
       let remaining = subjectType;
-      let matchEntry = captureFlow();
+      let matchEntry = captureIndependentFlow();
       const subjectName = narrowableName(me.Expression);
       const subjectOwner = subjectName === null ? null : flowOwner(subjectName);
       let subjectStable = true;
@@ -27264,7 +27269,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (!n.LexicalDeclaration && !n.VariableDeclarationList) collect(n.Expression_a);
             }
             widenForLoop(n);
-            const entry = captureLoopEntry();
+            const entry = captureIndependentFlow();
             const condition = n.type === 'ForStatement' ? ForPatternPositions(n).test : n.Expression;
             let test: TestFlow | undefined;
             if (n.type !== 'DoWhileStatement' && condition) {
@@ -27296,7 +27301,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (binding && (n.ForDeclaration || binding.TypeAnnotation)) declarePatternAnnotations(binding, frame);
             const source = n.type === 'ForInStatement' ? n.Expression : n.AssignmentExpression;
             collect(source);
-            const entry = captureLoopEntry();
+            const entry = captureIndependentFlow();
             collect(n.LeftHandSideExpression);
             if (binding && n.ForDeclaration) {
               const sourceType = staticType(source);
@@ -33680,7 +33685,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         bindingType = { ...(bindingType as object) } as Known;
         literalDerivedNumbers.add(bindingType as object);
       }
-      const iterationEntry = captureLoopEntry();
+      const iterationEntry = captureIndependentFlow();
       const sourceName = source ? narrowableName(source) : null;
       const sourceOwner = sourceName === null ? undefined : flowOwner(sourceName);
       const sourcePresent = enumerating && source && sourceName !== null && enumerationSourceStable(source)
@@ -35741,7 +35746,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             walk(n.LexicalDeclaration ?? n.VariableDeclarationList ?? n.Expression_a);
           }
           widenForLoop(n);
-          const entry = captureLoopEntry();
+          const entry = captureIndependentFlow();
           let test: TestFlow | undefined;
           if (n.type !== 'DoWhileStatement' && condition) {
             staticType(condition);

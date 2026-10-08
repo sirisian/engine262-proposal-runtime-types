@@ -35,7 +35,9 @@ test('unknown elements keep runtime admission without losing the array result', 
 });
 
 test('all has no exhaustiveness obligation and a dynamic result length', () => {
-  expect(evaluated('enum E { A, B } const e: E = E.B; JSON.stringify(match all (e) { when E.A: 1; });')).toBe('[]');
-  expectEarlyError('enum E { A, B } const e: E = E.B; match (e) { when E.A: 1; };', 'StaticTypeError');
+  expect(evaluated('enum E { A, B } function collect(e: E) { return match all (e) { when E.A: 1; }; }'
+    + ' JSON.stringify(collect(E.B));')).toBe('[]');
+  expectEarlyError('enum E { A, B } function select(e: E) { return match (e) { when E.A: 1; }; }', 'StaticTypeError');
+  expectEarlyError('enum E { A, B } const e: E = E.B; match all (e) { when E.A: 1; };', 'StaticTypeError');
   expectEarlyError('const xs: [2].<uint8> = match all (1) { when _: (1 := uint8); when _: (2 := uint8); };', 'StaticTypeError');
 });
