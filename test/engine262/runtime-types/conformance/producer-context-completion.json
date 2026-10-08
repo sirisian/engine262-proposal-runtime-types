@@ -1,0 +1,931 @@
+{
+  "cases": [
+    {
+      "name": "generic function expression consumer string",
+      "source": "const outer=function<T:type>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "generic function expression consumer string|number",
+      "source": "const outer=function<T:type>(flag:boolean){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";};",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "arrow in generic declaration consumer string",
+      "source": "function wrapper<T:type>(){const outer=(flag:boolean)=>{const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";};}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "arrow in generic declaration consumer string|number",
+      "source": "function wrapper<T:type>(){const outer=(flag:boolean)=>{const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";};}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic object method consumer string",
+      "source": "const object={outer<T:type>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "generic object method consumer string|number",
+      "source": "const object={outer<T:type>(flag:boolean){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}};",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic class method consumer string",
+      "source": "class C<T:type>{outer(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "generic class method consumer string|number",
+      "source": "class C<T:type>{outer(flag:boolean){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic named declaration consumer string",
+      "source": "function outer<T:type>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "generic named declaration consumer string|number",
+      "source": "function outer<T:type>(flag:boolean){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "runtime direct receiver string",
+      "source": "type Shape={value:string,read():string};const object:Shape={value:\"s\",read(){const captured=this.value;function produce(){return captured;}const value:string=produce();return value;}};String(object.read());",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "runtime arrow receiver string",
+      "source": "type Shape={value:string,read():string};const object:Shape={value:\"s\",read(){const f=()=>{const captured=this.value;function produce(){return captured;}const value:string=produce();return value;};return f();}};String(object.read());",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "runtime direct receiver number",
+      "source": "type Shape={value:number,read():number};const object:Shape={value:1,read(){const captured=this.value;function produce(){return captured;}const value:number=produce();return value;}};String(object.read());",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "runtime arrow receiver number",
+      "source": "type Shape={value:number,read():number};const object:Shape={value:1,read(){const f=()=>{const captured=this.value;function produce(){return captured;}const value:number=produce();return value;};return f();}};String(object.read());",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "generic class method 4 helpers string",
+      "source": "class C{outer<T:type>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "generic class method 4 helpers string|number",
+      "source": "class C{outer<T:type>(flag:boolean){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "static generic method 4 helpers string",
+      "source": "class C{static outer<T:type>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "static generic method 4 helpers string|number",
+      "source": "class C{static outer<T:type>(flag:boolean){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic async expression 4 helpers string",
+      "source": "const outer=async function<T:type>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "generic async expression 4 helpers string|number",
+      "source": "const outer=async function<T:type>(flag:boolean){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";};",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic generator 4 helpers string",
+      "source": "function* outer<T:type>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";yield 0;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "generic generator 4 helpers string|number",
+      "source": "function* outer<T:type>(flag:boolean){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";yield 0;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic async generator 4 helpers string",
+      "source": "async function* outer<T:type>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";yield 0;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "generic async generator 4 helpers string|number",
+      "source": "async function* outer<T:type>(flag:boolean){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";yield 0;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic class arrow 4 helpers string",
+      "source": "class C<T:type>{outer(flag:boolean){const inner=()=>{const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";};}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "generic class arrow 4 helpers string|number",
+      "source": "class C<T:type>{outer(flag:boolean){const inner=()=>{const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";};}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "nested shadowed type parameter 4 helpers string",
+      "source": "function container<T:type extends string>(){function outer<T:type extends number>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "nested shadowed type parameter 4 helpers string|number",
+      "source": "function container<T:type extends string>(){function outer<T:type extends number>(flag:boolean){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "default type parameter 4 helpers string",
+      "source": "function outer<T:type=string>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "default type parameter 4 helpers string|number",
+      "source": "function outer<T:type=string>(flag:boolean){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "named generic 8 helpers string",
+      "source": "function outer<T:type>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let u3:string|number=f4();if(flag&&id(u3)){}const t3=u3;let u4:string|number=f5();if(flag&&id(u4)){}const t4=u4;let u5:string|number=f6();if(flag&&id(u5)){}const t5=u5;let u6:string|number=f7();if(flag&&id(u6)){}const t6=u6;let last:string|number=\"s\";const t7=last;function id(x:string|number){u0=1;u1=1;u2=1;u3=1;u4=1;u5=1;u6=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "named generic 8 helpers string|number",
+      "source": "function outer<T:type>(flag:boolean){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let u3:string|number=f4();if(flag&&id(u3)){}const t3=u3;let u4:string|number=f5();if(flag&&id(u4)){}const t4=u4;let u5:string|number=f6();if(flag&&id(u5)){}const t5=u5;let u6:string|number=f7();if(flag&&id(u6)){}const t6=u6;let last:string|number=\"s\";const t7=last;function id(x:string|number){u0=1;u1=1;u2=1;u3=1;u4=1;u5=1;u6=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "named generic pure string",
+      "source": "function outer<T:type>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "named generic pure number",
+      "source": "function outer<T:type>(flag:boolean){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "named generic fresh store string",
+      "source": "function outer<T:type>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}u0=\"s\";const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}u1=\"s\";const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}u2=\"s\";const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "named generic fresh store number",
+      "source": "function outer<T:type>(flag:boolean){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}u0=\"s\";const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}u1=\"s\";const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}u2=\"s\";const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "generic expression 8 helpers string",
+      "source": "const outer=function<T:type>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let u3:string|number=f4();if(flag&&id(u3)){}const t3=u3;let u4:string|number=f5();if(flag&&id(u4)){}const t4=u4;let u5:string|number=f6();if(flag&&id(u5)){}const t5=u5;let u6:string|number=f7();if(flag&&id(u6)){}const t6=u6;let last:string|number=\"s\";const t7=last;function id(x:string|number){u0=1;u1=1;u2=1;u3=1;u4=1;u5=1;u6=1;return answer;}const answer=seed;let seed:string|number=\"s\";};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "generic expression 8 helpers string|number",
+      "source": "const outer=function<T:type>(flag:boolean){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let u3:string|number=f4();if(flag&&id(u3)){}const t3=u3;let u4:string|number=f5();if(flag&&id(u4)){}const t4=u4;let u5:string|number=f6();if(flag&&id(u5)){}const t5=u5;let u6:string|number=f7();if(flag&&id(u6)){}const t6=u6;let last:string|number=\"s\";const t7=last;function id(x:string|number){u0=1;u1=1;u2=1;u3=1;u4=1;u5=1;u6=1;return answer;}const answer=seed;let seed:string|number=\"s\";};",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic expression pure string",
+      "source": "const outer=function<T:type>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";};",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic expression pure number",
+      "source": "const outer=function<T:type>(flag:boolean){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "generic expression fresh store string",
+      "source": "const outer=function<T:type>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}u0=\"s\";const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}u1=\"s\";const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}u2=\"s\";const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";};",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic expression fresh store number",
+      "source": "const outer=function<T:type>(flag:boolean){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}u0=\"s\";const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}u1=\"s\";const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}u2=\"s\";const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "generic object method 8 helpers string",
+      "source": "const object={outer<T:type>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let u3:string|number=f4();if(flag&&id(u3)){}const t3=u3;let u4:string|number=f5();if(flag&&id(u4)){}const t4=u4;let u5:string|number=f6();if(flag&&id(u5)){}const t5=u5;let u6:string|number=f7();if(flag&&id(u6)){}const t6=u6;let last:string|number=\"s\";const t7=last;function id(x:string|number){u0=1;u1=1;u2=1;u3=1;u4=1;u5=1;u6=1;return answer;}const answer=seed;let seed:string|number=\"s\";}};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "generic object method 8 helpers string|number",
+      "source": "const object={outer<T:type>(flag:boolean){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let u3:string|number=f4();if(flag&&id(u3)){}const t3=u3;let u4:string|number=f5();if(flag&&id(u4)){}const t4=u4;let u5:string|number=f6();if(flag&&id(u5)){}const t5=u5;let u6:string|number=f7();if(flag&&id(u6)){}const t6=u6;let last:string|number=\"s\";const t7=last;function id(x:string|number){u0=1;u1=1;u2=1;u3=1;u4=1;u5=1;u6=1;return answer;}const answer=seed;let seed:string|number=\"s\";}};",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic object method pure string",
+      "source": "const object={outer<T:type>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}};",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic object method pure number",
+      "source": "const object={outer<T:type>(flag:boolean){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "generic object method fresh store string",
+      "source": "const object={outer<T:type>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}u0=\"s\";const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}u1=\"s\";const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}u2=\"s\";const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}};",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic object method fresh store number",
+      "source": "const object={outer<T:type>(flag:boolean){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}u0=\"s\";const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}u1=\"s\";const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}u2=\"s\";const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "generic class 8 helpers string",
+      "source": "class C<T:type>{outer(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let u3:string|number=f4();if(flag&&id(u3)){}const t3=u3;let u4:string|number=f5();if(flag&&id(u4)){}const t4=u4;let u5:string|number=f6();if(flag&&id(u5)){}const t5=u5;let u6:string|number=f7();if(flag&&id(u6)){}const t6=u6;let last:string|number=\"s\";const t7=last;function id(x:string|number){u0=1;u1=1;u2=1;u3=1;u4=1;u5=1;u6=1;return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "generic class 8 helpers string|number",
+      "source": "class C<T:type>{outer(flag:boolean){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let u3:string|number=f4();if(flag&&id(u3)){}const t3=u3;let u4:string|number=f5();if(flag&&id(u4)){}const t4=u4;let u5:string|number=f6();if(flag&&id(u5)){}const t5=u5;let u6:string|number=f7();if(flag&&id(u6)){}const t6=u6;let last:string|number=\"s\";const t7=last;function id(x:string|number){u0=1;u1=1;u2=1;u3=1;u4=1;u5=1;u6=1;return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic class pure string",
+      "source": "class C<T:type>{outer(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic class pure number",
+      "source": "class C<T:type>{outer(flag:boolean){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "generic class fresh store string",
+      "source": "class C<T:type>{outer(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}u0=\"s\";const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}u1=\"s\";const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}u2=\"s\";const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "generic class fresh store number",
+      "source": "class C<T:type>{outer(flag:boolean){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}u0=\"s\";const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}u1=\"s\";const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}u2=\"s\";const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "static generic method 8 helpers string",
+      "source": "class C{static outer<T:type>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let u3:string|number=f4();if(flag&&id(u3)){}const t3=u3;let u4:string|number=f5();if(flag&&id(u4)){}const t4=u4;let u5:string|number=f6();if(flag&&id(u5)){}const t5=u5;let u6:string|number=f7();if(flag&&id(u6)){}const t6=u6;let last:string|number=\"s\";const t7=last;function id(x:string|number){u0=1;u1=1;u2=1;u3=1;u4=1;u5=1;u6=1;return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "static generic method 8 helpers string|number",
+      "source": "class C{static outer<T:type>(flag:boolean){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let u3:string|number=f4();if(flag&&id(u3)){}const t3=u3;let u4:string|number=f5();if(flag&&id(u4)){}const t4=u4;let u5:string|number=f6();if(flag&&id(u5)){}const t5=u5;let u6:string|number=f7();if(flag&&id(u6)){}const t6=u6;let last:string|number=\"s\";const t7=last;function id(x:string|number){u0=1;u1=1;u2=1;u3=1;u4=1;u5=1;u6=1;return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "static generic method pure string",
+      "source": "class C{static outer<T:type>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "static generic method pure number",
+      "source": "class C{static outer<T:type>(flag:boolean){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "static generic method fresh store string",
+      "source": "class C{static outer<T:type>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}u0=\"s\";const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}u1=\"s\";const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}u2=\"s\";const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "static generic method fresh store number",
+      "source": "class C{static outer<T:type>(flag:boolean){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}u0=\"s\";const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}u1=\"s\";const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}u2=\"s\";const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number){u0=1;u1=1;u2=1;return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "value parameter string consumer string",
+      "source": "function outer<N:string>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=N;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "constraint string consumer string",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "value parameter string consumer number",
+      "source": "function outer<N:string>(flag:boolean){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=N;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "value parameter number consumer string",
+      "source": "function outer<N:number>(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=N;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "value parameter number consumer number",
+      "source": "function outer<N:number>(flag:boolean){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=N;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "constraint number consumer number",
+      "source": "function outer<T:type extends number>(flag:boolean,kind:T){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "deferred method consumer string string",
+      "source": "type Shape={value:string,read():string};const object:Shape={value:\"s\",read(){const captured=this.value;function produce(){return captured;}const result:string=produce();return this.value;}};",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "deferred method consumer string number",
+      "source": "type Shape={value:string,read():string};const object:Shape={value:\"s\",read(){const captured=this.value;function produce(){return captured;}const result:number=produce();return this.value;}};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "runtime method string 2 helpers",
+      "source": "type Shape={value:string,read():string};const object:Shape={value:\"s\",read(){const captured=this.value;function f0(){return f1();}function f1(){return captured;}const result:string=f0();return result;}};String(object.read());",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "runtime method string 6 helpers",
+      "source": "type Shape={value:string,read():string};const object:Shape={value:\"s\",read(){const captured=this.value;function f0(){return f1();}function f1(){return f2();}function f2(){return f3();}function f3(){return f4();}function f4(){return f5();}function f5(){return captured;}const result:string=f0();return result;}};String(object.read());",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "runtime function property string",
+      "source": "type Shape={value:string,read():string};const object:Shape={value:\"s\",read:function(){const captured=this.value;function produce(){return captured;}const result:string=produce();return result;}};String(object.read());",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "runtime nested object string",
+      "source": "type Shape={value:string,read():string};const object:Shape={value:\"s\",read(){const inner:{get():string}={get(){const captured=\"s\";function produce(){return captured;}const result:string=produce();return result;}};return inner.get();}};String(object.read());",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "deferred method consumer number string",
+      "source": "type Shape={value:number,read():number};const object:Shape={value:1,read(){const captured=this.value;function produce(){return captured;}const result:string=produce();return this.value;}};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "deferred method consumer number number",
+      "source": "type Shape={value:number,read():number};const object:Shape={value:1,read(){const captured=this.value;function produce(){return captured;}const result:number=produce();return this.value;}};",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "runtime method number 2 helpers",
+      "source": "type Shape={value:number,read():number};const object:Shape={value:1,read(){const captured=this.value;function f0(){return f1();}function f1(){return captured;}const result:number=f0();return result;}};String(object.read());",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "runtime method number 6 helpers",
+      "source": "type Shape={value:number,read():number};const object:Shape={value:1,read(){const captured=this.value;function f0(){return f1();}function f1(){return f2();}function f2(){return f3();}function f3(){return f4();}function f4(){return f5();}function f5(){return captured;}const result:number=f0();return result;}};String(object.read());",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "runtime function property number",
+      "source": "type Shape={value:number,read():number};const object:Shape={value:1,read:function(){const captured=this.value;function produce(){return captured;}const result:number=produce();return result;}};String(object.read());",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "runtime nested object number",
+      "source": "type Shape={value:number,read():number};const object:Shape={value:1,read(){const inner:{get():number}={get(){const captured=1;function produce(){return captured;}const result:number=produce();return result;}};return inner.get();}};String(object.read());",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "runtime generic capture TDZ",
+      "source": "function outer<T:type>(x:T){function produce(){return captured;}produce();const captured=x;}outer(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "runtime receiver capture TDZ",
+      "source": "type Shape={value:string,read():string};const object:Shape={value:\"s\",read(){const value:string=produce();function produce(){return captured;}const captured=this.value;return value;}};object.read();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "legacy condition automatic",
+      "source": "if(\"s\"){}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "legacy closure automatic",
+      "source": "const f=(x)=>{const captured=x;function produce(){return captured;}return produce();};String(f(3));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "3"
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "legacy condition forced",
+      "source": "if(\"s\"){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_CONSTANT_CONDITION",
+          "phase": "static",
+          "checked": true
+        }
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "legacy closure forced",
+      "source": "const f=(x)=>{const captured=x;function produce(){return captured;}return produce();};String(f(3));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "3"
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "legacy condition disabled",
+      "source": "if(\"s\"){}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "disabled"
+    },
+    {
+      "name": "legacy closure disabled",
+      "source": "const f=(x)=>{const captured=x;function produce(){return captured;}return produce();};String(f(3));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "3"
+      },
+      "checking": "disabled"
+    },
+    {
+      "name": "runtime generic direct calls keep substitutions",
+      "source": "function id<T:type>(x:T):T{return x;}const a:number=id(1);const b:string=id(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "runtime generic direct methods keep instances",
+      "source": "class C<T:type>{value:T;constructor(value:T){this.value=value;}read():T{return this.value;}}const a:number=new C.<number>(1).read();const b:string=new C.<string>(\"s\").read();String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    }
+  ]
+}

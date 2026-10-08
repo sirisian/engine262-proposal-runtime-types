@@ -4151,6 +4151,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * T): string { return x; }` is admitted on the strength of `T: string`.
    */
   const typeParameterScopes: Map<string, Known | null>[] = [];
+  const typeParameterDeclarations = new WeakMap<Map<string, Known | null>, readonly ParseNode[]>();
   const variadicObligations = new Map<ParseNode, { kind: 'constraint' | 'default' | 'adjacent', type: TypeRecord }[]>();
   const overrideArgumentObligations = new WeakMap<ParseNode, { key: string | SymbolValue, source: SignatureRecord, target: SignatureRecord }[]>();
   const checkOverrideArgumentObligations = (declaration: ParseNode, bindings: ReadonlyMap<string, TypeRecord>): void => {
@@ -4348,6 +4349,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (declaration) variadicObligations.set(declaration, []);
     const scope = new Map<string, Known | null>();
+    typeParameterDeclarations.set(scope, list as readonly ParseNode[]);
     typeParameterScopes.push(scope);
     for (const tp of list) {
       const name = tp.BindingIdentifier?.name;
@@ -26263,7 +26265,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const sourceBindings = new Set<PreparedBinding>();
   // Only completed portable value domains cross passes. Callable inputs
   // distinguish their checking contexts below; unsupported identities and
-  // generic/reference results remain in their original local worklist.
+  // parameter-dependent/reference results remain in their original worklist.
   const portableBindingScope = (node: ParseNode): boolean => {
     for (let scope: ParseNode | undefined = node; scope; scope = scope.parent) {
       if (scope.type === 'ClassDeclaration' || scope.type === 'ClassExpression') return false;
@@ -26282,12 +26284,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const parent = parentFrame ? bindingScopes.get(parentFrame) : bindingContracts.rootScope;
     const parameters = [...frame.declaredNames].map((name) => [name, frame.bindingKinds.get(name),
       frame.unresolvedAnnotations.get(name), frame.bindings.get(name) ?? null]);
-    const inputs = { parameters, result, generator, contextual, receiver: thisTypeFrames.at(-1) ?? null, classes: classContext.slice() };
-    bindingScopes.set(frame, !parent || typeParameterScopes.length || !ReusableBindingContext(inputs)
+    // Binder declarations distinguish same-spelled parameters. Constraints
+    // and value domains describe this judgment's effective generic inputs.
+    // A substitution or name-only scope with no declaration provenance stays
+    // local rather than borrowing a declaration-context contract.
+    const generics = typeParameterScopes.map((scope) => ({ declarations: typeParameterDeclarations.get(scope),
+      constraints: scope, values: valueParameterDomains.get(scope) }));
+    const inputs = { parameters, result, generator, contextual, generics,
+      receiver: thisTypeFrames.at(-1) ?? null, classes: classContext.slice() };
+    bindingScopes.set(frame, !parent || generics.some((scope) => !scope.declarations) || !ReusableBindingContext(inputs)
       ? null : bindingContracts.scopeFor(parent, node, inputs));
   };
   const bindingPublication = (node: ParseNode): BindingContractKey | undefined => {
-    if (!bindingContracts || typeParameterScopes.length || !bindingContracts.sourceBindings.has(node)) return;
+    if (!bindingContracts || !bindingContracts.sourceBindings.has(node)) return;
     let scope = bindingContracts.rootScope;
     if (!portableBindingScope(node)) {
       let owner: ParseNode | undefined = node;
@@ -26655,9 +26664,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     });
   };
 
-  const checkInitializerAssignable = (expression: ParseNode, target: Known, provenance = true, context?: InitializerContext): void => {
+  const checkInitializerAssignable = (expression: ParseNode, target: Known, provenance = true, obligation?: InitializerObligation): void => {
     if (!target) return;
-    const saved = context ?? captureInitializerContext();
+    const saved = obligation?.context ?? captureInitializerContext();
     const previous = initializerInputs;
     const inputs = new Set<PreparedBinding>();
     initializerInputs = inputs;
@@ -26673,7 +26682,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // An incomplete attempt is not a verdict. Reconsider the source at its
       // original flow and context after the required declaration work finishes.
       errors.splice(mark);
-      initializerObligations.push({ context: saved, expression, target, inputs, provenance });
+      // Rechecking a source obligation refreshes its dependencies. It does
+      // not create another obligation for the same judgment in the worklist.
+      if (obligation) obligation.inputs = inputs;
+      else initializerObligations.push({ context: saved, expression, target, inputs, provenance });
     }
   };
   const finishInitializerObligations = (): void => {
@@ -26682,7 +26694,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (incompleteFlows.has(obligation.context.flow)
         || [...obligation.inputs].some((input) => !bindingReady(input))) continue;
       inInitializerContext(obligation.context, () => checkInitializerAssignable(
-        obligation.expression, obligation.target, obligation.provenance, obligation.context,
+        obligation.expression, obligation.target, obligation.provenance, obligation,
       ));
     }
   };
