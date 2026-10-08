@@ -2804,16 +2804,27 @@ function checkCompletedDeclarations(statementList: readonly ParseNode[] | null, 
     }
   };
   collectSourceBindings(statementList);
-  const contracts = new Map<ParseNode, Known>();
+  const scopes = new WeakMap<ParseNode, BindingContractScope[]>();
+  const rootScope: BindingContractScope = { node: root, inputs: null, bindings: new Map() };
+  const scopeFor = (parent: BindingContractScope, node: ParseNode, inputs: unknown): BindingContractScope => {
+    const candidates = scopes.get(node) ?? [];
+    const existing = candidates.find((scope) => scope.parent === parent && SameBindingContext(scope.inputs, inputs));
+    if (existing) return existing;
+    const scope: BindingContractScope = { parent, node, inputs: SnapshotBindingContext(inputs), bindings: new Map() };
+    candidates.push(scope);
+    scopes.set(node, candidates);
+    return scope;
+  };
+  const contracts = new Map<BindingContractKey, Known>();
   for (;;) {
-    const bindings: BindingContractPass = { sourceBindings, available: new Map(contracts), completed: new Map(), pending: false };
+    const bindings: BindingContractPass = { sourceBindings, rootScope, scopeFor, available: new Map(contracts), completed: new Map(), pending: false };
     const referenceStores = new Map<ParseNode, TypeRecord[]>();
     const errors = CheckStatementList(statementList, root, session, afterTypeEvaluation, undefined, referenceStores, identities, bindings);
     const previousSize = contracts.size;
     for (const [node, type] of bindings.completed) if (!contracts.has(node)) contracts.set(node, type);
     // Rebuild every transfer and diagnostic from source. A newly completed
-    // declaration is progress; the number of source declarations bounds this
-    // worklist. Unresolved cycles do not manufacture a seed or a retry budget.
+    // declaration in its checking context is progress for this worklist.
+    // Unresolved cycles do not manufacture a seed or a retry budget.
     if (bindings.pending && contracts.size !== previousSize) continue;
     // Alias targets belong to the completed flow of this pass. Reuse exactly
     // its available contracts, not a different set discovered afterward.
@@ -2822,10 +2833,89 @@ function checkCompletedDeclarations(statementList: readonly ParseNode[] | null, 
   }
 }
 
+interface BindingContractKey { node: ParseNode; }
+interface BindingContractScope {
+  parent?: BindingContractScope;
+  node: ParseNode;
+  inputs: unknown;
+  bindings: Map<ParseNode, BindingContractKey>;
+}
+
+// Context keys snapshot compiler records, including signature names, defaults
+// and metadata. Type equivalence alone does not identify a checking context.
+// Source nodes and opaque engine values keep their identities; no runtime
+// value is copied, initialized or made live by this compiler-owned snapshot.
+function ReusableBindingContext(value: unknown, seen = new Set<object>()): boolean {
+  if (!value || typeof value !== 'object' || seen.has(value)) return true;
+  seen.add(value);
+  if (typeof (value as { type?: unknown }).type === 'string') return true;
+  if (value instanceof Value) return value === Value.undefined || value === Value.null
+    || value === Value.true || value === Value.false
+    || [JSStringValue.prototype, NumberValue.prototype, BigIntValue.prototype].includes(Object.getPrototypeOf(value));
+  const stableKey = (key: unknown): boolean => !key || typeof key !== 'object'
+    || typeof (key as { type?: unknown }).type === 'string';
+  if (value instanceof Map) return [...value].every(([key, item]) => stableKey(key) && ReusableBindingContext(item, seen));
+  if (value instanceof Set) return [...value].every(stableKey);
+  const proto = Object.getPrototypeOf(value);
+  if (!Array.isArray(value) && proto !== Object.prototype && proto !== null) return false;
+  return Reflect.ownKeys(value).every((key) => {
+    const item = (value as Record<PropertyKey, unknown>)[key];
+    // Activation identities and deferred environments are not stable merely
+    // because another pass built a structurally equal object. Keep these
+    // judgments in their original context instead of exporting a contract.
+    return (key !== 'DeclarationIdentity' && key !== 'DefaultEnvironment' || item === undefined)
+      && ReusableBindingContext(item, seen);
+  });
+}
+
+function SnapshotBindingContext(value: unknown, seen = new Map<object, unknown>()): unknown {
+  if (!value || typeof value !== 'object') return value;
+  if (seen.has(value)) return seen.get(value);
+  const proto = Object.getPrototypeOf(value);
+  if (typeof (value as { type?: unknown }).type === 'string'
+    || !Array.isArray(value) && !(value instanceof Map) && !(value instanceof Set)
+      && proto !== Object.prototype && proto !== null) return value;
+  if (value instanceof Map) {
+    const copy = new Map();
+    seen.set(value, copy);
+    for (const [key, item] of value) copy.set(key, SnapshotBindingContext(item, seen));
+    return copy;
+  }
+  if (value instanceof Set) return new Set(value);
+  const copy: Record<PropertyKey, unknown> = Array.isArray(value) ? [] as unknown as Record<PropertyKey, unknown> : Object.create(proto);
+  seen.set(value, copy);
+  for (const key of Reflect.ownKeys(value)) copy[key] = SnapshotBindingContext((value as Record<PropertyKey, unknown>)[key], seen);
+  return copy;
+}
+
+function SameBindingContext(a: unknown, b: unknown, seen = new Map<object, Set<object>>()): boolean {
+  if (Object.is(a, b)) return true;
+  if (a instanceof JSStringValue && b instanceof JSStringValue
+    || a instanceof NumberValue && b instanceof NumberValue
+    || a instanceof BigIntValue && b instanceof BigIntValue) return SameValue(a, b);
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+  const proto = Object.getPrototypeOf(a);
+  if (proto !== Object.getPrototypeOf(b) || typeof (a as { type?: unknown }).type === 'string'
+    || !Array.isArray(a) && !(a instanceof Map) && !(a instanceof Set)
+      && proto !== Object.prototype && proto !== null) return false;
+  if (seen.get(a)?.has(b)) return true;
+  if (!seen.has(a)) seen.set(a, new Set());
+  seen.get(a)!.add(b);
+  if (a instanceof Map && b instanceof Map) return a.size === b.size
+    && [...a].every(([key, value]) => b.has(key) && SameBindingContext(value, b.get(key), seen));
+  if (a instanceof Set && b instanceof Set) return a.size === b.size && [...a].every((value) => b.has(value));
+  const left = Reflect.ownKeys(a);
+  const right = Reflect.ownKeys(b);
+  return left.length === right.length && left.every((key) => Object.hasOwn(b, key)
+    && SameBindingContext((a as Record<PropertyKey, unknown>)[key], (b as Record<PropertyKey, unknown>)[key], seen));
+}
+
 interface BindingContractPass {
   sourceBindings: WeakSet<ParseNode>;
-  available: ReadonlyMap<ParseNode, Known>;
-  completed: Map<ParseNode, Known>;
+  rootScope: BindingContractScope;
+  scopeFor(parent: BindingContractScope, node: ParseNode, inputs: unknown): BindingContractScope;
+  available: ReadonlyMap<BindingContractKey, Known>;
+  completed: Map<BindingContractKey, Known>;
   pending: boolean;
 }
 
@@ -20903,7 +20993,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         setContextualParameters(member, expected?.Parameters ?? []);
         const contextual = contextualParameterTypes.get(member) ?? [];
         if (expected?.Return) contextualMethodReturns.set(member, expected.Return);
-        if (expected?.ThisType) adoptedReceiverTypes.set(member, expected.ThisType);
+        if (expected?.ThisType) {
+          adoptedReceiverTypes.set(member, expected.ThisType);
+          contextualThisTypes.set(member, expected.ThisType as Known);
+          if (wanted) contextualThisOwners.set(member, wanted);
+        }
         const scope = pushTypeParameterScopeOf(member);
         try {
           const params = member.UniqueFormalParameters ?? [];
@@ -26159,6 +26253,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     type?: Known, completed?: boolean, flowIncomplete?: boolean, independentFlow?: boolean, storeTarget?: TypeRecord,
     contribution?: { flowIndependent: boolean, thisTypes: Known[], flow?: FlowFacts },
     context?: InitializerContext, inputs?: Set<PreparedBinding>, deferredErrors?: ObjectValue[],
+    publication?: BindingContractKey,
   };
   const bindingReady = (binding: PreparedBinding): boolean => !binding.flowIncomplete
     && !binding.inputs?.size && (!!binding.completed || !!binding.type);
@@ -26166,9 +26261,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const preparedBindings = new WeakMap<Frame, Map<string, PreparedBinding>>();
   const preparingBindings = new Set<PreparedBinding>();
   const sourceBindings = new Set<PreparedBinding>();
-  // These contracts carry no nominal, contextual, reference or generic
-  // identity across passes. More general dependencies stay in their original
-  // context until they can be completed by the local worklist.
+  // Only completed portable value domains cross passes. Callable inputs
+  // distinguish their checking contexts below; unsupported identities and
+  // generic/reference results remain in their original local worklist.
   const portableBindingScope = (node: ParseNode): boolean => {
     for (let scope: ParseNode | undefined = node; scope; scope = scope.parent) {
       if (scope.type === 'ClassDeclaration' || scope.type === 'ClassExpression') return false;
@@ -26179,11 +26274,45 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     return true;
   };
+  const bindingScopes = new WeakMap<Frame, BindingContractScope | null>();
+  const registerBindingScope = (node: ParseNode, result: Known, generator: Known = null, contextual = false): void => {
+    if (!bindingContracts) return;
+    const frame = frames[frames.length - 1];
+    const parentFrame = frames.slice(0, -1).reverse().find((outer) => bindingScopes.has(outer));
+    const parent = parentFrame ? bindingScopes.get(parentFrame) : bindingContracts.rootScope;
+    const parameters = [...frame.declaredNames].map((name) => [name, frame.bindingKinds.get(name),
+      frame.unresolvedAnnotations.get(name), frame.bindings.get(name) ?? null]);
+    const inputs = { parameters, result, generator, contextual, receiver: thisTypeFrames.at(-1) ?? null, classes: classContext.slice() };
+    bindingScopes.set(frame, !parent || typeParameterScopes.length || !ReusableBindingContext(inputs)
+      ? null : bindingContracts.scopeFor(parent, node, inputs));
+  };
+  const bindingPublication = (node: ParseNode): BindingContractKey | undefined => {
+    if (!bindingContracts || typeParameterScopes.length || !bindingContracts.sourceBindings.has(node)) return;
+    let scope = bindingContracts.rootScope;
+    if (!portableBindingScope(node)) {
+      let owner: ParseNode | undefined = node;
+      while (owner && !functionBoundary(owner)) {
+        if (owner.type === 'ClassDeclaration' || owner.type === 'ClassExpression') return;
+        owner = owner.parent;
+      }
+      if (!owner) return;
+      const contextual = frames.slice().reverse().map((frame) => bindingScopes.get(frame)).find((entry) => entry?.node === owner);
+      if (!contextual) return;
+      scope = contextual;
+    }
+    let key = scope.bindings.get(node);
+    if (!key) {
+      key = { node };
+      scope.bindings.set(node, key);
+    }
+    return key;
+  };
   const collectCompletedBindings = (): void => {
     if (!bindingContracts) return;
-    const ambiguous = new Set<ParseNode>();
+    const ambiguous = new Set<BindingContractKey>();
     for (const binding of sourceBindings) {
-      const { node, type } = binding;
+      const { type } = binding;
+      const node = binding.publication!;
       if (!binding.completed || !binding.context || !bindingReady(binding)
         || type && !(type.Kind === 'union' ? type.Members : [type]).every((member) => {
           const base = member.Kind === 'literal' ? member.Base : member;
@@ -26947,7 +27076,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // A literal's contextual result query is a contribution computation too;
     // it may read an unparticipating local function's provisional answer.
     inferenceDepth += 1;
-    const ownReceiver = fn.type.endsWith('Declaration') || fn.type.endsWith('Expression');
+    const ownReceiver = fn.type.endsWith('Declaration') || fn.type.endsWith('Expression') || contextualThisTypes.has(fn);
     if (ownReceiver) {
       const adopted = contextualThisTypes.get(fn);
       const owner = contextualThisOwners.get(fn);
@@ -27003,6 +27132,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       recordBindingKinds(params, true);
       (params ?? []).forEach((prm, i) => declarePatternAnnotations(prm, frames[frames.length - 1],
         parameterBodyType(prm, parameterTypes[i] ?? null, records?.[i])));
+      const annotation = (fn as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation;
+      const resultContext = wanted ?? contextualMethodReturns.get(fn) ?? contextualReturnTypes.get(fn) ?? null;
+      registerBindingScope(fn, annotation ? resolveType(annotation.Type) : resultContext, null, !annotation && !!resultContext);
     };
 
     // A concise arrow body: the expression IS the return. Two wrapper nodes
@@ -27796,21 +27928,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const frame = frames[frames.length - 1];
           if (!preparedBindings.has(frame)) preparedBindings.set(frame, new Map());
           if (preparedBindings.get(frame)!.get(binding.BindingIdentifier.name)?.node === binding) continue;
-          const portable = !reference && typeParameterScopes.length === 0
-            && !!bindingContracts?.sourceBindings.has(binding) && portableBindingScope(binding);
+          const publication = !reference ? bindingPublication(binding) : undefined;
           const prepared: PreparedBinding = {
             node: binding, expression, constant: !binding.TypedInitializer && !reference, reference: !!reference,
             owner: frame, name: binding.BindingIdentifier.name,
             frames: frames.slice(), varFrames: varFrames.slice(), typeScopes: typeParameterScopes.slice(),
             ...(flowIndependent === undefined ? {} : { contribution: { flowIndependent, thisTypes: thisTypeFrames.slice() } }),
-            type: portable ? bindingContracts?.available.get(binding) : undefined,
+            publication,
+            type: publication ? bindingContracts?.available.get(publication) : undefined,
             // A completed unknown contract is progress too. It carries no
             // value-domain proof, but its consumers no longer await a type.
-            completed: portable && bindingContracts?.available.has(binding)
-              && bindingContracts.available.get(binding) === null,
+            completed: !!publication && bindingContracts?.available.has(publication)
+              && bindingContracts.available.get(publication) === null,
           };
           preparedBindings.get(frame)!.set(binding.BindingIdentifier.name, prepared);
-          if (portable && flowIndependent === undefined) sourceBindings.add(prepared);
+          if (publication && flowIndependent === undefined && trialDepth === 0) sourceBindings.add(prepared);
         }
       }
     }
@@ -29975,6 +30107,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       index += 1;
     }
     activeParameterFrames.delete(parameterFrame);
+    let owner = (Array.isArray(body) ? body[0] : body) as ParseNode | undefined;
+    while (owner && !functionBoundary(owner)) owner = owner.parent;
+    if (owner) registerBindingScope(owner, returnTypes.at(-1) ?? null, generatorType ?? null, !returnAnnotation && !!contextualReturn);
     hoistVarBindings(body);
     if (body) {
       // proposal-runtime-types #sec-overloading-on-return-type: a CONCISE arrow
@@ -36370,12 +36505,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'MethodDefinition': {
         walkMemberName(n);
+        // Contextual object methods adopt the same receiver in contribution
+        // queries and source-body checking (#sec-this-adoption).
+        const adopted = contextualThisTypes.get(n);
+        const owner = contextualThisOwners.get(n);
+        if (adopted) thisTypeFrames.push(owner && adopted.Kind === 'nominal'
+          && (adopted.Declaration as { type?: string })?.type === 'SelfThisMarker' ? owner : adopted);
         const pushed = pushTypeParameterScopeOf(n);
         try {
           enterFunction(n.UniqueFormalParameters ?? n.PropertySetParameterList, n.TypeAnnotation ?? null, n.FunctionBody, true,
             contextualParameterTypes.get(n), undefined, undefined, contextualMethodReturns.get(n) ?? null);
         } finally {
           if (pushed) typeParameterScopes.pop();
+          if (adopted) thisTypeFrames.pop();
         }
         return;
       }
@@ -36653,9 +36795,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // but it is carried so that a `yield` can read the N it declares.
         {
           walkMemberName(n);
-          const ordinary = n.type.endsWith('Declaration') || n.type.endsWith('Expression');
+          const ordinary = n.type.endsWith('Declaration') || n.type.endsWith('Expression') || contextualThisTypes.has(n);
           if (ordinary) {
-            thisTypeFrames.push(contextualThisTypes.get(n) ?? null);
+            const adopted = contextualThisTypes.get(n);
+            const owner = contextualThisOwners.get(n);
+            thisTypeFrames.push(adopted && owner && adopted.Kind === 'nominal'
+              && (adopted.Declaration as { type?: string })?.type === 'SelfThisMarker' ? owner : adopted ?? null);
           }
           const pushed = pushTypeParameterScopeOf(n);
           try {
