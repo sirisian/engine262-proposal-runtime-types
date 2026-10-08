@@ -1,0 +1,582 @@
+{
+  "cases": [
+    {
+      "name": "4 helpers with Boolean reject Number",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(Boolean(u0)){}const t0=u0;let u1:string|number=f2();if(Boolean(u1)){}const t1=u1;let u2:string|number=f3();if(Boolean(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true,
+          "location": {
+            "start": 32,
+            "end": 36,
+            "nodeType": "CallExpression"
+          }
+        }
+      }
+    },
+    {
+      "name": "4 helpers with Boolean accept String",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(Boolean(u0)){}const t0=u0;let u1:string|number=f2();if(Boolean(u1)){}const t1=u1;let u2:string|number=f3();if(Boolean(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "4 helpers with identity reject Number",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true,
+          "location": {
+            "start": 32,
+            "end": 36,
+            "nodeType": "CallExpression"
+          }
+        }
+      }
+    },
+    {
+      "name": "4 helpers with identity accept String",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "12 helpers with Boolean reject Number",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}function f8(){return t8;}function f9(){return t9;}function f10(){return t10;}function f11(){return t11;}let u0:string|number=f1();if(Boolean(u0)){}const t0=u0;let u1:string|number=f2();if(Boolean(u1)){}const t1=u1;let u2:string|number=f3();if(Boolean(u2)){}const t2=u2;let u3:string|number=f4();if(Boolean(u3)){}const t3=u3;let u4:string|number=f5();if(Boolean(u4)){}const t4=u4;let u5:string|number=f6();if(Boolean(u5)){}const t5=u5;let u6:string|number=f7();if(Boolean(u6)){}const t6=u6;let u7:string|number=f8();if(Boolean(u7)){}const t7=u7;let u8:string|number=f9();if(Boolean(u8)){}const t8=u8;let u9:string|number=f10();if(Boolean(u9)){}const t9=u9;let u10:string|number=f11();if(Boolean(u10)){}const t10=u10;let last:string|number=\"s\";const t11=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "12 helpers with Boolean accept String",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}function f8(){return t8;}function f9(){return t9;}function f10(){return t10;}function f11(){return t11;}let u0:string|number=f1();if(Boolean(u0)){}const t0=u0;let u1:string|number=f2();if(Boolean(u1)){}const t1=u1;let u2:string|number=f3();if(Boolean(u2)){}const t2=u2;let u3:string|number=f4();if(Boolean(u3)){}const t3=u3;let u4:string|number=f5();if(Boolean(u4)){}const t4=u4;let u5:string|number=f6();if(Boolean(u5)){}const t5=u5;let u6:string|number=f7();if(Boolean(u6)){}const t6=u6;let u7:string|number=f8();if(Boolean(u7)){}const t7=u7;let u8:string|number=f9();if(Boolean(u8)){}const t8=u8;let u9:string|number=f10();if(Boolean(u9)){}const t9=u9;let u10:string|number=f11();if(Boolean(u10)){}const t10=u10;let last:string|number=\"s\";const t11=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "12 helpers with identity reject Number",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}function f8(){return t8;}function f9(){return t9;}function f10(){return t10;}function f11(){return t11;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let u3:string|number=f4();if(id(u3)){}const t3=u3;let u4:string|number=f5();if(id(u4)){}const t4=u4;let u5:string|number=f6();if(id(u5)){}const t5=u5;let u6:string|number=f7();if(id(u6)){}const t6=u6;let u7:string|number=f8();if(id(u7)){}const t7=u7;let u8:string|number=f9();if(id(u8)){}const t8=u8;let u9:string|number=f10();if(id(u9)){}const t9=u9;let u10:string|number=f11();if(id(u10)){}const t10=u10;let last:string|number=\"s\";const t11=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "12 helpers with identity accept String",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}function f8(){return t8;}function f9(){return t9;}function f10(){return t10;}function f11(){return t11;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let u3:string|number=f4();if(id(u3)){}const t3=u3;let u4:string|number=f5();if(id(u4)){}const t4=u4;let u5:string|number=f6();if(id(u5)){}const t5=u5;let u6:string|number=f7();if(id(u6)){}const t6=u6;let u7:string|number=f8();if(id(u7)){}const t7=u7;let u8:string|number=f9();if(id(u8)){}const t8=u8;let u9:string|number=f10();if(id(u9)){}const t9=u9;let u10:string|number=f11();if(id(u10)){}const t10=u10;let last:string|number=\"s\";const t11=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "negated call transfer rejects Number",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(!id(u0)){}const t0=u0;let u1:string|number=f2();if(!id(u1)){}const t1=u1;let u2:string|number=f3();if(!id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "negated call transfer accepts String",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(!id(u0)){}const t0=u0;let u1:string|number=f2();if(!id(u1)){}const t1=u1;let u2:string|number=f3();if(!id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "while call transfer rejects Number",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();while(id(u0)){break;}const t0=u0;let u1:string|number=f2();while(id(u1)){break;}const t1=u1;let u2:string|number=f3();while(id(u2)){break;}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "while call transfer accepts String",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();while(id(u0)){break;}const t0=u0;let u1:string|number=f2();while(id(u1)){break;}const t1=u1;let u2:string|number=f3();while(id(u2)){break;}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "do while call transfer rejects Number",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();do{}while(id(u0));const t0=u0;let u1:string|number=f2();do{}while(id(u1));const t1=u1;let u2:string|number=f3();do{}while(id(u2));const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "do while call transfer accepts String",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();do{}while(id(u0));const t0=u0;let u1:string|number=f2();do{}while(id(u1));const t1=u1;let u2:string|number=f3();do{}while(id(u2));const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "for call transfer rejects Number",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();for(;id(u0);){break;}const t0=u0;let u1:string|number=f2();for(;id(u1);){break;}const t1=u1;let u2:string|number=f3();for(;id(u2);){break;}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "for call transfer accepts String",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();for(;id(u0);){break;}const t0=u0;let u1:string|number=f2();for(;id(u1);){break;}const t1=u1;let u2:string|number=f3();for(;id(u2);){break;}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "logical and call transfer rejects Number",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();id(u0)&&0;const t0=u0;let u1:string|number=f2();id(u1)&&0;const t1=u1;let u2:string|number=f3();id(u2)&&0;const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "logical and call transfer accepts String",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();id(u0)&&0;const t0=u0;let u1:string|number=f2();id(u1)&&0;const t1=u1;let u2:string|number=f3();id(u2)&&0;const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "logical or call transfer rejects Number",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();id(u0)||0;const t0=u0;let u1:string|number=f2();id(u1)||0;const t1=u1;let u2:string|number=f3();id(u2)||0;const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "logical or call transfer accepts String",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();id(u0)||0;const t0=u0;let u1:string|number=f2();id(u1)||0;const t1=u1;let u2:string|number=f3();id(u2)||0;const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "conditional call transfer rejects Number",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();id(u0)?0:1;const t0=u0;let u1:string|number=f2();id(u1)?0:1;const t1=u1;let u2:string|number=f3();id(u2)?0:1;const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "conditional call transfer accepts String",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();id(u0)?0:1;const t0=u0;let u1:string|number=f2();id(u1)?0:1;const t1=u1;let u2:string|number=f3();id(u2)?0:1;const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "comma call transfer rejects Number",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if((id(u0),u0)){}const t0=u0;let u1:string|number=f2();if((id(u1),u1)){}const t1=u1;let u2:string|number=f3();if((id(u2),u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "comma call transfer accepts String",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if((id(u0),u0)){}const t0=u0;let u1:string|number=f2();if((id(u1),u1)){}const t1=u1;let u2:string|number=f3();if((id(u2),u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "nested test call transfer rejects Number",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(u0 && id(u0)){}const t0=u0;let u1:string|number=f2();if(u1 && id(u1)){}const t1=u1;let u2:string|number=f3();if(u2 && id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "nested test call transfer accepts String",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(u0 && id(u0)){}const t0=u0;let u1:string|number=f2();if(u1 && id(u1)){}const t1=u1;let u2:string|number=f3();if(u2 && id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "label call transfer rejects Number",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();done:{if(id(u0))break done;}const t0=u0;let u1:string|number=f2();done:{if(id(u1))break done;}const t1=u1;let u2:string|number=f3();done:{if(id(u2))break done;}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "label call transfer accepts String",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();done:{if(id(u0))break done;}const t0=u0;let u1:string|number=f2();done:{if(id(u1))break done;}const t1=u1;let u2:string|number=f3();done:{if(id(u2))break done;}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "finally call transfer rejects Number",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();try{if(id(u0)){}}finally{}const t0=u0;let u1:string|number=f2();try{if(id(u1)){}}finally{}const t1=u1;let u2:string|number=f3();try{if(id(u2)){}}finally{}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "finally call transfer accepts String",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();try{if(id(u0)){}}finally{}const t0=u0;let u1:string|number=f2();try{if(id(u1)){}}finally{}const t1=u1;let u2:string|number=f3();try{if(id(u2)){}}finally{}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "catch call transfer rejects Number",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();try{throw 1;}catch{if(id(u0)){}}const t0=u0;let u1:string|number=f2();try{throw 1;}catch{if(id(u1)){}}const t1=u1;let u2:string|number=f3();try{throw 1;}catch{if(id(u2)){}}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "catch call transfer accepts String",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();try{throw 1;}catch{if(id(u0)){}}const t0=u0;let u1:string|number=f2();try{throw 1;}catch{if(id(u1)){}}const t1=u1;let u2:string|number=f3();try{throw 1;}catch{if(id(u2)){}}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "call chain reaches impossible typeof",
+      "source": "function outer(){if(typeof f0()===\"number\"){}function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "call chain reaches impossible switch label",
+      "source": "function outer(){switch(typeof f0()){case \"number\":break;}function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "call chain permits value query",
+      "source": "function outer(){const query=typeof f0()===\"number\";function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "extra Boolean argument calls preserve unmutated input",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(Boolean(u0,id(u0))){}const t0=u0;let u1:string|number=f2();if(Boolean(u1,id(u1))){}const t1=u1;let u2:string|number=f3();if(Boolean(u2,id(u2))){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "extra Boolean argument writes invalidate input",
+      "source": "function outer(){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(Boolean(u0,change())){}const t0=u0;let u1:string|number=f2();if(Boolean(u1,change())){}const t1=u1;let u2:string|number=f3();if(Boolean(u2,change())){}const t2=u2;let last:string|number=\"s\";const t3=last;function change(){u0=1;u1=1;u2=1;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "captured write in call retains open domain",
+      "source": "function outer(){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{u0=1;u1=1;u2=1;return x;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "unrelated captured write does not erase primitive input",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let other:string|number=\"s\";let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}function change(){other=1;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "transitive copies survive calls",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const a0=u0;const b0=a0;const t0=b0;let u1:string|number=f2();if(id(u1)){}const a1=u1;const b1=a1;const t1=b1;let u2:string|number=f3();if(id(u2)){}const a2=u2;const b2=a2;const t2=b2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "copied value survives later store",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;u0=1;let u1:string|number=f2();if(id(u1)){}const t1=u1;u1=1;let u2:string|number=f3();if(id(u2)){}const t2=u2;u2=1;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "unknown returned domain does not erase untouched argument",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):any{return x;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "effectful intrinsic replacement respects capture invalidation",
+      "source": "function outer(){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(Boolean(u0)){}const t0=u0;let u1:string|number=f2();if(Boolean(u1)){}const t1=u1;let u2:string|number=f3();if(Boolean(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function Boolean(x:string|number):boolean{u0=1;u1=1;u2=1;return true;}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "shadowed Boolean returning false is still a deciding error",
+      "source": "function outer(){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(Boolean(u0)){}const t0=u0;let u1:string|number=f2();if(Boolean(u1)){}const t1=u1;let u2:string|number=f3();if(Boolean(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function Boolean(x:string|number):false{return false;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_CONSTANT_CONDITION",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "call producer is not executed by checking",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(id(u0)){}const t0=u0;let u1:string|number=f2();if(id(u1)){}const t1=u1;let u2:string|number=f3();if(id(u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;function id(x:string|number):string|number{return x;}}\"not invoked\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "not invoked"
+      }
+    },
+    {
+      "name": "call invalidates copied relation",
+      "source": "function f(x:string|number,y:string|number){const a=x;function change():boolean{x=y;return true;}if(change()){if(a is string){if(x is number){}}}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "unrelated call keeps copied relation",
+      "source": "function f(x:string|number){const a=x;function check():boolean{return true;}if(check()){if(a is string){if(x is number){}}}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "arguments evaluated before call may mutate source",
+      "source": "function f(x:string|number,y:string|number){const a=x;function check(z:any):boolean{return true;}if(check(x=y)){if(a is string){if(x is number){}}}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "legacy call checking can be forced",
+      "source": "function outer(){if(f()){}if(typeof f()===\"number\"){}function f():string{return \"s\";}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "legacy call checking remains automatic",
+      "source": "function outer(){if(f()){}if(typeof f()===\"number\"){}function f():string{return \"s\";}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "disabled checking retains legacy execution",
+      "source": "function outer(){return 1;}outer();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "disabled"
+    }
+  ]
+}

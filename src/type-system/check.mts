@@ -3464,8 +3464,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const prepared = preparedBindings.get(frames[i])?.get(name);
       if (prepared) finishReadyBindingContract(prepared);
       const t = frames[i].bindings.get(name);
-      if (flowNeedsReplay && (t || frames[i].declaredNames.has(name))
-        && !independentFlowFacts.get(flowOwner(name, i))?.has(name)) {
+      const origin = invocationOrigins.get(frames[i])?.get(name);
+      const stableCallable = flowNeedsReplay && t?.Kind === 'function' && origin
+        && ['FunctionDeclaration', 'AsyncFunctionDeclaration', 'GeneratorDeclaration', 'AsyncGeneratorDeclaration'].includes(origin.node.type)
+        && lexicalUnassigned(origin.node.parent ?? origin.node, name) === true && !lexicalMutations.exposedParameters.has(name);
+      if (flowNeedsReplay && !stableCallable && (t || frames[i].declaredNames.has(name))
+        && !independentFlowFacts.get(flowOwner(name, i))?.has(name)
+        && !independentTestInputs.some((inputs) => inputs.get(flowOwner(name, i))?.has(name.split('.\u0000')[0]))) {
         for (const read of flowReadCollectors) read.incomplete = true;
       }
       if (t) {
@@ -3652,6 +3657,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       for (const key of independentFlowFacts.get(f) ?? []) {
         if (key === name || key.startsWith(prefix)) independentFlowFacts.get(f)!.delete(key);
       }
+      for (const inputs of independentTestInputs) for (const key of inputs.get(f) ?? []) {
+        if (key === name || key.startsWith(prefix)) inputs.get(f)!.delete(key);
+      }
       if (f.narrowed) {
         for (const key of [...f.narrowed]) {
           if (key === name || key.startsWith(prefix)) {
@@ -3681,6 +3689,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   let independentFlowFacts = new Map<Frame, Set<string>>();
   const independentFactsOf = new WeakMap<FlowFacts, Map<Frame, Set<string>>>();
   const flowReadCollectors: { incomplete: boolean }[] = [];
+  const independentTestInputs: Map<Frame, Set<string>>[] = [];
   const bindingFlowReads = new WeakMap<ParseNode, { incomplete: boolean }>();
   const deferredStoredTypes = new WeakMap<TypeRecord, PreparedBinding>();
   const completedFlowType = (type: TypeRecord): TypeRecord => {
@@ -23518,8 +23527,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     return changed;
   };
-  const propagateCopies = (): void => {
-    const pending = valueCopies.filter(({ source, target }) => placeStillCaptured(source) && placeStillCaptured(target));
+  const propagateCopies = (subjects: readonly string[]): void => {
+    const reachable = new Map<Frame, Set<string>>();
+    const include = (owner: Frame, name: string): void => {
+      if (!reachable.has(owner)) reachable.set(owner, new Set());
+      reachable.get(owner)!.add(name);
+    };
+    for (const name of subjects) include(flowOwner(name), name);
+    const remaining = valueCopies.filter(({ source, target }) => placeStillCaptured(source) && placeStillCaptured(target));
+    const pending: ValueCopy[] = [];
+    // Only a connected value relation can consume this refinement. Reading
+    // every saved copy would add dependencies on unrelated unfinished values.
+    for (let changed = true; changed;) {
+      changed = false;
+      for (let i = remaining.length - 1; i >= 0; i -= 1) {
+        const relation = remaining[i];
+        const { source, target } = relation;
+        const touches = (place: CapturedPlace): boolean => [...reachable.get(place.owner) ?? []]
+          .some((name) => name === place.name || name.startsWith(`${place.name}.`) || place.name.startsWith(`${name}.`));
+        if (!touches(source) && !touches(target)) continue;
+        include(source.owner, source.name);
+        include(target.owner, target.name);
+        pending.push(relation);
+        remaining.splice(i, 1);
+        changed = true;
+      }
+    }
     // Each pass carries facts across one more edge. No new value relation is
     // inferred, and paths longer than the source's edge count add no evidence.
     for (let pass = 0; pass <= pending.length; pass += 1) {
@@ -23540,7 +23573,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // Built-in strict equality cannot have succeeded with a NaN operand.
       recordCategories(source.name, allCategories & ~4);
       recordCategories(target.name, allCategories & ~4);
-      propagateCopies();
+      propagateCopies([source.name, target.name]);
     }
   };
   const rememberValueOrigin = (owner: Frame, name: string, initializer: ParseNode, targetType: Known): void => {
@@ -23741,7 +23774,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         } else declareNarrowed(entry.name, narrowed as Known);
       }
     }
-    propagateCopies();
+    propagateCopies([fact, ...(fact.additional ?? [])].map((entry) => entry.name));
     return captureFlow();
   };
 
@@ -23966,6 +23999,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** Evaluate each operand once, retaining separate facts for both answers. */
   const walkTest = (test: ParseNode, deciding = true, truthiness = deciding, visit = true): TestFlow => {
     const incomplete = flowNeedsReplay;
+    // A test can retain completed values while unrelated flow is unfinished.
+    // Calls apply their ordinary effects, revoking affected input proofs.
+    // Publish only surviving proofs when all required test inputs are complete.
+    const independent = incomplete && flowWrites(test).size === 0
+      && !containsPropertyRead(test) && !containsDeferredTestBoundary(test)
+      ? new Map([...independentFlowFacts].map(([owner, names]) => [owner, new Set(names)])) : undefined;
+    const reads = { incomplete: false };
+    let pending = false;
     const defer = visit && inferenceDepth === 0 && deferredTestDepth === 0 && !incomplete
       && flowWrites(test).size === 0 && !containsPropertyRead(test)
       && !containsDeferredTestBoundary(test);
@@ -23973,19 +24014,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const mark = errors.length;
     if (context) deferredTestDepth += 1;
     let result: TestFlow;
+    if (independent) independentTestInputs.push(independent);
+    flowReadCollectors.push(reads);
     try {
       result = withFlowInputs(() => walkTestOutcomes(test, deciding, truthiness, visit), (inputs) => {
+        pending = true;
         if (!context || invalidTypeGraph) return;
         errors.splice(mark);
         testObligations.push({ context, test, deciding, truthiness, inputs });
       });
     } finally {
       if (context) deferredTestDepth -= 1;
+      flowReadCollectors.pop();
+      if (independent) independentTestInputs.pop();
     }
     if (incomplete || flowNeedsReplay) {
       for (const edge of [result.whenTrue, result.whenFalse]) if (edge) {
         incompleteFlows.add(edge);
-        independentFactsOf.delete(edge);
+        if (independent && !pending && !reads.incomplete) independentFactsOf.set(edge, independent);
+        else independentFactsOf.delete(edge);
       }
     }
     return result;
@@ -25764,6 +25811,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const outerFrames = frames.slice();
     const outerVars = varFrames.slice();
     const outerTypes = typeParameterScopes.slice();
+    // A local test proof belongs to the suspended source position. A nested
+    // producer query may use the same lexical owner at a different position.
+    const outerTestInputs = independentTestInputs.splice(0);
     frames.splice(0, frames.length, ...item.frames);
     varFrames.splice(0, varFrames.length, ...item.varFrames);
     typeParameterScopes.splice(0, typeParameterScopes.length, ...item.typeScopes);
@@ -25774,6 +25824,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       frames.splice(0, frames.length, ...outerFrames);
       varFrames.splice(0, varFrames.length, ...outerVars);
       typeParameterScopes.splice(0, typeParameterScopes.length, ...outerTypes);
+      independentTestInputs.push(...outerTestInputs);
     }
   };
 

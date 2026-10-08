@@ -1,0 +1,642 @@
+{
+  "cases": [
+    {
+      "name": "4 linked tests reject Number",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(u0){}const t0=u0;let u1:string|number=f2();if(u1){}const t1=u1;let u2:string|number=f3();if(u2){}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true,
+          "location": {
+            "start": 32,
+            "end": 36,
+            "nodeType": "CallExpression"
+          }
+        }
+      }
+    },
+    {
+      "name": "4 linked tests accept String",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(u0){}const t0=u0;let u1:string|number=f2();if(u1){}const t1=u1;let u2:string|number=f3();if(u2){}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "12 linked tests reject Number",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}function f8(){return t8;}function f9(){return t9;}function f10(){return t10;}function f11(){return t11;}let u0:string|number=f1();if(u0){}const t0=u0;let u1:string|number=f2();if(u1){}const t1=u1;let u2:string|number=f3();if(u2){}const t2=u2;let u3:string|number=f4();if(u3){}const t3=u3;let u4:string|number=f5();if(u4){}const t4=u4;let u5:string|number=f6();if(u5){}const t5=u5;let u6:string|number=f7();if(u6){}const t6=u6;let u7:string|number=f8();if(u7){}const t7=u7;let u8:string|number=f9();if(u8){}const t8=u8;let u9:string|number=f10();if(u9){}const t9=u9;let u10:string|number=f11();if(u10){}const t10=u10;let last:string|number=\"s\";const t11=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true,
+          "location": {
+            "start": 32,
+            "end": 36,
+            "nodeType": "CallExpression"
+          }
+        }
+      }
+    },
+    {
+      "name": "12 linked tests accept String",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}function f8(){return t8;}function f9(){return t9;}function f10(){return t10;}function f11(){return t11;}let u0:string|number=f1();if(u0){}const t0=u0;let u1:string|number=f2();if(u1){}const t1=u1;let u2:string|number=f3();if(u2){}const t2=u2;let u3:string|number=f4();if(u3){}const t3=u3;let u4:string|number=f5();if(u4){}const t4=u4;let u5:string|number=f6();if(u5){}const t5=u5;let u6:string|number=f7();if(u6){}const t6=u6;let u7:string|number=f8();if(u7){}const t7=u7;let u8:string|number=f9();if(u8){}const t8=u8;let u9:string|number=f10();if(u9){}const t9=u9;let u10:string|number=f11();if(u10){}const t10=u10;let last:string|number=\"s\";const t11=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "24 linked tests reject Number",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}function f8(){return t8;}function f9(){return t9;}function f10(){return t10;}function f11(){return t11;}function f12(){return t12;}function f13(){return t13;}function f14(){return t14;}function f15(){return t15;}function f16(){return t16;}function f17(){return t17;}function f18(){return t18;}function f19(){return t19;}function f20(){return t20;}function f21(){return t21;}function f22(){return t22;}function f23(){return t23;}let u0:string|number=f1();if(u0){}const t0=u0;let u1:string|number=f2();if(u1){}const t1=u1;let u2:string|number=f3();if(u2){}const t2=u2;let u3:string|number=f4();if(u3){}const t3=u3;let u4:string|number=f5();if(u4){}const t4=u4;let u5:string|number=f6();if(u5){}const t5=u5;let u6:string|number=f7();if(u6){}const t6=u6;let u7:string|number=f8();if(u7){}const t7=u7;let u8:string|number=f9();if(u8){}const t8=u8;let u9:string|number=f10();if(u9){}const t9=u9;let u10:string|number=f11();if(u10){}const t10=u10;let u11:string|number=f12();if(u11){}const t11=u11;let u12:string|number=f13();if(u12){}const t12=u12;let u13:string|number=f14();if(u13){}const t13=u13;let u14:string|number=f15();if(u14){}const t14=u14;let u15:string|number=f16();if(u15){}const t15=u15;let u16:string|number=f17();if(u16){}const t16=u16;let u17:string|number=f18();if(u17){}const t17=u17;let u18:string|number=f19();if(u18){}const t18=u18;let u19:string|number=f20();if(u19){}const t19=u19;let u20:string|number=f21();if(u20){}const t20=u20;let u21:string|number=f22();if(u21){}const t21=u21;let u22:string|number=f23();if(u22){}const t22=u22;let last:string|number=\"s\";const t23=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "24 linked tests accept String",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}function f8(){return t8;}function f9(){return t9;}function f10(){return t10;}function f11(){return t11;}function f12(){return t12;}function f13(){return t13;}function f14(){return t14;}function f15(){return t15;}function f16(){return t16;}function f17(){return t17;}function f18(){return t18;}function f19(){return t19;}function f20(){return t20;}function f21(){return t21;}function f22(){return t22;}function f23(){return t23;}let u0:string|number=f1();if(u0){}const t0=u0;let u1:string|number=f2();if(u1){}const t1=u1;let u2:string|number=f3();if(u2){}const t2=u2;let u3:string|number=f4();if(u3){}const t3=u3;let u4:string|number=f5();if(u4){}const t4=u4;let u5:string|number=f6();if(u5){}const t5=u5;let u6:string|number=f7();if(u6){}const t6=u6;let u7:string|number=f8();if(u7){}const t7=u7;let u8:string|number=f9();if(u8){}const t8=u8;let u9:string|number=f10();if(u9){}const t9=u9;let u10:string|number=f11();if(u10){}const t10=u10;let u11:string|number=f12();if(u11){}const t11=u11;let u12:string|number=f13();if(u12){}const t12=u12;let u13:string|number=f14();if(u13){}const t13=u13;let u14:string|number=f15();if(u14){}const t14=u14;let u15:string|number=f16();if(u15){}const t15=u15;let u16:string|number=f17();if(u16){}const t16=u16;let u17:string|number=f18();if(u17){}const t17=u17;let u18:string|number=f19();if(u18){}const t18=u18;let u19:string|number=f20();if(u19){}const t19=u19;let u20:string|number=f21();if(u20){}const t20=u20;let u21:string|number=f22();if(u21){}const t21=u21;let u22:string|number=f23();if(u22){}const t22=u22;let last:string|number=\"s\";const t23=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "negated keeps independent chain",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(!u0){}const t0=u0;let u1:string|number=f2();if(!u1){}const t1=u1;let u2:string|number=f3();if(!u2){}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "negated compatible chain",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(!u0){}const t0=u0;let u1:string|number=f2();if(!u1){}const t1=u1;let u2:string|number=f3();if(!u2){}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "parenthesized keeps independent chain",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if((u0)){}const t0=u0;let u1:string|number=f2();if((u1)){}const t1=u1;let u2:string|number=f3();if((u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "parenthesized compatible chain",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if((u0)){}const t0=u0;let u1:string|number=f2();if((u1)){}const t1=u1;let u2:string|number=f3();if((u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "comma keeps independent chain",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if((0,u0)){}const t0=u0;let u1:string|number=f2();if((0,u1)){}const t1=u1;let u2:string|number=f3();if((0,u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "comma compatible chain",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if((0,u0)){}const t0=u0;let u1:string|number=f2();if((0,u1)){}const t1=u1;let u2:string|number=f3();if((0,u2)){}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "while keeps independent chain",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();while(u0){break;}const t0=u0;let u1:string|number=f2();while(u1){break;}const t1=u1;let u2:string|number=f3();while(u2){break;}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "while compatible chain",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();while(u0){break;}const t0=u0;let u1:string|number=f2();while(u1){break;}const t1=u1;let u2:string|number=f3();while(u2){break;}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "do while keeps independent chain",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();do{}while(u0);const t0=u0;let u1:string|number=f2();do{}while(u1);const t1=u1;let u2:string|number=f3();do{}while(u2);const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "do while compatible chain",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();do{}while(u0);const t0=u0;let u1:string|number=f2();do{}while(u1);const t1=u1;let u2:string|number=f3();do{}while(u2);const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "for keeps independent chain",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();for(;u0;){break;}const t0=u0;let u1:string|number=f2();for(;u1;){break;}const t1=u1;let u2:string|number=f3();for(;u2;){break;}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "for compatible chain",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();for(;u0;){break;}const t0=u0;let u1:string|number=f2();for(;u1;){break;}const t1=u1;let u2:string|number=f3();for(;u2;){break;}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "conditional keeps independent chain",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();u0?0:1;const t0=u0;let u1:string|number=f2();u1?0:1;const t1=u1;let u2:string|number=f3();u2?0:1;const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "conditional compatible chain",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();u0?0:1;const t0=u0;let u1:string|number=f2();u1?0:1;const t1=u1;let u2:string|number=f3();u2?0:1;const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "logical and keeps independent chain",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();u0&&0;const t0=u0;let u1:string|number=f2();u1&&0;const t1=u1;let u2:string|number=f3();u2&&0;const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "logical and compatible chain",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();u0&&0;const t0=u0;let u1:string|number=f2();u1&&0;const t1=u1;let u2:string|number=f3();u2&&0;const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "logical or keeps independent chain",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();u0||0;const t0=u0;let u1:string|number=f2();u1||0;const t1=u1;let u2:string|number=f3();u2||0;const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "logical or compatible chain",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();u0||0;const t0=u0;let u1:string|number=f2();u1||0;const t1=u1;let u2:string|number=f3();u2||0;const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "label keeps independent chain",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();done:{if(u0)break done;}const t0=u0;let u1:string|number=f2();done:{if(u1)break done;}const t1=u1;let u2:string|number=f3();done:{if(u2)break done;}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "label compatible chain",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();done:{if(u0)break done;}const t0=u0;let u1:string|number=f2();done:{if(u1)break done;}const t1=u1;let u2:string|number=f3();done:{if(u2)break done;}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "finally keeps independent chain",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();try{if(u0){}}finally{}const t0=u0;let u1:string|number=f2();try{if(u1){}}finally{}const t1=u1;let u2:string|number=f3();try{if(u2){}}finally{}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "finally compatible chain",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();try{if(u0){}}finally{}const t0=u0;let u1:string|number=f2();try{if(u1){}}finally{}const t1=u1;let u2:string|number=f3();try{if(u2){}}finally{}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "catch keeps independent chain",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();try{throw 1;}catch{if(u0){}}const t0=u0;let u1:string|number=f2();try{throw 1;}catch{if(u1){}}const t1=u1;let u2:string|number=f3();try{throw 1;}catch{if(u2){}}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "catch compatible chain",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();try{throw 1;}catch{if(u0){}}const t0=u0;let u1:string|number=f2();try{throw 1;}catch{if(u1){}}const t1=u1;let u2:string|number=f3();try{throw 1;}catch{if(u2){}}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "for in keeps independent chain",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();for(const k in {}){if(u0){}}const t0=u0;let u1:string|number=f2();for(const k in {}){if(u1){}}const t1=u1;let u2:string|number=f3();for(const k in {}){if(u2){}}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "for in compatible chain",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();for(const k in {}){if(u0){}}const t0=u0;let u1:string|number=f2();for(const k in {}){if(u1){}}const t1=u1;let u2:string|number=f3();for(const k in {}){if(u2){}}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "for of keeps independent chain",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();for(const k of [1]){if(u0){}}const t0=u0;let u1:string|number=f2();for(const k of [1]){if(u1){}}const t1=u1;let u2:string|number=f3();for(const k of [1]){if(u2){}}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "for of compatible chain",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();for(const k of [1]){if(u0){}}const t0=u0;let u1:string|number=f2();for(const k of [1]){if(u1){}}const t1=u1;let u2:string|number=f3();for(const k of [1]){if(u2){}}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "declarations follow consumers",
+      "source": "function outer(){const q:number=f0();let u0:string|number=f1();if(u0){}const t0=u0;let u1:string|number=f2();if(u1){}const t1=u1;let u2:string|number=f3();if(u2){}const t2=u2;let last:string|number=\"s\";const t3=last;function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "completed chain reaches impossible false test",
+      "source": "function outer(){if(typeof f0()===\"number\"){}function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(u0){}const t0=u0;let u1:string|number=f2();if(u1){}const t1=u1;let u2:string|number=f3();if(u2){}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "completed chain reaches impossible true test",
+      "source": "function outer(){if(typeof f0()===\"string\"){}function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(u0){}const t0=u0;let u1:string|number=f2();if(u1){}const t1=u1;let u2:string|number=f3();if(u2){}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "completed chain permits nondeciding query",
+      "source": "function outer(){const answer=typeof f0()===\"number\";function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(u0){}const t0=u0;let u1:string|number=f2();if(u1){}const t1=u1;let u2:string|number=f3();if(u2){}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "completed chain reaches switch label",
+      "source": "function outer(){switch(typeof f0()){case \"number\":break;}function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(u0){}const t0=u0;let u1:string|number=f2();if(u1){}const t1=u1;let u2:string|number=f3();if(u2){}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "transitive copied values",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(u0){}const a0=u0;const b0=a0;const t0=b0;let u1:string|number=f2();if(u1){}const a1=u1;const b1=a1;const t1=b1;let u2:string|number=f3();if(u2){}const a2=u2;const b2=a2;const t2=b2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "later stores do not replace captured value",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(u0){}const t0=u0;u0=1;let u1:string|number=f2();if(u1){}const t1=u1;u1=1;let u2:string|number=f3();if(u2){}const t2=u2;u2=1;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "same spelled inner binding",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(u0){}const t0=u0;let u1:string|number=f2();if(u1){}const t1=u1;let u2:string|number=f3();if(u2){}const t2=u2;let last:string|number=\"s\";const t3=last;{let u2:number=1;const t2=u2;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "equal conditional stores",
+      "source": "function outer(){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(u0){u0=\"a\";}else{u0=\"b\";}const t0=u0;let u1:string|number=f2();if(u1){u1=\"a\";}else{u1=\"b\";}const t1=u1;let u2:string|number=f3();if(u2){u2=\"a\";}else{u2=\"b\";}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "different conditional stores retain both arms",
+      "source": "function outer(){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(u0){u0=1;}const t0=u0;let u1:string|number=f2();if(u1){u1=1;}const t1=u1;let u2:string|number=f3();if(u2){u2=1;}const t2=u2;let last:string|number=\"s\";const t3=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "both actual predecessor values retained",
+      "source": "function outer(flag:boolean){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(u0){}const t0=u0;let u1:string|number=f2();if(u1){}const t1=u1;let u2:string|number=f3();if(u2){}const t2=u2;let last:string|number=flag?\"s\":1;const t3=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "completed dynamic input remains unknown",
+      "source": "function outer(unknown:any){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(u0){}const t0=u0;let u1:string|number=f2();if(u1){}const t1=u1;let u2:string|number=f3();if(u2){}const t2=u2;let last:string|number=unknown;const t3=last;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "connected copy chain refines both directions",
+      "source": "function f(x:string|number){const a=x;const b=a;if(b is string){if(x is number){}}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "disconnected copied domain stays open",
+      "source": "function f(x:string|number,y:string|number){const a=x;const b=y;if(a is string){if(b is number){}}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "strict equality relation remains transitive",
+      "source": "function f(x:string|number,y:string|number,z:string|number){if(x===y){if(y===z){if(x is string){if(z is number){}}}}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "write invalidates copied relation",
+      "source": "function f(x:string|number,y:string|number){const a=x;x=y;if(a is string){if(x is number){}}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "captured write invalidates copied relation",
+      "source": "function f(x:string|number,y:string|number){const a=x;function change(){x=y;}change();if(a is string){if(x is number){}}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "shadowed copy has separate lexical owner",
+      "source": "function f(x:string|number,y:string|number){const a=x;{const x=y;if(a is string){if(x is number){}}}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "callable replacement with same named parameter",
+      "source": "function outer(flag:boolean){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(u0){}const t0=u0;let u1:string|number=f2();if(u1){}const t1=u1;let u2:string|number=f3();if(u2){}const t2=u2;let last:string|number=\"s\";const t3=last;f3=function(f3){return 1;};}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "legacy forced mode",
+      "source": "function outer(){if(f()){}if(typeof f()===\"number\"){}function f():string{return \"s\";}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "legacy automatic mode",
+      "source": "function outer(){if(f()){}if(typeof f()===\"number\"){}function f():string{return \"s\";}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "disabled mode executes ordinary source",
+      "source": "function outer(){return 1;}outer();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      },
+      "checking": "disabled"
+    },
+    {
+      "name": "checking never executes uncalled chain",
+      "source": "function outer(){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(u0){}const t0=u0;let u1:string|number=f2();if(u1){}const t1=u1;let u2:string|number=f3();if(u2){}const t2=u2;let last:string|number=\"s\";const t3=last;}\"not invoked\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "not invoked"
+      }
+    }
+  ]
+}
