@@ -53,7 +53,7 @@ import {
 import { indexTypeRecord } from './index-type.mts';
 import { CanonicalizeType, isTypeObject } from './intern.mts';
 import { elementTypeOfIterable, widenForBinding } from './unify.mts';
-import { CompileTimeEvaluabilityChecker, ResolveBindingDeclaration } from './compile-time-evaluability.mts';
+import { CompileTimeEvaluabilityChecker, ResolveBindingDeclaration, LexicalFreeReferences } from './compile-time-evaluability.mts';
 import { LexicalMutationAnalysis } from './lexical-mutations.mts';
 import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
@@ -99,7 +99,7 @@ import { memberKind, normalizedMemberType, addMemberContract, abstractMemberViol
 import { intrinsicDeclarationRecord } from './records.mts';
 import { prepareFamilyPattern, finishFamilyPattern, FamilyPatternError, hasDeferredFamilyDefault, inFamilyPattern, enterFamilyPattern, leaveFamilyPattern, deferredFamilyDefault, deferredDeclarationDefault } from './family-patterns.mts';
 import { bindIntrinsicArguments, intrinsicParameters, isHigherKindedArgument } from './intrinsic-generics.mts';
-import { rememberDeclaredConstraint, rememberDeclaredDefault } from './records.mts';
+import { rememberDeclaredConstraint, rememberDeclaredDefault, rememberGenericTypeCaptures } from './records.mts';
 import {
   R, Throw, wellKnownSymbols,
 } from '#self';
@@ -746,19 +746,35 @@ export interface GenericDefaultCheck {
   readonly node: ParseNode.Type;
   readonly parameters: readonly TypeParameterRecord[];
   readonly bindings: ReadonlyMap<string, TypeRecord>;
+  readonly captures?: TypeParameterRecord['Captures'];
+  readonly constraint?: boolean;
 }
 const genericDefaultChecks = new WeakMap<object, readonly GenericDefaultCheck[]>();
-const evaluatedGenericDefaults = new WeakMap<object, WeakMap<object, TypeRecord>>();
+const evaluatedGenericDefaults = new WeakMap<object, WeakMap<object, { inputs: readonly [object, TypeRecord][], constraint: boolean, type: TypeRecord }[]>>();
 export function GenericDefaultChecksOf(root: object): readonly GenericDefaultCheck[] {
   return genericDefaultChecks.get(root) ?? [];
 }
-export function SetEvaluatedGenericDefault(application: object, node: object, type: TypeRecord): void {
-  let defaults = evaluatedGenericDefaults.get(application);
+function genericTypeInputs(check: GenericDefaultCheck): readonly [object, TypeRecord][] {
+  return [...check.parameters.flatMap((parameter): [object, TypeRecord][] => {
+    const bound = check.bindings.get(parameter.Name);
+    return bound ? [[parameter.Declaration, bound]] : [];
+  }), ...(check.captures ?? []).map((capture): [object, TypeRecord] => [capture.Declaration, capture.Type])];
+}
+export function EvaluatedGenericType(check: GenericDefaultCheck): TypeRecord | undefined {
+  const inputs = genericTypeInputs(check);
+  return evaluatedGenericDefaults.get(check.application)?.get(check.node)?.find((result) => result.constraint === !!check.constraint
+    && result.inputs.length === inputs.length && inputs.every(([declaration, type], i) =>
+      result.inputs[i][0] === declaration && SameType(type, result.inputs[i][1])))?.type;
+}
+export function SetEvaluatedGenericDefault(check: GenericDefaultCheck, type: TypeRecord): void {
+  let defaults = evaluatedGenericDefaults.get(check.application);
   if (!defaults) {
     defaults = new WeakMap();
-    evaluatedGenericDefaults.set(application, defaults);
+    evaluatedGenericDefaults.set(check.application, defaults);
   }
-  defaults.set(node, type);
+  const results = defaults.get(check.node) ?? [];
+  results.push({ inputs: genericTypeInputs(check), constraint: !!check.constraint, type });
+  defaults.set(check.node, results);
 }
 
 export interface GenericWhereCheck {
@@ -4478,6 +4494,27 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // anything - which is what lets `...xs: Ts` pass the rest-annotation
         // rule that rightly refuses a scalar `T` with no constraint.
         scope.set(name, { Kind: 'array', Element: anyTypeRecord, Extent: 'dynamic' } as Known);
+      }
+      {
+        const own = new Set(list);
+        const captures = new Map<ParseNode.TypeParameter, TypeRecord>();
+        const seen = new Set<ParseNode>();
+        const collect = (source: ParseNode): void => {
+          if (seen.has(source)) return;
+          seen.add(source);
+          for (const reference of LexicalFreeReferences(source)) {
+            const binding = ResolveBindingDeclaration(reference, reference.name);
+            if (binding?.kind === 'type-parameter') {
+              const parameter = (binding.node as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } })
+                .TypeParameters?.TypeParameterList?.find((p) => p.BindingIdentifier.name === reference.name);
+              if (parameter && !own.has(parameter)) captures.set(parameter, parameterTypeRecord(reference.name));
+            } else if (binding?.kind === 'function') collect(binding.node);
+            else if (binding?.node.type === 'TypeAliasDeclaration' && !binding.node.TypeParameters) collect(binding.node.Type);
+          }
+        };
+        if (tp.TypeParameterConstraint) collect(tp.TypeParameterConstraint);
+        if (tp.TypeParameterDefault) collect(tp.TypeParameterDefault);
+        rememberGenericTypeCaptures(tp as ParseNode.TypeParameter, [...captures].map(([Declaration, Type]) => ({ Declaration, Type })));
       }
       if (tp.TypeParameterDefault) {
         // Retain a symbolic description in the declaring environment. Merely
@@ -13415,12 +13452,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // A later default must wait for an earlier default's binding, not
           // publish that parameter's placeholder as an application result.
           const pending = FreeReferences(tp.DefaultNode).some((reference) => scope.has(reference.name) && !into.has(reference.name));
-          const resolved = pending ? null : evaluatedGenericDefaults.get(validation.application)?.get(tp.DefaultNode)
-            ?? tp.Default ?? resolveType(tp.DefaultNode);
-          const supplied = resolved && substituteFreeTypeParameters(resolved, into);
+          const check: GenericDefaultCheck = { application: validation.application, node: tp.DefaultNode,
+            parameters: typeParams, bindings: new Map(into), captures: tp.Captures };
+          const resolved = pending ? null : EvaluatedGenericType(check) ?? tp.Default ?? resolveType(tp.DefaultNode);
+          const supplied = resolved && substituteFreeTypeParameters(resolved, into, typeParams.map((parameter) => parameter.Declaration));
           if (supplied) into.set(tp.Name, supplied);
           else if ([...into.values()].every((type) => !mentionsTypeParameter(type))) {
-            genericDefaults.push({ application: validation.application, node: tp.DefaultNode, parameters: typeParams, bindings: new Map(into) });
+            genericDefaults.push(check);
           }
         }
         const supplied = into.get(tp.Name);
@@ -13430,7 +13468,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           continue;
         }
-        const bound = typeParameterConstraint(tp, into);
+        let bound = typeParameterConstraint(tp, into);
+        if (tp.ConstraintNode && (!bound || bound.Kind === 'deferred')) {
+          const check: GenericDefaultCheck = { application: validation.application, node: tp.ConstraintNode,
+            parameters: typeParams, bindings: new Map(into), captures: tp.Captures, constraint: true };
+          const evaluated = EvaluatedGenericType(check);
+          if (evaluated) bound = evaluated;
+          else genericDefaults.push(check);
+        }
         // #sec-the-type-type: "`type` is the type whose values are the Type
         // Objects ... it is the Static Type of a type name or type expression
         // in expression position ... a type argument may be constrained to
@@ -17033,6 +17078,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return null;
       }
       const byName = new Map<string, TypeRecord>();
+      const declarations = [...(kase.TypeParameters?.TypeParameterList ?? []), ...(kase.TypeParameters?.Captures ?? [])];
+      let owner = kase.parent;
+      while (owner && owner.type !== 'ClassDeclaration' && owner.type !== 'ClassExpression') owner = owner.parent;
+      let receiver = target?.type === 'MemberExpression' ? staticType(target.MemberExpression) : null;
+      const seenReceivers = new Set<TypeRecord>();
+      while (receiver?.Kind === 'nominal' && !seenReceivers.has(receiver)) {
+        seenReceivers.add(receiver);
+        if (receiver.Declaration === owner) {
+          const parameters = (owner as ParseNode.ClassDeclaration).TypeParameters?.TypeParameterList ?? [];
+          for (let i = 0; i < parameters.length; i += 1) {
+            const parameter = parameters[i];
+            const name = parameter.BindingIdentifier.name;
+            const argument = receiver.Arguments[i];
+            if (argument === undefined || declarations.some((own) => own.BindingIdentifier.name === name)) continue;
+            byName.set(name, typeof argument === 'number'
+              ? { Kind: 'literal', Value: Value(argument), Base: makePrimitive('number') } as TypeRecord : argument);
+            declarations.push(parameter);
+          }
+          break;
+        }
+        receiver = receiver.Base ?? null;
+      }
       for (const b of bindings) {
         byName.set(b.Capture.Name, typeof b.Value === 'number'
           ? { Kind: 'literal', Value: Value(b.Value), Base: makePrimitive('number') } as TypeRecord
@@ -17048,7 +17115,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       } finally {
         if (pushed) typeParameterScopes.pop();
       }
-      const returned = written ? substituteFreeTypeParameters(written, byName) : null;
+      const returned = written ? substituteFreeTypeParameters(written, byName, declarations) : null;
       // The case's own signature, instantiated: the callee's type at this call.
       const pushedForParameters = pushTypeParameterScopeOf(kase as never);
       try {
@@ -17290,12 +17357,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           let record: TypeRecord | null = null;
           if (run.length === 0 && param.TypeParameterDefault) {
             const application = callee as ParseNode.TypeArgumentsExpression;
-            const resolved = evaluatedGenericDefaults.get(application)?.get(param.TypeParameterDefault)
-              ?? resolveType(param.TypeParameterDefault);
+            const parameters = typeParameterRecordsOf(params);
+            const check: GenericDefaultCheck = { application, node: param.TypeParameterDefault,
+              parameters, bindings: new Map(frame), captures: parameters[j]?.Captures };
+            const resolved = EvaluatedGenericType(check) ?? resolveType(param.TypeParameterDefault);
             record = resolved ? substituteTypeParameters(resolved, frame) : null;
             if (!record && [...frame.values()].every((t) => !mentionsTypeParameter(t))) {
-              genericDefaults.push({ application, node: param.TypeParameterDefault,
-                parameters: typeParameterRecordsOf(params), bindings: new Map(frame) });
+              genericDefaults.push(check);
               pendingOwnerDefault = true;
             }
           } else if (param.IsVariadic) {
@@ -18663,7 +18731,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 bindTypeParametersFromArguments(parameters, passed, names, bindings);
               }
               if (declaredOrPublished && bindings.size > 0) {
-                return substituteFreeTypeParameters(declaredOrPublished, bindings);
+                return substituteFreeTypeParameters(declaredOrPublished, bindings, only.TypeParameters?.map((parameter) => parameter.Declaration));
               }
             }
           }

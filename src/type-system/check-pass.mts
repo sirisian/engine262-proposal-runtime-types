@@ -14,7 +14,7 @@ import { JSStringValue, ObjectValue, Value } from '../value.mts';
 import { CreateTypeDiagnostic, TypeDiagnosticApplies, TypeDiagnosticOf } from './diagnostics.mts';
 import type { TypeRecord } from './records.mts';
 import {
-  DefaultValueOf, TypeNodeToTypeRecord, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame,
+  DefaultValueOf, TypeNodeToTypeRecord, BindTypeParameterTyped, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame,
   EvaluateRefinementPredicate, ValuePackView, InferGenericBindingsFrom, staticArguments, markValueParameterBinding } from './runtime.mts';
 import { GenericWhereVerified, MarkGenericWhereVerified } from './generic-where.mts';
 import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
@@ -26,7 +26,7 @@ import {
   RecheckAfterTypeEvaluation, HasDeferredGuardChecks, DeferredTypeChecksOf, SetEvaluatedTypeNode, SetEvaluatedEnum,
   TakeDeferredMetadataChecks, TakeDeferredCrossingChecks, TakeDeferredMeetChecks, TakeUnclaimedKeyChecks, TakeNarrowingRequests, SetNarrowingResolutions,
   TakeDefaultRequirements, GenericWhereChecksOf, DefaultConversionChecksOf, GenericDefaultChecksOf, SetEvaluatedGenericDefault,
-  type DeferredMetadataCheck, type NarrowingRequest, type NarrowingResolution,
+  type DeferredMetadataCheck, type NarrowingRequest, type NarrowingResolution, type GenericDefaultCheck,
 } from './check.mts';
 import { BeginTypeEvaluation, BudgetExhaustionKind, EndTypeEvaluation, IsBudgetExhausted } from './budget.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
@@ -317,6 +317,131 @@ function isUninitializedImportRead(error: unknown): boolean {
   return false;
 }
 
+/** Evaluate a required generic source with its original lexical declarations. */
+function* evaluateGenericSource(check: GenericDefaultCheck): PlainEvaluator<TypeRecord | undefined> {
+  const inputs = new Map((check.captures ?? []).map((capture) => [capture.Declaration, capture.Type]));
+  for (const parameter of check.parameters) {
+    const bound = check.bindings.get(parameter.Name);
+    if (bound) inputs.set(parameter.Declaration, bound);
+  }
+  const parameterOf = (owner: ParseNode, name: string): ParseNode.TypeParameter | undefined =>
+    (owner as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } })
+      .TypeParameters?.TypeParameterList?.find((parameter) => parameter.BindingIdentifier.name === name);
+  const checked = new Set<ParseNode>();
+  const available = (source: ParseNode): boolean => {
+    if (checked.has(source)) return true;
+    checked.add(source);
+    if (TypeExpressionEvaluabilityViolation(source, Value.undefined, (binding, reference) => {
+      // Imports use the actual module environment and its initialization order.
+      if (ResolveBindingDeclaration(reference, reference.name)?.kind === 'import') return false;
+      if (binding.kind === 'type-parameter') {
+        const parameter = parameterOf(binding.node, reference.name);
+        const bound = parameter && inputs.get(parameter);
+        return !bound || whereInputNeedsRuntimeValue(bound);
+      }
+      if (binding.kind === 'function') return binding.node.type !== 'FunctionDeclaration';
+      if (binding.node.type === 'TypeAliasDeclaration') return !!binding.node.TypeParameters;
+      return true;
+    })) return false;
+    for (const reference of LexicalFreeReferences(source)) {
+      const binding = ResolveBindingDeclaration(reference, reference.name);
+      if (!binding && !builtinTypeRecord(reference.name) && !BoundTypeRecordForName(reference.name)
+        && !FRAGMENT_FLOOR.includes(reference.name) && !ERROR_CONSTRUCTORS.includes(reference.name)) return false;
+      if (binding?.kind === 'function' && !available(binding.node)) return false;
+      if (binding?.node.type === 'TypeAliasDeclaration' && !available(binding.node.Type)) return false;
+    }
+    return true;
+  };
+  if (!available(check.node)) return undefined;
+  const context = surroundingAgent.runningExecutionContext;
+  const outer = context.LexicalEnvironment;
+  const functions = new Map<ParseNode, Value>();
+  const aliases = new Map<ParseNode, TypeRecord>();
+  const activeAliases = new Set<ParseNode>();
+  // Each helper has its own environment and generic frame: spelling alone
+  // cannot merge a helper's captured T with the caller's independent T.
+  function* prepare(source: ParseNode): PlainEvaluator<{ scope: DeclarativeEnvironmentRecord, frame: Map<string, TypeRecord> } | undefined> {
+    const scope = new DeclarativeEnvironmentRecord(outer);
+    const frame = new Map<string, TypeRecord>();
+    const parameters = [...inputs].filter(([parameter]) => {
+      const name = parameter.BindingIdentifier.name;
+      const binding = ResolveBindingDeclaration(source, name);
+      return binding?.kind === 'type-parameter' && parameterOf(binding.node, name) === parameter;
+    });
+    for (const [parameter, bound] of parameters) bindTypeParameter(frame, parameter.BindingIdentifier.name, bound, parameter);
+    const previous = context.LexicalEnvironment;
+    context.LexicalEnvironment = scope;
+    pushTypeParameterFrame(frame);
+    try {
+      const bind = (name: string, value: Value): void => {
+        if (X(scope.HasBinding(Value(name))) === Value.true) return;
+        X(scope.CreateImmutableBinding(Value(name), Value.true));
+        X(scope.InitializeBinding(Value(name), value));
+      };
+      for (const [parameter, bound] of parameters) {
+        const name = parameter.BindingIdentifier.name;
+        Q(yield* BindTypeParameterTyped(frame, name, bound, parameter));
+        const type = frame.get(name)!;
+        let value: Value;
+        if (parameter.IsValueParameter && type.Kind === 'literal') value = type.Value;
+        else if (parameter.IsValueParameter && type.Kind === 'tuple') value = Q(yield* ValuePackView(type));
+        else value = GetTypeObject(type);
+        bind(name, value);
+      }
+      // Cache the function before its dependencies, allowing mutual recursion.
+      if (source.type === 'FunctionDeclaration') functions.set(source, X(InstantiateFunctionObject(source, scope, context.PrivateEnvironment)));
+      for (const reference of LexicalFreeReferences(source)) {
+        const binding = ResolveBindingDeclaration(reference, reference.name);
+        if (binding?.kind === 'function' && binding.node.type === 'FunctionDeclaration') {
+          if (!functions.has(binding.node)) {
+            const prepared = Q(yield* prepare(binding.node));
+            if (!prepared) return undefined;
+          }
+          bind(reference.name, functions.get(binding.node)!);
+        } else if (binding?.node.type === 'TypeAliasDeclaration') {
+          const alias = binding.node;
+          if (!aliases.has(alias)) {
+            if (activeAliases.has(alias)) return undefined;
+            activeAliases.add(alias);
+            const prepared = Q(yield* prepare(alias.Type));
+            if (!prepared) return undefined;
+            const saved = context.LexicalEnvironment;
+            context.LexicalEnvironment = prepared.scope;
+            pushTypeParameterFrame(prepared.frame);
+            try {
+              aliases.set(alias, Q(yield* TypeNodeToTypeRecord(alias.Type)));
+            } finally {
+              popTypeParameterFrame();
+              context.LexicalEnvironment = saved;
+              activeAliases.delete(alias);
+            }
+          }
+          bind(reference.name, GetTypeObject(aliases.get(alias)!));
+        }
+      }
+      return { scope, frame };
+    } finally {
+      popTypeParameterFrame();
+      context.LexicalEnvironment = previous;
+    }
+  }
+  BeginFragmentEvaluation();
+  try {
+    const prepared = Q(yield* prepare(check.node));
+    if (!prepared) return undefined;
+    context.LexicalEnvironment = prepared.scope;
+    pushTypeParameterFrame(prepared.frame);
+    try {
+      return Q(yield* TypeNodeToTypeRecord(check.node));
+    } finally {
+      popTypeParameterFrame();
+    }
+  } finally {
+    context.LexicalEnvironment = outer;
+    EndFragmentEvaluation();
+  }
+}
+
 function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Module): PlainEvaluator {
   const items = sourcePreparationItems(root);
   // A |ComputedType| alias -
@@ -371,39 +496,15 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   for (;;) {
     let resolved = false;
     for (const check of GenericDefaultChecksOf(root)) {
-      const available = new Set(check.bindings.keys());
-      if (FirstNonEvaluableForm(check.node) || FirstFreeReference(check.node, available)) continue;
-      const context = surroundingAgent.runningExecutionContext;
-      const outer = context.LexicalEnvironment;
-      const scope = new DeclarativeEnvironmentRecord(null);
-      const frame = new Map<string, TypeRecord>();
-      for (const parameter of check.parameters) {
-        const bound = check.bindings.get(parameter.Name);
-        if (!bound) continue;
-        bindTypeParameter(frame, parameter.Name, bound, parameter.Declaration);
-        let value: Value;
-        if (parameter.Kind === 'value' && bound.Kind === 'literal') value = bound.Value;
-        else if (parameter.Kind === 'value' && bound.Kind === 'tuple') value = Q(yield* ValuePackView(bound));
-        else value = GetTypeObject(bound);
-        X(scope.CreateImmutableBinding(Value(parameter.Name), Value.true));
-        X(scope.InitializeBinding(Value(parameter.Name), value));
-      }
-      context.LexicalEnvironment = scope;
-      pushTypeParameterFrame(frame);
-      BeginFragmentEvaluation();
-      let result;
-      try {
-        result = EnsureCompletion(yield* TypeNodeToTypeRecord(check.node));
-      } finally {
-        EndFragmentEvaluation();
-        popTypeParameterFrame();
-        context.LexicalEnvironment = outer;
-      }
+      const result = EnsureCompletion(yield* evaluateGenericSource(check));
       if (result.Type !== 'normal') {
         if (IsBudgetExhausted()) return result;
+        if (check.constraint) return CreateTypeDiagnostic('rt-type-evaluation', check.node, 'pre-evaluation',
+          'a generic constraint could not be evaluated: $1', Value(inspect(result.Value)));
         return CreateTypeDiagnostic('rt-default-evaluation', check.node, 'pre-evaluation', 'a generic default could not be evaluated: $1', Value(inspect(result.Value)));
       }
-      SetEvaluatedGenericDefault(check.application, check.node, result.Value);
+      if (result.Value === undefined) continue;
+      SetEvaluatedGenericDefault(check, result.Value);
       resolved = true;
     }
     if (!resolved) break;

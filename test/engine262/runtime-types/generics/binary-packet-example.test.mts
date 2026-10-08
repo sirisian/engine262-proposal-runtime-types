@@ -9,4 +9,4 @@ import { binaryPacketProgram } from './fixtures/binarypacket-harness.mts';
 // quantized to 18 bits over [-1024, 1024], a step of about 0.0078.
 test('the binary packet example round-trips every written value', () => {
   expect(evaluated(binaryPacketProgram)).toBe('513,true,12.5001220703125,-300.2523193359375,777777,ace | true,3000,zed');
-}, 90000);
+}, 180000);

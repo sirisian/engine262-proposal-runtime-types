@@ -279,6 +279,11 @@ export function parameterFromDeclaration(node: ParseNode, Type: TypeRecord): Par
  * [[Declaration]] is the node itself - the identity a ~parameter~ Type Record
  * substitutes by, and what makes two references to one parameter one thing.
  */
+export interface GenericTypeCapture {
+  readonly Declaration: ParseNode.TypeParameter;
+  readonly Type: TypeRecord;
+}
+
 export interface TypeParameterRecord {
   readonly Name: string;
   readonly Kind: 'type' | 'value';
@@ -289,6 +294,7 @@ export interface TypeParameterRecord {
   readonly Constraint?: TypeRecord;
   readonly DefaultNode: ParseNode.Type | null;
   readonly Default?: TypeRecord;
+  readonly Captures?: readonly GenericTypeCapture[];
   readonly Declaration: ParseNode.TypeParameter;
   /**
    * Engine-side: the ~parameter~ Type Record this parameter denotes within its
@@ -313,6 +319,11 @@ export function rememberDeclaredDefault(node: ParseNode.Type, record: TypeRecord
   declaredDefaults.set(node, record);
 }
 
+const genericTypeCaptures = new WeakMap<ParseNode.TypeParameter, readonly GenericTypeCapture[]>();
+export function rememberGenericTypeCaptures(parameter: ParseNode.TypeParameter, captures: readonly GenericTypeCapture[]): void {
+  genericTypeCaptures.set(parameter, captures);
+}
+
 /** The Type Parameter Records of a declared TypeParameterList, in declaration order. */
 export function typeParameterRecordsOf(list: readonly ParseNode.TypeParameter[] | undefined | null): readonly TypeParameterRecord[] {
   if (!list || list.length === 0) {
@@ -329,6 +340,7 @@ export function typeParameterRecordsOf(list: readonly ParseNode.TypeParameter[] 
     DefaultNode: (tp as unknown as { TypeParameterDefault?: ParseNode.Type | null }).TypeParameterDefault ?? null,
     Default: tp.TypeParameterDefault ? declaredDefaults.get(tp.TypeParameterDefault) : undefined,
     Declaration: tp,
+    Captures: genericTypeCaptures.get(tp),
   }));
 }
 
@@ -2068,7 +2080,8 @@ export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): b
     || (!!sig.ThisType && mentionsTypeParameter(sig.ThisType, seen))
     || sig.Narrows?.some((rule) => mentionsTypeParameter(rule.Type, seen))
     || sig.TypeParameters?.some((parameter) => mentionsTypeParameter(parameter.Constraint ?? null, seen)
-      || mentionsTypeParameter(parameter.Default ?? null, seen)))) {
+      || mentionsTypeParameter(parameter.Default ?? null, seen)
+      || parameter.Captures?.some((capture) => mentionsTypeParameter(capture.Type, seen))))) {
     return true;
   }
   // An OBJECT type mentions a parameter through its members. An interface
@@ -2129,9 +2142,15 @@ export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): b
 export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string, TypeRecord>): Known => makeSubstitution(bindings, t)(t);
 
 /** Substitute an enclosing environment without applying a returned generic signature. */
-export const substituteFreeTypeParameters = (t: Known, bindings: ReadonlyMap<string, TypeRecord>): Known => makeSubstitution(bindings, null)(t);
+export const substituteFreeTypeParameters = (t: Known, bindings: ReadonlyMap<string, TypeRecord>,
+  declarations?: readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[]): Known => makeSubstitution(bindings, null, { bindings, declarations })(t);
 
-const makeSubstitution = (bindings: ReadonlyMap<string, TypeRecord>, root: Known): ((type: Known) => Known) => {
+interface CaptureSubstitution {
+  readonly bindings: ReadonlyMap<string, TypeRecord>;
+  readonly declarations?: readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[];
+}
+const makeSubstitution = (bindings: ReadonlyMap<string, TypeRecord>, root: Known,
+  captures: CaptureSubstitution = { bindings, declarations: root?.Kind === 'function' ? root.Signatures.flatMap((signature) => (signature.TypeParameters ?? []).map((parameter) => parameter.Declaration)) : undefined }): ((type: Known) => Known) => {
   // Reference targets can close a recursive record. Install a shell before
   // descending, and keep unchanged records (notably storage views) identical.
   const seen = new Map<TypeRecord, Known>();
@@ -2140,7 +2159,7 @@ const makeSubstitution = (bindings: ReadonlyMap<string, TypeRecord>, root: Known
     if (seen.has(type)) return seen.get(type)!;
     const shell = { ...type } as TypeRecord;
     seen.set(type, shell);
-    const result = substituteTypeParametersUncached(type, bindings, walk, root);
+    const result = substituteTypeParametersUncached(type, bindings, walk, root, captures);
     if (result !== type && result?.Kind === type.Kind && type.Kind !== 'deferred'
       && (type.Kind !== 'parameter' || !bindings.has(type.Name))) {
       Object.assign(shell, result);
@@ -2153,7 +2172,7 @@ const makeSubstitution = (bindings: ReadonlyMap<string, TypeRecord>, root: Known
 };
 
 const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string, TypeRecord>,
-  walk: (type: Known) => Known, root: Known): Known => {
+  walk: (type: Known) => Known, root: Known, captures: CaptureSubstitution): Known => {
   if (!t) {
     return t;
   }
@@ -2288,13 +2307,21 @@ const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string
         // A nested generic signature introduces new lexical bindings.
         const scoped = t !== root && sig.TypeParameters?.some((p) => bindings.has(p.Name))
           ? new Map([...bindings].filter(([name]) => !sig.TypeParameters!.some((p) => p.Name === name))) : null;
-        const apply = scoped ? makeSubstitution(scoped, null) : walk;
+        const apply = scoped ? makeSubstitution(scoped, null, captures) : walk;
         return {
           ...sig,
           ...(sig.TypeParameters ? { TypeParameters: sig.TypeParameters.map((parameter) => ({
             ...parameter,
             ...(parameter.Constraint ? { Constraint: apply(parameter.Constraint)! } : {}),
             ...(parameter.Default ? { Default: apply(parameter.Default)! } : {}),
+            ...(parameter.Captures ? { Captures: parameter.Captures.map((capture) => {
+              // Captures identify free declarations even when an inner binder
+              // has the same spelling. Applying a root signature supplies only
+              // that root's declarations; free substitution supplies captures.
+              const relevant = captures.declarations && !captures.declarations.includes(capture.Declaration)
+                ? new Map<string, TypeRecord>() : captures.bindings;
+              return { ...capture, Type: makeSubstitution(relevant, null)(capture.Type)! };
+            }) } : {}),
             ...(parameter.Parameter ? { Parameter: apply(parameter.Parameter)! } : {}),
           })) } : {}),
           Parameters: (sig.Parameters ?? []).map((prm) => (prm?.Type

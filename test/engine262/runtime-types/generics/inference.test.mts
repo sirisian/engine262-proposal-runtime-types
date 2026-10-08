@@ -75,7 +75,8 @@ test('a computed constraint is evaluated over earlier bindings, left to right', 
   const prefix = 'function baseOf(T) { return T; } '
     + 'function pair<T: type, U: type extends baseOf(T)>(x: T, y: U): U { return y; } ';
   expect(evaluated(`${prefix}String(Reflect.typeOf(pair((5 := uint32), (7 := uint32))) === uint32);`)).toBe('true');
-  expect(evaluated(`${prefix}try { pair((5 := uint32), (7 := uint16)); "no-throw"; } catch (e) { "rejected"; }`)).toBe('rejected');
+  expectStaticTypeError(`${prefix}try { pair((5 := uint32), (7 := uint16)); "no-throw"; } catch (e) { "rejected"; }`);
+  expect(evaluated(`${prefix}const dynamic: any = pair; try { dynamic((5 := uint32), (7 := uint16)); "no-throw"; } catch (e) { "rejected"; }`)).toBe('rejected');
 });
 
 // -- The typed-literal value carrier is transparent ----------------------------

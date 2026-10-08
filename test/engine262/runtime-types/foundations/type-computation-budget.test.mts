@@ -9,6 +9,12 @@ const sources = [
   `type T = [number = ${value}];`,
   `type T = [${value}].<uint8>;`,
   `type T<N: uint32> = uint8 where (${value} === 1); type U = T.<1>;`,
+  `function build(T: type): type { ${work} return T; } function outer<T: type>(x: T) {
+    return function inner<U: type = build(T)>(x: U): U { return x; };
+  } const fn = outer(1); fn.<>;`,
+  `function build(T: type): type { ${work} return T; } function outer<T: type>(x: T) {
+    return function inner<U: type extends build(T)>(x: U): U { return x; };
+  } const fn = outer(1); fn(2);`,
 ];
 
 function check(source: string, steps: number) {
