@@ -2804,7 +2804,7 @@ function checkCompletedDeclarations(statementList: readonly ParseNode[] | null, 
     }
   };
   collectSourceBindings(statementList);
-  const contracts = new Map<ParseNode, TypeRecord>();
+  const contracts = new Map<ParseNode, Known>();
   for (;;) {
     const bindings: BindingContractPass = { sourceBindings, available: new Map(contracts), completed: new Map(), pending: false };
     const referenceStores = new Map<ParseNode, TypeRecord[]>();
@@ -2824,8 +2824,8 @@ function checkCompletedDeclarations(statementList: readonly ParseNode[] | null, 
 
 interface BindingContractPass {
   sourceBindings: WeakSet<ParseNode>;
-  available: ReadonlyMap<ParseNode, TypeRecord>;
-  completed: Map<ParseNode, TypeRecord>;
+  available: ReadonlyMap<ParseNode, Known>;
+  completed: Map<ParseNode, Known>;
   pending: boolean;
 }
 
@@ -3684,10 +3684,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // A transfer evaluated with an unavailable inference input is not a final
   // proof. Completing the input alone does not recompute that transfer.
   const incompleteFlows = new WeakSet<FlowFacts>();
-  // A fresh successful store can establish a value independently of an earlier
-  // unfinished branch. Keep that proof with its flow edge and lexical owner.
+  // A completed input or fresh store can establish a domain independently of
+  // an unfinished test. Keep that proof with its flow edge and lexical owner.
   let independentFlowFacts = new Map<Frame, Set<string>>();
   const independentFactsOf = new WeakMap<FlowFacts, Map<Frame, Set<string>>>();
+  const independentDomainsOf = new WeakMap<FlowFacts, FlowFacts>();
+  // These identities distinguish unfinished selections from dependencies
+  // shared by every alternative of a subsequent completed test.
+  const pendingTestEdgesOf = new WeakMap<FlowFacts, Set<object>>();
+  let pendingTestEdges = new Set<object>();
   const flowReadCollectors: { incomplete: boolean }[] = [];
   const independentTestInputs: Map<Frame, Set<string>>[] = [];
   const bindingFlowReads = new WeakMap<ParseNode, { incomplete: boolean }>();
@@ -3709,6 +3714,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     return frames[0];
   };
+  const independentDomains = (proofs: Map<Frame, Set<string>>): FlowFacts => {
+    const domains: FlowFacts = new Map();
+    for (const [owner, names] of proofs) {
+      if (!frames.includes(owner)) continue;
+      for (const name of names) {
+        for (let i = frames.length - 1; i >= 0; i -= 1) {
+          if (flowOwner(name, i) !== owner) continue;
+          const type = frames[i].bindings.get(name);
+          if (!type && !frames[i].declaredNames.has(name)) continue;
+          if (!domains.has(owner)) domains.set(owner, new Map());
+          // This summary can be unknown without installing any flow fact.
+          domains.get(owner)!.set(name, type ? completedFlowType(type) : anyTypeRecord);
+          break;
+        }
+      }
+    }
+    return domains;
+  };
   const captureFlow = (): FlowFacts => {
     const result: FlowFacts = new Map();
     frames.forEach((frame, index) => {
@@ -3721,14 +3744,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     });
     if (flowNeedsReplay) incompleteFlows.add(result);
+    if (pendingTestEdges.size) pendingTestEdgesOf.set(result, new Set(pendingTestEdges));
     if (independentFlowFacts.size) independentFactsOf.set(result, new Map([...independentFlowFacts]
       .filter(([owner]) => frames.includes(owner))
       .map(([owner, names]) => [owner, new Set(names)])));
+    if (independentFlowFacts.size) independentDomainsOf.set(result, independentDomains(independentFlowFacts));
     return result;
   };
   const restoreFlow = (facts: FlowFacts = new Map()): void => {
     const current = captureFlow();
     flowNeedsReplay = incompleteFlows.has(facts);
+    pendingTestEdges = new Set(pendingTestEdgesOf.get(facts));
     independentFlowFacts = new Map([...(independentFactsOf.get(facts) ?? [])].map(([owner, names]) => [owner, new Set(names)]));
     const active = [...facts].filter(([frame, entries]) => frames.includes(frame) && entries.size);
     if (current.size === active.length && active.every(([frame, entries]) => {
@@ -3786,11 +3812,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     const independent = new Map<Frame, Set<string>>();
+    const domains: FlowFacts = new Map();
+    const firstEdges = pendingTestEdgesOf.get(live[0]) ?? new Set();
+    const differentPredecessors = live.some((facts) => {
+      const edges = pendingTestEdgesOf.get(facts) ?? new Set();
+      return edges.size !== firstEdges.size || [...edges].some((edge) => !firstEdges.has(edge));
+    });
     for (const [owner, names] of independentFactsOf.get(live[0]) ?? []) {
-      const common = new Set([...names].filter((name) => live.every((facts) => independentFactsOf.get(facts)?.get(owner)?.has(name))));
+      const common = new Set([...names].filter((name) => {
+        if (!live.every((facts) => independentFactsOf.get(facts)?.get(owner)?.has(name))) return false;
+        const types = live.map((facts) => independentDomainsOf.get(facts)?.get(owner)?.get(name));
+        if (types.some((type) => !type)) return false;
+        // An unfinished predecessor may disappear. A union of different
+        // domains is not independent of that predecessor's feasibility.
+        if (differentPredecessors
+          && !types.every((type) => SameType(type!, types[0]!) && SameType(types[0]!, type!))) return false;
+        if (!domains.has(owner)) domains.set(owner, new Map());
+        domains.get(owner)!.set(name, CanonicalizeType({ Kind: 'union', Members: types as TypeRecord[] }));
+        return true;
+      }));
       if (common.size) independent.set(owner, common);
     }
-    if (independent.size) independentFactsOf.set(joined, independent);
+    if (independent.size) {
+      independentFactsOf.set(joined, independent);
+      independentDomainsOf.set(joined, domains);
+    }
+    const pendingEdges = new Set(live.flatMap((facts) => [...pendingTestEdgesOf.get(facts) ?? []]));
+    if (pendingEdges.size) pendingTestEdgesOf.set(joined, pendingEdges);
     if (live.some((facts) => incompleteFlows.has(facts))) incompleteFlows.add(joined);
     return joined;
   };
@@ -23996,15 +24044,89 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     result.skipped = changed.whenFalse;
   };
 
+  const independentTestFacts = (): Map<Frame, Set<string>> => {
+    if (flowNeedsReplay) return new Map([...independentFlowFacts].map(([owner, names]) => [owner, new Set(names)]));
+    const proofs = new Map<Frame, Set<string>>();
+    const portable = (type: TypeRecord): boolean => type.Kind === 'any'
+      || type.Kind === 'primitive' && type.Name !== 'symbol' && type.Arguments.length === 0
+      || type.Kind === 'literal' && portable(type.Base as TypeRecord)
+      || type.Kind === 'union' && type.Members.every(portable);
+    for (const frame of frames) for (const name of new Set([...frame.bindings.keys(), ...frame.declaredNames])) {
+      const type = frame.bindings.get(name);
+      if (name.includes('.') || type && (!portable(type) || deferredStoredTypes.has(type)) || flowOwner(name) !== frame
+        || frame.unresolvedAnnotations.has(name)
+        || frame.bindingKinds.get(name)?.endsWith('-ref') || uninitializedVars.get(frame)?.has(name)) continue;
+      const binding = preparedBindings.get(frame)?.get(name);
+      if (binding && !bindingReady(binding)) continue;
+      if (!proofs.has(frame)) proofs.set(frame, new Set());
+      proofs.get(frame)!.add(name);
+    }
+    return proofs;
+  };
+  const discardTestSubjects = (test: ParseNode, proofs: Map<Frame, Set<string>>): void => {
+    const affected = new Map<Frame, Set<string>>();
+    const include = (owner: Frame, name: string): boolean => {
+      const rootName = name.split('.')[0];
+      if (!affected.has(owner)) affected.set(owner, new Set());
+      const names = affected.get(owner)!;
+      if (names.has(rootName)) return false;
+      names.add(rootName);
+      return true;
+    };
+    const visit = (node: ParseNode): boolean => {
+      if (functionBoundary(node)) return false;
+      let changed = node.type === 'IdentifierReference' && include(flowOwner(node.name), node.name);
+      for (const [key, child] of Object.entries(node)) {
+        if (['parent', 'location', 'sourceText', 'TypeAnnotation'].includes(key)) continue;
+        for (const value of Array.isArray(child) ? child : [child]) {
+          if (value && typeof value === 'object' && typeof value.type === 'string') changed = visit(value) || changed;
+        }
+      }
+      return changed;
+    };
+    visit(test);
+    const touches = (place: CapturedPlace): boolean => affected.get(place.owner)?.has(place.name.split('.')[0]) ?? false;
+    for (let changed = true; changed;) {
+      changed = false;
+      for (const { source, target } of valueCopies) {
+        if (!placeStillCaptured(source) || !placeStillCaptured(target) || !touches(source) && !touches(target)) continue;
+        changed = include(source.owner, source.name) || changed;
+        changed = include(target.owner, target.name) || changed;
+      }
+      for (const [owner, names] of affected) for (const name of names) {
+        // An unfinished predicate/copy can acquire a source relation only
+        // after its initializer completes. Do not rely on its absence yet.
+        const binding = preparedBindings.get(owner)?.get(name);
+        if (binding && !bindingReady(binding)) {
+          changed = inDeclarationScope(binding, () => visit(binding.expression)) || changed;
+        }
+        const tag = savedTags.get(owner)?.get(name);
+        for (const origin of [...savedPredicates.get(owner)?.get(name)?.origins ?? [], ...(tag ? [tag.source] : [])]) {
+          if (placeStillCaptured(origin)) changed = include(origin.owner, origin.name) || changed;
+        }
+      }
+    }
+    for (const [owner, names] of proofs) for (const name of names) {
+      if (affected.get(owner)?.has(name.split('.')[0])) names.delete(name);
+    }
+  };
+
   /** Evaluate each operand once, retaining separate facts for both answers. */
   const walkTest = (test: ParseNode, deciding = true, truthiness = deciding, visit = true): TestFlow => {
     const incomplete = flowNeedsReplay;
     // A test can retain completed values while unrelated flow is unfinished.
     // Calls apply their ordinary effects, revoking affected input proofs.
-    // Publish only surviving proofs when all required test inputs are complete.
-    const independent = incomplete && flowWrites(test).size === 0
-      && !containsPropertyRead(test) && !containsDeferredTestBoundary(test)
-      ? new Map([...independentFlowFacts].map(([owner, names]) => [owner, new Set(names)])) : undefined;
+    // An unfinished result cannot change a fact unrelated to its subjects.
+    const independent = !containsPropertyRead(test) && !containsDeferredTestBoundary(test)
+      ? independentTestFacts() : undefined;
+    // A store elsewhere in the expression does not invalidate every input.
+    // Exclude its destinations from the pre-test proof on every alternative.
+    if (independent) for (const written of flowWrites(test)) {
+      for (const names of independent.values()) for (const name of names) {
+        if (name === written || name.startsWith(`${written}.`)) names.delete(name);
+      }
+    }
+    const domains = independent && independentDomains(independent);
     const reads = { incomplete: false };
     let pending = false;
     const defer = visit && inferenceDepth === 0 && deferredTestDepth === 0 && !incomplete
@@ -24029,10 +24151,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (independent) independentTestInputs.pop();
     }
     if (incomplete || flowNeedsReplay) {
+      if (independent && (pending || reads.incomplete)) discardTestSubjects(test, independent);
+      if ((pending || reads.incomplete) && result.whenTrue && result.whenTrue === result.whenFalse) {
+        // Equal fact maps do not identify an unfinished test's alternatives.
+        // Their bodies can later establish different independent domains.
+        const other = new Map([...result.whenTrue].map(([owner, entries]) => [owner, new Map(entries)]));
+        pendingTestEdgesOf.set(other, new Set(pendingTestEdgesOf.get(result.whenTrue)));
+        result = { whenTrue: result.whenTrue, whenFalse: other };
+      }
       for (const edge of [result.whenTrue, result.whenFalse]) if (edge) {
         incompleteFlows.add(edge);
-        if (independent && !pending && !reads.incomplete) independentFactsOf.set(edge, independent);
-        else independentFactsOf.delete(edge);
+        if (pending || reads.incomplete) {
+          pendingTestEdgesOf.set(edge, new Set([...pendingTestEdgesOf.get(edge) ?? [], {}]));
+        }
+        if (independent) {
+          independentFactsOf.set(edge, independent);
+          independentDomainsOf.set(edge, new Map([...independent].map(([owner, names]) => [owner,
+            new Map([...names].flatMap((name) => {
+              const type = edge.get(owner)?.get(name) ?? domains?.get(owner)?.get(name);
+              return type ? [[name, type] as const] : [];
+            })),
+          ])));
+        } else {
+          independentFactsOf.delete(edge);
+          independentDomainsOf.delete(edge);
+        }
       }
     }
     return result;
@@ -25918,8 +26061,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const ambiguous = new Set<ParseNode>();
     for (const binding of sourceBindings) {
       const { node, type } = binding;
-      if (!binding.completed || !binding.context || !bindingReady(binding) || !type
-        || !(type.Kind === 'union' ? type.Members : [type]).every((member) => {
+      if (!binding.completed || !binding.context || !bindingReady(binding)
+        || type && !(type.Kind === 'union' ? type.Members : [type]).every((member) => {
           const base = member.Kind === 'literal' ? member.Base : member;
           return base.Kind === 'primitive' && base.Arguments.length === 0 && base.Name !== 'symbol';
         })) {
@@ -25927,8 +26070,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         continue;
       }
       const previous = bindingContracts.completed.get(node);
-      if (previous && !SameType(previous, type)) ambiguous.add(node);
-      else bindingContracts.completed.set(node, type);
+      if (bindingContracts.completed.has(node) && previous !== type
+        && (!previous || !type || !SameType(previous, type))) ambiguous.add(node);
+      else bindingContracts.completed.set(node, type ?? null);
     }
     for (const node of ambiguous) bindingContracts.completed.delete(node);
   };
@@ -27527,6 +27671,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             frames: frames.slice(), varFrames: varFrames.slice(), typeScopes: typeParameterScopes.slice(),
             ...(flowIndependent === undefined ? {} : { contribution: { flowIndependent, thisTypes: thisTypeFrames.slice() } }),
             type: portable ? bindingContracts?.available.get(binding) : undefined,
+            // A completed unknown contract is progress too. It carries no
+            // value-domain proof, but its consumers no longer await a type.
+            completed: portable && bindingContracts?.available.has(binding)
+              && bindingContracts.available.get(binding) === null,
           };
           preparedBindings.get(frame)!.set(binding.BindingIdentifier.name, prepared);
           if (portable && flowIndependent === undefined) sourceBindings.add(prepared);

@@ -514,7 +514,7 @@
     },
     {
       "name": "both actual predecessor values retained",
-      "source": "function outer(flag:boolean){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(u0){}const t0=u0;let u1:string|number=f2();if(u1){}const t1=u1;let u2:string|number=f3();if(u2){}const t2=u2;let last:string|number=flag?\"s\":1;const t3=last;}",
+      "source": "function outer(flag:boolean,text:string,count:number){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(u0){}const t0=u0;let u1:string|number=f2();if(u1){}const t1=u1;let u2:string|number=f3();if(u2){}const t2=u2;let last:string|number=flag?text:count;const t3=last;}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
