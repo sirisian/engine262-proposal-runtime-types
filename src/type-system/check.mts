@@ -3134,13 +3134,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * A `const` cannot be reassigned, so one never needs widening; it is left to
    * `invalidateNarrowing`, which drops nothing it does not hold.
    */
-  const assignedNamesIn = (node: unknown, out: Set<string>): void => {
+  const assignedNamesIn = (node: unknown, out: Set<string>, include?: (place: ParseNode, name: string) => boolean): void => {
     if (!node || typeof node !== 'object') {
       return;
     }
     if (Array.isArray(node)) {
       for (const c of node) {
-        assignedNamesIn(c, out);
+        assignedNamesIn(c, out, include);
       }
       return;
     }
@@ -3154,7 +3154,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         let place = x as ParseNode;
         while (place.type === 'MemberExpression' && narrowableName(place) === null) place = place.MemberExpression;
         const name = narrowableName(place);
-        if (name !== null) out.add(name);
+        if (name !== null && (!include || include(place, name))) out.add(name);
       }
     };
     if (n.type === 'AssignmentExpression') {
@@ -3168,7 +3168,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') {
         continue;
       }
-      assignedNamesIn(n[key], out);
+      assignedNamesIn(n[key], out, include);
     }
   };
 
@@ -3181,23 +3181,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const selectedOperatorCalls = new WeakSet<object>();
   /** Whether a subtree contains a call, which may reassign a captured binding. */
-  const containsCall = (node: unknown): boolean => {
+  const containsCall = (node: unknown, immediate = false): boolean => {
     if (!node || typeof node !== 'object') {
       return false;
     }
     if (Array.isArray(node)) {
-      return node.some((c) => containsCall(c));
+      return node.some((c) => containsCall(c, immediate));
     }
     const n = node as Record<string, unknown> & { type?: string };
     if (typeof n.type !== 'string') {
       return false;
+    }
+    if (immediate && functionBoundary(node as ParseNode)) {
+      // Computed names and decorators run when the callable is created;
+      // its parameters and body run only when it is invoked.
+      return ['ClassElementName', 'PropertyName', 'Decorators'].some((key) => containsCall(n[key], true));
     }
     if (selectedOperatorCalls.has(n) || n.type === 'CallExpression' || n.type === 'NewExpression'
       || n.type === 'TaggedTemplateExpression' || n.type === 'OptionalExpression') {
       return true;
     }
     return Object.keys(n).some((key) => (key === 'parent' || key === 'location'
-      || key === 'strict' || key === 'sourceText' ? false : containsCall(n[key])));
+      || key === 'strict' || key === 'sourceText' ? false : containsCall(n[key], immediate)));
   };
 
   const containsPropertyRead = (node: unknown): boolean => {
@@ -3224,18 +3229,40 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** Drop the narrowing of every name a loop can reassign, before its body is walked. */
   const widenForLoop = (node: ParseNode): void => {
     const assigned = new Set<string>();
-    assignedNamesIn(node, assigned);
+    assignedNamesIn(node, assigned, (place, name) => {
+      // A nested callable is not executed by visiting its declaration.
+      // Calls are handled by the captured-write inventory below.
+      let child = place;
+      for (let at = place.parent; at && at !== node; child = at, at = at.parent) {
+        if (!functionBoundary(at)) continue;
+        const callable = at as unknown as Record<string, unknown>;
+        const creation = ['ClassElementName', 'PropertyName', 'Decorators'].some((key) => {
+          const part = callable[key];
+          return Array.isArray(part) ? part.includes(child) : part === child;
+        });
+        if (!creation) return false;
+      }
+      const rootName = name.split('.')[0];
+      const site = bindingSites.get(flowOwner(rootName))?.get(rootName);
+      const owner = site && ResolveBindingDeclaration(site, rootName)?.node;
+      const target = ResolveBindingDeclaration(place, rootName)?.node;
+      // A loop-head or block-local store cannot widen an outer namesake.
+      // A head already installed in this frame still widens its own domain.
+      return !owner || !target || owner === target;
+    });
     // A CALL in the body reaches names no syntactic scan of the body can see,
     // and the call-site widening below cannot help: it fires when the walk
     // REACHES the call, and a read placed before it has already been typed.
     // `for (…) { n = v.x; clob(); }` is exactly that order.
-    if (containsCall(node)) {
+    if (containsCall(node, true)) {
       for (const name of capturedMutationNames()) {
         assigned.add(name);
       }
     }
+    // The prescribed widening supplies a completed domain at the loop
+    // entry, independently of an unfinished first-iteration value.
     for (const name of assigned) {
-      invalidateNarrowing(name);
+      invalidateNarrowing(name, true);
     }
   };
 
@@ -3645,7 +3672,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /** Drop any narrowing of a name, which an assignment to it invalidates. */
-  const invalidateNarrowing = (name: string, completedEffect = false) => {
+  const invalidateNarrowing = (name: string, completedWidening = false) => {
     typeRevision += 1;
     // A PREFIX SWEEP, not an exact match: a narrowing is keyed by place, so
     // assigning `b` unseats `b.a` and `b.a.c` with it. Assigning `b.a.c` leaves
@@ -3675,9 +3702,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         break;
       }
     }
-    if (completedEffect) {
-      // #sec-dependent-flow-completion: an applied effect can finish a
-      // widened domain without waiting for the value or test it invalidates.
+    if (completedWidening) {
+      // #sec-dependent-flow-completion: a prescribed widening can finish a
+      // domain without waiting for the value or test it invalidates.
       // Keep that domain explicit on this edge; removing a fact alone would
       // let a saved pre-effect domain stand in for it at the test boundary.
       const owner = flowOwner(name);
@@ -24209,11 +24236,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const mark = errors.length;
     if (context) deferredTestDepth += 1;
     let result: TestFlow;
-    // Input proofs remain available to operand reads through the active
-    // snapshot. Remove subjects from carried outputs before evaluating the
-    // test, so an unfinished relation cannot pass its old proof through.
-    // Effects and component transfers may establish fresh output proofs.
-    discardTestSubjects(test, independentFlowFacts);
+    // Composite tests revoke input proofs in the component that consumes
+    // them. Removing every subject here would also remove right-hand proofs
+    // from a skipped predecessor. Ordinary leaf tests still revoke subjects
+    // before producing outputs; operand reads retain the active snapshot.
+    const composed = ['LogicalANDExpression', 'LogicalORExpression', 'ConditionalExpression', 'ParenthesizedExpression', 'CommaOperator'].includes(test.type)
+      || test.type === 'UnaryExpression' && test.operator === '!' && !declaredLogicalNot(test)
+      || test.type === 'CallExpression' && originalBooleanCall(test);
+    if (!composed) discardTestSubjects(test, independentFlowFacts);
     if (independent) independentTestInputs.push(independent);
     flowReadCollectors.push(reads);
     try {
