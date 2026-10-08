@@ -90,3 +90,45 @@ test('published results, receivers and narrowing contracts use the same scoped s
   expect(result.ThisType).toBe(number);
   expect(result.Narrows![0].Type).toBe(number);
 });
+
+
+test('a default-only capture participates in substitution without changing its declaration', () => {
+  const T = parameter('T');
+  const U = parameter('U');
+  const declaration = { ...binder(U), Default: T };
+  const source = fn(number, [declaration]);
+  expect(mentionsTypeParameter(source)).toBe(true);
+  const result = signature(substituteFreeTypeParameters(source, new Map([['T', string]])));
+  expect(result.TypeParameters![0].Default).toBe(string);
+  expect(result.TypeParameters![0].Declaration).toBe(declaration.Declaration);
+  expect(declaration.Default).toBe(T);
+});
+
+test('a default containing a generic signature preserves its inner binder', () => {
+  const T = parameter('T');
+  const U = parameter('U');
+  const inner = fn(T, [binder(T)]);
+  const source = fn(U, [{ ...binder(U), Default: inner }]);
+  const result = signature(substituteFreeTypeParameters(source, new Map([['T', number]])));
+  expect(signature(result.TypeParameters![0].Default!).Return).toBe(T);
+});
+
+test('separate applications substitute captured defaults independently', () => {
+  const T = parameter('T');
+  const U = parameter('U');
+  const source = fn(U, [{ ...binder(U), Default: T }]);
+  const a = signature(substituteFreeTypeParameters(source, new Map([['T', number]])));
+  const b = signature(substituteFreeTypeParameters(source, new Map([['T', string]])));
+  expect(a.TypeParameters![0].Default).toBe(number);
+  expect(b.TypeParameters![0].Default).toBe(string);
+  expect(source.Signatures[0].TypeParameters![0].Default).toBe(T);
+});
+
+test('substitution shares the captured record used by a constraint and default', () => {
+  const T = parameter('T');
+  const U = parameter('U', T);
+  const source = fn(U, [{ ...binder(U, T), Default: T }]);
+  const result = signature(substituteFreeTypeParameters(source, new Map([['T', number]])));
+  expect(result.TypeParameters![0].Default).toBe(result.TypeParameters![0].Constraint);
+  expect(result.TypeParameters![0].Default).toBe(number);
+});

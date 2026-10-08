@@ -99,7 +99,7 @@ import { memberKind, normalizedMemberType, addMemberContract, abstractMemberViol
 import { intrinsicDeclarationRecord } from './records.mts';
 import { prepareFamilyPattern, finishFamilyPattern, FamilyPatternError, hasDeferredFamilyDefault, inFamilyPattern, enterFamilyPattern, leaveFamilyPattern, deferredFamilyDefault, deferredDeclarationDefault } from './family-patterns.mts';
 import { bindIntrinsicArguments, intrinsicParameters, isHigherKindedArgument } from './intrinsic-generics.mts';
-import { rememberDeclaredConstraint } from './records.mts';
+import { rememberDeclaredConstraint, rememberDeclaredDefault } from './records.mts';
 import {
   R, Throw, wellKnownSymbols,
 } from '#self';
@@ -4478,6 +4478,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // anything - which is what lets `...xs: Ts` pass the rest-annotation
         // rule that rightly refuses a scalar `T` with no constraint.
         scope.set(name, { Kind: 'array', Element: anyTypeRecord, Extent: 'dynamic' } as Known);
+      }
+      if (tp.TypeParameterDefault) {
+        // Retain a symbolic description in the declaring environment. Merely
+        // resolving this description does not execute a computed default.
+        const resolvedDefault = resolveType(tp.TypeParameterDefault);
+        if (resolvedDefault) rememberDeclaredDefault(tp.TypeParameterDefault, resolvedDefault);
       }
     }
     for (let i = 0; i < list.length; i += 1) {
@@ -9478,6 +9484,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const isHigherKindedPosition = (node: ParseNode): boolean => {
+    // A higher-kinded default supplies a constructor, just like a written
+    // argument for that slot; a bare alias is not an empty application here.
+    const defaultParameter = node.parent;
+    if (defaultParameter?.type === 'TypeParameter' && defaultParameter.TypeParameterDefault === node && (defaultParameter.Arity ?? 0) > 0) return true;
     if (isHigherKindedArgument(node, (name) => functionNodes.get(name) ?? classNodes.get(name) ?? aliasNodes.get(name))) return true;
     const list = node.parent;
     const application = list?.parent;
@@ -11809,7 +11819,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // An open generic application still belongs to specialization. A closed
     // failure, in contrast, is an obligation, never evidence for `any`.
     const enclosingParameters = new Set<string>();
-    for (let parent: ParseNode | undefined = node.parent; parent; parent = parent.parent) {
+    let defaultSource = false;
+    for (let child: ParseNode = node, parent: ParseNode | undefined = node.parent; parent; child = parent, parent = parent.parent) {
+      // A generic default is computed only by an application that needs it,
+      // including when the computation is nested in an array or tuple type.
+      if (parent.type === 'TypeParameter' && parent.TypeParameterDefault === child) defaultSource = true;
       // Through typeParameterNamesOf, which also reads a primitive block's
       // captures of metadata.
       (typeParameterNamesOf(parent) ?? []).forEach((name) => enclosingParameters.add(name));
@@ -11841,7 +11855,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         : n.type === 'IdentifierReference' ? n : undefined;
       // Signature and alias prepasses may precede the function's value frame.
       // A runtime parameter still makes an annotation dependent in that pass.
-      if (name && reference && ResolveBindingDeclaration(reference, name)?.kind === 'parameter') open = true;
+      if (name && reference) {
+        const declaration = ResolveBindingDeclaration(reference, name);
+        if (declaration?.kind === 'parameter' || declaration?.kind === 'type-parameter') open = true;
+        // A local alias can hide an enclosing generic input. Follow its own
+        // source identity rather than treating the alias name as a closed type.
+        if (declaration?.node.type === 'TypeAliasDeclaration' && !declaration.node.TypeParameters) {
+          examine(declaration.node.Type);
+        }
+      }
       if (name && (assignedGlobalProperties.has(name) || typeParameterInScope(name) || enclosingParameters.has(name) || (frames.some((frame) => frame.declaredNames.has(name))
           && !frames.some((frame) => frame.constLiteralValues.has(name) || frame.aliases.has(name))
           && !functionNodes.has(name) && !classNodes.has(name) && !interfaceNodes.has(name) && !aliasNodes.has(name)))) {
@@ -11855,7 +11877,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     };
     examine(node);
     if (open) unresolvedTypes.delete(node);
-    if (!open && ['TypeReference', 'ComputedType', 'ArrayType', 'KeyOfType', 'IndexedAccessType', 'ParameterizedType'].includes(node.type)) {
+    if (!open && !defaultSource && ['TypeReference', 'ComputedType', 'ArrayType', 'KeyOfType', 'IndexedAccessType', 'ParameterizedType'].includes(node.type)) {
       const constants = new Map<string, Value>();
       const aliases = new Map<string, TypeRecord>();
       for (const frame of frames) {
@@ -13394,8 +13416,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // publish that parameter's placeholder as an application result.
           const pending = FreeReferences(tp.DefaultNode).some((reference) => scope.has(reference.name) && !into.has(reference.name));
           const resolved = pending ? null : evaluatedGenericDefaults.get(validation.application)?.get(tp.DefaultNode)
-            ?? resolveType(tp.DefaultNode);
-          const supplied = resolved && substituteTypeParameters(resolved, into);
+            ?? tp.Default ?? resolveType(tp.DefaultNode);
+          const supplied = resolved && substituteFreeTypeParameters(resolved, into);
           if (supplied) into.set(tp.Name, supplied);
           else if ([...into.values()].every((type) => !mentionsTypeParameter(type))) {
             genericDefaults.push({ application: validation.application, node: tp.DefaultNode, parameters: typeParams, bindings: new Map(into) });
@@ -26163,7 +26185,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     frames: readonly Frame[],
     varFrames: readonly Frame[],
     typeScopes: readonly Map<string, Known | null>[],
-    typeParameterNames?: readonly string[],
+    typeParameterScope?: Map<string, Known | null>,
   };
 
   type ReturnInference = InferenceScope & {
@@ -26200,7 +26222,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     frames.splice(0, frames.length, ...item.frames);
     varFrames.splice(0, varFrames.length, ...item.varFrames);
     typeParameterScopes.splice(0, typeParameterScopes.length, ...item.typeScopes);
-    if (item.typeParameterNames) typeParameterScopes.push(scopeOfNames(item.typeParameterNames));
+    if (item.typeParameterScope) typeParameterScopes.push(item.typeParameterScope);
     try {
       return action();
     } finally {
@@ -28040,10 +28062,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       let usable = true;
       // A generic declaration binds its type parameters for its whole
       // signature, so they are in scope while the annotations below resolve.
-      // The NAMES are still wanted downstream, for the pending inferences; the
-      // push is what carries the constraints.
-      const typeParameterScope = typeParameterNamesOf(n as ParseNode);
+      // Pending inference retains this same scope, including declaration
+      // identities, bounds, and value-parameter domains.
       const pushedTypeParameters = pushTypeParameterScopeOf(n as ParseNode);
+      const typeParameterScope = pushedTypeParameters ? typeParameterScopes.at(-1) : undefined;
       for (const p of fn.FormalParameters ?? []) {
         // A REST parameter is usable: it does have an arity, since
         // #sec-type-annotations makes its annotation the type of what it
@@ -28076,6 +28098,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       if (!usable) {
         rejected.add(name);
+        if (pushedTypeParameters) typeParameterScopes.pop();
         continue;
       }
       const Return = fn.TypeAnnotation ? resolveType(fn.TypeAnnotation.Type) : null;
@@ -28169,7 +28192,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           fn: n as ParseNode,
           parameterTypes: annotated.slice(),
           signatureTyped: annotated.some((t) => t !== null),
-          typeParameterNames: typeParameterScope ?? undefined,
+          typeParameterScope,
           generator: { asyncGenerator: isAsyncGenerator },
         });
       }
@@ -28182,7 +28205,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           fn: n as ParseNode,
           parameterTypes: annotated.slice(),
           signatureTyped: annotated.some((t) => t !== null),
-          typeParameterNames: typeParameterScope ?? undefined,
+          typeParameterScope,
           asyncFunction: true,
         });
       }
@@ -28195,7 +28218,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           fn: fn as unknown as ParseNode,
           parameterTypes: annotated.slice(),
           signatureTyped: annotated.some((t) => t !== null),
-          typeParameterNames: typeParameterScope ?? undefined,
+          typeParameterScope,
         });
       }
       collected.set(name, signatures);

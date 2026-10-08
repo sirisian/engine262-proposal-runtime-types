@@ -288,6 +288,7 @@ export interface TypeParameterRecord {
   readonly ConstraintNode: ParseNode.Type | null;
   readonly Constraint?: TypeRecord;
   readonly DefaultNode: ParseNode.Type | null;
+  readonly Default?: TypeRecord;
   readonly Declaration: ParseNode.TypeParameter;
   /**
    * Engine-side: the ~parameter~ Type Record this parameter denotes within its
@@ -307,6 +308,11 @@ export function rememberDeclaredConstraint(node: ParseNode.Type, record: TypeRec
   declaredConstraints.set(node, record);
 }
 
+const declaredDefaults = new WeakMap<ParseNode.Type, TypeRecord>();
+export function rememberDeclaredDefault(node: ParseNode.Type, record: TypeRecord): void {
+  declaredDefaults.set(node, record);
+}
+
 /** The Type Parameter Records of a declared TypeParameterList, in declaration order. */
 export function typeParameterRecordsOf(list: readonly ParseNode.TypeParameter[] | undefined | null): readonly TypeParameterRecord[] {
   if (!list || list.length === 0) {
@@ -321,6 +327,7 @@ export function typeParameterRecordsOf(list: readonly ParseNode.TypeParameter[] 
     ConstraintNode: tp.TypeParameterConstraint ?? null,
     Constraint: tp.TypeParameterConstraint ? declaredConstraints.get(tp.TypeParameterConstraint) : undefined,
     DefaultNode: (tp as unknown as { TypeParameterDefault?: ParseNode.Type | null }).TypeParameterDefault ?? null,
+    Default: tp.TypeParameterDefault ? declaredDefaults.get(tp.TypeParameterDefault) : undefined,
     Declaration: tp,
   }));
 }
@@ -2060,7 +2067,8 @@ export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): b
     || (!!sig.InferredReturn && mentionsTypeParameter(sig.InferredReturn, seen))
     || (!!sig.ThisType && mentionsTypeParameter(sig.ThisType, seen))
     || sig.Narrows?.some((rule) => mentionsTypeParameter(rule.Type, seen))
-    || sig.TypeParameters?.some((parameter) => mentionsTypeParameter(parameter.Constraint ?? null, seen)))) {
+    || sig.TypeParameters?.some((parameter) => mentionsTypeParameter(parameter.Constraint ?? null, seen)
+      || mentionsTypeParameter(parameter.Default ?? null, seen)))) {
     return true;
   }
   // An OBJECT type mentions a parameter through its members. An interface
@@ -2286,6 +2294,7 @@ const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string
           ...(sig.TypeParameters ? { TypeParameters: sig.TypeParameters.map((parameter) => ({
             ...parameter,
             ...(parameter.Constraint ? { Constraint: apply(parameter.Constraint)! } : {}),
+            ...(parameter.Default ? { Default: apply(parameter.Default)! } : {}),
             ...(parameter.Parameter ? { Parameter: apply(parameter.Parameter)! } : {}),
           })) } : {}),
           Parameters: (sig.Parameters ?? []).map((prm) => (prm?.Type
