@@ -43,7 +43,7 @@ import { isTokenStream } from '../intrinsics/TokenStream.mts';
 import type { ParameterRecord, SignatureRecord, TypeRecord, Known } from './records.mts';
 import { joinTypes } from './logical-types.mts';
 import { literalFitsNumericType } from './literal-fit.mts';
-import { InjectedClassOf, CanonicalWidthArgument, orderKey, typeParameterRecordsOf, setDeferredOperatorImpl, mentionsTypeParameter, substituteTypeParameters } from './records.mts';
+import { InjectedClassOf, CanonicalWidthArgument, orderKey, typeParameterRecordsOf, setDeferredOperatorImpl, mentionsTypeParameter, substituteTypeParameters, substituteFreeTypeParameters } from './records.mts';
 import {
   ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation, EnterTypeComputation, ExitTypeComputation, EvaluateWithTypeBudget,
 } from './budget.mts';
@@ -2766,6 +2766,7 @@ function deriveSignatureType(value: ObjectValue): TypeRecord {
   }
   const F = value as unknown as {
     Environment?: unknown,
+    TypeParameterFrame?: Map<string, TypeRecord>,
     FormalParameters?: readonly ParseNode[],
     ECMAScriptCode?: { parent?: object } | null,
     OverloadFunctions?: unknown,
@@ -2829,10 +2830,19 @@ function deriveSignatureType(value: ObjectValue): TypeRecord {
     }
   }
   const published = F.ECMAScriptCode?.parent ? PublishedReturnTypeOf(F.ECMAScriptCode.parent) : undefined;
+  // Reflection can inspect an escaped closure outside its creating call.
+  // Its captured arguments, not an unrelated caller's current frame, bind
+  // the free parameters of the published result. Own binders still shadow.
+  let instantiated = published ?? null;
+  if (published && F.TypeParameterFrame && mentionsTypeParameter(published)) {
+    const captured = new Map(F.TypeParameterFrame);
+    for (const signature of declared) for (const parameter of (signature as { TypeParameters?: readonly { Name: string }[] }).TypeParameters ?? []) captured.delete(parameter.Name);
+    instantiated = substituteFreeTypeParameters(published, captured);
+  }
   const Signatures = declared.map((o) => ({
     Parameters: o.Parameters,
     ...(o.Narrows ? { Narrows: o.Narrows } : {}),
-    Return: constructedType ?? o.ReturnType ?? (declared!.length === 1 ? published ?? null : null),
+    Return: constructedType ?? o.ReturnType ?? (declared!.length === 1 ? instantiated : null),
     // A class constructor's signature is not the catch-all: its return is
     // determined (the class) whether or not it wrote a parameter type.
     ...(o.Untyped && constructedType === undefined ? { Untyped: true } : {}),
@@ -3537,7 +3547,7 @@ export function SubstituteTypeArguments(
       return already;
     }
     if (r.Kind === 'parameter') {
-      return byName.get((r as { Name?: string }).Name ?? '') ?? r;
+      return substituteFreeTypeParameters(r, byName)!;
     }
     // A DEFERRED operator - `keyof T`, `T[K]` - waits on the parameters it
     // names, and this walk had no arm for it: an interface instantiated at `P`
@@ -3579,30 +3589,12 @@ export function SubstituteTypeArguments(
       }));
       return out;
     }
-    // A FUNCTION type's SIGNATURES carry parameters in their Return and their
-    // Parameters, and were not walked. `interface Box<T> { get(): T; }`
-    // substituted to `{ get(): T }` unchanged, so a class whose `get` returns a
-    // `uint8` did not satisfy `Box.<uint8>` - a program that worked until a
-    // parameterised interface began resolving.
-    //
-    // The same omission `Properties` had one position over: this walk handles an
-    // object, a union and an intersection, and a signature is the fourth place a
-    // parameter can sit.
+    // Interface/class application substitutes only a method's free inputs.
+    // Use the shared signature walk so its effective constraints, receiver,
+    // published result and repeated parameter records agree with its fields.
     if (r.Kind === 'function') {
-      const out = { ...r };
+      const out = substituteFreeTypeParameters(r, byName)!;
       seen.set(r, out);
-      out.Signatures = r.Signatures.map((sig) => {
-        // This walk binds the enclosing class/interface, never a method's
-        // locally declared parameter with the same spelling.
-        const scoped = sig.TypeParameters?.some((p) => byName.has(p.Name))
-          ? new Map([...byName].filter(([name]) => !sig.TypeParameters!.some((p) => p.Name === name))) : null;
-        const apply = scoped ? (type: TypeRecord) => substituteTypeParameters(type, scoped) as TypeRecord : walk;
-        return {
-          ...sig,
-          Parameters: sig.Parameters.map((prm) => ({ ...prm, Type: apply(prm.Type) })),
-          Return: sig.Return ? apply(sig.Return) : sig.Return,
-        };
-      });
       return out;
     }
     if (r.Kind === 'tuple') {

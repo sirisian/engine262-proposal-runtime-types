@@ -22,7 +22,7 @@ import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { skipDebugger } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf, PublishedNarrowingOf } from '../type-system/check.mts';
-import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue, typeParameterRecordsOf } from '../type-system/records.mts';
+import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue, typeParameterRecordsOf, substituteFreeTypeParameters, mentionsTypeParameter } from '../type-system/records.mts';
 import { IsAssignable, IsSubtype, SameMetadata, SameType, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
 import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver } from '../type-system/layout.mts';
 import type { PrivateName } from '../value.mts';
@@ -5146,7 +5146,13 @@ export function* EnforceReturnType(fn: AnnotatedFunction, value: Value): ValueEv
     if (published && published.Kind !== 'void') {
       // `void` is vacuous here for the reason #sec-void-type gives for a
       // declared one: it constrains the consumer, not the value leaving.
-      return Q(yield* CheckedConvertValue(value, published));
+      // The declaration's contract can mention a captured generic parameter.
+      // Body evaluation has installed the closure's frame and this call's own
+      // bindings, with lexical shadowing. Instantiate at this boundary rather
+      // than enforcing a bare parameter or changing the shared declaration.
+      const instantiated = mentionsTypeParameter(published)
+        ? substituteFreeTypeParameters(published, currentTypeParameterFrame() ?? new Map())! : published;
+      return Q(yield* CheckedConvertValue(value, instantiated));
     }
     return value;
   }
@@ -5994,7 +6000,9 @@ export function* returnTypeRecordOf(fn: Value): PlainEvaluator<TypeRecord | null
     // ways (#sec-inferred-return-types).
     const code = (fn as AnnotatedFunction).ECMAScriptCode as { parent?: object } | null | undefined;
     const published = code?.parent ? PublishedReturnTypeOf(code.parent) : undefined;
-    return published && published.Kind !== 'void' && published.Kind !== 'parameter' ? published : null;
+    const instantiated = published && mentionsTypeParameter(published)
+      ? substituteFreeTypeParameters(published, currentTypeParameterFrame() ?? new Map()) : published;
+    return instantiated && instantiated.Kind !== 'void' && instantiated.Kind !== 'parameter' ? instantiated : null;
   }
   const attempted = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation.Type));
   if (attempted.Type !== 'normal') {

@@ -392,11 +392,9 @@ test('a generic function infers a return over its type parameters', () => {
   expectEarly('let a: [].<uint32> = [1]; function first<T: type>(x: [].<T>): T { return x[0]; } const s: string = first(a);', 'uint.<32>');
 });
 
-test('a published type over type parameters is not enforced at the boundary', () => {
-  // Such a type means something only once a call binds them, and the boundary
-  // sees one function for every instantiation - so enforcing it there would
-  // refuse `id(5)` against a bare `T`. The checker publishes it and substitutes
-  // per call; the run time is told nothing.
+test('a published type over type parameters is instantiated at the boundary', () => {
+  // Each call enforces its own argument's contract, not a bare parameter or
+  // the concrete type supplied by an earlier invocation.
   expectOk('function id<T: type>(v: T) { return v; } id(5); id("hi"); id({});');
 });
 

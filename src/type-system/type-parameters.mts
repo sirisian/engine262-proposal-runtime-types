@@ -27,9 +27,9 @@ import { BlockCapturesOf } from './specialization-patterns.mts';
  * would close a cycle. Both are pure walks over Type Records and depend on
  * nothing here.
  */
-import { mentionsTypeParameter, substituteTypeParameters } from './records.mts';
+import { mentionsTypeParameter, substituteTypeParameters, substituteFreeTypeParameters } from './records.mts';
 
-export { mentionsTypeParameter, substituteTypeParameters };
+export { mentionsTypeParameter, substituteTypeParameters, substituteFreeTypeParameters };
 
 export const scopeOfNames = (names: Iterable<string>): Map<string, Known | null> => {
   const scope = new Map<string, Known | null>();

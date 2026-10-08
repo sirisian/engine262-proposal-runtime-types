@@ -1,0 +1,649 @@
+{
+  "cases": [
+    {
+      "name": "returned declared binder through inferred application",
+      "source": "function outer<T:type>(x:T){return function inner<T:type>(y:T):T{return y;};}const fn=outer(true);const a:number=fn(1);const b:string=fn(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "returned declared binder through explicit application",
+      "source": "function outer<T:type>(x:T){return function inner<T:type>(y:T):T{return y;};}const fn=outer.<boolean>(true);const a:number=fn(1);const b:string=fn(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "returned inferred binder through inferred application",
+      "source": "function outer<T:type>(x:T){return function inner<T:type>(y:T){const c=y;function p(){return c;}return p();};}const fn=outer(true);const a:number=fn(1);const b:string=fn(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "returned inferred binder through explicit application",
+      "source": "function outer<T:type>(x:T){return function inner<T:type>(y:T){const c=y;function p(){return c;}return p();};}const fn=outer.<boolean>(true);const a:number=fn(1);const b:string=fn(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "nested same spelling",
+      "source": "function outer<T:type>(x:T){return function middle<T:type>(y:T){return function inner<T:type>(z:T):T{return z;};};}const f=outer(true)(1);const v:string=f(\"s\");v;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "nested distinct middle and shadowing inner",
+      "source": "function outer<T:type>(x:T){return function middle<U:type>(y:U){return function inner<T:type>(z:T):T{return z;};};}const f=outer(true)(1);const v:string=f(\"s\");v;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "nested capture own outer binder",
+      "source": "function outer<T:type>(x:T){return function middle<U:type>(y:U){return function inner<T:type>(z:T):U{return y;};};}const f=outer(true)(1);const v:number=f(\"s\");String(v);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "distinct returned binder retains free capture",
+      "source": "function outer<T:type>(x:T){return function inner<U:type>(y:U):T{return x;};}const a=outer(1);const b=outer(\"s\");const x:number=a(true);const y:string=b(false);String(x)+y;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "own result mismatch",
+      "source": "function outer<T:type>(x:T){return function inner<T:type>(y:T):T{return y;};}const fn=outer(true);const v:number=fn(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "captured result mismatch",
+      "source": "function outer<T:type>(x:T){return function inner<U:type>(y:U):T{return x;};}const fn=outer(true);const v:number=fn(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "declared helper captured result reflection",
+      "source": "function make<T:type>(x:T){function get():T{return x;}function produce(){return get();}return produce;}const a=make(1);const b=make(\"s\");function num():number{return 1;}function str():string{return \"s\";}String(Reflect.typeOf(a)===Reflect.typeOf(num))+String(Reflect.typeOf(b)===Reflect.typeOf(str));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "truetrue"
+      }
+    },
+    {
+      "name": "declared helper incompatible symbolic consumer",
+      "source": "function outer<T:type>(x:T){function get():T{return x;}function produce(){return get();}const bad:boolean=produce();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "constant callback captured result reflection",
+      "source": "function make<T:type>(x:T){const get:()=>T=()=>x;function produce(){return get();}return produce;}const a=make(1);const b=make(\"s\");function num():number{return 1;}function str():string{return \"s\";}String(Reflect.typeOf(a)===Reflect.typeOf(num))+String(Reflect.typeOf(b)===Reflect.typeOf(str));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "truetrue"
+      }
+    },
+    {
+      "name": "constant callback incompatible symbolic consumer",
+      "source": "function outer<T:type>(x:T){const get:()=>T=()=>x;function produce(){return get();}const bad:boolean=produce();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "bounded declared helper explicit reflection",
+      "source": "function make<T:type extends string | number>(x:T){function get():T{return x;}function produce(){return get();}return produce;}const a=make.<number>(1);const b=make.<string>(\"s\");function num():number{return 1;}function str():string{return \"s\";}String(Reflect.typeOf(a)===Reflect.typeOf(num))+String(Reflect.typeOf(b)===Reflect.typeOf(str));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "truetrue"
+      }
+    },
+    {
+      "name": "bounded declared helper incompatible consumer",
+      "source": "function outer<T:type extends string | number>(x:T){function get():T{return x;}function produce(){return get();}const bad:boolean=produce();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "bounded callback explicit reflection",
+      "source": "function make<T:type extends string | number>(x:T){const get:()=>T=()=>x;function produce(){return get();}return produce;}const a=make.<number>(1);const b=make.<string>(\"s\");function num():number{return 1;}function str():string{return \"s\";}String(Reflect.typeOf(a)===Reflect.typeOf(num))+String(Reflect.typeOf(b)===Reflect.typeOf(str));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "truetrue"
+      }
+    },
+    {
+      "name": "bounded callback incompatible consumer",
+      "source": "function outer<T:type extends string | number>(x:T){const get:()=>T=()=>x;function produce(){return get();}const bad:boolean=produce();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "replaced function declaration has unknown result",
+      "source": "function bad():any{return \"s\";}function id<T:type>(x:T){function typed():T{return x;}function produce(){return typed();}let replacement:any=bad;typed=replacement;return produce();}id(1);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "declared result checks replaced function",
+      "source": "function bad():any{return \"s\";}function id<T:type>(x:T){function typed():T{return x;}function produce():T{return typed();}let replacement:any=bad;typed=replacement;return produce();}id(1);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "replaced annotated callback has unknown result",
+      "source": "function bad():any{return \"s\";}function id<T:type>(x:T){let typed:()=>T=()=>x;function produce(){return typed();}let replacement:any=bad;typed=replacement;return produce();}id(1);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "declared result checks replaced annotated callback",
+      "source": "function bad():any{return \"s\";}function id<T:type>(x:T){let typed:()=>T=()=>x;function produce():T{return typed();}let replacement:any=bad;typed=replacement;return produce();}id(1);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "replaced unannotated callback has unknown result",
+      "source": "function bad():any{return \"s\";}function id<T:type>(x:T){let typed=()=>x;function produce(){return typed();}let replacement:any=bad;typed=replacement;return produce();}id(1);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "declared result checks replaced unannotated callback",
+      "source": "function bad():any{return \"s\";}function id<T:type>(x:T){let typed=()=>x;function produce():T{return typed();}let replacement:any=bad;typed=replacement;return produce();}id(1);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "returned signature captured constraint",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);const n:number=fn(2);String(n);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "shadowing binder own constraint",
+      "source": "function outer<T:type>(x:T){return function inner<T:type extends number>(y:T):T{return y;};}const fn=outer(true);const n:number=fn(2);String(n);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "shadowing binder explicit argument and default",
+      "source": "function outer<T:type>(x:T){return function inner<T:type=number>(y:T):T{return y;};}const fn=outer(true);const n:number=fn.<number>(2);String(n);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "original nested capture shadowing witness",
+      "source": "function outer<T:type>(x:T){return function inner<T:type>(y:T):T{const captured=y;function produce(){return captured;}return produce();};}const fn=outer(true);const a:number=fn(1);const b:string=fn(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "original dynamic replacement witness with corrected expectation",
+      "source": "function bad():any{return \"s\";}function id<T:type>(x:T){function typed():T{return x;}function produce(){return typed();}let replacement:any=bad;typed=replacement;return produce();}id(1);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "own specialization 29",
+      "source": "function outer<T:type>(x:T){return function inner<T:type>(y:T):T{return y;};};const fn=outer(true);const specialized=fn.<number>;const a:number=fn.<number>(1);const b:string=fn.<string>(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "own specialization 30",
+      "source": "function outer<T:type>(x:T){return function inner<T:type>(y:T):T{return y;};};const fn=outer(true);const specialized=fn.<number>;const a:number=specialized(1);const b:string=fn.<string>(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "own specialization 31",
+      "source": "function outer<T:type>(x:T){return function inner<T:type>(y:T){return y;};};const fn=outer(true);const specialized=fn.<number>;const a:number=fn.<number>(1);const b:string=fn.<string>(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "own specialization 32",
+      "source": "function outer<T:type>(x:T){return function inner<T:type>(y:T){return y;};};const fn=outer(true);const specialized=fn.<number>;const a:number=specialized(1);const b:string=fn.<string>(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "own specialization 33",
+      "source": "const outer=function<T:type>(x:T){return function inner<T:type>(y:T):T{return y;};};const fn=outer(true);const specialized=fn.<number>;const a:number=fn.<number>(1);const b:string=fn.<string>(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "own specialization 34",
+      "source": "const outer=function<T:type>(x:T){return function inner<T:type>(y:T):T{return y;};};const fn=outer(true);const specialized=fn.<number>;const a:number=specialized(1);const b:string=fn.<string>(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "own specialization 35",
+      "source": "const outer=function<T:type>(x:T){return function inner<T:type>(y:T){return y;};};const fn=outer(true);const specialized=fn.<number>;const a:number=fn.<number>(1);const b:string=fn.<string>(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "own specialization 36",
+      "source": "const outer=function<T:type>(x:T){return function inner<T:type>(y:T){return y;};};const fn=outer(true);const specialized=fn.<number>;const a:number=specialized(1);const b:string=fn.<string>(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "returned object method",
+      "source": "function outer<T:type>(x:T){return {inner<T:type>(y:T):T{return y;}};}const value=outer(true);const fn=value.inner;const a:number=fn(1);const b:string=fn(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "returned object property",
+      "source": "function outer<T:type>(x:T){return {inner:function<T:type>(y:T):T{return y;}};}const value=outer(true);const fn=value.inner;const a:number=fn(1);const b:string=fn(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "stable helper result declaration",
+      "source": "function make<T:type>(x:T){function get():T{return x;}function produce(){return get();}return produce;}const a=make(1);const b=make(\"s\");const x:number=a();const y:string=b();String(x)+y;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "stable helper reflection declaration",
+      "source": "function make<T:type>(x:T){function get():T{return x;}function produce(){return get();}return produce;}const a=make(1);const b=make(\"s\");function n():number{return 1;}function s():string{return \"s\";}String(Reflect.typeOf(a)===Reflect.typeOf(n))+String(Reflect.typeOf(b)===Reflect.typeOf(s));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "truetrue"
+      }
+    },
+    {
+      "name": "stable helper result expression",
+      "source": "function make<T:type>(x:T){function get():T{return x;}return function(){return get();};}const a=make(1);const b=make(\"s\");const x:number=a();const y:string=b();String(x)+y;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "stable helper reflection expression",
+      "source": "function make<T:type>(x:T){function get():T{return x;}return function(){return get();};}const a=make(1);const b=make(\"s\");function n():number{return 1;}function s():string{return \"s\";}String(Reflect.typeOf(a)===Reflect.typeOf(n))+String(Reflect.typeOf(b)===Reflect.typeOf(s));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "truetrue"
+      }
+    },
+    {
+      "name": "stable helper result arrow",
+      "source": "function make<T:type>(x:T){function get():T{return x;}return ()=>get();}const a=make(1);const b=make(\"s\");const x:number=a();const y:string=b();String(x)+y;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "stable helper reflection arrow",
+      "source": "function make<T:type>(x:T){function get():T{return x;}return ()=>get();}const a=make(1);const b=make(\"s\");function n():number{return 1;}function s():string{return \"s\";}String(Reflect.typeOf(a)===Reflect.typeOf(n))+String(Reflect.typeOf(b)===Reflect.typeOf(s));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "truetrue"
+      }
+    },
+    {
+      "name": "bounded inference retains literal arguments",
+      "source": "function make<T:type extends number|string>(x:T){function get():T{return x;}function produce(){return get();}return produce;}const a=make(1);const b=make(\"s\");String(Reflect.typeOf(a))+\" / \"+String(Reflect.typeOf(b));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "() => 1 / () => 's'"
+      }
+    },
+    {
+      "name": "unrelated caller cannot replace captured symbolic result",
+      "source": "function make<T:type>(x:T){function get():T{return x;}function produce(){return get();}return produce;}const a=make(1);const b=make(\"s\");function invoke<T:type>(x:T){const n:number=a();const s:string=b();return String(n)+s;}invoke(true);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "unknown replacement cannot cause false impossible test",
+      "source": "function bad():any{return \"s\";}function id<T:type>(x:T){function typed():T{return x;}function produce(){return typed();}let replacement:any=bad;typed=replacement;const value=produce();if(typeof value===\"string\"){return value;}return \"wrong\";}id(1);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "annotated outer checks unknown replacement",
+      "source": "function bad():any{return \"s\";}function id<T:type>(x:T):T{function typed():T{return x;}function produce(){return typed();}let replacement:any=bad;typed=replacement;return produce();}id(1);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "replacement dynamic value satisfies explicit return",
+      "source": "function good():any{return 2;}function id<T:type>(x:T){function typed():T{return x;}function produce():T{return typed();}let replacement:any=good;typed=replacement;return produce();}String(id(1));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "captured typed return keeps temporal dead zone",
+      "source": "function make<T:type>(x:T){function get():T{return captured;}function produce(){return get();}return produce();const captured=x;}make(1);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "symbolic helper impossible if",
+      "source": "function outer<T:type extends string>(x:T){function get():T{return x;}function produce(){return get();}if(typeof produce()===\"number\"){}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "symbolic helper impossible while",
+      "source": "function outer<T:type extends string>(x:T){function get():T{return x;}function produce(){return get();}while(typeof produce()===\"number\"){break;}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "symbolic helper impossible do",
+      "source": "function outer<T:type extends string>(x:T){function get():T{return x;}function produce(){return get();}do {} while(typeof produce()===\"number\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "symbolic helper impossible for",
+      "source": "function outer<T:type extends string>(x:T){function get():T{return x;}function produce(){return get();}for(;typeof produce()===\"number\";){}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "symbolic helper impossible conditional",
+      "source": "function outer<T:type extends string>(x:T){function get():T{return x;}function produce(){return get();}return typeof produce()===\"number\"?\"a\":\"b\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "symbolic helper impossible logical",
+      "source": "function outer<T:type extends string>(x:T){function get():T{return x;}function produce(){return get();}return typeof produce()===\"number\"&&\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "immutable dynamic callback declaration bad",
+      "source": "function dynamic():any{return \"s\";}function outer<T:type>(x:T){let unknown:any=dynamic;const get:()=>T=unknown;function produce(){return get();}return produce();}String(outer(1));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "immutable dynamic callback expression bad",
+      "source": "function dynamic():any{return \"s\";}function outer<T:type>(x:T){let unknown:any=dynamic;const get:()=>T=unknown;const produce=function(){return get();};return produce();}String(outer(1));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "immutable dynamic callback arrow bad",
+      "source": "function dynamic():any{return \"s\";}function outer<T:type>(x:T){let unknown:any=dynamic;const get:()=>T=unknown;const produce=()=>get();return produce();}String(outer(1));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "unchanged callback parameter bad",
+      "source": "function dynamic():any{return \"s\";}function outer<T:type>(x:T,get:()=>T){function produce(){return get();}return produce();}let unknown:any=dynamic;String(outer(1,unknown));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "immutable dynamic callback declaration valid",
+      "source": "function dynamic():any{return 2;}function outer<T:type>(x:T){let unknown:any=dynamic;const get:()=>T=unknown;function produce(){return get();}return produce();}String(outer(1));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "immutable dynamic callback expression valid",
+      "source": "function dynamic():any{return 2;}function outer<T:type>(x:T){let unknown:any=dynamic;const get:()=>T=unknown;const produce=function(){return get();};return produce();}String(outer(1));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "immutable dynamic callback arrow valid",
+      "source": "function dynamic():any{return 2;}function outer<T:type>(x:T){let unknown:any=dynamic;const get:()=>T=unknown;const produce=()=>get();return produce();}String(outer(1));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "unchanged callback parameter valid",
+      "source": "function dynamic():any{return 2;}function outer<T:type>(x:T,get:()=>T){function produce(){return get();}return produce();}let unknown:any=dynamic;String(outer(1,unknown));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    }
+  ]
+}

@@ -1,0 +1,861 @@
+{
+  "description": "Dependent generic contracts retain symbolic bounds and instantiate captured results at runtime.",
+  "cases": [
+    {
+      "name": "constraint string consumer string",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "constraint string consumer number",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "constraint number consumer string",
+      "source": "function outer<T:type extends number>(flag:boolean,kind:T){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "constraint number consumer number",
+      "source": "function outer<T:type extends number>(flag:boolean,kind:T){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "runtime generic calls keep substitutions",
+      "source": "function id<T:type>(x:T):T{const captured=x;function produce(){return captured;}return produce();}const a:number=id(1);const b:string=id(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "runtime generic class keeps instances",
+      "source": "class C<T:type>{value:T;constructor(value:T){this.value=value;}read():T{const captured=this.value;function produce(){return captured;}return produce();}}const a:number=new C.<number>(1).read();const b:string=new C.<string>(\"s\").read();String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "runtime annotated generic calls keep substitutions",
+      "source": "function id<T:type>(x:T):T{const captured:T=x;function produce(){return captured;}return produce();}const a:number=id(1);const b:string=id(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "runtime annotated generic class keeps instances",
+      "source": "class C<T:type>{value:T;constructor(value:T){this.value=value;}read():T{const captured:T=this.value;function produce(){return captured;}return produce();}}const a:number=new C.<number>(1).read();const b:string=new C.<string>(\"s\").read();String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "bounded chain 2 string to string",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:string=f0();function f0(){return t0;}function f1(){return t1;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let last:string|number=kind;const t1=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "bounded chain 2 string to number",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:number=f0();function f0(){return t0;}function f1(){return t1;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let last:string|number=kind;const t1=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "bounded chain 2 number to number",
+      "source": "function outer<T:type extends number>(flag:boolean,kind:T){const q:number=f0();function f0(){return t0;}function f1(){return t1;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let last:string|number=kind;const t1=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "bounded chain 2 number to string",
+      "source": "function outer<T:type extends number>(flag:boolean,kind:T){const q:string=f0();function f0(){return t0;}function f1(){return t1;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let last:string|number=kind;const t1=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "bounded chain 8 string to string",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let u3:string|number=f4();if(flag&&id(u3)){}const t3=u3;let u4:string|number=f5();if(flag&&id(u4)){}const t4=u4;let u5:string|number=f6();if(flag&&id(u5)){}const t5=u5;let u6:string|number=f7();if(flag&&id(u6)){}const t6=u6;let last:string|number=kind;const t7=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "bounded chain 8 string to number",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let u3:string|number=f4();if(flag&&id(u3)){}const t3=u3;let u4:string|number=f5();if(flag&&id(u4)){}const t4=u4;let u5:string|number=f6();if(flag&&id(u5)){}const t5=u5;let u6:string|number=f7();if(flag&&id(u6)){}const t6=u6;let last:string|number=kind;const t7=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "bounded chain 8 number to number",
+      "source": "function outer<T:type extends number>(flag:boolean,kind:T){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let u3:string|number=f4();if(flag&&id(u3)){}const t3=u3;let u4:string|number=f5();if(flag&&id(u4)){}const t4=u4;let u5:string|number=f6();if(flag&&id(u5)){}const t5=u5;let u6:string|number=f7();if(flag&&id(u6)){}const t6=u6;let last:string|number=kind;const t7=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "bounded chain 8 number to string",
+      "source": "function outer<T:type extends number>(flag:boolean,kind:T){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let u3:string|number=f4();if(flag&&id(u3)){}const t3=u3;let u4:string|number=f5();if(flag&&id(u4)){}const t4=u4;let u5:string|number=f6();if(flag&&id(u5)){}const t5=u5;let u6:string|number=f7();if(flag&&id(u6)){}const t6=u6;let last:string|number=kind;const t7=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "bounded chain 16 string to string",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}function f8(){return t8;}function f9(){return t9;}function f10(){return t10;}function f11(){return t11;}function f12(){return t12;}function f13(){return t13;}function f14(){return t14;}function f15(){return t15;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let u3:string|number=f4();if(flag&&id(u3)){}const t3=u3;let u4:string|number=f5();if(flag&&id(u4)){}const t4=u4;let u5:string|number=f6();if(flag&&id(u5)){}const t5=u5;let u6:string|number=f7();if(flag&&id(u6)){}const t6=u6;let u7:string|number=f8();if(flag&&id(u7)){}const t7=u7;let u8:string|number=f9();if(flag&&id(u8)){}const t8=u8;let u9:string|number=f10();if(flag&&id(u9)){}const t9=u9;let u10:string|number=f11();if(flag&&id(u10)){}const t10=u10;let u11:string|number=f12();if(flag&&id(u11)){}const t11=u11;let u12:string|number=f13();if(flag&&id(u12)){}const t12=u12;let u13:string|number=f14();if(flag&&id(u13)){}const t13=u13;let u14:string|number=f15();if(flag&&id(u14)){}const t14=u14;let last:string|number=kind;const t15=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "bounded chain 16 string to number",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}function f8(){return t8;}function f9(){return t9;}function f10(){return t10;}function f11(){return t11;}function f12(){return t12;}function f13(){return t13;}function f14(){return t14;}function f15(){return t15;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let u3:string|number=f4();if(flag&&id(u3)){}const t3=u3;let u4:string|number=f5();if(flag&&id(u4)){}const t4=u4;let u5:string|number=f6();if(flag&&id(u5)){}const t5=u5;let u6:string|number=f7();if(flag&&id(u6)){}const t6=u6;let u7:string|number=f8();if(flag&&id(u7)){}const t7=u7;let u8:string|number=f9();if(flag&&id(u8)){}const t8=u8;let u9:string|number=f10();if(flag&&id(u9)){}const t9=u9;let u10:string|number=f11();if(flag&&id(u10)){}const t10=u10;let u11:string|number=f12();if(flag&&id(u11)){}const t11=u11;let u12:string|number=f13();if(flag&&id(u12)){}const t12=u12;let u13:string|number=f14();if(flag&&id(u13)){}const t13=u13;let u14:string|number=f15();if(flag&&id(u14)){}const t14=u14;let last:string|number=kind;const t15=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "bounded chain 16 number to number",
+      "source": "function outer<T:type extends number>(flag:boolean,kind:T){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}function f8(){return t8;}function f9(){return t9;}function f10(){return t10;}function f11(){return t11;}function f12(){return t12;}function f13(){return t13;}function f14(){return t14;}function f15(){return t15;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let u3:string|number=f4();if(flag&&id(u3)){}const t3=u3;let u4:string|number=f5();if(flag&&id(u4)){}const t4=u4;let u5:string|number=f6();if(flag&&id(u5)){}const t5=u5;let u6:string|number=f7();if(flag&&id(u6)){}const t6=u6;let u7:string|number=f8();if(flag&&id(u7)){}const t7=u7;let u8:string|number=f9();if(flag&&id(u8)){}const t8=u8;let u9:string|number=f10();if(flag&&id(u9)){}const t9=u9;let u10:string|number=f11();if(flag&&id(u10)){}const t10=u10;let u11:string|number=f12();if(flag&&id(u11)){}const t11=u11;let u12:string|number=f13();if(flag&&id(u12)){}const t12=u12;let u13:string|number=f14();if(flag&&id(u13)){}const t13=u13;let u14:string|number=f15();if(flag&&id(u14)){}const t14=u14;let last:string|number=kind;const t15=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "bounded chain 16 number to string",
+      "source": "function outer<T:type extends number>(flag:boolean,kind:T){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}function f4(){return t4;}function f5(){return t5;}function f6(){return t6;}function f7(){return t7;}function f8(){return t8;}function f9(){return t9;}function f10(){return t10;}function f11(){return t11;}function f12(){return t12;}function f13(){return t13;}function f14(){return t14;}function f15(){return t15;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let u3:string|number=f4();if(flag&&id(u3)){}const t3=u3;let u4:string|number=f5();if(flag&&id(u4)){}const t4=u4;let u5:string|number=f6();if(flag&&id(u5)){}const t5=u5;let u6:string|number=f7();if(flag&&id(u6)){}const t6=u6;let u7:string|number=f8();if(flag&&id(u7)){}const t7=u7;let u8:string|number=f9();if(flag&&id(u8)){}const t8=u8;let u9:string|number=f10();if(flag&&id(u9)){}const t9=u9;let u10:string|number=f11();if(flag&&id(u10)){}const t10=u10;let u11:string|number=f12();if(flag&&id(u11)){}const t11=u11;let u12:string|number=f13();if(flag&&id(u12)){}const t12=u12;let u13:string|number=f14();if(flag&&id(u13)){}const t13=u13;let u14:string|number=f15();if(flag&&id(u14)){}const t14=u14;let last:string|number=kind;const t15=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "expression bounded consumer string",
+      "source": "const outer=function<T:type extends string>(flag:boolean,kind:T){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";};",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "expression bounded consumer number",
+      "source": "const outer=function<T:type extends string>(flag:boolean,kind:T){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "class bounded consumer string",
+      "source": "class Outer<T:type extends string>{run(flag:boolean,kind:T){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "class bounded consumer number",
+      "source": "class Outer<T:type extends string>{run(flag:boolean,kind:T){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "object bounded consumer string",
+      "source": "const outer={run<T:type extends string>(flag:boolean,kind:T){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}};",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "object bounded consumer number",
+      "source": "const outer={run<T:type extends string>(flag:boolean,kind:T){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "nested bounded consumer string",
+      "source": "function outer<T:type extends string>(kind:T){function inner(flag:boolean){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "nested bounded consumer number",
+      "source": "function outer<T:type extends string>(kind:T){function inner(flag:boolean){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "or bounded consumer string",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag||id(u0)){}const t0=u0;let u1:string|number=f2();if(flag||id(u1)){}const t1=u1;let u2:string|number=f3();if(flag||id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "or bounded consumer number",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag||id(u0)){}const t0=u0;let u1:string|number=f2();if(flag||id(u1)){}const t1=u1;let u2:string|number=f3();if(flag||id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "conditional bounded consumer string",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();flag?id(u0):0;const t0=u0;let u1:string|number=f2();flag?id(u1):0;const t1=u1;let u2:string|number=f3();flag?id(u2):0;const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "conditional bounded consumer number",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();flag?id(u0):0;const t0=u0;let u1:string|number=f2();flag?id(u1):0;const t1=u1;let u2:string|number=f3();flag?id(u2):0;const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "while bounded consumer string",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();while(flag&&id(u0)){break;}const t0=u0;let u1:string|number=f2();while(flag&&id(u1)){break;}const t1=u1;let u2:string|number=f3();while(flag&&id(u2)){break;}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "while bounded consumer number",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();while(flag&&id(u0)){break;}const t0=u0;let u1:string|number=f2();while(flag&&id(u1)){break;}const t1=u1;let u2:string|number=f3();while(flag&&id(u2)){break;}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "for bounded consumer string",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();for(;flag&&id(u0);){break;}const t0=u0;let u1:string|number=f2();for(;flag&&id(u1);){break;}const t1=u1;let u2:string|number=f3();for(;flag&&id(u2);){break;}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "for bounded consumer number",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();for(;flag&&id(u0);){break;}const t0=u0;let u1:string|number=f2();for(;flag&&id(u1);){break;}const t1=u1;let u2:string|number=f3();for(;flag&&id(u2);){break;}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "do bounded consumer string",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();do{}while(flag&&id(u0));const t0=u0;let u1:string|number=f2();do{}while(flag&&id(u1));const t1=u1;let u2:string|number=f3();do{}while(flag&&id(u2));const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "do bounded consumer number",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();do{}while(flag&&id(u0));const t0=u0;let u1:string|number=f2();do{}while(flag&&id(u1));const t1=u1;let u2:string|number=f3();do{}while(flag&&id(u2));const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "switch bounded consumer string",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();switch(flag){case true:id(u0);break;}const t0=u0;let u1:string|number=f2();switch(flag){case true:id(u1);break;}const t1=u1;let u2:string|number=f3();switch(flag){case true:id(u2);break;}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "switch bounded consumer number",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();switch(flag){case true:id(u0);break;}const t0=u0;let u1:string|number=f2();switch(flag){case true:id(u1);break;}const t1=u1;let u2:string|number=f3();switch(flag){case true:id(u2);break;}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "finally bounded consumer string",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:string=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();try{if(flag&&id(u0)){}}finally{}const t0=u0;let u1:string|number=f2();try{if(flag&&id(u1)){}}finally{}const t1=u1;let u2:string|number=f3();try{if(flag&&id(u2)){}}finally{}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "finally bounded consumer number",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();try{if(flag&&id(u0)){}}finally{}const t0=u0;let u1:string|number=f2();try{if(flag&&id(u1)){}}finally{}const t1=u1;let u2:string|number=f3();try{if(flag&&id(u2)){}}finally{}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "runtime expression capture annotated False",
+      "source": "function id<T:type>(x:T):T{const captured=x;const produce=function(){return captured;};return produce();}const a:number=id(1);const b:string=id(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "runtime expression capture annotated True",
+      "source": "function id<T:type>(x:T):T{const captured:T=x;const produce=function(){return captured;};return produce();}const a:number=id(1);const b:string=id(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "runtime arrow block capture annotated False",
+      "source": "function id<T:type>(x:T):T{const captured=x;const produce=()=>{return captured;};return produce();}const a:number=id(1);const b:string=id(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "runtime arrow block capture annotated True",
+      "source": "function id<T:type>(x:T):T{const captured:T=x;const produce=()=>{return captured;};return produce();}const a:number=id(1);const b:string=id(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "runtime arrow concise capture annotated False",
+      "source": "function id<T:type>(x:T):T{const captured=x;const produce=()=>captured;return produce();}const a:number=id(1);const b:string=id(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "runtime arrow concise capture annotated True",
+      "source": "function id<T:type>(x:T):T{const captured:T=x;const produce=()=>captured;return produce();}const a:number=id(1);const b:string=id(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "runtime object method capture annotated False",
+      "source": "function id<T:type>(x:T):T{const captured=x;const obj={produce(){return captured;}};const produce=()=>obj.produce();return produce();}const a:number=id(1);const b:string=id(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "runtime object method capture annotated True",
+      "source": "function id<T:type>(x:T):T{const captured:T=x;const obj={produce(){return captured;}};const produce=()=>obj.produce();return produce();}const a:number=id(1);const b:string=id(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "escaping declaration distinct instances",
+      "source": "function make<T:type>(x:T){const captured=x;function produce(){return captured;}return produce;}const a=make(1);const b=make(\"s\");const x:number=a();const y:string=b();String(x)+y;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "escaping declaration callable contract",
+      "source": "function make<T:type>(x:T){const captured=x;function produce(){return captured;}return produce;}const a:()=>number=make(1);const b:()=>string=make(\"s\");String(a())+b();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "escaping arrow distinct instances",
+      "source": "function make<T:type>(x:T){const captured=x;return ()=>captured;}const a=make(1);const b=make(\"s\");const x:number=a();const y:string=b();String(x)+y;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "escaping arrow callable contract",
+      "source": "function make<T:type>(x:T){const captured=x;return ()=>captured;}const a:()=>number=make(1);const b:()=>string=make(\"s\");String(a())+b();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "escaping expression distinct instances",
+      "source": "function make<T:type>(x:T){const captured=x;return function(){return captured;};}const a=make(1);const b=make(\"s\");const x:number=a();const y:string=b();String(x)+y;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "escaping expression callable contract",
+      "source": "function make<T:type>(x:T){const captured=x;return function(){return captured;};}const a:()=>number=make(1);const b:()=>string=make(\"s\");String(a())+b();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "shadowed caller parameter retains captured binding",
+      "source": "function make<T:type>(x:T){const captured=x;return ()=>captured;}const a=make(1);function invoke<T:type>(x:T){return String(a())+x;}invoke(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "captured forward local retains TDZ",
+      "source": "function id<T:type>(x:T):T{function produce(){return captured;}return produce();const captured=x;}id(1);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "dynamic wrong return remains enforced",
+      "source": "function bad():any{return \"s\";}function id<T:type>(x:T){function typed():T{return x;}function produce(){return typed();}let replacement:any=bad;typed=replacement;return produce();}const a:number=id(1);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "bounded subtype is not interchangeable with bound",
+      "source": "function id<T:type extends string>(x:T):T{const captured=x;function produce(){return captured;}const wrong:T=\"s\";return produce();}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "reflection declaration",
+      "source": "function make<T:type>(x:T){const captured=x;function produce(){return captured;}return produce;}const a=make(1);const b=make(\"s\");function num():number{return 1;}function str():string{return \"s\";}String(Reflect.typeOf(a)===Reflect.typeOf(num))+String(Reflect.typeOf(b)===Reflect.typeOf(str));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "truetrue"
+      }
+    },
+    {
+      "name": "reflection arrow",
+      "source": "function make<T:type>(x:T){const captured=x;return ()=>captured;}const a=make(1);const b=make(\"s\");function num():number{return 1;}function str():string{return \"s\";}String(Reflect.typeOf(a)===Reflect.typeOf(num))+String(Reflect.typeOf(b)===Reflect.typeOf(str));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "truetrue"
+      }
+    },
+    {
+      "name": "reflection expression",
+      "source": "function make<T:type>(x:T){const captured=x;return function(){return captured;};}const a=make(1);const b=make(\"s\");function num():number{return 1;}function str():string{return \"s\";}String(Reflect.typeOf(a)===Reflect.typeOf(num))+String(Reflect.typeOf(b)===Reflect.typeOf(str));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "truetrue"
+      }
+    },
+    {
+      "name": "reflection dynamic caller",
+      "source": "function make<T:type>(x:T){const captured=x;function produce(){return captured;}return produce;}const a=make(1);const b=make(\"s\");function num():number{return 1;}function str():string{return \"s\";}function inspect<U:type>(x:U){return String(Reflect.typeOf(a)===Reflect.typeOf(num))+String(Reflect.typeOf(b)===Reflect.typeOf(str));}inspect(true);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "truetrue"
+      }
+    },
+    {
+      "name": "reflection same named caller",
+      "source": "function make<T:type>(x:T){const captured=x;function produce(){return captured;}return produce;}const a=make(1);const b=make(\"s\");function num():number{return 1;}function str():string{return \"s\";}function inspect<T:type>(x:T){return String(Reflect.typeOf(a)===Reflect.typeOf(num))+String(Reflect.typeOf(b)===Reflect.typeOf(str));}inspect(true);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "truetrue"
+      }
+    },
+    {
+      "name": "constraint string consumer string symbolic T",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:T=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "constraint string consumer string symbolic string|number",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "constraint number consumer number symbolic T",
+      "source": "function outer<T:type extends number>(flag:boolean,kind:T){const q:T=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "constraint number consumer number symbolic string|number",
+      "source": "function outer<T:type extends number>(flag:boolean,kind:T){const q:string|number=f0();function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "direct generic instances keep symbolic publication",
+      "source": "function id<T:type>(x:T){return x;}const a:number=id(1);const b:string=id(\"s\");String(a)+b;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1s"
+      }
+    },
+    {
+      "name": "generic declaration reflection retains own binder",
+      "source": "function id<T:type>(x:T){return x;}function declared<T:type>(x:T):T{return x;}String(Reflect.typeOf(id)===Reflect.typeOf(declared));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "bounded deciding if (q is string) {}",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q=f0();if (q is string) {}function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "bounded deciding while (q is string) {break;}",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q=f0();while (q is string) {break;}function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "bounded deciding for (;q is string;) {break;}",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q=f0();for (;q is string;) {break;}function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "bounded deciding do {} while (q is string);",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q=f0();do {} while (q is string);function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "bounded deciding q is string ? 1 : 2;",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q=f0();q is string ? 1 : 2;function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "bounded deciding if (q is number) {}",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q=f0();if (q is number) {}function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "bounded deciding while (q is number) {break;}",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q=f0();while (q is number) {break;}function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "bounded deciding for (;q is number;) {break;}",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q=f0();for (;q is number;) {break;}function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "bounded deciding do {} while (q is number);",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q=f0();do {} while (q is number);function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    },
+    {
+      "name": "bounded deciding q is number ? 1 : 2;",
+      "source": "function outer<T:type extends string>(flag:boolean,kind:T){const q=f0();q is number ? 1 : 2;function f0(){return t0;}function f1(){return t1;}function f2(){return t2;}function f3(){return t3;}let u0:string|number=f1();if(flag&&id(u0)){}const t0=u0;let u1:string|number=f2();if(flag&&id(u1)){}const t1=u1;let u2:string|number=f3();if(flag&&id(u2)){}const t2=u2;let last:string|number=kind;const t3=last;function id(x:string|number){return answer;}const answer=seed;let seed:string|number=\"s\";}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "checked": true
+        }
+      }
+    }
+  ]
+}

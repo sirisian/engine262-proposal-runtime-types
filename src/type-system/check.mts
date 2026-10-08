@@ -89,7 +89,7 @@ import {
   canCompleteNormally, endsWithReturn, canCarryDisposal, guardsABranch,
 } from './control-flow.mts';
 import {
-  scopeOfNames, typeParameterNamesOf, mentionsTypeParameter, substituteTypeParameters, bindTypeParametersFromArguments,
+  scopeOfNames, typeParameterNamesOf, mentionsTypeParameter, substituteTypeParameters, substituteFreeTypeParameters, bindTypeParametersFromArguments,
 } from './type-parameters.mts';
 import {
   awaitedElementType, numericFamilyOf, isRangeFamilyName, boundOrdinalOf, spanElementOfReceiver, spanExtentOfReceiver, iteratorMethodSignature, collectionMethodSignature, promiseMethodSignature,
@@ -4152,6 +4152,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const typeParameterScopes: Map<string, Known | null>[] = [];
   const typeParameterDeclarations = new WeakMap<Map<string, Known | null>, readonly ParseNode[]>();
+  // Complete bounded symbolic domains without replacing the parameter by
+  // its constraint. Only a known, unambiguous declaration scope identifies
+  // the binder for this transport; substitution-only scopes stay local.
+  const portableCompletionType = (value: TypeRecord, scopes: readonly Map<string, Known | null>[] = typeParameterScopes, seen = new Set<TypeRecord>()): boolean => {
+    if (seen.has(value)) return false;
+    const visited = new Set(seen).add(value);
+    if (value.Kind === 'union') return value.Members.every((member) => portableCompletionType(member, scopes, visited));
+    if (value.Kind === 'literal') return portableCompletionType(value.Base, scopes, visited);
+    if (value.Kind === 'primitive') return value.Arguments.length === 0 && value.Name !== 'symbol';
+    if (value.Kind !== 'parameter' || (value.Arity ?? 0) !== 0
+      || Object.keys(value).some((key) => !['Kind', 'Name', 'Constraint', 'Arity'].includes(key))) return false;
+    const owners = scopes.filter((scope) => scope.has(value.Name));
+    if (owners.length !== 1 || !typeParameterDeclarations.get(owners[0])?.some((declaration) =>
+      (declaration as ParseNode.TypeParameter).BindingIdentifier?.name === value.Name)) return false;
+    const constraint = owners[0].get(value.Name);
+    return SameBindingContext(constraint ?? null, value.Constraint ?? null)
+      && !!value.Constraint && portableCompletionType(value.Constraint, scopes, visited);
+  };
   const variadicObligations = new Map<ParseNode, { kind: 'constraint' | 'default' | 'adjacent', type: TypeRecord }[]>();
   const overrideArgumentObligations = new WeakMap<ParseNode, { key: string | SymbolValue, source: SignatureRecord, target: SignatureRecord }[]>();
   const checkOverrideArgumentObligations = (declaration: ParseNode, bindings: ReadonlyMap<string, TypeRecord>): void => {
@@ -17001,7 +17019,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       } finally {
         if (pushed) typeParameterScopes.pop();
       }
-      const returned = written ? substituteTypeParameters(written, byName) : null;
+      const returned = written ? substituteFreeTypeParameters(written, byName) : null;
       // The case's own signature, instantiated: the callee's type at this call.
       const pushedForParameters = pushTypeParameterScopeOf(kase as never);
       try {
@@ -18049,8 +18067,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           const substituted = substituteTypeParameters({ Kind: 'function', Signatures: [signature] }, bindings);
           const specialized = { ...(substituted as typeof base).Signatures[0]!,
-            InferredReturn: (signature as SignatureRecord & { InferredReturn?: TypeRecord }).InferredReturn
-              ? substituteTypeParameters((signature as SignatureRecord & { InferredReturn: TypeRecord }).InferredReturn, bindings) ?? undefined : undefined,
             TypeParameters: undefined };
           if (declaration) signatureDeclarations.set(specialized, declaration);
           formalPatternBindings.set(specialized, bindings);
@@ -18618,13 +18634,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 bindTypeParametersFromArguments(parameters, passed, names, bindings);
               }
               if (declaredOrPublished && bindings.size > 0) {
-                return substituteTypeParameters(declaredOrPublished, bindings);
+                return substituteFreeTypeParameters(declaredOrPublished, bindings);
               }
             }
           }
-          if (only.Return && mentionsTypeParameter(only.Return)) {
-            // A generic return with no binding for its parameters says nothing
-            // this call site can use.
+          if (only.TypeParameters?.length && only.Return && mentionsTypeParameter(only.Return)) {
+            // An unapplied generic callee still needs its own arguments. A
+            // nongeneric helper may instead return a completed symbolic type
+            // from its enclosing declaration environment.
             return null;
           }
           // A signature is trusted only where the CALLEE'S NAME cannot be replaced.
@@ -24189,10 +24206,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const independentTestFacts = (): Map<Frame, Set<string>> => {
     if (flowNeedsReplay) return new Map([...independentFlowFacts].map(([owner, names]) => [owner, new Set(names)]));
     const proofs = new Map<Frame, Set<string>>();
-    const portable = (type: TypeRecord): boolean => type.Kind === 'any'
-      || type.Kind === 'primitive' && type.Name !== 'symbol' && type.Arguments.length === 0
-      || type.Kind === 'literal' && portable(type.Base as TypeRecord)
-      || type.Kind === 'union' && type.Members.every(portable);
+    const portable = (type: TypeRecord): boolean => type.Kind === 'any' || portableCompletionType(type);
     for (const [index, frame] of frames.entries()) for (const name of new Set([...frame.bindings.keys(), ...frame.declaredNames])) {
       const type = frame.bindings.get(name);
       if (name.includes('.') || type && (!portable(type) || deferredStoredTypes.has(type)) || flowOwner(name, index) !== frame
@@ -24752,7 +24766,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const storedDomain = (source: Known, target: Known): Known => {
     if (!source || !target || source.Kind === 'any' || target.Kind === 'any'
-      || mentionsTypeParameter(source) || mentionsTypeParameter(target)) return null;
+      || (mentionsTypeParameter(source) && !portableCompletionType(source)) || mentionsTypeParameter(target)) return null;
     const targets = target.Kind === 'union' ? target.Members : [target];
     if (targets.some(conversionHasEffect)) return null;
     const sources = source.Kind === 'union' ? source.Members : [source];
@@ -24761,7 +24775,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // Immutable scalar values can keep their precise domain. Objects and
       // callables keep the selected declared view: a source shape must not
       // change a mutable field, predicate, or contextual-void contract.
-      if (primitiveBased(member) && IsSubtype(member, target, [])) results.push(member);
+      if ((primitiveBased(member) || portableCompletionType(member)) && IsSubtype(member, target, [])) results.push(member);
       else {
         const selected = targets.filter((contract) => IsSubtype(member, contract, [])
           || member.Kind === 'literal' && literalFitsNumericType(member, contract));
@@ -26237,16 +26251,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (anchorage.origins && anchorage.origins.length > 0) {
       publishedOrigins.set(item.signature as object, anchorage.origins);
     }
-    // The run time enforces what is published, so the type is recorded
-    // against the declaration the boundary will look it up from - EXCEPT
-    // where the published type is an expression over the declaration's type
-    // parameters. Such a type means something only once a call binds them,
-    // and the boundary sees one function for every instantiation, so
-    // enforcing it there refused `id(5)` against a bare `T`. The checker
-    // still publishes it, and substitutes it per call.
-    if (!mentionsTypeParameter(published)) {
-      publishedReturnTypes.set(item.fn as unknown as object, published);
-    }
+    // Preserve the symbolic declaration contract. The runtime boundary
+    // substitutes this invocation's bindings before conversion; omitting a
+    // dependent result would let an untyped caller bypass its enforcement.
+    publishedReturnTypes.set(item.fn as unknown as object, published);
     return changed;
   };
 
@@ -26264,8 +26272,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const preparingBindings = new Set<PreparedBinding>();
   const sourceBindings = new Set<PreparedBinding>();
   // Only completed portable value domains cross passes. Callable inputs
-  // distinguish their checking contexts below; unsupported identities and
-  // parameter-dependent/reference results remain in their original worklist.
+  // distinguish their checking contexts below. Unsupported identities,
+  // symbolic domains and reference results stay in their original worklist.
   const portableBindingScope = (node: ParseNode): boolean => {
     for (let scope: ParseNode | undefined = node; scope; scope = scope.parent) {
       if (scope.type === 'ClassDeclaration' || scope.type === 'ClassExpression') return false;
@@ -26322,17 +26330,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (const binding of sourceBindings) {
       const { type } = binding;
       const node = binding.publication!;
-      if (!binding.completed || !binding.context || !bindingReady(binding)
-        || type && !(type.Kind === 'union' ? type.Members : [type]).every((member) => {
-          const base = member.Kind === 'literal' ? member.Base : member;
-          return base.Kind === 'primitive' && base.Arguments.length === 0 && base.Name !== 'symbol';
-        })) {
+      if (!binding.completed || !binding.context || !bindingReady(binding) || type && !portableCompletionType(type, binding.typeScopes)) {
         ambiguous.add(node);
         continue;
       }
       const previous = bindingContracts.completed.get(node);
       if (bindingContracts.completed.has(node) && previous !== type
-        && (!previous || !type || !SameType(previous, type))) ambiguous.add(node);
+        && (!previous || !type || !SameBindingContext(previous, type))) ambiguous.add(node);
       else bindingContracts.completed.set(node, type ?? null);
     }
     for (const node of ambiguous) bindingContracts.completed.delete(node);

@@ -2059,7 +2059,8 @@ export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): b
     || (!!sig.Return && mentionsTypeParameter(sig.Return, seen))
     || (!!sig.InferredReturn && mentionsTypeParameter(sig.InferredReturn, seen))
     || (!!sig.ThisType && mentionsTypeParameter(sig.ThisType, seen))
-    || sig.Narrows?.some((rule) => mentionsTypeParameter(rule.Type, seen)))) {
+    || sig.Narrows?.some((rule) => mentionsTypeParameter(rule.Type, seen))
+    || sig.TypeParameters?.some((parameter) => mentionsTypeParameter(parameter.Constraint ?? null, seen)))) {
     return true;
   }
   // An OBJECT type mentions a parameter through its members. An interface
@@ -2116,7 +2117,13 @@ export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): b
  * the [[Base]] walk in `relations.mts` is correct without it.
  */
 
-export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string, TypeRecord>): Known => {
+/** Instantiate a signature's own parameters as well as its free parameters. */
+export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string, TypeRecord>): Known => makeSubstitution(bindings, t)(t);
+
+/** Substitute an enclosing environment without applying a returned generic signature. */
+export const substituteFreeTypeParameters = (t: Known, bindings: ReadonlyMap<string, TypeRecord>): Known => makeSubstitution(bindings, null)(t);
+
+const makeSubstitution = (bindings: ReadonlyMap<string, TypeRecord>, root: Known): ((type: Known) => Known) => {
   // Reference targets can close a recursive record. Install a shell before
   // descending, and keep unchanged records (notably storage views) identical.
   const seen = new Map<TypeRecord, Known>();
@@ -2125,15 +2132,16 @@ export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string,
     if (seen.has(type)) return seen.get(type)!;
     const shell = { ...type } as TypeRecord;
     seen.set(type, shell);
-    const result = substituteTypeParametersUncached(type, bindings, walk, t);
-    if (result !== type && result?.Kind === type.Kind && type.Kind !== 'parameter' && type.Kind !== 'deferred') {
+    const result = substituteTypeParametersUncached(type, bindings, walk, root);
+    if (result !== type && result?.Kind === type.Kind && type.Kind !== 'deferred'
+      && (type.Kind !== 'parameter' || !bindings.has(type.Name))) {
       Object.assign(shell, result);
       return shell;
     }
     seen.set(type, result);
     return result;
   };
-  return walk(t);
+  return walk;
 };
 
 const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string, TypeRecord>,
@@ -2143,7 +2151,10 @@ const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string
   }
   if (t.Kind === 'family-pattern') return { ...t, Template: walk(t.Template) as TypeRecord };
   if (t.Kind === 'parameter') {
-    return bindings.get((t as { Name: string }).Name) ?? t;
+    const bound = bindings.get(t.Name);
+    if (bound) return bound;
+    const Constraint = t.Constraint ? walk(t.Constraint)! : t.Constraint;
+    return Constraint === t.Constraint ? t : { ...t, Constraint };
   }
   if (t.Kind === 'reference' || t.Kind === 'shared') {
     if (!mentionsTypeParameter(t)) return t;
@@ -2269,9 +2280,14 @@ const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string
         // A nested generic signature introduces new lexical bindings.
         const scoped = t !== root && sig.TypeParameters?.some((p) => bindings.has(p.Name))
           ? new Map([...bindings].filter(([name]) => !sig.TypeParameters!.some((p) => p.Name === name))) : null;
-        const apply = scoped ? (type: Known) => substituteTypeParameters(type, scoped) : walk;
+        const apply = scoped ? makeSubstitution(scoped, null) : walk;
         return {
           ...sig,
+          ...(sig.TypeParameters ? { TypeParameters: sig.TypeParameters.map((parameter) => ({
+            ...parameter,
+            ...(parameter.Constraint ? { Constraint: apply(parameter.Constraint)! } : {}),
+            ...(parameter.Parameter ? { Parameter: apply(parameter.Parameter)! } : {}),
+          })) } : {}),
           Parameters: (sig.Parameters ?? []).map((prm) => (prm?.Type
             ? { ...prm, Type: apply(prm.Type) }
             : prm)),
