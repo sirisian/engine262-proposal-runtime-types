@@ -24258,42 +24258,43 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       flowReadCollectors.pop();
       if (independent) independentTestInputs.pop();
     }
-    if (incomplete || flowNeedsReplay) {
-      if (independent && (pending || reads.incomplete)) discardTestSubjects(test, independent);
-      if ((pending || reads.incomplete) && result.whenTrue && result.whenTrue === result.whenFalse) {
-        // Equal fact maps do not identify an unfinished test's alternatives.
-        // Their bodies can later establish different independent domains.
-        const other = new Map([...result.whenTrue].map(([owner, entries]) => [owner, new Map(entries)]));
-        pendingTestEdgesOf.set(other, new Set(pendingTestEdgesOf.get(result.whenTrue)));
-        result = { whenTrue: result.whenTrue, whenFalse: other };
+    // Preserve completed component outputs before a later sibling can
+    // introduce an unfinished input. Completion does not depend on when
+    // another transfer first needs replay.
+    if (independent && (pending || reads.incomplete)) discardTestSubjects(test, independent);
+    if ((pending || reads.incomplete) && result.whenTrue && result.whenTrue === result.whenFalse) {
+      // Equal fact maps do not identify an unfinished test's alternatives.
+      // Their bodies can later establish different independent domains.
+      const other = new Map([...result.whenTrue].map(([owner, entries]) => [owner, new Map(entries)]));
+      pendingTestEdgesOf.set(other, new Set(pendingTestEdgesOf.get(result.whenTrue)));
+      result = { whenTrue: result.whenTrue, whenFalse: other };
+    }
+    for (const edge of [result.whenTrue, result.whenFalse]) if (edge) {
+      if (incomplete || flowNeedsReplay) incompleteFlows.add(edge);
+      if (pending || reads.incomplete) {
+        pendingTestEdgesOf.set(edge, new Set([...pendingTestEdgesOf.get(edge) ?? [], {}]));
       }
-      for (const edge of [result.whenTrue, result.whenFalse]) if (edge) {
-        incompleteFlows.add(edge);
-        if (pending || reads.incomplete) {
-          pendingTestEdgesOf.set(edge, new Set([...pendingTestEdgesOf.get(edge) ?? [], {}]));
+      if (independent) {
+        // Entry subjects were removed before the walk. Preserve newly
+        // justified component outputs as well as surviving input proofs.
+        const outputs = new Map([...(independentFactsOf.get(edge) ?? [])]
+          .map(([owner, names]) => [owner, new Set(names)]));
+        const outputDomains = new Map([...(independentDomainsOf.get(edge) ?? [])]
+          .map(([owner, types]) => [owner, new Map(types)]));
+        for (const [owner, names] of independent) for (const name of names) {
+          const type = edge.get(owner)?.get(name) ?? domains?.get(owner)?.get(name);
+          if (!type) continue;
+          if (!outputs.has(owner)) outputs.set(owner, new Set());
+          if (!outputDomains.has(owner)) outputDomains.set(owner, new Map());
+          outputs.get(owner)!.add(name);
+          outputDomains.get(owner)!.set(name, type);
         }
-        if (independent) {
-          // Entry subjects were removed before the walk. Preserve newly
-          // justified component outputs as well as surviving input proofs.
-          const outputs = new Map([...(independentFactsOf.get(edge) ?? [])]
-            .map(([owner, names]) => [owner, new Set(names)]));
-          const outputDomains = new Map([...(independentDomainsOf.get(edge) ?? [])]
-            .map(([owner, types]) => [owner, new Map(types)]));
-          for (const [owner, names] of independent) for (const name of names) {
-            const type = edge.get(owner)?.get(name) ?? domains?.get(owner)?.get(name);
-            if (!type) continue;
-            if (!outputs.has(owner)) outputs.set(owner, new Set());
-            if (!outputDomains.has(owner)) outputDomains.set(owner, new Map());
-            outputs.get(owner)!.add(name);
-            outputDomains.get(owner)!.set(name, type);
-          }
-          independentFactsOf.set(edge, outputs);
-          independentDomainsOf.set(edge, outputDomains);
-        }
-        // A structured test can already have proofs from its component
-        // transfers. No outer input snapshot is needed to retain those
-        // justified outputs; each component applies its own effects.
+        independentFactsOf.set(edge, outputs);
+        independentDomainsOf.set(edge, outputDomains);
       }
+      // A structured test can already have proofs from its component
+      // transfers. No outer input snapshot is needed to retain those
+      // justified outputs; each component applies its own effects.
     }
     return result;
   };
