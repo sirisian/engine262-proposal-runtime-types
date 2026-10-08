@@ -628,6 +628,7 @@ export function* BindTypeArgumentsInto(
   argNodes: readonly ParseNode.Type[],
   frame: Map<string, TypeRecord>,
   applied: string,
+  declarationContext?: { Environment?: EnvironmentRecord, TypeParameterFrame?: ReadonlyMap<string, TypeRecord> },
 ): PlainEvaluator<TypeRecord[]> {
   const exhausted = specializationDepthExhausted();
   if (exhausted) {
@@ -661,7 +662,22 @@ export function* BindTypeArgumentsInto(
       entries.push({ record: t, name: typeArgumentNameOf(a) });
     }
   }
-  return yield* BindTypeArgumentRecordsInto(params, entries.map((e) => e.record), entries.map((e) => e.name), frame, applied);
+  // Written arguments resolve in the caller above. Only constraints and
+  // defaults use the function's declaring environment and captured bindings.
+  const context = surroundingAgent.runningExecutionContext;
+  const savedEnvironment = context.LexicalEnvironment;
+  const captured = declarationContext?.TypeParameterFrame ? new Map(declarationContext.TypeParameterFrame) : null;
+  if (captured) {
+    for (const parameter of params) captured.delete(parameter.BindingIdentifier.name);
+    pushTypeParameterFrame(captured);
+  }
+  if (declarationContext?.Environment) context.LexicalEnvironment = declarationContext.Environment;
+  try {
+    return yield* BindTypeArgumentRecordsInto(params, entries.map((e) => e.record), entries.map((e) => e.name), frame, applied);
+  } finally {
+    context.LexicalEnvironment = savedEnvironment;
+    if (captured) popTypeParameterFrame();
+  }
 }
 
 /** Bind already evaluated arguments with the same defaults, constraints and packs as a written application. */

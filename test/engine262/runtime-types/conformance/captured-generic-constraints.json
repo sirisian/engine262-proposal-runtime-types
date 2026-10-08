@@ -1,0 +1,978 @@
+{
+  "description": "Captured generic constraints: written arguments resolve at the call, constraints retain declaration bindings; runtime any inference preserves enforcement.",
+  "specification": [
+    "sec-generic-constraint-contexts",
+    "sec-bindtypearguments",
+    "sec-dependent-result-instantiation"
+  ],
+  "cases": [
+    {
+      "name": "number captured outer(1) call inferred invalid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);String(fn(\"s\"));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "number captured outer(1) call inferred valid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);String(fn(2));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "number captured outer(1) call .<U: number> invalid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);String(fn.<U: number>(\"s\"));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "number captured outer(1) call .<U: number> valid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);String(fn.<U: number>(2));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "number captured outer(1) call .<number> invalid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);String(fn.<number>(\"s\"));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "number captured outer(1) call .<number> valid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);String(fn.<number>(2));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "number captured outer.<number>(1) call inferred invalid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer.<number>(1);String(fn(\"s\"));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "number captured outer.<number>(1) call inferred valid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer.<number>(1);String(fn(2));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "number captured outer.<number>(1) call .<U: number> invalid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer.<number>(1);String(fn.<U: number>(\"s\"));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "number captured outer.<number>(1) call .<U: number> valid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer.<number>(1);String(fn.<U: number>(2));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "number captured outer.<number>(1) call .<number> invalid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer.<number>(1);String(fn.<number>(\"s\"));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "number captured outer.<number>(1) call .<number> valid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer.<number>(1);String(fn.<number>(2));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "number stored explicit number",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);const applied=fn.<number>;\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "number stored explicit string",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);const applied=fn.<string>;\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "string captured outer(\"s\") call inferred invalid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(\"s\");String(fn(2));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "string captured outer(\"s\") call inferred valid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(\"s\");String(fn(\"t\"));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "t"
+      }
+    },
+    {
+      "name": "string captured outer(\"s\") call .<U: string> invalid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(\"s\");String(fn.<U: string>(2));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "string captured outer(\"s\") call .<U: string> valid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(\"s\");String(fn.<U: string>(\"t\"));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "t"
+      }
+    },
+    {
+      "name": "string captured outer(\"s\") call .<string> invalid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(\"s\");String(fn.<string>(2));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "string captured outer(\"s\") call .<string> valid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(\"s\");String(fn.<string>(\"t\"));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "t"
+      }
+    },
+    {
+      "name": "string captured outer.<string>(\"s\") call inferred invalid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer.<string>(\"s\");String(fn(2));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "string captured outer.<string>(\"s\") call inferred valid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer.<string>(\"s\");String(fn(\"t\"));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "t"
+      }
+    },
+    {
+      "name": "string captured outer.<string>(\"s\") call .<U: string> invalid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer.<string>(\"s\");String(fn.<U: string>(2));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "string captured outer.<string>(\"s\") call .<U: string> valid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer.<string>(\"s\");String(fn.<U: string>(\"t\"));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "t"
+      }
+    },
+    {
+      "name": "string captured outer.<string>(\"s\") call .<string> invalid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer.<string>(\"s\");String(fn.<string>(2));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "string captured outer.<string>(\"s\") call .<string> valid",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer.<string>(\"s\");String(fn.<string>(\"t\"));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "t"
+      }
+    },
+    {
+      "name": "string stored explicit string",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(\"s\");const applied=fn.<string>;\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "string stored explicit number",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(\"s\");const applied=fn.<number>;\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "caller shadow string True",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);function caller<T:type extends string>(x:T){return fn(2);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "caller shadow string False",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);function caller<T:type extends string>(x:T){return fn(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "caller shadow number False",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);function caller<T:type extends number>(x:T){return fn(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "caller type alias shadow cannot replace captured number",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);function unused(){type T=string;fn(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "distinct applications retain separate constraints",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const numberFn=outer(1);const stringFn=outer(\"s\");String(numberFn(2))+stringFn(\"t\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2t"
+      }
+    },
+    {
+      "name": "earlier application is not overwritten by later one",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const numberFn=outer(1);const stringFn=outer(\"s\");numberFn(\"t\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "object 34",
+      "source": "function outer<T:type>(x:T){return {method<U:type extends T>(y:U):U{return y;}};}const o=outer(1);String(o.method(2));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "object 35",
+      "source": "function outer<T:type>(x:T){return {method<U:type extends T>(y:U):U{return y;}};}const o=outer(1);String(o.method(\"s\"));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "object 36",
+      "source": "function outer<T:type>(x:T){return {method:function<U:type extends T>(y:U):U{return y;}};}const o=outer(1);String(o.method(2));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "object 37",
+      "source": "function outer<T:type>(x:T){return {method:function<U:type extends T>(y:U):U{return y;}};}const o=outer(1);String(o.method(\"s\"));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "own preceding constraint 38",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T,V:type extends U>(x:U,y:V):V{return y;};}const fn=outer(1);fn(2,\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "own preceding constraint 39",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(x:U):U{return x;};}const fn=outer(1);fn(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "keyof captured shape True",
+      "source": "function outer<T:type>(x:T){return function inner<K:keyof T>(k:K):K{return k;};}const fn=outer({a:1,b:\"s\"});fn(\"a\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "a"
+      }
+    },
+    {
+      "name": "indexed captured member True",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T[\"a\"]>(u:U):U{return u;};}const fn=outer({a:1});String(fn(2));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "captured tuple pack True",
+      "source": "function outer<T:type>(x:T){return function inner<...U:[].<T>>():string{return \"ok\";};}const fn=outer(1);fn.<2,3>();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "captured value domain True",
+      "source": "function outer<T:type>(x:T){return function inner<N:T>():T{return N;};}const fn=outer.<uint8>(1);String(fn.<2>());",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "captured computed constraint True",
+      "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){return function inner<U:type extends identity(T)>(y:U):U{return y;};}const fn=outer(1);String(fn(2));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "interface captured method constraint True",
+      "source": "interface Shape<T:type>{method<U:type extends T>(y:U):U;}function unused(s:Shape.<number>){s.method(2);}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "class captured method constraint True",
+      "source": "class Shape<T:type>{method<U:type extends T>(y:U):U{return y;}}const s=new Shape.<number>();String(s.method(2));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "keyof captured shape False",
+      "source": "function outer<T:type>(x:T){return function inner<K:keyof T>(k:K):K{return k;};}const fn=outer({a:1,b:\"s\"});fn(\"missing\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "indexed captured member False",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T[\"a\"]>(u:U):U{return u;};}const fn=outer({a:1});String(fn(\"s\"));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "captured tuple pack False",
+      "source": "function outer<T:type>(x:T){return function inner<...U:[].<T>>():string{return \"ok\";};}const fn=outer(1);fn.<2,\"s\">();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "rule": "rt-generic-argument",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "captured value domain False",
+      "source": "function outer<T:type>(x:T){return function inner<N:T>():T{return N;};}const fn=outer.<uint8>(1);String(fn.<300>());",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "captured default constraint False",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T = string>(y:U):U{return y;};}const fn=outer(1);const applied=fn.<>;\"bad\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "interface captured method constraint False",
+      "source": "interface Shape<T:type>{method<U:type extends T>(y:U):U;}function unused(s:Shape.<number>){s.method(\"s\");}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "class captured method constraint False",
+      "source": "class Shape<T:type>{method<U:type extends T>(y:U):U{return y;}}const s=new Shape.<number>();String(s.method(\"s\"));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "unapplied declaration remains symbolic",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "dynamic argument retains runtime boundary",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);let x:any=\"s\";fn(x);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "dynamic actual value True",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);let value:any=2;String(fn(value));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "explicit any remains explicit True",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);String(fn.<any>(2));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "caller argument scope True",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);function caller<T:type>(x:T){return fn.<T>(x);}String(caller(2));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "caller lexical type argument scope True",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);function caller(){type T=number;return fn.<T>(2);}String(caller());",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "stored callable invocation True",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);const applied=fn.<number>;String(applied(2));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "spread captured constraint True",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);type Args=[number];const applied=fn.<...Args>;String(applied(2));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "dynamic actual value False",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);let value:any=\"s\";String(fn(value));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "explicit any remains explicit False",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);String(fn.<any>(\"s\"));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "caller argument scope False",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);function caller<T:type>(x:T){return fn.<T>(x);}String(caller(\"s\"));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "caller lexical type argument scope False",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);function caller(){type T=string;return fn.<T>(\"s\");}String(caller());",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "stored callable invocation False",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);const applied=fn.<number>;String(applied(\"s\"));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "spread captured constraint False",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);type Args=[string];const applied=fn.<...Args>;String(applied(\"s\"));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "same named caller parameter cannot prebind unrelated inner parameter",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);function caller<U:type>(x:U){return fn(\"s\");}caller(2);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "independent specialized closure identity",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);const other=outer(1);String(fn.<number>===fn.<U:number>)+String(fn.<number>===other.<number>);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "truefalse"
+      }
+    },
+    {
+      "name": "caller environment restored after successful binding",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);function caller(){type T=string;fn.<number>(2);const v:T=\"s\";return v;}caller();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "caller environment restored after failed binding",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);function caller<T:type>(x:T){try{fn.<T>(x);}catch(e){const result:T=x;return result;}}caller(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "declaration alias direct explicit",
+      "source": "function outer<T:type>(x:T){type Limit=T;return function inner<U:type extends Limit>(y:U):U{return y;};}const fn=outer(1);String(fn.<number>(2));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "declaration alias stored",
+      "source": "function outer<T:type>(x:T){type Limit=T;return function inner<U:type extends Limit>(y:U):U{return y;};}const fn=outer(1);String((fn.<number>)(2));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "typed captured error automatic",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);fn(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "typed captured error forced",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);fn(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "applicability": "always"
+        }
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "typed syntax disabled",
+      "source": "function outer<T:type>(x:T){return function inner<U:type extends T>(y:U):U{return y;};}const fn=outer(1);fn(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "SyntaxError"
+      },
+      "checking": "disabled"
+    },
+    {
+      "name": "legacy syntax automatic",
+      "source": "function id(x){return x;}String(id(2));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "legacy syntax forced",
+      "source": "function id(x){return x;}String(id(2));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "legacy syntax disabled",
+      "source": "function id(x){return x;}String(id(2));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      },
+      "checking": "disabled"
+    }
+  ]
+}

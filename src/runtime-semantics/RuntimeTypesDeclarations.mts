@@ -2794,7 +2794,7 @@ function* SpecializeGenericFunction(fn: ObjectValue, ref: unknown, node: ParseNo
   const fnName = ((fn as unknown as { ECMAScriptCode?: { parent?: { BindingIdentifier?: { name?: string } } } }).ECMAScriptCode?.parent?.BindingIdentifier?.name) ?? 'the function';
   let bound: TypeRecord[];
   if (preBound) bound = params.map((p) => preBound.get(p.BindingIdentifier.name)!);
-  else bound = Q(yield* BindTypeArgumentsInto(params, node.TypeArguments.TypeArgumentList, frame, fnName));
+  else bound = Q(yield* BindTypeArgumentsInto(params, node.TypeArguments.TypeArgumentList, frame, fnName, fn as never));
   const key = bound.map(specializationKeyOf).join('|');
   let table = genericFunctionSpecializations.get(fn as unknown as object);
   if (!table) {

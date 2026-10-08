@@ -1191,8 +1191,8 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         );
       }
       const frame = new Map<string, TypeRecord>();
-      if (usesPacks) {
-        Q(yield* BindTypeArgumentsInto(params, typeArgs, frame, 'the call'));
+      if (usesPacks || (func as { TypeParameterFrame?: unknown }).TypeParameterFrame) {
+        Q(yield* BindTypeArgumentsInto(params, typeArgs, frame, 'the call', func as never));
       } else {
       for (let i = 0; i < params.length; i += 1) {
         const p = params[i]! as unknown as { BindingIdentifier?: { name?: string }, TypeParameterConstraint?: ParseNode.Type | null, TypeParameterDefault?: ParseNode.Type | null };

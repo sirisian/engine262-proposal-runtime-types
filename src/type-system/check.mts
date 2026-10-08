@@ -13374,6 +13374,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return resolved && resolved.Kind !== 'any' && resolved.Kind !== 'parameter' ? resolved : null;
   };
 
+  const typeParameterConstraint = (parameter: TypeParameterRecord, bindings: ReadonlyMap<string, TypeRecord>): Known => {
+    // A returned or member signature already carries its enclosing arguments
+    // in the effective constraint. Re-resolving its source in the caller can
+    // lose that capture or replace it with an unrelated same-spelled binding.
+    const constraint = parameter.Constraint ?? (parameter.ConstraintNode ? resolveType(parameter.ConstraintNode) : null);
+    return constraint && substituteFreeTypeParameters(constraint, bindings);
+  };
+
   const finishTypeArgumentBindings = (typeParams: readonly TypeParameterRecord[], into: Map<string, TypeRecord>,
     validation: { complete: boolean, application: GenericDefaultCheck['application'], mayInfer?: (name: string) => boolean }): void => {
     const scope = new Map<string, Known>();
@@ -13400,8 +13408,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           continue;
         }
-        const constraint = tp.ConstraintNode ? resolveType(tp.ConstraintNode as ParseNode.Type) : null;
-        const bound = constraint && substituteTypeParameters(constraint, into);
+        const bound = typeParameterConstraint(tp, into);
         // #sec-the-type-type: "`type` is the type whose values are the Type
         // Objects ... it is the Static Type of a type name or type expression
         // in expression position ... a type argument may be constrained to
@@ -13494,8 +13501,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       entries.map((e) => e.name),
       (index, entry) => {
         const tp = typeParams[index];
-        if (!tp.Variadic || !tp.ConstraintNode) return true;
-        const constraint = resolveType(tp.ConstraintNode as ParseNode.Type);
+        if (!tp.Variadic) return true;
+        const constraint = typeParameterConstraint(tp, into);
         const record = entry.record ?? (entry.node ? resolveType(entry.node as ParseNode.Type) : null);
         return !constraint || !record || mentionsTypeParameter(constraint) || mentionsTypeParameter(record)
           || packElementAdmits(record, restElementType(constraint));
@@ -31851,9 +31858,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const valueParameterNames = new Set(generic
             .filter((tp) => (tp as { Kind?: string }).Kind === 'value')
             .map((tp) => tp.Name));
+          // An inferred `any` conveys no argument type. Let the runtime binder
+          // infer the actual value and enforce the captured constraint.
           const closedBindings = new Map<string, TypeRecord>();
           for (const [name, bound] of bindings) {
-            if (!mentionsTypeParameter(bound) && !valueParameterNames.has(name)) {
+            if (bound.Kind !== 'any' && !mentionsTypeParameter(bound) && !valueParameterNames.has(name)) {
               closedBindings.set(name, bound);
             }
           }
@@ -31889,19 +31898,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           try {
             for (const tp of generic) {
               const bound = bindings.get(tp.Name);
-              const constraintNode = (tp as { ConstraintNode?: ParseNode.Type | null }).ConstraintNode;
               // A VARIADIC pack's bound applies to each element, not to the
               // tuple the pack binds to, and is checked where the pack is
               // bound; applying it to the whole tuple here refused every
               // bounded pack.
-              if (!bound || !constraintNode || tp.Variadic) {
+              if (!bound || tp.Variadic) {
                 continue;
               }
-              const constraint = resolveType(constraintNode);
-              if (!constraint) {
-                continue;
-              }
-              const closed = substituteTypeParameters(constraint, bindings);
+              const closed = typeParameterConstraint(tp, bindings);
               if (!closed || mentionsTypeParameter(closed)) {
                 continue;
               }
