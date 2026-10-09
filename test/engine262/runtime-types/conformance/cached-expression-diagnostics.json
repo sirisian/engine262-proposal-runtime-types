@@ -1,0 +1,701 @@
+{
+  "description": "Cached expression checks retain diagnostics through speculative contextual adaptation; valid alternatives discard only their own failures.",
+  "cases": [
+    {
+      "name": "yield single incompatible",
+      "source": "const value:{item:[].<Generator.<uint8,void,void>>}={item:[do * {yield \"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "yield single compatible",
+      "source": "const value:{item:[].<Generator.<uint8,void,void>>}={item:[do * {yield 1;}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "yield nested incompatible",
+      "source": "const value:{inner:{item:[].<Generator.<uint8,void,void>>}}={inner:{item:[do * {yield \"s\";}]}}; \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "yield nested compatible",
+      "source": "const value:{inner:{item:[].<Generator.<uint8,void,void>>}}={inner:{item:[do * {yield 1;}]}}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "yield union incompatible",
+      "source": "const value:{item:[].<Generator.<uint8,void,void>>}&{left?:boolean}|{item:[].<Generator.<uint8,void,void>>}&{right?:boolean}={item:[do * {yield \"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "yield union compatible",
+      "source": "const value:{item:[].<Generator.<uint8,void,void>>}&{left?:boolean}|{item:[].<Generator.<uint8,void,void>>}&{right?:boolean}={item:[do * {yield 1;}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "yield valid alternative last",
+      "source": "const value:{item:[].<Generator.<uint8,void,void>>}|{item:[].<Generator.<string,void,void>>}={item:[do * {yield \"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "yield valid alternative first",
+      "source": "const value:{item:[].<Generator.<string,void,void>>}|{item:[].<Generator.<uint8,void,void>>}={item:[do * {yield \"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "yield uncalled incompatible body",
+      "source": "function unused():void {const value:{item:[].<Generator.<uint8,void,void>>}={item:[do * {yield \"s\";}]};} \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "return single incompatible",
+      "source": "const value:{item:[].<Generator.<never,uint8,void>>}={item:[do * {return \"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "return single compatible",
+      "source": "const value:{item:[].<Generator.<never,uint8,void>>}={item:[do * {return 1;}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "return nested incompatible",
+      "source": "const value:{inner:{item:[].<Generator.<never,uint8,void>>}}={inner:{item:[do * {return \"s\";}]}}; \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "return nested compatible",
+      "source": "const value:{inner:{item:[].<Generator.<never,uint8,void>>}}={inner:{item:[do * {return 1;}]}}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "return union incompatible",
+      "source": "const value:{item:[].<Generator.<never,uint8,void>>}&{left?:boolean}|{item:[].<Generator.<never,uint8,void>>}&{right?:boolean}={item:[do * {return \"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "return union compatible",
+      "source": "const value:{item:[].<Generator.<never,uint8,void>>}&{left?:boolean}|{item:[].<Generator.<never,uint8,void>>}&{right?:boolean}={item:[do * {return 1;}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "return valid alternative last",
+      "source": "const value:{item:[].<Generator.<never,uint8,void>>}|{item:[].<Generator.<never,string,void>>}={item:[do * {return \"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "return valid alternative first",
+      "source": "const value:{item:[].<Generator.<never,string,void>>}|{item:[].<Generator.<never,uint8,void>>}={item:[do * {return \"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "return uncalled incompatible body",
+      "source": "function unused():void {const value:{item:[].<Generator.<never,uint8,void>>}={item:[do * {return \"s\";}]};} \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async-yield single incompatible",
+      "source": "const value:{item:[].<AsyncGenerator.<uint8,void,void>>}={item:[async do * {yield \"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async-yield single compatible",
+      "source": "const value:{item:[].<AsyncGenerator.<uint8,void,void>>}={item:[async do * {yield 1;}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-yield nested incompatible",
+      "source": "const value:{inner:{item:[].<AsyncGenerator.<uint8,void,void>>}}={inner:{item:[async do * {yield \"s\";}]}}; \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async-yield nested compatible",
+      "source": "const value:{inner:{item:[].<AsyncGenerator.<uint8,void,void>>}}={inner:{item:[async do * {yield 1;}]}}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-yield union incompatible",
+      "source": "const value:{item:[].<AsyncGenerator.<uint8,void,void>>}&{left?:boolean}|{item:[].<AsyncGenerator.<uint8,void,void>>}&{right?:boolean}={item:[async do * {yield \"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async-yield union compatible",
+      "source": "const value:{item:[].<AsyncGenerator.<uint8,void,void>>}&{left?:boolean}|{item:[].<AsyncGenerator.<uint8,void,void>>}&{right?:boolean}={item:[async do * {yield 1;}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-yield valid alternative last",
+      "source": "const value:{item:[].<AsyncGenerator.<uint8,void,void>>}|{item:[].<AsyncGenerator.<string,void,void>>}={item:[async do * {yield \"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-yield valid alternative first",
+      "source": "const value:{item:[].<AsyncGenerator.<string,void,void>>}|{item:[].<AsyncGenerator.<uint8,void,void>>}={item:[async do * {yield \"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-yield uncalled incompatible body",
+      "source": "function unused():void {const value:{item:[].<AsyncGenerator.<uint8,void,void>>}={item:[async do * {yield \"s\";}]};} \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async-return single incompatible",
+      "source": "const value:{item:[].<AsyncGenerator.<never,uint8,void>>}={item:[async do * {return \"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async-return single compatible",
+      "source": "const value:{item:[].<AsyncGenerator.<never,uint8,void>>}={item:[async do * {return 1;}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-return nested incompatible",
+      "source": "const value:{inner:{item:[].<AsyncGenerator.<never,uint8,void>>}}={inner:{item:[async do * {return \"s\";}]}}; \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async-return nested compatible",
+      "source": "const value:{inner:{item:[].<AsyncGenerator.<never,uint8,void>>}}={inner:{item:[async do * {return 1;}]}}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-return union incompatible",
+      "source": "const value:{item:[].<AsyncGenerator.<never,uint8,void>>}&{left?:boolean}|{item:[].<AsyncGenerator.<never,uint8,void>>}&{right?:boolean}={item:[async do * {return \"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "async-return union compatible",
+      "source": "const value:{item:[].<AsyncGenerator.<never,uint8,void>>}&{left?:boolean}|{item:[].<AsyncGenerator.<never,uint8,void>>}&{right?:boolean}={item:[async do * {return 1;}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-return valid alternative last",
+      "source": "const value:{item:[].<AsyncGenerator.<never,uint8,void>>}|{item:[].<AsyncGenerator.<never,string,void>>}={item:[async do * {return \"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-return valid alternative first",
+      "source": "const value:{item:[].<AsyncGenerator.<never,string,void>>}|{item:[].<AsyncGenerator.<never,uint8,void>>}={item:[async do * {return \"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-return uncalled incompatible body",
+      "source": "function unused():void {const value:{item:[].<AsyncGenerator.<never,uint8,void>>}={item:[async do * {return \"s\";}]};} \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "match single incompatible",
+      "source": "const value:{item:[].<uint8>}={item:[match(true){when _:\"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "match single compatible",
+      "source": "const value:{item:[].<uint8>}={item:[match(true){when _:1;}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "match nested incompatible",
+      "source": "const value:{inner:{item:[].<uint8>}}={inner:{item:[match(true){when _:\"s\";}]}}; \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "match nested compatible",
+      "source": "const value:{inner:{item:[].<uint8>}}={inner:{item:[match(true){when _:1;}]}}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "match union incompatible",
+      "source": "const value:{item:[].<uint8>}&{left?:boolean}|{item:[].<uint8>}&{right?:boolean}={item:[match(true){when _:\"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "match union compatible",
+      "source": "const value:{item:[].<uint8>}&{left?:boolean}|{item:[].<uint8>}&{right?:boolean}={item:[match(true){when _:1;}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "match valid alternative last",
+      "source": "const value:{item:[].<uint8>}|{item:[].<string>}={item:[match(true){when _:\"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "match valid alternative first",
+      "source": "const value:{item:[].<string>}|{item:[].<uint8>}={item:[match(true){when _:\"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "match uncalled incompatible body",
+      "source": "function unused():void {const value:{item:[].<uint8>}={item:[match(true){when _:\"s\";}]};} \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "match-all single incompatible",
+      "source": "const value:{item:[].<[].<uint8>>}={item:[match all(true){when _:\"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "match-all single compatible",
+      "source": "const value:{item:[].<[].<uint8>>}={item:[match all(true){when _:1;}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "match-all nested incompatible",
+      "source": "const value:{inner:{item:[].<[].<uint8>>}}={inner:{item:[match all(true){when _:\"s\";}]}}; \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "match-all nested compatible",
+      "source": "const value:{inner:{item:[].<[].<uint8>>}}={inner:{item:[match all(true){when _:1;}]}}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "match-all union incompatible",
+      "source": "const value:{item:[].<[].<uint8>>}&{left?:boolean}|{item:[].<[].<uint8>>}&{right?:boolean}={item:[match all(true){when _:\"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "match-all union compatible",
+      "source": "const value:{item:[].<[].<uint8>>}&{left?:boolean}|{item:[].<[].<uint8>>}&{right?:boolean}={item:[match all(true){when _:1;}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "match-all valid alternative last",
+      "source": "const value:{item:[].<[].<uint8>>}|{item:[].<[].<string>>}={item:[match all(true){when _:\"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "match-all valid alternative first",
+      "source": "const value:{item:[].<[].<string>>}|{item:[].<[].<uint8>>}={item:[match all(true){when _:\"s\";}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "match-all uncalled incompatible body",
+      "source": "function unused():void {const value:{item:[].<[].<uint8>>}={item:[match all(true){when _:\"s\";}]};} \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "yield unknown remains a runtime obligation",
+      "source": "let input:any=\"s\";const value:{item:[].<Generator.<uint8,void,void>>}={item:[do * {yield input;}]};value.item[0].next();\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "match-all unknown remains a runtime obligation",
+      "source": "let input:any=\"s\";const value:{item:[].<[].<uint8>>}={item:[match all(true){when _:input;}]};\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nested match-all outcomes incompatible",
+      "source": "const value:{item:[].<[].<[].<[].<[].<[].<[].<[].<[].<uint8>>>>>>>>>}={item:[match all(true){when _:match all(true){when _:match all(true){when _:match all(true){when _:match all(true){when _:match all(true){when _:match all(true){when _:match all(true){when _:\"s\";};};};};};};};}]}; \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "nested match-all outcomes compatible",
+      "source": "const value:{item:[].<[].<[].<[].<[].<[].<[].<[].<[].<uint8>>>>>>>>>}={item:[match all(true){when _:match all(true){when _:match all(true){when _:match all(true){when _:match all(true){when _:match all(true){when _:match all(true){when _:match all(true){when _:1;};};};};};};};}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "nested generator outcomes incompatible",
+      "source": "const value:{item:[].<Generator.<Generator.<Generator.<Generator.<Generator.<Generator.<Generator.<Generator.<uint8,void,void>,void,void>,void,void>,void,void>,void,void>,void,void>,void,void>,void,void>>}={item:[do * {yield do * {yield do * {yield do * {yield do * {yield do * {yield do * {yield do * {yield \"s\";};};};};};};};}]}; \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "nested generator outcomes compatible",
+      "source": "const value:{item:[].<Generator.<Generator.<Generator.<Generator.<Generator.<Generator.<Generator.<Generator.<uint8,void,void>,void,void>,void,void>,void,void>,void,void>,void,void>,void,void>,void,void>>}={item:[do * {yield do * {yield do * {yield do * {yield do * {yield do * {yield do * {yield do * {yield 1;};};};};};};};}]}; \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    }
+  ]
+}

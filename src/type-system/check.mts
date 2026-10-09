@@ -25450,6 +25450,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const matchContexts = new WeakMap<ParseNode, Known>();
   const matchResults = new WeakMap<ParseNode, {
     revision: number, contextual: Known, type: Known, parameters: readonly Map<string, Known | null>[],
+    diagnostics: readonly ObjectValue[],
   }>();
   const checkingMatches = new Set<ParseNode>();
   const completionContexts = new WeakMap<ParseNode, Known>();
@@ -25543,9 +25544,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const cached = matchResults.get(me);
     if (!tested && cached?.revision === typeRevision && cached.contextual === contextual
       && cached.parameters.length === typeParameterScopes.length
-      && cached.parameters.every((scope, index) => scope === typeParameterScopes[index])) return cached.type;
+      && cached.parameters.every((scope, index) => scope === typeParameterScopes[index])) {
+      // A contextual trial can discard diagnostics while retaining this type.
+      // Reuse must reproduce its checking outcome in the current obligation.
+      for (const diagnostic of cached.diagnostics) errors.push(diagnostic);
+      return cached.type;
+    }
     if (checkingMatches.has(me)) return null;
     checkingMatches.add(me);
+    const diagnosticsStart = errors.length;
     try {
       const armTypes: Known[] = [];
       walk(me.Expression as ParseNode);
@@ -25976,7 +25983,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // #sec-pattern-static-semantics: collection length depends on evaluation;
       // an unknown arm loses the element type, not the known array result.
       const type: Known = me.All ? { Kind: 'array', Element: armContext ?? element ?? anyTypeRecord, Extent: 'dynamic' } : element;
-      matchResults.set(me, { revision: typeRevision, contextual, type, parameters: [...typeParameterScopes] });
+      matchResults.set(me, { revision: typeRevision, contextual, type, parameters: [...typeParameterScopes],
+        diagnostics: [...new Set(errors.slice(diagnosticsStart))] });
       return type;
     } finally {
       checkingMatches.delete(me);
@@ -26028,7 +26036,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const doGeneratorContexts = new Journaled<Known>();
-  const doGeneratorResults = new WeakMap<ParseNode, { revision: number, contextual: Known, type: Known }>();
+  const doGeneratorResults = new WeakMap<ParseNode, { revision: number, contextual: Known, type: Known,
+    diagnostics: readonly ObjectValue[] }>();
   const checkingDoGenerators = new Set<ParseNode>();
 
   /** #sec-do-generator-expressions: context supplies Y/R/N; the body is a function boundary. */
@@ -26036,9 +26045,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (inferenceResources.exhausted) return null;
     if (contextual) doGeneratorContexts.set(node, contextual);
     const cached = doGeneratorResults.get(node);
-    if (cached?.revision === typeRevision && cached.contextual === contextual) return cached.type;
+    if (cached?.revision === typeRevision && cached.contextual === contextual) {
+      // The carrier may be context-supplied even when a body operand failed.
+      // Its cached type alone cannot make a later contextual trial succeed.
+      for (const diagnostic of cached.diagnostics) errors.push(diagnostic);
+      return cached.type;
+    }
     if (checkingDoGenerators.has(node)) return contextual;
     checkingDoGenerators.add(node);
+    const diagnosticsStart = errors.length;
     let queries = 0;
     let collectingInputs = false;
     const inputs = new Set<PreparedBinding>();
@@ -26089,7 +26104,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       if (!inputs.size) {
         if (result && !mentionsTypeParameter(result)) publishedReturnTypes.set(node, result);
-        doGeneratorResults.set(node, { revision: typeRevision, contextual, type: result });
+        doGeneratorResults.set(node, { revision: typeRevision, contextual, type: result,
+          diagnostics: [...new Set(errors.slice(diagnosticsStart))] });
       }
       return result;
     } finally {
