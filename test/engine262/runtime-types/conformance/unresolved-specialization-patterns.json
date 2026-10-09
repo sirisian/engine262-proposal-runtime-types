@@ -1,0 +1,760 @@
+{
+  "description": "Unresolved fixed specialization patterns are language diagnostics during static selection, including stored and uncalled applications. Valid fixed, generic, symbolic and dynamic controls retain their outcomes.",
+  "cases": [
+    {
+      "name": "bare explicit",
+      "source": "function select<Missing>(value:string):string{return value;}select.<string>(\"ok\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 0,
+            "end": 60,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 16,
+            "end": 23,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "bare stored",
+      "source": "function select<Missing>(value:string):string{return value;}const selected=select.<string>;\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 0,
+            "end": 60,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 16,
+            "end": 23,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "bare uncalled",
+      "source": "function select<Missing>(value:string):string{return value;}function never(){select.<string>(\"ok\");}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 0,
+            "end": 60,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 16,
+            "end": 23,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "bare declaration",
+      "source": "function select<Missing>(value:string):string{return value;}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "array explicit",
+      "source": "function select<[].<Missing>>(value:string):string{return value;}select.<[].<string>>(\"ok\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 0,
+            "end": 65,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 16,
+            "end": 28,
+            "nodeType": "ArrayType"
+          }
+        }
+      }
+    },
+    {
+      "name": "array stored",
+      "source": "function select<[].<Missing>>(value:string):string{return value;}const selected=select.<[].<string>>;\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 0,
+            "end": 65,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 16,
+            "end": 28,
+            "nodeType": "ArrayType"
+          }
+        }
+      }
+    },
+    {
+      "name": "array uncalled",
+      "source": "function select<[].<Missing>>(value:string):string{return value;}function never(){select.<[].<string>>(\"ok\");}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 0,
+            "end": 65,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 16,
+            "end": 28,
+            "nodeType": "ArrayType"
+          }
+        }
+      }
+    },
+    {
+      "name": "tuple explicit",
+      "source": "function select<[Missing,string]>(value:string):string{return value;}select.<[string,string]>(\"ok\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 0,
+            "end": 69,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 16,
+            "end": 32,
+            "nodeType": "TupleType"
+          }
+        }
+      }
+    },
+    {
+      "name": "tuple stored",
+      "source": "function select<[Missing,string]>(value:string):string{return value;}const selected=select.<[string,string]>;\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 0,
+            "end": 69,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 16,
+            "end": 32,
+            "nodeType": "TupleType"
+          }
+        }
+      }
+    },
+    {
+      "name": "tuple uncalled",
+      "source": "function select<[Missing,string]>(value:string):string{return value;}function never(){select.<[string,string]>(\"ok\");}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 0,
+            "end": 69,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 16,
+            "end": 32,
+            "nodeType": "TupleType"
+          }
+        }
+      }
+    },
+    {
+      "name": "promise explicit",
+      "source": "function select<Promise.<Missing>>(value:string):string{return value;}select.<Promise.<string>>(\"ok\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 0,
+            "end": 70,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 16,
+            "end": 33,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "promise stored",
+      "source": "function select<Promise.<Missing>>(value:string):string{return value;}const selected=select.<Promise.<string>>;\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 0,
+            "end": 70,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 16,
+            "end": 33,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "promise uncalled",
+      "source": "function select<Promise.<Missing>>(value:string):string{return value;}function never(){select.<Promise.<string>>(\"ok\");}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 0,
+            "end": 70,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 16,
+            "end": 33,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "union explicit",
+      "source": "function select<Missing|string>(value:string):string{return value;}select.<string>(\"ok\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 0,
+            "end": 67,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 16,
+            "end": 30,
+            "nodeType": "UnionType"
+          }
+        }
+      }
+    },
+    {
+      "name": "union stored",
+      "source": "function select<Missing|string>(value:string):string{return value;}const selected=select.<string>;\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 0,
+            "end": 67,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 16,
+            "end": 30,
+            "nodeType": "UnionType"
+          }
+        }
+      }
+    },
+    {
+      "name": "union uncalled",
+      "source": "function select<Missing|string>(value:string):string{return value;}function never(){select.<string>(\"ok\");}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 0,
+            "end": 67,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 16,
+            "end": 30,
+            "nodeType": "UnionType"
+          }
+        }
+      }
+    },
+    {
+      "name": "nested capture explicit",
+      "source": "function select<Map.<Missing,const V>>(value:string):string{return value;}select.<Map.<string,string>>(\"ok\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 0,
+            "end": 74,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 21,
+            "end": 28,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "nested capture stored",
+      "source": "function select<Map.<Missing,const V>>(value:string):string{return value;}const selected=select.<Map.<string,string>>;\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 0,
+            "end": 74,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 21,
+            "end": 28,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "nested capture uncalled",
+      "source": "function select<Map.<Missing,const V>>(value:string):string{return value;}function never(){select.<Map.<string,string>>(\"ok\");}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 0,
+            "end": 74,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 21,
+            "end": 28,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "original",
+      "source": "function identity<T>(value:T){return value;}identity.<string>(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 0,
+            "end": 44,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 18,
+            "end": 19,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "original stored",
+      "source": "function identity<T>(value:T){return value;}const f=identity.<string>;\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 0,
+            "end": 44,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 18,
+            "end": 19,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "method",
+      "source": "class C {select<Missing>(value:string):string{return value;}}new C().select.<string>(\"ok\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 9,
+            "end": 60,
+            "nodeType": "MethodDefinition"
+          },
+          "location": {
+            "start": 16,
+            "end": 23,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "method uncalled",
+      "source": "class C {select<Missing>(value:string):string{return value;}}function never(c:C){c.select.<string>(\"ok\");}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 9,
+            "end": 60,
+            "nodeType": "MethodDefinition"
+          },
+          "location": {
+            "start": 16,
+            "end": 23,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "object method",
+      "source": "const object={select<Missing>(value:string):string{return value;}};object.select.<string>(\"ok\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 14,
+            "end": 65,
+            "nodeType": "MethodDefinition"
+          },
+          "location": {
+            "start": 21,
+            "end": 28,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "generic",
+      "source": "function identity<T:type>(value:T):T{return value;}identity.<string>(\"ok\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generic stored",
+      "source": "function identity<T:type>(value:T):T{return value;}const f=identity.<string>;f(\"ok\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generic method",
+      "source": "class C {select<T:type>(value:T):T{return value;}}new C().select.<string>(\"ok\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "attached fixed",
+      "source": "function select<T:type>(value:T):string{return \"owner\";}function select<string>(value:string):string{return \"ok\";}select.<string>(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "fixed alias",
+      "source": "type Known=string;function select<T:type>(value:T):string{return \"owner\";}function select<Known>(value:string):string{return \"ok\";}select.<string>(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "forward alias",
+      "source": "function select<T:type>(value:T):string{return \"owner\";}function select<Known>(value:string):string{return \"ok\";}type Known=string;select.<string>(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "dynamic boundary",
+      "source": "function select<T:type>(value:T):T{return value;}function invoke(f){return f.<string>(\"ok\");}invoke(select);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "invalid pattern cannot select owner fallback",
+      "source": "function select<T:type>(value:T):string{return \"owner\";}function select<Missing>(value:string):string{return \"case\";}select.<string>(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 56,
+            "end": 117,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 72,
+            "end": 79,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "invalid nested pattern cannot select owner fallback",
+      "source": "function select<T:type>(value:T):string{return \"owner\";}function select<[].<Missing>>(value:string):string{return \"case\";}select.<string>(\"s\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "applicability": "always",
+          "checked": true,
+          "unit": {
+            "start": 56,
+            "end": 122,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 72,
+            "end": 84,
+            "nodeType": "ArrayType"
+          }
+        }
+      }
+    },
+    {
+      "name": "resolved different fixed pattern selects owner",
+      "source": "function select<T:type>(value:T):string{return \"ok\";}function select<uint8>(value:uint8):string{return \"case\";}select.<string>(\"s\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "symbolic generic forwarding",
+      "source": "function identity<T:type>(value:T):T{return value;}function forward<U:type>(value:U):U{return identity.<U>(value);}forward.<string>(\"ok\");",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "nested pattern capture remains valid",
+      "source": "function select<T:type>(value:T):string{return \"owner\";}function select<[].<const E>>(value:[].<E>):string{return \"ok\";}select.<[].<string>>([\"s\"]);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    }
+  ]
+}

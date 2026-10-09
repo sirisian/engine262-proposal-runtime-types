@@ -17425,7 +17425,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       step = advance(admitted);
     }
     if (patternError) {
-      reportType('rt-specialization-contract', node, '$1', Value(patternError.message));
+      reportType('rt-specialization-contract', patternError.node ?? node, '$1', Value(patternError.message));
       return undefined;
     }
     const choice = step.value;

@@ -28,7 +28,7 @@ import { SameType, IsAssignable } from './relations.mts';
 import { literalFitsNumericType } from './literal-fit.mts';
 import {
   MatchSpecializationList, MatchSpecializationPattern, PrimitiveDeclaresParameters, PrimitiveParameterKinds, PrimitiveParameterDefault,
-  SpecializationPatternsOf, type PatternSlotParameter, type SpecializationMatchHost,
+  SpecializationPatternsOf, SpecializationPatternError, type PatternSlotParameter, type SpecializationMatchHost,
 } from './specialization-patterns.mts';
 import type { CallableGroupHost } from './specialization-selection.mts';
 import { MetadataObjectFromType } from './runtime.mts';
@@ -318,7 +318,10 @@ function componentHost(resolve: (node: ParseNode) => TypeRecord | null, unknownS
       }
       const record = resolve(node);
       if (!record) {
-        throw new Error('a component pattern names a type that is not resolved');
+        // Source resolution can fail while the checker is selecting a case.
+        // Keep that failure in its diagnostic path, rather than escaping as
+        // a host exception or treating an invalid pattern as a non-match.
+        throw new SpecializationPatternError('unresolved-fixed', `the fixed pattern type \`${node.sourceText}\` could not be resolved`, node);
       }
       return record;
     },
