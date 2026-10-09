@@ -1,4 +1,4 @@
-import { EnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity } from '../execution-context/Environment.mts';
+import { EnvironmentRecord, DeclarativeEnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity } from '../execution-context/Environment.mts';
 import { TypeNameEnvironmentFor } from '../execution-context/TypeNames.mts';
 import { isRationalObject, rationalWidthOf } from '../intrinsics/Rational.mts';
 import { FamilyCasesOf, SpecializedClassConstructor, ResolveInterfaceDeclaration } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
@@ -682,6 +682,25 @@ export function* BindTypeArgumentsInto(
 
 /** Bind already evaluated arguments with the same defaults, constraints and packs as a written application. */
 export function* BindTypeArgumentRecordsInto(
+  params: readonly ParseNode.TypeParameter[],
+  records: readonly TypeRecord[],
+  names: readonly (string | undefined)[],
+  frame: Map<string, TypeRecord>,
+  applied: string,
+): PlainEvaluator<TypeRecord[]> {
+  const context = surroundingAgent.runningExecutionContext;
+  const savedEnvironment = context.LexicalEnvironment;
+  const parameterEnvironment = new DeclarativeEnvironmentRecord(savedEnvironment);
+  parameterEnvironment.TypeParameterList = params;
+  context.LexicalEnvironment = parameterEnvironment;
+  try {
+    return yield* BindTypeArgumentRecordsInParameterEnvironment(params, records, names, frame, applied);
+  } finally {
+    context.LexicalEnvironment = savedEnvironment;
+  }
+}
+
+function* BindTypeArgumentRecordsInParameterEnvironment(
   params: readonly ParseNode.TypeParameter[],
   records: readonly TypeRecord[],
   names: readonly (string | undefined)[],
@@ -4182,10 +4201,11 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         // the type-position route (`type Box.<t>`) - and the interned record
         // carries whichever came first, so the prototype walk can miss an
         // instance of the other. Identity is by declaration and arguments, so
-        // the instance's OWN class type answers membership as a subtype test.
+        // the instance's OWN class type answers membership as a subtype test,
+        // including the instantiated base chain of a derived class.
         if (((t.Arguments as readonly unknown[] | undefined)?.length ?? 0) > 0) {
           const own = classInstanceType(value) ?? RuntimeTypeOf(value);
-          if (own.Kind === 'nominal' && own.Declaration === t.Declaration) {
+          if (own.Kind === 'nominal') {
             return IsSubtype(own, t, []);
           }
         }
@@ -6839,26 +6859,8 @@ function* evaluateComputedTypeBody(node: ParseNode.ComputedType): PlainEvaluator
     if (a.type === 'NamedArgument') {
       return Throw.TypeError('$1 is not supported yet', Value('a named builder argument'));
     }
-    // proposal-runtime-types (Capability B): a builder-call argument that is a
-    // bare identifier naming a bound type parameter resolves to that parameter's
-    // Type Object (it is a type, not a value binding). This is what lets a return
-    // type like `joinResult(P, delimiter)` read the inferred `P` alongside the
-    // ordinary value `delimiter`.
-    const bareName = (a as { type?: string, name?: string }).type === 'IdentifierReference' ? (a as { name?: string }).name : undefined;
-    if (bareName !== undefined) {
-      const boundParam = lookupTypeParameter(bareName);
-      if (boundParam !== null) {
-        // A metadata VALUE parameter - `D` of `multiplyDimensions(D, D2)` - is
-        // passed as its metadata object, which is what the builder computes
-        // with; a type parameter is passed as its Type Object.
-        if (boundParam.Kind === 'object' && isValueParameterBinding(boundParam)) {
-          args.push(Q(yield* MetadataCaptureView(boundParam)));
-        } else {
-          args.push(GetTypeObject(boundParam));
-        }
-        continue;
-      }
-    }
+    // Builder arguments are expressions. Ordinary lexical resolution preserves
+    // value-parameter views, type-parameter Type Objects, and local shadows.
     const ref = Q(yield* Evaluate(a));
     args.push(Q(yield* GetValue(ref)));
   }

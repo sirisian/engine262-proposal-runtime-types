@@ -1636,12 +1636,8 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
   // does; that is ConvertValue). An out-of-range literal is already an Early
   // Error caught by the checker before this runs.
   const record = Q(yield* TypeNodeToTypeRecord(annotation.Type));
-  // The checker's rule, at run time (TypedNumericMismatch).
-  const typedMismatch = TypedNumericMismatch(value, record);
-  if (typedMismatch) {
-    return typedMismatch;
-  }
-  return Q(yield* CheckedConvertValue(value, record));
+  // All annotation boundaries retain RequireType's storage-admission rules.
+  return Q(yield* RequireType(value, record));
 }
 
 /**
@@ -5152,7 +5148,7 @@ export function* EnforceReturnType(fn: AnnotatedFunction, value: Value): ValueEv
       // than enforcing a bare parameter or changing the shared declaration.
       const instantiated = mentionsTypeParameter(published)
         ? substituteFreeTypeParameters(published, currentTypeParameterFrame() ?? new Map())! : published;
-      return Q(yield* CheckedConvertValue(value, instantiated));
+      return Q(yield* RequireType(value, instantiated));
     }
     return value;
   }

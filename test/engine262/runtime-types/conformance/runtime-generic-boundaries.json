@@ -1,0 +1,397 @@
+{
+  "specification": [
+    "sec-generic-parameters-as-values",
+    "sec-generic-constraint-contexts",
+    "sec-value-type-copying",
+    "sec-isoftype"
+  ],
+  "cases": [
+    {
+      "name": "value capture supplies typed arithmetic",
+      "source": "function sized(n:uint32):type{return type [n/8].<uint8>;}function outer<N:uint32>(){return function inner<U:type=sized(N)>(x:U):U{return x;};}const fn=outer.<16>();fn.<>([1,2]);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "selected inherited result 4 inherited",
+      "source": "class C<N:uint32=4>{begin():C{return this;}m<T:type>(x:T);m<number>(x:number):C{return this;}end():C{return this;}}class D extends C.<4> {}const result=new D().begin().m.<number>(1).end();\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "selected inherited result 8 inherited",
+      "source": "class C<N:uint32=4>{begin():C{return this;}m<T:type>(x:T);m<number>(x:number):C{return this;}end():C{return this;}}class D extends C.<8> {}const result=new D().begin().m.<number>(1).end();\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "bare value argument in direct computed return",
+      "source": "function sized(n:uint32):type{return type [n/8].<uint8>;}function fn<N:uint32>():sized(N){return [1,2];}fn.<16>();\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "earlier own value in computed default",
+      "source": "function sized(n:uint32):type{return type [n/8].<uint8>;}function fn<N:uint32,U:type=sized(N)>(x:U):U{return x;}fn.<16>([1,2]);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "own value shadows outer binding in default",
+      "source": "const N=8;function sized(n:uint32):type{return type [n/8].<uint8>;}function fn<N:uint32,U:type=sized(N)>(x:U):U{return x;}fn.<16>([1,2]);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "own type shadows outer binding in default",
+      "source": "const T=string;function identity(t:type):type{return t;}function fn<T:type,U:type=identity(T)>(x:U):U{return x;}fn.<number>(1);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "local shadows generic in builder argument",
+      "source": "function sized(n:uint32):type{return type [n/8].<uint8>;}function fn<N:uint32>(){{const N=16;type A=sized(N);let a:A=[1,2];}}fn.<8>();\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "ordinary parameter shadows captured generic",
+      "source": "function sized(n:uint32):type{return type [n/8].<uint8>;}function outer<N:uint32>(){return function inner(N:uint32){type A=sized(N);let a:A=[1,2];};}outer.<8>()(16);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "value pack builder argument",
+      "source": "function first(v:[].<uint32>):type{return uint8;}function outer<...Ns:[].<uint32>>(){return function inner<T:type=first(Ns)>(x:T):T{return x;};}const f=outer.<1,2>();f.<>(3);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "parenthesized value capture",
+      "source": "function sized(n:uint32):type{return type [n/8].<uint8>;}function outer<N:uint32>(){return function inner<U:type=sized((N))>(x:U):U{return x;};}outer.<16>().<>([1,2]);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "parenthesized own value shadows outer binding",
+      "source": "const N=8;function sized(n:uint32):type{return type [n/8].<uint8>;}function f<N:uint32,U:type=sized((N))>(x:U):U{return x;}f.<16>([1,2]);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "named value argument precedes computed default",
+      "source": "function sized(n:uint32):type{return type [n/8].<uint8>;}function f<N:uint32,U:type=sized(N)>(x:U):U{return x;}f.<N:16>([1,2]);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "captured applications retain distinct admitted values",
+      "source": "function sized(n:uint32):type{return type [n/8].<uint8>;}function outer<N:uint32>(){return function inner<U:type=sized(N)>(x:U):U{return x;};}const a=outer.<8>();const b=outer.<16>();a.<>([1]);b.<>([1,2]);a.<>([3]);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "nested generic shadow preserves captured helper value",
+      "source": "function outer<N:uint32>(){function size():type{return type [N/8].<uint8>;}return function mid<N:uint32>(){return function inner<U:type=size()>(x:U):U{return x;};};}outer.<16>().<8>().<>([1,2]);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "type parameter remains a Type Object in builder argument",
+      "source": "function identity(t:type):type{return t;}function f<T:type>():identity(T){return 3;}f.<number>();\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "literal type parameter remains a Type Object",
+      "source": "function identity(t:type):type{return t;}function f<T:type>():identity(T){return 3;}f.<3>();\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "value pack elements keep their domain",
+      "source": "function sized(ns:[].<uint32>):type{return type [ns[0]/8].<uint8>;}function outer<...Ns:[].<uint32>>(){return function inner<U:type=sized(Ns)>(x:U):U{return x;};}outer.<16>().<>([1,2]);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "own value pack shadows outer array",
+      "source": "const Ns=[8];function sized(ns:[].<uint32>):type{return type [ns[0]/8].<uint8>;}function f<...Ns:[].<uint32>,U:type=sized(Ns)>(x:U):U{return x;}f.<16>([1,2]);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "local type parameter spelling shadows with ordinary type value",
+      "source": "function identity(t:type):type{return t;}function f<T:type>(){{const T=string;type A=identity(T);let a:A=\"s\";}}f.<number>();\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "dynamic wrong captured result remains a runtime error",
+      "source": "function sized(n:uint32):type{return type [n/8].<uint8>;}function outer<N:uint32>(){return function inner<U:type=sized(N)>(x:U):U{return x;};}const f=outer.<16>();function invoke(x){return f.<>(x);}invoke([1]);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "explicit argument bypasses failed computed default",
+      "source": "function fail(n:uint32):type{throw new TypeError(\"default\");}function outer<N:uint32>(){return function inner<U:type=fail(N)>(x:U):U{return x;};}outer.<16>().<number>(3);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "inherited return through multilevel",
+      "source": "class C<N:uint32=4>{begin():C{return this;}m<T:type>(x:T);m<number>(x:number):C{return this;}end():C{return this;}}class D extends C.<8>{}class E extends D{}new E().begin().m.<number>(1).end();\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "inherited return through generic intermediate",
+      "source": "class C<N:uint32=4>{begin():C{return this;}m<T:type>(x:T);m<number>(x:number):C{return this;}end():C{return this;}}class D<N:uint32> extends C.<N>{}class E extends D.<8>{}new E().begin().m.<number>(1).end();\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "reference subclass with extra storage retains identity",
+      "source": "reference class C<N:uint32=4>{begin():C{return this;}m<T:type>(x:T);m<number>(x:number):C{return this;}end():C{return this;}}class D extends C.<8>{x:uint32=7;}const d=new D();const e=d.begin().m.<number>(1).end();String(d===e)+\"/\"+String(d.x);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true/7"
+      }
+    },
+    {
+      "name": "direct instance still crosses instantiated return",
+      "source": "class C<N:uint32=4>{begin():C{return this;}m<T:type>(x:T);m<number>(x:number):C{return this;}end():C{return this;}}new C.<8>().begin().m.<number>(1).end();\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "nominal membership matching derived",
+      "source": "class C<N:uint32>{}class D extends C.<8>{}class E extends C.<4>{}class U<N:uint32>{}function matches(v){return v is C.<8>;}String(matches(new D()));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "nominal membership different argument",
+      "source": "class C<N:uint32>{}class D extends C.<8>{}class E extends C.<4>{}class U<N:uint32>{}function matches(v){return v is C.<8>;}String(matches(new E()));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "nominal membership unrelated generic",
+      "source": "class C<N:uint32>{}class D extends C.<8>{}class E extends C.<4>{}class U<N:uint32>{}function matches(v){return v is C.<8>;}String(matches(new U.<8>()));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "nominal membership plain object",
+      "source": "class C<N:uint32>{}class D extends C.<8>{}class E extends C.<4>{}class U<N:uint32>{}function matches(v){return v is C.<8>;}String(matches({}));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    },
+    {
+      "name": "nominal return refuses wrong argument",
+      "source": "class C<N:uint32>{}class E extends C.<4>{}class U<N:uint32>{}function take(v):C.<8>{return v;}take(new E());",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nominal return refuses unrelated class",
+      "source": "class C<N:uint32>{}class E extends C.<4>{}class U<N:uint32>{}function take(v):C.<8>{return v;}take(new U.<8>());",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nominal return refuses plain object",
+      "source": "class C<N:uint32>{}class E extends C.<4>{}class U<N:uint32>{}function take(v):C.<8>{return v;}take({});",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "larger derived layout remains forbidden at value boundary",
+      "source": "class C<N:uint32>{x:uint32=1;}class D extends C.<8>{y:uint32=2;}function take(v):C.<8>{return v;}take(new D());",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "larger derived layout remains valid for membership",
+      "source": "class C<N:uint32>{x:uint32=1;}class D extends C.<8>{y:uint32=2;}function matches(v){return v is C.<8>;}String(matches(new D()));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "same generic class across functions retains argument identity",
+      "source": "class C<N:uint32>{}function create(){class D extends C.<8>{}return new D();}function take(v):C.<8>{return v;}take(create());take(create());\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "dynamic wider subclass refused by parameter annotation",
+      "source": "class C<N:uint32>{x:uint32=1;}class D extends C.<8>{y:uint32=2;}function take(v:C.<8>){}function invoke(v){take(v);}invoke(new D());",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "dynamic wider subclass refused by binding annotation",
+      "source": "class C<N:uint32>{x:uint32=1;}class D extends C.<8>{y:uint32=2;}function take(v){let x:C.<8>=v;}take(new D());",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "dynamic wider subclass refused by field store",
+      "source": "class C<N:uint32>{x:uint32=1;}class D extends C.<8>{y:uint32=2;}class H{c:C.<8>=new C.<8>();}const h=new H();function store(v){h.c=v;}store(new D());",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "runtime default failure restores caller lexical scope",
+      "source": "const N=8;function fail(n:uint32):type{throw new TypeError(\"default\");}function f<N:uint32,U:type=fail(N)>(){}function call(g){try{g.<16>();}catch(e){}return String(N);}call(f);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "8"
+      }
+    },
+    {
+      "name": "runtime failed binding does not contaminate following call",
+      "source": "function fail(n:uint32):type{throw new TypeError(\"default\");}function f<N:uint32,U:type=fail(N)>(){}function good<N:uint32>():uint32{return N;}function call(g){try{g.<16>();}catch(e){}return String(good.<8>());}call(f);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "8"
+      }
+    },
+    {
+      "name": "written builder argument resolves in caller scope",
+      "source": "const N=8;function sized(n:uint32):type{return type [n/8].<uint8>;}function f<N:uint32,U:type>(x:U):U{return x;}f.<16,sized(N)>([1]);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "method default shadows outer value",
+      "source": "const N=8;function sized(n:uint32):type{return type [n/8].<uint8>;}class C{f<N:uint32,U:type=sized(N)>(x:U):U{return x;}}new C().f.<16>([1,2]);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    }
+  ]
+}

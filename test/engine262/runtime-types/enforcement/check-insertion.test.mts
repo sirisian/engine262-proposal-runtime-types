@@ -1538,7 +1538,9 @@ test('the logical compounds assign the right operand, so their check is the same
   expectStatic('let a: uint8 = 0; a ||= "s";');
   expectStatic('let a: uint8 = 1; a &&= "s";');
   expectStatic('let a: uint8 | null = null; a ??= "s";');
-  expect(ran('let a: uint8 | null = null; a ??= 1;')).toBe(true);
+  expectStatic('let a: uint8 | null = null; a ??= 1;');
+  expectStatic('function update(a: uint8 | null) { a ??= "s"; }');
+  expect(evaluated('function update(a: uint8 | null) { a ??= 1; return a; } String(update(null)) + "/" + String(update(2));')).toBe('1/2');
 });
 
 test('what stays as it was', () => {

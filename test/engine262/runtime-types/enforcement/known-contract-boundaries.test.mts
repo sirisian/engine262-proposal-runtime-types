@@ -104,7 +104,7 @@ test('String index proofs use UTF-16 extent and preserve unknown or skipped stor
   expect(ok('function unused(s: "abc") { s[9] = "x"; }')).toBe(true);
   expect(ok('function unused(s: any) { s.length = 0; }')).toBe(true);
   expect(ok('function unused(s: string) { s.length ??= 0; }')).toBe(true);
-  expect(ok('function unused(s: "abc") { s.length ||= 0; }')).toBe(true);
+  expectStaticTypeError('function unused(s: "abc") { s.length ||= 0; }');
   expectStaticTypeError('function unused(s: "abc") { s.length &&= 0; }');
   expect(ok('function unused(n: number) { n.x = 1; }')).toBe(true);
 });

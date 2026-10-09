@@ -149,9 +149,14 @@ test.each([
   "class C { x: uint8; m(): uint8 { return this.x; } } function unused(c: C) { const {m} = c; m?.(); }",
 ])("optional calls preserve receiver requirements: %s", (source) => expectStaticTypeError(source));
 
+test.each([
+  "class C { x: uint8; m(): uint8 { return this.x; } } const c: C | null = new C(); String(c?.m());",
+  "const f: (() => uint8) | null = null; f?.();",
+  "const f: (() => uint8) | null = (): uint8 => 1; String(f?.());",
+])("optional calls reject a deciding test made constant by initialization: %s", (source) => expectStaticTypeError(source));
+
 test("optional calls preserve receiver requirements preserve valid and dynamic cases", () => {
-  expect(evaluated("class C { x: uint8; m(): uint8 { return this.x; } } const c: C | null = new C(); String(c?.m());")).toBe("0");
-  expect(ok("const f: (() => uint8) | null = null; f?.();")).toBe(true);
+  expect(evaluated("class C { x: uint8; m(): uint8 { return this.x; } } function invoke(c: C | null) { return c?.m(); } String(invoke(new C())) + '/' + String(invoke(null));")).toBe("0/undefined");
   expect(ok("class C { x: uint8; m(): uint8 { return this.x; } } function unused(c: C) { const f: any = c.m; f?.(); }")).toBe(true);
 });
 
@@ -173,7 +178,7 @@ test("repeated fields share a storage contract preserve valid and dynamic cases"
 });
 
 test('a receiver-free function remains callable through an optional call', () => {
-  expect(evaluated('const f: (() => uint8) | null = (): uint8 => 1; String(f?.());')).toBe('1');
+  expect(evaluated('function invoke(f: (() => uint8) | null) { return f?.(); } String(invoke((): uint8 => 1)) + "/" + String(invoke(null));')).toBe('1/undefined');
 });
 
 test('abstract redeclarations must preserve covariance', () => {

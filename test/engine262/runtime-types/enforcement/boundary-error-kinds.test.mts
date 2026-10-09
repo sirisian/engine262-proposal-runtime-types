@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { expectStaticTypeError } from '../harness.mts';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
@@ -38,9 +39,15 @@ function expectThrownKind(source: string, kind: 'TypeError' | 'RangeError' | 'Sy
   expect(completion.Value?.stringValue?.(), `expected ${kind} for: ${source}`).toBe(kind);
 }
 
-test('is evaluates to the membership test', () => {
-  expect(evaluated('((5 := uint8) is uint8) === true && (5 is uint8) === false ? "ok" : "no";')).toBe('ok');
-  expect(evaluated('type T = uint8 | string; ("s" is T) === true ? "ok" : "no";')).toBe('ok');
+test('is evaluates to the membership test when queried as a value', () => {
+  expect(evaluated('String((5 := uint8) is uint8) + "/" + String(5 is uint8);')).toBe('true/false');
+  expect(evaluated('type T = uint8 | string; String("s" is T);')).toBe('true');
+  expect(evaluated('function choose(v) { return v is uint8 ? "typed" : "other"; } choose(5) + "/" + choose(5 := uint8);')).toBe('other/typed');
+});
+
+test('constant membership tests cannot decide a branch', () => {
+  expectStaticTypeError('((5 := uint8) is uint8) === true && (5 is uint8) === false ? "ok" : "no";');
+  expectStaticTypeError('type T = uint8 | string; ("s" is T) === true ? "ok" : "no";');
 });
 
 test(':= applies the conversion rule', () => {

@@ -3315,6 +3315,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!node || typeof node !== 'object') return false;
     if (Array.isArray(node)) return node.some(containsPropertyRead);
     const value = node as Record<string, unknown>;
+    if (typeof value.type !== 'string') return false;
     if (value.type === 'MemberExpression' || value.type === 'SuperProperty'
       || value.type === 'MatchObjectPattern' || value.type === 'MatchArrayPattern') return true;
     return Object.entries(value).some(([key, child]) => !['parent', 'location', 'strict', 'sourceText'].includes(key)

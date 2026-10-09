@@ -11,14 +11,10 @@ import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ObjectValue as ObjectValueClass } from '../value.mts';
 import { RuntimeTypeOf, BindTypeArgumentsInto } from '../type-system/runtime.mts';
-import { orderTypeArguments, typeArgumentNameOf } from '../type-system/type-argument-order.mts';
-import { IsAssignable } from '../type-system/relations.mts';
-import { displayType } from '../type-system/records.mts';
 import { MarkTypeArgumentsCallee, ClearTypeArgumentsCallee, Evaluate_TypeArgumentsExpression } from './RuntimeTypesDeclarations.mts';
 import { CaseGroupMembers, SelectExplicitCase, WithSelectedInvocation } from '../abstract-ops/callable-selection.mts';
 import { DereferenceReferenceValue } from '../abstract-ops/reference-operations.mts';
 import { EvaluatePropertyAccessWithExpressionKey, EvaluatePropertyAccessWithIdentifierKey } from './EvaluatePropertyAccess.mts';
-import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { OverloadSignatureOf } from '../abstract-ops/runtime-types.mts';
 import { ClassFieldReflection, TypeStructureReflection } from '../intrinsics/Reflect.mts';
 import { CreateArrayView } from '../abstract-ops/array-view.mts';
@@ -27,8 +23,7 @@ import { ToIndex, GetV, Call, ToLength, R } from '../abstract-ops/all.mts';
 import { ToString } from '../abstract-ops/all.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { anyType, builtinTypeRecord, type TypeRecord } from '../type-system/records.mts';
-import { setPendingCheckerBindings, pushTypeParameterFrame, popTypeParameterFrame, bindTypeParameter, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
-import { EnsureCompletion } from '../completion.mts';
+import { setPendingCheckerBindings, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
 import { TypedJSONParse } from '../intrinsics/JSON.mts';
 import { TypedRandom, TypedRandomInRange } from '../intrinsics/Math.mts';
 import { isRangeObject } from '../intrinsics/Range.mts';
@@ -1146,164 +1141,10 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
     // fallback turned into the naming error.
     if (params && params.length > 0) {
       const typeArgs = memberExpr.TypeArguments.TypeArgumentList;
-      // `f.<V: 5>()`
-      // bound V's argument to the FIRST parameter. Named arguments are ordered
-      // into parameter order here, before the arity check and the binding loop,
-      // by the same shared operation every other application site uses.
-      const explicitArgNames = typeArgs.map((a) => typeArgumentNameOf(a));
-      const namedTypeArgs = explicitArgNames.some((n) => n !== undefined);
-      // Packs and spreads bind by the engine's BindTypeArguments.
-      const usesPacks = params.some((q: ParseNode.TypeParameter) => q.IsVariadic === true)
-        || typeArgs.some((a) => (a as { IsSpread?: boolean }).IsSpread === true);
-      let orderedTypeArgs: readonly (ParseNode.Type | undefined)[] | null = null;
-      if (namedTypeArgs && !usesPacks) {
-        const order = orderTypeArguments(
-          params.map((p: ParseNode.TypeParameter) => p.BindingIdentifier?.name),
-          typeArgs,
-          explicitArgNames,
-        );
-        if (!order.ok) {
-          switch (order.kind) {
-            case 'positional-after-named':
-              return Throw.TypeError('a positional type argument cannot follow a named one in $1', Value('the call'));
-            case 'unknown-name':
-              return Throw.TypeError('$1 does not name a type parameter of $2', Value(order.name), Value('the call'));
-            case 'supplied-twice':
-              return Throw.TypeError('the type parameter $1 of $2 is supplied twice', Value(order.name), Value('the call'));
-            default:
-              return Throw.TypeError('$1 takes $2 type arguments; $3 expects one taking $4', Value('the call'), Value(String(typeArgs.length)), Value(params[0]!.BindingIdentifier.name), Value(String(params.length)));
-          }
-        }
-        orderedTypeArgs = order.ordered;
-      }
-      // #sec-generics: an argument list may omit a TRAILING parameter that has
-      // a default, which then binds the default's type. A parameter without one
-      // may not be omitted, and the parse-time rule that defaults come last
-      // makes the count of required parameters simply the count before the
-      // first default.
-      const required = params.findIndex((p: ParseNode.TypeParameter) => (p as unknown as { TypeParameterDefault?: unknown }).TypeParameterDefault);
-      const least = required === -1 ? params.length : required;
-      if (!namedTypeArgs && !usesPacks && (typeArgs.length < least || typeArgs.length > params.length)) {
-        return Throw.TypeError(
-          '$1 takes $2 type arguments; $3 expects one taking $4',
-          Value('the call'), Value(String(typeArgs.length)),
-          Value(params[0]!.BindingIdentifier.name), Value(String(params.length)),
-        );
-      }
       const frame = new Map<string, TypeRecord>();
-      if (usesPacks || (func as { TypeParameterFrame?: unknown }).TypeParameterFrame) {
-        Q(yield* BindTypeArgumentsInto(params, typeArgs, frame, 'the call', func as never));
-      } else {
-      for (let i = 0; i < params.length; i += 1) {
-        const p = params[i]! as unknown as { BindingIdentifier?: { name?: string }, TypeParameterConstraint?: ParseNode.Type | null, TypeParameterDefault?: ParseNode.Type | null };
-        // A parameter past the supplied arguments takes its default, which is
-        // resolved with the frame built so far in scope - so a later default
-        // may name an earlier parameter. With named arguments, "past the
-        // supplied" is a hole in the ordered list.
-        const suppliedNode = namedTypeArgs ? orderedTypeArgs![i] : (i < typeArgs.length ? typeArgs[i] : undefined);
-        const argNode = suppliedNode ?? p.TypeParameterDefault;
-        if (!argNode) {
-          return Throw.TypeError('the type parameter $1 of $2 has no argument and no default', Value(p.BindingIdentifier?.name ?? String(i)), Value('the call'));
-        }
-        // A higher-kinded parameter's argument is a DECLARATION: resolved as
-        // the class application resolves one (TypeArgumentAsDeclaration), since
-        // as a type a bare generic name is the error its own parameters make
-        // it. Its arity is what `badKindedArgument` validates; the constraint
-        // branches below are for type and value parameters and are skipped.
-        const kindedHere = ((p as unknown as { Arity?: number }).Arity ?? 0) > 0;
-        pushTypeParameterFrame(frame);
-        let record;
-        try {
-          // (Two statements rather than `??`: the completion macro hoists its
-          // call ahead of the operator and would resolve the name as a type
-          // regardless.)
-          let asDeclaration: TypeRecord | undefined;
-          if (kindedHere) {
-            asDeclaration = Q(yield* TypeArgumentAsDeclaration(argNode, (p as { Arity?: number }).Arity ?? 0));
-          }
-          if (asDeclaration !== undefined) {
-            record = asDeclaration;
-          } else {
-            record = Q(yield* TypeNodeToTypeRecord(argNode));
-          }
-        } finally {
-          popTypeParameterFrame();
-        }
-        // A value parameter's argument is a value OF the declared type, so the
-        // literal it binds carries a value of that type rather than the plain
-        // number the argument was written as.
-        if (kindedHere) {
-          // Bound below as the declaration it is.
-        } else if (record.Kind === 'literal' && p.TypeParameterConstraint) {
-          // #sec-computed-constraints: the constraint is evaluated over the
-          // bindings so far, so it resolves UNDER the frame - `V: T = 0` read
-          // T with no frame in scope and threw "'T' is not defined".
-          pushTypeParameterFrame(frame);
-          let declared;
-          try {
-            declared = Q(yield* TypeNodeToTypeRecord(p.TypeParameterConstraint));
-          } finally {
-            popTypeParameterFrame();
-          }
-          const converted = EnsureCompletion(yield* CheckedConvertValue(record.Value as Value, declared as never));
-          if (converted.Type !== 'normal') {
-            return converted as never;
-          }
-          // The BASE moves with the value, as it does at the other two sites
-          // that make this conversion - `BindTypeArguments` in runtime.mts and
-          // the declaration path in RuntimeTypesDeclarations - both of which
-          // write `Base: <the constraint>` beside the value.
-          //
-          // Without it the binding is a ~literal~ record whose [[Value]] is a
-          // `uint8` 1 and whose [[Base]] is `number`, which is a type no
-          // program can fill. #sec-isoftype decides a ~literal~ by SameValue
-          // against its [[Value]], so a plain Number is not of it; and
-          // #sec-literal-propagation's rule for reaching one - "a contextual
-          // type that is a ~literal~ Type Record whose [[Base]] is a numeric
-          // VALUE type admits a numeric literal ... the literal is converted at
-          // the base" - does not fire either, because the base says `number`.
-          // So `f.<1>(1)` for `function f<T: uint8>(a: T)` bound a parameter
-          // type that refused its own argument: "1 is not assignable to \"1\"".
-          // The clause names this failure exactly - "without this such a type is
-          // nameable and not fillable".
-          record = { ...record, Value: converted.Value as Value, Base: declared as TypeRecord } as never;
-        } else if (record.Kind !== 'literal' && p.TypeParameterConstraint) {
-          // #sec-computed-constraints step 8 for a NON-literal explicit argument:
-          // `f<T: string>` applied `f.<number>` was caught only because inference
-          // re-checked the call's ARGUMENT against T; the explicit site is where
-          // the constraint belongs (the root fix made inference honour the
-          // explicit binding, which removed that accidental check).
-          pushTypeParameterFrame(frame);
-          let declaredForType;
-          try {
-            declaredForType = Q(yield* TypeNodeToTypeRecord(p.TypeParameterConstraint));
-          } finally {
-            popTypeParameterFrame();
-          }
-          // #sec-the-type-type: `type` is the type of TYPES, and "because
-          // `type` is itself a type, `type` is a value of `type`" - so EVERY
-          // type record satisfies a `type` bound and there is nothing here to
-          // compare.
-          //
-          // `IsAssignable` answers the question one level down: whether the
-          // VALUES of one type are values of another. Asked of `uint8` against
-          // `type` it says no - correctly, since no `uint.<8>` is a type - and
-          // that is not what a `<T: type>` bound asks. So `f.<uint8>()` was
-          // refused for a generic value parameter while the same argument at an
-          // ordinary parameter, `f(v: type)` called as `f(uint8)`, was
-          // accepted: that path tests the Type Object as a VALUE and gets it
-          // right.
-          const boundIsTheTypeType = (declaredForType as { Kind?: string, Name?: string }).Kind === 'primitive'
-            && (declaredForType as { Name?: string }).Name === 'type';
-          if (!boundIsTheTypeType && !IsAssignable(record, declaredForType)) {
-            return Throw.TypeError('$1 is not assignable to $2', Value(displayType(record)), Value(displayType(declaredForType)));
-          }
-        }
-        if (p.BindingIdentifier?.name) {
-          bindTypeParameter(frame, p.BindingIdentifier.name, record, p);
-        }
-      }
-      }
+      // Constraints and defaults use the declaration's parameter environment;
+      // written arguments still resolve in the caller before that scope opens.
+      Q(yield* BindTypeArgumentsInto(params, typeArgs, frame, 'the call', func as never));
       // #sec-where-clauses: a `where` clause is "a compile-time-evaluable
       // Boolean expression over its parameters, checked at each specialization
       // once its parameters are bound. Where the expression is *false* for an
