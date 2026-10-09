@@ -1,0 +1,1942 @@
+{
+  "schemaVersion": 1,
+  "specification": [
+    "sec-callable-overload-contracts",
+    "sec-inference-query-inputs"
+  ],
+  "cases": [
+    {
+      "name": "sibling alias",
+      "source": "function a(){type Known=string;}function b(){function f<[].<Known>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 45,
+            "end": 95,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 60,
+            "end": 65,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "block alias",
+      "source": "{type Known=string;}function b(){function f<[].<Known>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 33,
+            "end": 83,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 48,
+            "end": 53,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "local alias",
+      "source": "function b(){type Known=string;function f<[].<Known>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "forward alias",
+      "source": "function b(){function f<[].<Known>>(x:string):string{return x;}type Known=string;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "sibling generic alias",
+      "source": "function a(){type Known<T:type>=T;}function b(){function f<[].<Known.<string>>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 48,
+            "end": 107,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 63,
+            "end": 77,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "block generic alias",
+      "source": "{type Known<T:type>=T;}function b(){function f<[].<Known.<string>>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 36,
+            "end": 95,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 51,
+            "end": 65,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "local generic alias",
+      "source": "function b(){type Known<T:type>=T;function f<[].<Known.<string>>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "forward generic alias",
+      "source": "function b(){function f<[].<Known.<string>>>(x:string):string{return x;}type Known<T:type>=T;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "sibling class",
+      "source": "function a(){class Known {}}function b(){function f<[].<Known>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 41,
+            "end": 91,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 56,
+            "end": 61,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "block class",
+      "source": "{class Known {}}function b(){function f<[].<Known>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 29,
+            "end": 79,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 44,
+            "end": 49,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "local class",
+      "source": "function b(){class Known {}function f<[].<Known>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "forward class",
+      "source": "function b(){function f<[].<Known>>(x:string):string{return x;}class Known {}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "sibling interface",
+      "source": "function a(){interface Known {}}function b(){function f<[].<Known>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 45,
+            "end": 95,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 60,
+            "end": 65,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "block interface",
+      "source": "{interface Known {}}function b(){function f<[].<Known>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 33,
+            "end": 83,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 48,
+            "end": 53,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "local interface",
+      "source": "function b(){interface Known {}function f<[].<Known>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "forward interface",
+      "source": "function b(){function f<[].<Known>>(x:string):string{return x;}interface Known {}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "sibling enum",
+      "source": "function a(){enum Known { A }}function b(){function f<[].<Known>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 43,
+            "end": 93,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 58,
+            "end": 63,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "block enum",
+      "source": "{enum Known { A }}function b(){function f<[].<Known>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 31,
+            "end": 81,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 46,
+            "end": 51,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "local enum",
+      "source": "function b(){enum Known { A }function f<[].<Known>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "forward enum",
+      "source": "function b(){function f<[].<Known>>(x:string):string{return x;}enum Known { A }}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "alias target uses declaration scope",
+      "source": "type Target=string;type Known=Target;function b(){type Target=uint8;function f<[].<Known>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "alias target bypasses caller shadow",
+      "source": "type Target=string;type Known=Target;function b(){type Target=uint8;function f(x:Known):Known{return \"ok\";}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "same name aliases independent",
+      "source": "type Known=string;function b(){type Known=uint8;function f(x:Known):Known{return 1;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "sibling generic alias different contract",
+      "source": "function a(){type Known<T:type>=uint8;}function b(){type Known<T:type>=string;function f(x:Known.<string>):Known.<string>{return \"ok\";}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "shadow const type value",
+      "source": "type Known=uint8;function b(){const Known=type string;function f(x:Known):Known{return \"ok\";}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "symbolic alias",
+      "source": "function b<T:type>(){type Known=T;function f<[].<Known>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "recursive alias",
+      "source": "type Known={next: Known|null};function f(x:Known):Known{return x;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "nested recursive alias shadow",
+      "source": "type Known=string;function b(){type Known={next:Known|null};function f(x:Known):Known{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "sibling intrinsic shadow",
+      "source": "function a(){class Map {}}function b(){function f<[].<Map.<string,string>>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "sibling alias bare",
+      "source": "function a(){type Known=string;}function b(){function f<Known>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 45,
+            "end": 90,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 56,
+            "end": 61,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"`Known` has no domain, so it is an argument, and no type named `Known` is in scope; a type parameter is declared as `Known: type`\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling alias tuple",
+      "source": "function a(){type Known=string;}function b(){function f<[Known]>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 45,
+            "end": 92,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 57,
+            "end": 62,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling alias union",
+      "source": "function a(){type Known=string;}function b(){function f<Known|string>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 45,
+            "end": 97,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 56,
+            "end": 61,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "outer alias",
+      "source": "function a(){type Known=string;function b(){function f<[].<Known>>(x:string):string{return x;}}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "method alias",
+      "source": "function a(){type Known=string;}class B{m(){function f<[].<Known>>(x:string):string{return x;}}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 44,
+            "end": 94,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 59,
+            "end": 64,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "reverse alias",
+      "source": "function b(){function f<[].<Known>>(x:string):string{return x;}}function a(){type Known=string;}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 13,
+            "end": 63,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 28,
+            "end": 33,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling generic alias bare",
+      "source": "function a(){type Known<T:type>=T;}function b(){function f<Known.<string>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 48,
+            "end": 102,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 59,
+            "end": 73,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling generic alias tuple",
+      "source": "function a(){type Known<T:type>=T;}function b(){function f<[Known.<string>]>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 48,
+            "end": 104,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 60,
+            "end": 74,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling generic alias union",
+      "source": "function a(){type Known<T:type>=T;}function b(){function f<Known.<string>|string>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 48,
+            "end": 109,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 59,
+            "end": 73,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "outer generic alias",
+      "source": "function a(){type Known<T:type>=T;function b(){function f<[].<Known.<string>>>(x:string):string{return x;}}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "method generic alias",
+      "source": "function a(){type Known<T:type>=T;}class B{m(){function f<[].<Known.<string>>>(x:string):string{return x;}}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 47,
+            "end": 106,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 62,
+            "end": 76,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "reverse generic alias",
+      "source": "function b(){function f<[].<Known.<string>>>(x:string):string{return x;}}function a(){type Known<T:type>=T;}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 13,
+            "end": 72,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 28,
+            "end": 42,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling class bare",
+      "source": "function a(){class Known {}}function b(){function f<Known>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 41,
+            "end": 86,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 52,
+            "end": 57,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"`Known` has no domain, so it is an argument, and no type named `Known` is in scope; a type parameter is declared as `Known: type`\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling class tuple",
+      "source": "function a(){class Known {}}function b(){function f<[Known]>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 41,
+            "end": 88,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 53,
+            "end": 58,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling class union",
+      "source": "function a(){class Known {}}function b(){function f<Known|string>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 41,
+            "end": 93,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 52,
+            "end": 57,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "outer class",
+      "source": "function a(){class Known {}function b(){function f<[].<Known>>(x:string):string{return x;}}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "method class",
+      "source": "function a(){class Known {}}class B{m(){function f<[].<Known>>(x:string):string{return x;}}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 40,
+            "end": 90,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 55,
+            "end": 60,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "reverse class",
+      "source": "function b(){function f<[].<Known>>(x:string):string{return x;}}function a(){class Known {}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 13,
+            "end": 63,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 28,
+            "end": 33,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling generic class bare",
+      "source": "function a(){class Known<T:type> {}}function b(){function f<Known.<string>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 49,
+            "end": 103,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 60,
+            "end": 74,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling generic class tuple",
+      "source": "function a(){class Known<T:type> {}}function b(){function f<[Known.<string>]>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 49,
+            "end": 105,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 61,
+            "end": 75,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling generic class union",
+      "source": "function a(){class Known<T:type> {}}function b(){function f<Known.<string>|string>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 49,
+            "end": 110,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 60,
+            "end": 74,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "outer generic class",
+      "source": "function a(){class Known<T:type> {}function b(){function f<[].<Known.<string>>>(x:string):string{return x;}}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "method generic class",
+      "source": "function a(){class Known<T:type> {}}class B{m(){function f<[].<Known.<string>>>(x:string):string{return x;}}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 48,
+            "end": 107,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 63,
+            "end": 77,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "reverse generic class",
+      "source": "function b(){function f<[].<Known.<string>>>(x:string):string{return x;}}function a(){class Known<T:type> {}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 13,
+            "end": 72,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 28,
+            "end": 42,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling interface bare",
+      "source": "function a(){interface Known {}}function b(){function f<Known>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 45,
+            "end": 90,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 56,
+            "end": 61,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"`Known` has no domain, so it is an argument, and no type named `Known` is in scope; a type parameter is declared as `Known: type`\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling interface tuple",
+      "source": "function a(){interface Known {}}function b(){function f<[Known]>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 45,
+            "end": 92,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 57,
+            "end": 62,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling interface union",
+      "source": "function a(){interface Known {}}function b(){function f<Known|string>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 45,
+            "end": 97,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 56,
+            "end": 61,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "outer interface",
+      "source": "function a(){interface Known {}function b(){function f<[].<Known>>(x:string):string{return x;}}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "method interface",
+      "source": "function a(){interface Known {}}class B{m(){function f<[].<Known>>(x:string):string{return x;}}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 44,
+            "end": 94,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 59,
+            "end": 64,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "reverse interface",
+      "source": "function b(){function f<[].<Known>>(x:string):string{return x;}}function a(){interface Known {}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 13,
+            "end": 63,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 28,
+            "end": 33,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling generic interface bare",
+      "source": "function a(){interface Known<T:type> {}}function b(){function f<Known.<string>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 53,
+            "end": 107,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 64,
+            "end": 78,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling generic interface tuple",
+      "source": "function a(){interface Known<T:type> {}}function b(){function f<[Known.<string>]>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 53,
+            "end": 109,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 65,
+            "end": 79,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling generic interface union",
+      "source": "function a(){interface Known<T:type> {}}function b(){function f<Known.<string>|string>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 53,
+            "end": 114,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 64,
+            "end": 78,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "outer generic interface",
+      "source": "function a(){interface Known<T:type> {}function b(){function f<[].<Known.<string>>>(x:string):string{return x;}}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "method generic interface",
+      "source": "function a(){interface Known<T:type> {}}class B{m(){function f<[].<Known.<string>>>(x:string):string{return x;}}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 52,
+            "end": 111,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 67,
+            "end": 81,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "reverse generic interface",
+      "source": "function b(){function f<[].<Known.<string>>>(x:string):string{return x;}}function a(){interface Known<T:type> {}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 13,
+            "end": 72,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 28,
+            "end": 42,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling enum bare",
+      "source": "function a(){enum Known { A }}function b(){function f<Known>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 43,
+            "end": 88,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 54,
+            "end": 59,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"`Known` has no domain, so it is an argument, and no type named `Known` is in scope; a type parameter is declared as `Known: type`\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling enum tuple",
+      "source": "function a(){enum Known { A }}function b(){function f<[Known]>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 43,
+            "end": 90,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 55,
+            "end": 60,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling enum union",
+      "source": "function a(){enum Known { A }}function b(){function f<Known|string>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 43,
+            "end": 95,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 54,
+            "end": 59,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "outer enum",
+      "source": "function a(){enum Known { A }function b(){function f<[].<Known>>(x:string):string{return x;}}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "method enum",
+      "source": "function a(){enum Known { A }}class B{m(){function f<[].<Known>>(x:string):string{return x;}}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 42,
+            "end": 92,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 57,
+            "end": 62,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "reverse enum",
+      "source": "function b(){function f<[].<Known>>(x:string):string{return x;}}function a(){enum Known { A }}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 13,
+            "end": 63,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 28,
+            "end": 33,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling intrinsic shadow class",
+      "source": "function a(){class Map{}}function b(){function f<[].<Map.<string,string>>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "sibling intrinsic shadow interface",
+      "source": "function a(){interface Map{}}function b(){function f<[].<Map.<string,string>>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "sibling intrinsic shadow alias",
+      "source": "function a(){type Map=uint8;}function b(){function f<[].<Map.<string,string>>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "sibling intrinsic shadow generic alias",
+      "source": "function a(){type Map<T:type>=T;}function b(){function f<[].<Map.<string,string>>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "alias body captured outer versus generic caller",
+      "source": "type Target=string;type Known=Target;function b<Target:type>(){function f(x:Known):Known{return \"ok\";}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "alias own recursive layout rejects",
+      "source": "type Known=string;function b(){type Known=[Known];}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_LAYOUT",
+          "rule": "rt-layout",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 56,
+            "nodeType": "Script"
+          },
+          "location": {
+            "start": 0,
+            "end": 18,
+            "nodeType": "TypeAliasDeclaration"
+          },
+          "arguments": [
+            "\"Known\"",
+            "\"0\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "alias nested dependency versus caller shadow",
+      "source": "type Leaf=string;type Middle=Leaf;type Known=Middle;function b(){type Leaf=uint8;type Middle=uint8;function f(x:Known):Known{return \"ok\";}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "closed builder alias forward",
+      "source": "function b(){function f(x:Known):Known{return \"ok\";}function build(){return type string;}type Known=build();}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "sibling ordinary parameter annotation",
+      "source": "function a(){type Known=string;}function b(x:Known){}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 32,
+            "end": 53,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 45,
+            "end": 50,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling ordinary return annotation",
+      "source": "function a(){type Known=string;}function b():Known{return \"ok\";}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 32,
+            "end": 64,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 45,
+            "end": 50,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling alias body",
+      "source": "function a(){type Known=string;}function b(){type Other=Known;}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 32,
+            "end": 63,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 56,
+            "end": 61,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "sibling class member annotation",
+      "source": "function a(){type Known=string;}class B {value: Known;}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 32,
+            "end": 55,
+            "nodeType": "ClassDeclaration"
+          },
+          "location": {
+            "start": 48,
+            "end": 53,
+            "nodeType": "TypeReference"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"Known\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "capture shadows outer alias",
+      "source": "type E=uint8;function f<[].<const E>,E>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generic parameter shadows outer alias",
+      "source": "type Target=uint8;function b<Target:type>(){function f<[].<Target>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "alias retains enclosing generic",
+      "source": "type Target=string;function b<Target:type>(){type Known=Target;function f(x:Known):Known{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "sibling builder through alias",
+      "source": "function a(){function build(){return type string;}}function b(){type Known=build();function f<[].<Known>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 51,
+            "end": 134,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 75,
+            "end": 82,
+            "nodeType": "ComputedType"
+          },
+          "arguments": [
+            "\"ReferenceError: \\\"build\\\" is not defined\\n    at <anonymous>\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "local builder through alias",
+      "source": "function b(){function build(){return type string;}type Known=build();function f<[].<Known>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "forward builder through alias",
+      "source": "function b(){type Known=build();function f<[].<Known>>(x:string):string{return x;}function build(){return type string;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "computed alias sees outer type",
+      "source": "type Target=string;function build(){return type Target;}type Known=build();function b(){type Target=uint8;function f(x:Known):Known{return \"ok\";}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    }
+  ]
+}

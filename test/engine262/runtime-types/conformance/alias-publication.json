@@ -1,0 +1,1181 @@
+{
+  "cases": [
+    {
+      "name": "function plain alias stays local",
+      "steps": [
+        {
+          "source": "function seed(){type Hidden=string;}seed();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "function computed alias stays local",
+      "steps": [
+        {
+          "source": "function seed(){function build(){return type string;}type Hidden=build();}seed();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "block plain alias stays local",
+      "steps": [
+        {
+          "source": "{type Hidden=string;}\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "block computed alias stays local",
+      "steps": [
+        {
+          "source": "{function build(){return type string;}type Hidden=build();}\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "arrow plain alias stays local",
+      "steps": [
+        {
+          "source": "(()=>{type Hidden=string;})();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "arrow computed alias stays local",
+      "steps": [
+        {
+          "source": "(()=>{function build(){return type string;}type Hidden=build();})();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "method plain alias stays local",
+      "steps": [
+        {
+          "source": "class Seed {m(){type Hidden=string;}}new Seed().m();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "method computed alias stays local",
+      "steps": [
+        {
+          "source": "class Seed {m(){function build(){return type string;}type Hidden=build();}}new Seed().m();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "loop plain alias stays local",
+      "steps": [
+        {
+          "source": "for(let i=0;i<1;i++){type Hidden=string;}\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "loop computed alias stays local",
+      "steps": [
+        {
+          "source": "for(let i=0;i<1;i++){function build(){return type string;}type Hidden=build();}\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "try plain alias stays local",
+      "steps": [
+        {
+          "source": "try{type Hidden=string;}finally{}\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "try computed alias stays local",
+      "steps": [
+        {
+          "source": "try{function build(){return type string;}type Hidden=build();}finally{}\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "abrupt function plain alias stays local",
+      "steps": [
+        {
+          "source": "function seed(){type Hidden=string; throw new Error(\"stop\");}try{seed();}catch(e){}\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "abrupt function computed alias stays local",
+      "steps": [
+        {
+          "source": "function seed(){function build(){return type string;}type Hidden=build(); throw new Error(\"stop\");}try{seed();}catch(e){}\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "generator plain alias stays local",
+      "steps": [
+        {
+          "source": "function* seed(){type Hidden=string; yield 1;}seed().next();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "generator computed alias stays local",
+      "steps": [
+        {
+          "source": "function* seed(){function build(){return type string;}type Hidden=build(); yield 1;}seed().next();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "eval plain alias stays local",
+      "steps": [
+        {
+          "source": "eval(\"{type Hidden=string;}\");\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "eval computed alias stays local",
+      "steps": [
+        {
+          "source": "eval(\"{function build(){return type string;}type Hidden=build();}\");\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic function plain alias stays local",
+      "steps": [
+        {
+          "source": "Function(\"type Hidden=string;\")();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic function computed alias stays local",
+      "steps": [
+        {
+          "source": "Function(\"function build(){return type string;}type Hidden=build();\")();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "function plain preserves global success",
+      "steps": [
+        {
+          "source": "type Known=string;function seed(){type Known=uint8;}seed();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(x:Known):Known{return \"ok\";}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function plain preserves global rejection",
+      "steps": [
+        {
+          "source": "type Known=string;function seed(){type Known=uint8;}seed();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(x:Known):Known{return 1;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "block plain preserves global success",
+      "steps": [
+        {
+          "source": "type Known=string;{type Known=uint8;}\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(x:Known):Known{return \"ok\";}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "block plain preserves global rejection",
+      "steps": [
+        {
+          "source": "type Known=string;{type Known=uint8;}\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(x:Known):Known{return 1;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "method plain preserves global success",
+      "steps": [
+        {
+          "source": "type Known=string;class Seed {m(){type Known=uint8;}}new Seed().m();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(x:Known):Known{return \"ok\";}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "method plain preserves global rejection",
+      "steps": [
+        {
+          "source": "type Known=string;class Seed {m(){type Known=uint8;}}new Seed().m();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(x:Known):Known{return 1;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "abrupt function plain preserves global success",
+      "steps": [
+        {
+          "source": "type Known=string;function seed(){type Known=uint8; throw new Error(\"stop\");}try{seed();}catch(e){}\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(x:Known):Known{return \"ok\";}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "abrupt function plain preserves global rejection",
+      "steps": [
+        {
+          "source": "type Known=string;function seed(){type Known=uint8; throw new Error(\"stop\");}try{seed();}catch(e){}\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(x:Known):Known{return 1;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "function computed preserves global success",
+      "steps": [
+        {
+          "source": "type Known=string;function seed(){function local(){return type uint8;}type Known=local();}seed();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(x:Known):Known{return \"ok\";}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function computed preserves global rejection",
+      "steps": [
+        {
+          "source": "type Known=string;function seed(){function local(){return type uint8;}type Known=local();}seed();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(x:Known):Known{return 1;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "block computed preserves global success",
+      "steps": [
+        {
+          "source": "type Known=string;{function local(){return type uint8;}type Known=local();}\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(x:Known):Known{return \"ok\";}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "block computed preserves global rejection",
+      "steps": [
+        {
+          "source": "type Known=string;{function local(){return type uint8;}type Known=local();}\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(x:Known):Known{return 1;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "method computed preserves global success",
+      "steps": [
+        {
+          "source": "type Known=string;class Seed {m(){function local(){return type uint8;}type Known=local();}}new Seed().m();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(x:Known):Known{return \"ok\";}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "method computed preserves global rejection",
+      "steps": [
+        {
+          "source": "type Known=string;class Seed {m(){function local(){return type uint8;}type Known=local();}}new Seed().m();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(x:Known):Known{return 1;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "abrupt function computed preserves global success",
+      "steps": [
+        {
+          "source": "type Known=string;function seed(){function local(){return type uint8;}type Known=local(); throw new Error(\"stop\");}try{seed();}catch(e){}\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(x:Known):Known{return \"ok\";}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "abrupt function computed preserves global rejection",
+      "steps": [
+        {
+          "source": "type Known=string;function seed(){function local(){return type uint8;}type Known=local(); throw new Error(\"stop\");}try{seed();}catch(e){}\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(x:Known):Known{return 1;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "previous script plain alias valid",
+      "steps": [
+        {
+          "source": "type Known=string;\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function f(x:Known):Known{return \"ok\";}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "previous script plain alias refuses wrong return",
+      "steps": [
+        {
+          "source": "type Known=string;\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function f(x:Known):Known{return 1;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "previous script computed alias valid",
+      "steps": [
+        {
+          "source": "function build(){return type string;}type Known=build();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function f(x:Known):Known{return \"ok\";}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "previous script computed alias refuses wrong return",
+      "steps": [
+        {
+          "source": "function build(){return type string;}type Known=build();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function f(x:Known):Known{return 1;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "new script shadows old alias with const type object",
+      "steps": [
+        {
+          "source": "type Known=uint8;\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "{const Known=type string;function f(x:Known):Known{return \"ok\";}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "new script shadows old alias with pending runtime parameter",
+      "steps": [
+        {
+          "source": "type Known=string;\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function outer(Known:type){function f(x:Known):Known{return x;}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later local activation does not replace earlier returned alias",
+      "steps": [
+        {
+          "source": "function make(T:type){type Local=T;return type Local;}const first=make(type string);const second=make(type uint8);\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "String(first===type string)+\"/\"+String(second===type uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "private alias does not hide intrinsic Map",
+      "steps": [
+        {
+          "source": "function seed(){type Map=uint8;}seed();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function f<[].<Map.<string,string>>>(x:string):string{return x;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed lookup allows subsequent corrected source",
+      "steps": [
+        {
+          "source": "function seed(){type Hidden=string;}seed();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "type Visible=string;function good<[].<Visible>>(x:string):string{return x;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "escaped closure uses its own activation: first valid",
+      "steps": [
+        {
+          "source": "function make(T:type){type Local=T;return function(source){return eval(source);};}const first=make(type string);const second=make(type uint8);\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded",
+            "scriptBodies": 1
+          }
+        },
+        {
+          "source": "first('function f(x:Local):Local{return \"ok\";}\"ok\";');",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok",
+            "scriptBodies": 2
+          }
+        }
+      ]
+    },
+    {
+      "name": "escaped closure uses its own activation: first invalid",
+      "steps": [
+        {
+          "source": "function make(T:type){type Local=T;return function(source){return eval(source);};}const first=make(type string);const second=make(type uint8);\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded",
+            "scriptBodies": 1
+          }
+        },
+        {
+          "source": "first('function f(x:Local):Local{return 1;}\"bad\";');",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            },
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "escaped closure uses its own activation: second valid",
+      "steps": [
+        {
+          "source": "function make(T:type){type Local=T;return function(source){return eval(source);};}const first=make(type string);const second=make(type uint8);\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded",
+            "scriptBodies": 1
+          }
+        },
+        {
+          "source": "second('function f(x:Local):Local{return 1;}\"ok\";');",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok",
+            "scriptBodies": 2
+          }
+        }
+      ]
+    },
+    {
+      "name": "escaped closure uses its own activation: second invalid",
+      "steps": [
+        {
+          "source": "function make(T:type){type Local=T;return function(source){return eval(source);};}const first=make(type string);const second=make(type uint8);\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded",
+            "scriptBodies": 1
+          }
+        },
+        {
+          "source": "second('function f(x:Local):Local{return \"wrong\";}\"bad\";');",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            },
+            "scriptBodies": 1
+          }
+        }
+      ]
+    }
+  ]
+}

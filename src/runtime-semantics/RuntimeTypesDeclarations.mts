@@ -230,15 +230,6 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
       } else {
         value = GetTypeObject(record);
       }
-      // Publish what the alias
-      // resolved to, under its NAME in this realm, so a later source text's
-      // checker can read an annotation whose Type node it cannot walk - a
-      // |ComputedType| resolves by EVALUATING, which is what just happened.
-      recordResolvedAlias(
-        surroundingAgent.currentRealmRecord as unknown as object,
-        name.stringValue(),
-        (value as { TypeRecord?: TypeRecord }).TypeRecord ?? record,
-      );
     }
   } else if (node.type === 'EnumDeclaration') {
     // Enum members take their initializer's value, or the previous numeric
@@ -808,6 +799,11 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     }
   } else {
     Q(yield* InitializeBoundName(name, value, env));
+  }
+  // Publication follows successful initialization/rebinding. A failed or
+  // shape-only preparation must not lend a record to another binding.
+  if (node.type === 'TypeAliasDeclaration' && !node.TypeParameters && isTypeObject(value)) {
+    recordResolvedAlias(env, name, node, value.TypeRecord);
   }
   // proposal-runtime-types decorators.md: `@f enum Count { @f Zero, ... }`.
   // decorators.md "Order" puts members before their container, so the

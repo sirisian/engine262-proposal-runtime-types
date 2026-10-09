@@ -10369,15 +10369,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // ~any~ the annotation would admit everything, and a bad value would
         // be refused at run time where the inline spelling refuses it here.
         //
-        // The evaluation has already happened. The pass pre-evaluates this
+        // Where evaluation has already happened for this exact binding, the
+        // record is available. The pass pre-evaluates this
         // source text's type declarations before it walks (check-pass.mts), and
         // it runs after GlobalDeclarationInstantiation, so a callee declared in
         // the same text is initialized by then - which is why the
         // pre-evaluation SUCCEEDS and there is an answer to read.
         if (declared.type === 'ComputedType') {
           const evaluated = resolvedAlias(
-            surroundingAgent.currentRealmRecord as unknown as object,
+            surroundingAgent.runningExecutionContext?.LexicalEnvironment,
             name,
+            node,
           ) as Known;
           if (evaluated) {
             return evaluated;
@@ -10402,19 +10404,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     if (node) return null;
-    // Nothing in THIS source text
-    // answers: either the alias is only mentioned here and declared elsewhere,
-    // or its Type is a |ComputedType| - `type G = makeG();` - which resolves by
-    // EVALUATING rather than by walking, so no walk of it can answer. Where
-    // that evaluation has already happened in this realm the record is
-    // published under the alias's name, and reading it is what keeps an
-    // annotation of `G` from degrading to ~any~.
-    //
-    // LAST, deliberately. A declaration in this text wins over a name the realm
-    // happens to carry, so a source text that redeclares an alias is judged
-    // against its own and not against an earlier text's.
+    // An alias established by an earlier script or an import can supply its
+    // completed record only through the actual visible initialized binding.
+    // A local publication with the same spelling is not external evidence.
     const published = resolvedAlias(
-      surroundingAgent.currentRealmRecord as unknown as object,
+      surroundingAgent.runningExecutionContext?.LexicalEnvironment,
       name,
     ) as Known;
     if (published) {

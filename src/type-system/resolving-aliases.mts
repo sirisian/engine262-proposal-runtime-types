@@ -1,4 +1,7 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { DeclarativeEnvironmentRecord, GlobalEnvironmentRecord, RefBindingHolder, type EnvironmentRecord } from '../execution-context/Environment.mts';
+import type { AbstractModuleRecord } from '../modules.mts';
+import { Value, type JSStringValue } from '../value.mts';
 import type { TypeRecord } from './records.mts';
 
 /**
@@ -57,38 +60,51 @@ export function tieAliasKnot(placeholder: TypeRecord, resolved: TypeRecord): voi
 }
 
 /**
- * What a type alias RESOLVED TO, by name, per realm.
- *
- * The checker resolves an annotation
- * by walking the Type node, and a |ComputedType| - `type G = makeG();` -
- * resolves by EVALUATING rather than by walking, so the walk answers nothing
- * and every annotation of `G` degrades to ~any~.
- *
- * Two earlier attempts keyed this on the DECLARATION NODE, and both failed for
- * reasons worth keeping: a node key is unreachable from a source text that only
- * MENTIONS the alias and declares nothing, which is the whole cross-text case;
- * and within one source text the record does not exist yet when the checker
- * runs. The name is the key a mention has. The realm scopes it, because two
- * realms may bind the same name to different types and a module map would let
- * one see the other's.
- *
- * This does not by itself fix the same-source-text case: `type G = makeG()`
- * cannot be pre-evaluated while `makeG` is an uninitialized binding of the text
- * being checked. It fixes the case where the alias evaluated earlier - another
- * script, or an imported module - and it is the registry any fix for the first
- * case would write into.
+ * A completed alias belongs to its actual initialized binding. Neither a name
+ * in the same realm nor another activation of the same declaration is that
+ * binding. Weak keys do not retain dead environments or publish local aliases
+ * into later source texts.
  */
-const resolvedByRealm = new WeakMap<object, Map<string, TypeRecord>>();
+const resolvedByBinding = new WeakMap<object, { declaration: ParseNode, record: TypeRecord }>();
 
-export function recordResolvedAlias(realm: object, name: string, record: TypeRecord): void {
-  let byName = resolvedByRealm.get(realm);
-  if (byName === undefined) {
-    byName = new Map();
-    resolvedByRealm.set(realm, byName);
+export function recordResolvedAlias(environment: EnvironmentRecord, name: JSStringValue, declaration: ParseNode, record: TypeRecord): void {
+  const binding = RefBindingHolder(environment, name)?.bindings.get(name);
+  if (binding?.initialized && !binding.indirect && !binding.refLocation) {
+    resolvedByBinding.set(binding, { declaration, record });
   }
-  byName.set(name, record);
 }
 
-export function resolvedAlias(realm: object | undefined, name: string): TypeRecord | undefined {
-  return realm === undefined ? undefined : resolvedByRealm.get(realm)?.get(name);
+/**
+ * Read publication metadata without executing HasBinding/GetBindingValue or
+ * user code. Every nearer binding blocks fallback, including an uninitialized
+ * or non-alias binding. Imports retain their target's binding identity. An
+ * object environment is not statically traversable by this lookup.
+ */
+export function resolvedAlias(environment: EnvironmentRecord | null | undefined, name: string, declaration?: ParseNode): TypeRecord | undefined {
+  let at = environment;
+  let key = Value(name);
+  let imported = false;
+  const seen = new Set<object>();
+  while (at) {
+    if (!(at instanceof DeclarativeEnvironmentRecord) && !(at instanceof GlobalEnvironmentRecord)) return undefined;
+    const binding = RefBindingHolder(at, key)?.bindings.get(key);
+    if (binding) {
+      if (!binding.initialized || binding.refLocation || seen.has(binding)) return undefined;
+      seen.add(binding);
+      if (binding.indirect) {
+        const [module, target] = (binding as unknown as { target: [AbstractModuleRecord, JSStringValue] }).target;
+        at = module.Environment;
+        key = target;
+        imported = true;
+        continue;
+      }
+      const published = resolvedByBinding.get(binding);
+      return published && (!declaration || published.declaration === declaration) ? published.record : undefined;
+    }
+    // An import target is a direct binding in its Module Environment, not a
+    // fresh lexical search through the target module's outer environments.
+    if (imported) return undefined;
+    at = at.OuterEnv;
+  }
+  return undefined;
 }
