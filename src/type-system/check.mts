@@ -10417,6 +10417,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return null;
   };
 
+  // Initializer chains and the annotations on those bindings form one origin
+  // query. A fresh resolveType call must not forget an active declaration and
+  // recursively ask for that same binding's still-unproved origin.
+  const activeTypeObjectBindings = new Set<ParseNode>();
+  const typeObjectBinding = (declaration: ParseNode, compute: () => Known): Known => {
+    if (activeTypeObjectBindings.has(declaration)) return null;
+    activeTypeObjectBindings.add(declaration);
+    try {
+      return compute();
+    } finally {
+      activeTypeObjectBindings.delete(declaration);
+    }
+  };
+
   /** Resolve a type-object callee without evaluating a value or a type builder. */
   const typeObjectTarget = (expression: ParseNode | null | undefined, seen = new Set<ParseNode>()): Known => {
     const node = patternExpression(expression ?? undefined);
@@ -10428,11 +10442,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     seen.add(nameNode);
     const binding = ResolveBindingDeclaration(nameNode, name);
     if (binding?.kind === 'const') {
-      const annotation = (binding.node as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation;
-      const declared = annotation ? resolveType(annotation.Type) : null;
-      if (application || !binding.initializer || (annotation && !(declared?.Kind === 'primitive' && declared.Name === 'type'))
-        || (binding.node as { Ref?: boolean }).Ref) return null;
-      return typeObjectTarget(binding.initializer, seen);
+      return typeObjectBinding(binding.node, () => {
+        const annotation = (binding.node as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation;
+        const declared = annotation ? resolveType(annotation.Type) : null;
+        if (application || !binding.initializer || (annotation && !(declared?.Kind === 'primitive' && declared.Name === 'type'))
+          || (binding.node as { Ref?: boolean }).Ref) return null;
+        return typeObjectTarget(binding.initializer, seen);
+      });
     }
     if (binding && binding.kind !== 'type' && binding.kind !== 'type-parameter') return null;
     // Resolve lexical declarations at their own source node. An inner caller's
@@ -10477,15 +10493,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (base.type !== 'IdentifierReference') return null;
     const binding = ResolveBindingDeclaration(base, base.name);
     if (binding?.kind === 'const') {
-      const annotation = (binding.node as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation;
-      const declared = annotation ? resolveType(annotation.Type) : null;
-      if (annotation && !(declared?.Kind === 'primitive' && declared.Name === 'type')) return null;
-      return binding.initializer ? establishedTypeObjectTarget(binding.initializer, seen) : null;
+      return typeObjectBinding(binding.node, () => {
+        const annotation = (binding.node as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation;
+        const declared = annotation ? resolveType(annotation.Type) : null;
+        if ((annotation && !(declared?.Kind === 'primitive' && declared.Name === 'type'))
+          || (binding.node as { Ref?: boolean }).Ref) return null;
+        return binding.initializer ? establishedTypeObjectTarget(binding.initializer, seen) : null;
+      });
     }
     const type = typeObjectTarget(node);
     if (!type || mentionsTypeParameter(type)) return null;
     if (binding?.kind === 'type') return type;
-    if (binding || assignedNames.has(base.name) || assignedGlobalProperties.has(base.name)) return null;
+    if (binding) return null;
     for (let parent = base.parent; parent; parent = parent.parent) if (/Function|Arrow|Method|Class/.test(parent.type)) return null;
     const realm = surroundingAgent.currentRealmRecord;
     if (realm.GlobalEnv.DeclarativeRecord.bindings.has(Value(base.name))) return null;
@@ -10496,7 +10515,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!unboundBuiltin && !(actual && builtin && isTypeObject(actual) && SameType(actual.TypeRecord, builtin))
         && !(base.name === 'Composite' && actual === intrinsic)) return null;
     const safe = (candidate: ParseNode): boolean => {
-      if (candidate.type === 'IdentifierReference' && typeObjectTarget(candidate)) return true;
+      if (candidate.type === 'IdentifierReference') {
+        // A type name is judged with its written arguments by the annotation
+        // check. A family/generic callee likewise belongs to its application:
+        // probing the bare name can invent a missing-argument diagnostic.
+        if (candidate.parent?.type === 'TypeName') return false;
+        const application = candidate.parent?.type === 'TypeArgumentsExpression' && candidate.parent.Expression === candidate
+          ? candidate.parent : candidate;
+        if (typeObjectTarget(application)) return true;
+      }
       if (candidate.type === 'MemberExpression' && ['bitLength', 'byteLength', 'alignment'].includes(String(memberKey(candidate)))
           && typeObjectTarget(candidate.MemberExpression)) return true;
       if (candidate.type === 'TypeArgumentsExpression' && typeObjectTarget(candidate)) return true;
@@ -10515,7 +10542,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           && candidate.parent.Arguments[0].name === base.name) return true;
       return false;
     };
-    return inertScalarAnnotations(root) && intrinsicSourceIsStable(root, realm, safe) ? type : null;
+    // Prove the read which captures the Type Object. An annotation or effect
+    // after that read cannot change an immutable captured value, and asking it
+    // for this very origin would introduce a spurious dependency cycle.
+    return intrinsicSourceIsStable(root, realm, safe, node, inertScalarAnnotations, base.name) ? type : null;
   };
 
   /**

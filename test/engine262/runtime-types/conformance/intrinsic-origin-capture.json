@@ -1,0 +1,1413 @@
+{
+  "cases": [
+    {
+      "name": "bare valid",
+      "steps": [
+        {
+          "source": "const K=uint8;let x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bare invalid",
+      "steps": [
+        {
+          "source": "const K=uint8;let x:K=\"bad\";\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "bare unused return",
+      "steps": [
+        {
+          "source": "const K=uint8;function unused(x:K):K{return \"bad\";}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "parenthesized valid",
+      "steps": [
+        {
+          "source": "const K=(uint8);let x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "parenthesized invalid",
+      "steps": [
+        {
+          "source": "const K=(uint8);let x:K=\"bad\";\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "parenthesized unused return",
+      "steps": [
+        {
+          "source": "const K=(uint8);function unused(x:K):K{return \"bad\";}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "chain valid",
+      "steps": [
+        {
+          "source": "const A=uint8;const K=A;let x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "chain invalid",
+      "steps": [
+        {
+          "source": "const A=uint8;const K=A;let x:K=\"bad\";\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "chain unused return",
+      "steps": [
+        {
+          "source": "const A=uint8;const K=A;function unused(x:K):K{return \"bad\";}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed valid",
+      "steps": [
+        {
+          "source": "const K:type=uint8;let x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed invalid",
+      "steps": [
+        {
+          "source": "const K:type=uint8;let x:K=\"bad\";\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed unused return",
+      "steps": [
+        {
+          "source": "const K:type=uint8;function unused(x:K):K{return \"bad\";}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed chain valid",
+      "steps": [
+        {
+          "source": "const A:type=uint8;const K:type=A;let x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed chain invalid",
+      "steps": [
+        {
+          "source": "const A:type=uint8;const K:type=A;let x:K=\"bad\";\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed chain unused return",
+      "steps": [
+        {
+          "source": "const A:type=uint8;const K:type=A;function unused(x:K):K{return \"bad\";}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "operator valid",
+      "steps": [
+        {
+          "source": "const K=type uint8;let x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "operator invalid",
+      "steps": [
+        {
+          "source": "const K=type uint8;let x:K=\"bad\";\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "operator unused return",
+      "steps": [
+        {
+          "source": "const K=type uint8;function unused(x:K):K{return \"bad\";}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "family valid",
+      "steps": [
+        {
+          "source": "const K=uint.<8>;let x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "family invalid",
+      "steps": [
+        {
+          "source": "const K=uint.<8>;let x:K=\"bad\";\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "family unused return",
+      "steps": [
+        {
+          "source": "const K=uint.<8>;function unused(x:K):K{return \"bad\";}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "same declaration valid",
+      "steps": [
+        {
+          "source": "const A=uint8,K=A;let x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same declaration invalid",
+      "steps": [
+        {
+          "source": "const A=uint8,K=A;let x:K=\"bad\";\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "same declaration unused return",
+      "steps": [
+        {
+          "source": "const A=uint8,K=A;function unused(x:K):K{return \"bad\";}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "consumer in same declaration valid",
+      "steps": [
+        {
+          "source": "const K=uint8,x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "consumer in same declaration invalid",
+      "steps": [
+        {
+          "source": "const K=uint8,x:K=\"bad\";\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "consumer in later declaration of same item",
+      "steps": [
+        {
+          "source": "const K=uint8,U=K,x:U=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior scalar boundary valid",
+      "steps": [
+        {
+          "source": "let before:uint8=1;const K=uint8;let x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior scalar boundary invalid",
+      "steps": [
+        {
+          "source": "let before:uint8=1;const K=uint8;let x:K=\"bad\";\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior alias boundary valid",
+      "steps": [
+        {
+          "source": "const A=uint8;let before:A=1;const K=uint8;let x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior alias boundary invalid",
+      "steps": [
+        {
+          "source": "const A=uint8;let before:A=1;const K=uint8;let x:K=\"bad\";\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier unused function consumes later capture",
+      "steps": [
+        {
+          "source": "function f(x:K):K{return x;}const K=uint8;let x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested consumer valid",
+      "steps": [
+        {
+          "source": "const K=uint8;function f(){let x:K=3;return String(x);}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested consumer invalid",
+      "steps": [
+        {
+          "source": "const K=uint8;function f(){let x:K=\"bad\";}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "local capture valid",
+      "steps": [
+        {
+          "source": "function f(){const K=uint8;let x:K=3;return String(x);}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local capture invalid",
+      "steps": [
+        {
+          "source": "function f(){const K=uint8;let x:K=\"bad\";}\"bad\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "bad"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same name source shadow",
+      "steps": [
+        {
+          "source": "const uint8=type string;const K=uint8;let x:K=\"ok\";x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit erased alias",
+      "steps": [
+        {
+          "source": "const K:any=uint8;function f(x:K):K{return x;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "self initializer cycle",
+      "steps": [
+        {
+          "source": "const K=K;let x:K=3;\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "ReferenceError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mutual initializer cycle",
+      "steps": [
+        {
+          "source": "const A=K;const K=A;let x:K=3;\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "ReferenceError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "self annotation cycle",
+      "steps": [
+        {
+          "source": "const K:K=uint8;let x:K=3;\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "ReferenceError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mutual annotation cycle",
+      "steps": [
+        {
+          "source": "const A:K=uint8;const K:A=uint8;let x:K=3;\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "ReferenceError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unrelated recursive alias",
+      "steps": [
+        {
+          "source": "type Link={next:Link|null};const K=uint8;let x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object annotation after capture",
+      "steps": [
+        {
+          "source": "const K=uint8;let box:{x:uint8}={x:1};let x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid after later object annotation",
+      "steps": [
+        {
+          "source": "const K=uint8;let box:{x:uint8}={x:1};let x:K=\"bad\";\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown call after capture",
+      "steps": [
+        {
+          "source": "function later(){}const K=uint8;later();let x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown call before capture",
+      "steps": [
+        {
+          "source": "function later(){}later();const K=uint8;let x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior realm replacement",
+      "steps": [
+        {
+          "source": "globalThis.uint8=type string;\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "const K=uint8;let x:K=\"ok\";x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior realm accessor remains dynamic",
+      "steps": [
+        {
+          "source": "globalThis.calls=0;Object.defineProperty(globalThis,\"uint8\",{get(){calls++;return type string;}});\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "const K=uint8;function unused(x:K):K{return x;}String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier source assignment",
+      "steps": [
+        {
+          "source": "globalThis.uint8=type string;const K=uint8;let x:K=\"ok\";x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later source assignment",
+      "steps": [
+        {
+          "source": "const K=uint8;globalThis.uint8=type string;let x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reference alias is not immutable value evidence",
+      "steps": [
+        {
+          "source": "let Target:type=type uint8;const ref K=Target;function f(x:K):K{return x;}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_COMPILE_TIME_EVALUABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "recovery after failed self annotation",
+      "steps": [
+        {
+          "source": "const K:K=uint8;\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "ReferenceError"
+          }
+        },
+        {
+          "source": "const U=uint8;let x:U=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier implicit getter conversion determines capture",
+      "steps": [
+        {
+          "source": "globalThis.calls=0;const one=1:=uint8;globalThis.source={get x(){calls++;globalThis.uint8=type string;return one;}};\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "const obj:{x:uint8}=source;const K=uint8;let x:K=\"ok\";x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        },
+        {
+          "source": "calls===0?\"none\":\"called\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "called"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later implicit getter conversion preserves capture",
+      "steps": [
+        {
+          "source": "globalThis.calls=0;const one=1:=uint8;globalThis.source={get x(){calls++;globalThis.uint8=type string;return one;}};\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "const K=uint8;const obj:{x:uint8}=source;let x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        },
+        {
+          "source": "calls===0?\"none\":\"called\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "called"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later implicit getter conversion cannot erase early error",
+      "steps": [
+        {
+          "source": "globalThis.calls=0;const one=1:=uint8;globalThis.source={get x(){calls++;globalThis.uint8=type string;return one;}};\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "const K=uint8;const obj:{x:uint8}=source;let x:K=\"bad\";\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "calls===0?\"none\":\"called\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "none"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier declarator conversion determines capture",
+      "steps": [
+        {
+          "source": "globalThis.calls=0;const one=1:=uint8;globalThis.source={get x(){calls++;globalThis.uint8=type string;return one;}};\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "const obj:{x:uint8}=source,K=uint8,x:K=\"ok\";x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        },
+        {
+          "source": "calls===0?\"none\":\"called\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "called"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later declarator conversion preserves capture",
+      "steps": [
+        {
+          "source": "globalThis.calls=0;const one=1:=uint8;globalThis.source={get x(){calls++;globalThis.uint8=type string;return one;}};\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "const K=uint8,obj:{x:uint8}=source,x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        },
+        {
+          "source": "calls===0?\"none\":\"called\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "called"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later declarator conversion cannot erase early error",
+      "steps": [
+        {
+          "source": "globalThis.calls=0;const one=1:=uint8;globalThis.source={get x(){calls++;globalThis.uint8=type string;return one;}};\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "const K=uint8,obj:{x:uint8}=source,x:K=\"bad\";\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "calls===0?\"none\":\"called\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "none"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier unknown call determines capture",
+      "steps": [
+        {
+          "source": "globalThis.change=function(){globalThis.uint8=type string;};\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "change();const K=uint8;let x:K=\"ok\";x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later unknown call preserves capture",
+      "steps": [
+        {
+          "source": "globalThis.change=function(){globalThis.uint8=type string;};\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "const K=uint8;change();let x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later unknown call cannot erase early error",
+      "steps": [
+        {
+          "source": "globalThis.change=function(){globalThis.uint8=type string;};\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "const K=uint8;change();let x:K=\"bad\";\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "late object annotation is an independent invalid boundary",
+      "steps": [
+        {
+          "source": "const K=uint8;let obj:{x:uint8}={x:\"bad\"};let x:K=3;String(x);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "later source shadow retains initializer identity",
+      "steps": [
+        {
+          "source": "const K=uint8;{type uint8=string;let x:K=\"bad\";}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic alias annotation before capture",
+      "steps": [
+        {
+          "source": "type A<T:type>=T;let before:A.<uint8>=1;const K=uint8;let x:K=\"bad\";\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "recursive alias is not a value origin cycle",
+      "steps": [
+        {
+          "source": "type R={next:R|null};const K=type R;let x:K={next:null};\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "block valid",
+      "steps": [
+        {
+          "source": "{const K=uint8;let x:K=3;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "block invalid",
+      "steps": [
+        {
+          "source": "{const K=uint8;let x:K=\"bad\";}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested block invalid",
+      "steps": [
+        {
+          "source": "{{const K=uint8;let x:K=\"bad\";}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "conditional block invalid",
+      "steps": [
+        {
+          "source": "if(true){const K=uint8;let x:K=\"bad\";}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "block earlier conversion determines capture",
+      "steps": [
+        {
+          "source": "globalThis.calls=0;const one=1:=uint8;globalThis.source={get x(){calls++;globalThis.uint8=type string;return one;}};\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "{const obj:{x:uint8}=source;const K=uint8;let x:K=\"ok\";}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        },
+        {
+          "source": "calls===0?\"none\":\"called\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "called"
+          }
+        }
+      ]
+    },
+    {
+      "name": "block later conversion cannot erase early error",
+      "steps": [
+        {
+          "source": "globalThis.calls=0;const one=1:=uint8;globalThis.source={get x(){calls++;globalThis.uint8=type string;return one;}};\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "{const K=uint8;const obj:{x:uint8}=source;let x:K=\"bad\";}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "calls===0?\"none\":\"called\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "none"
+          }
+        }
+      ]
+    },
+    {
+      "name": "loop later effect can precede a new capture",
+      "steps": [
+        {
+          "source": "globalThis.next=function(){globalThis.uint8=type string;};\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "for(let i=0;i<2;i++){const K=uint8;next();if(i===1){let x:K=\"ok\";}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier call of later function keeps its effects",
+      "steps": [
+        {
+          "source": "globalThis.next=function(){globalThis.uint8=type string;};\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "{run();const K=uint8;let x:K=\"ok\";function run(){next();}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier callee annotation keeps conversion effects",
+      "steps": [
+        {
+          "source": "globalThis.calls=0;const one=1:=uint8;globalThis.source={get x(){calls++;globalThis.uint8=type string;return one;}};\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "{run(source);const K=uint8;let x:K=\"ok\";function run(x:{x:uint8}){}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        },
+        {
+          "source": "calls===0?\"none\":\"called\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "called"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic alias boundary valid",
+      "steps": [
+        {
+          "source": "type A<T:type>=T;let before:A.<uint8>=1;const K=uint8;let x:K=3;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later direct replacement must not erase captured contract",
+      "steps": [
+        {
+          "source": "const K=uint8;globalThis.uint8=type string;let x:K=\"bad\";\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "later unqualified replacement must not erase captured contract",
+      "steps": [
+        {
+          "source": "const K=uint8;uint8=type string;let x:K=\"bad\";\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "later declarator replacement cannot erase early error",
+      "steps": [
+        {
+          "source": "const K=uint8,changed=(globalThis.uint8=type string),x:K=\"bad\";\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier declarator replacement determines capture",
+      "steps": [
+        {
+          "source": "const changed=(globalThis.uint8=type string),K=uint8,x:K=\"ok\";x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior realm binding and earlier replacement determine capture",
+      "steps": [
+        {
+          "source": "globalThis.uint8=type uint8;\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "globalThis.uint8=type string;const K=uint8;let x:K=\"ok\";x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    }
+  ]
+}

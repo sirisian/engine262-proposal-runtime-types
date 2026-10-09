@@ -55,7 +55,8 @@ function childNodes(node: ParseNode): ParseNode[] {
  * refuses a block for a type's own pair - so it does not count either; before
  * this, `q + q` at `uint8` anywhere in a file stood every proof in it down.
  */
-export function intrinsicSourceIsStable(root: ParseNode, realm: Realm, safeNode: (node: ParseNode) => boolean = () => false, at?: ParseNode): boolean {
+export function intrinsicSourceIsStable(root: ParseNode, realm: Realm, safeNode: (node: ParseNode) => boolean = () => false, at?: ParseNode,
+  safeAnnotation?: (node: ParseNode.TypeAnnotation) => boolean, capturedName?: string): boolean {
   const nodes: ParseNode[] = [];
   /** The top-level item a node lies in, and the hoisted function declarations it lies inside. */
   const placement = new Map<ParseNode, { item: number, declarations: readonly ParseNode[] }>();
@@ -125,11 +126,34 @@ export function intrinsicSourceIsStable(root: ParseNode, realm: Realm, safeNode:
     }
   }
   const reachable = new Set<ParseNode>(atPlacement?.declarations ?? []);
+  // A captured Type Object precedes later statements/declarators in the same
+  // sequential list. Their annotations can themselves consume that value.
+  // Do not apply this shortening inside a loop: a later operation in one
+  // iteration can precede the next activation's capture. Other clients retain
+  // their whole-item screen, and the selected initializer remains conservative.
+  const laterInCaptureLists = new Set<ParseNode>();
+  if (safeAnnotation && at) {
+    for (let node: ParseNode | undefined = at; node?.parent; node = node.parent) {
+      if (/^(For|While|DoWhile)/.test(node.parent.type)) {
+        laterInCaptureLists.clear();
+        break;
+      }
+      const list: readonly ParseNode[] | undefined = node.parent.type === 'LexicalDeclaration' ? node.parent.BindingList
+        : node.parent.type === 'Block' ? node.parent.StatementList : undefined;
+      const index = list?.indexOf(node) ?? -1;
+      if (list && index >= 0) for (const later of list.slice(index + 1)) laterInCaptureLists.add(later);
+    }
+  }
   const counts = (node: ParseNode): boolean => {
     if (!atPlacement) return true;
     const where = placement.get(node);
     if (!where) return true;
     if (!atInsideFunction && where.item > atPlacement.item) return false;
+    if (laterInCaptureLists.size > 0 && where.item === atPlacement.item && where.declarations.length === 0) {
+      for (let owner: ParseNode | undefined = node; owner; owner = owner.parent) {
+        if (laterInCaptureLists.has(owner)) return false;
+      }
+    }
     return where.declarations.every((d) => reachable.has(d));
   };
   if (atPlacement) {
@@ -310,12 +334,21 @@ export function intrinsicSourceIsStable(root: ParseNode, realm: Realm, safeNode:
       && (unwrap(node.MemberExpression) as ParseNode.IdentifierReference).name === 'Proxy' && intrinsicName('Proxy');
   };
   for (const node of nodes) {
+    // A source-position annotation proof must not resolve later candidates
+    // even speculatively through safeNode. Imports remain a prerequisite.
+    if (safeAnnotation && node.type !== 'ImportDeclaration' && !counts(node)) continue;
+    if (capturedName && ['AssignmentExpression', 'UpdateExpression', 'ForInStatement', 'ForOfStatement', 'ForAwaitStatement'].includes(node.type)) {
+      const written = new Set<string>();
+      AddWrittenNames(node, written);
+      if (written.has(capturedName) && !ResolveBindingDeclaration(node, capturedName)) return false;
+    }
     if (safeNode(node)) continue;
     // An import runs before anything in the module, wherever it is written;
     // everything else is an effect at its own position, so it counts only
     // where it can run before the construction.
     if (node.type === 'ImportDeclaration' || node.type === 'WithStatement') return false;
     if (!counts(node)) continue;
+    if (node.type === 'TypeAnnotation' && safeAnnotation && !safeAnnotation(node)) return false;
     // A bare free name can itself select a global getter. Type-name syntax
     // follows its separate resolution rules; value reads need a data origin.
     if (node.type === 'IdentifierReference' && node.parent?.type !== 'TypeName'
@@ -335,7 +368,7 @@ export function intrinsicSourceIsStable(root: ParseNode, realm: Realm, safeNode:
       if (write && base.type === 'IdentifierReference' && base.name === 'globalThis' && key !== undefined
           && !definitions.has('globalThis') && !mutated.has('globalThis')
           && intrinsicData(realm.GlobalObject, Value('globalThis')) === realm.GlobalObject
-          && !['Proxy', 'Map', 'Set', 'WeakMap', 'WeakSet', 'WeakRef', 'FinalizationRegistry', 'Array', 'globalThis'].includes(key)
+          && key !== capturedName && !['Proxy', 'Map', 'Set', 'WeakMap', 'WeakSet', 'WeakRef', 'FinalizationRegistry', 'Array', 'globalThis'].includes(key)
           && intrinsicData(realm.GlobalObject, Value(key)) !== undefined) continue;
       if (!write && key === 'revocable' && base.type === 'IdentifierReference' && base.name === 'Proxy'
           && parent?.type === 'CallExpression' && parent.CallExpression === node) continue;
