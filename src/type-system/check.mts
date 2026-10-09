@@ -23,7 +23,7 @@ import { ProvenArrayMembers } from './array-intrinsics.mts';
 import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, vectorIndexOf } from './vector-specialization.mts';
 import { BlockCapturesOf, MatchSpecializationList, SpecializationPatternError, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf, ValidateSpecializationList } from './specialization-patterns.mts';
 import { AnalyzeCallableGroup, SelectSpecialization } from './specialization-selection.mts';
-import { IsUnknownMetadataCapture, MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters, MatchStandaloneCase } from './component-patterns.mts';
+import { IsUnknownMetadataCapture, MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters, MatchStandaloneCase, FixedTypeSubtrees } from './component-patterns.mts';
 import { StaticIterationContribution, AsyncIterationContribution, StaticDelegationContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
 import { MissingLiteralSymbol, OrdinaryPrototypeLacks } from './literal-prototype.mts';
@@ -33657,6 +33657,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  // Resolve fixed pattern fragments while their lexical and capture scopes
+  // are active. Closed computations use the ordinary deferred type obligations;
+  // an unresolved result is not proof that a pending or symbolic type is invalid.
+  const checkSpecializationTypes = (declaration: ParseNode): void => {
+    const list = (declaration as { TypeParameters?: ParseNode.TypeParameters | null }).TypeParameters;
+    if (!list || list.ListKind === 'parameters') return;
+    // Capture bindings are pattern syntax, but references to those captures
+    // resolve symbolically in this scope. Do not skip a type such as T|Missing
+    // merely because T is a capture; its other fragment still needs checking.
+    const names = new Set(['_']);
+    const pushed = pushTypeParameterScopeOf(declaration);
+    try {
+      for (const entry of SpecializationPatternsOf(list)) {
+        for (const fixed of FixedTypeSubtrees(entry, names)) {
+          // Constructor heads and extents are checked by pattern formation.
+          if (fixed.type === 'TypeName' || fixed.type === 'NumericLiteral') continue;
+          const resolved = resolveType(fixed as ParseNode.Type);
+          if (!resolved && fixed === entry && entry.type === 'TypeReference' && !entry.TypeArguments
+              && entry.TypeName.MemberNames.length === 0
+              && !ResolveBindingDeclaration(entry.TypeName.IdentifierReference, entry.TypeName.IdentifierReference.name)) {
+            const name = entry.TypeName.IdentifierReference.name;
+            reportType('rt-specialization-contract', entry, '$1', Value(`\`${name}\` has no domain, so it is an argument, and no type named \`${name}\` is in scope; a type parameter is declared as \`${name}: type\``));
+          }
+        }
+      }
+    } finally {
+      if (pushed) typeParameterScopes.pop();
+    }
+  };
+
   const walkNode = (node: ParseNode | readonly ParseNode[] | null | undefined): void => {
     if (!node || typeof node !== 'object') {
       return;
@@ -33672,6 +33702,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       withPatternScope(node as ParseNode, () => walk(node));
       return;
     }
+    if (!Array.isArray(node)) checkSpecializationTypes(node as ParseNode);
     if (!Array.isArray(node) && (node as { type: string }).type === 'RefExpression') {
       const expression = (node as unknown as { Expression: ParseNode }).Expression;
       requireBorrowable(expression);
@@ -37363,17 +37394,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           continue;
         }
         for (const diagnostic of analysis.Diagnostics) report(diagnostic.message);
-        // A bare name in a standalone case that names no type is almost
-        // always a type parameter written without its domain.
-        for (const d of analysis.Standalone) {
-          for (const entry of listOf(d.Node as Decl)?.ListKind === 'specialization' ? SpecializationPatternsOf(listOf(d.Node as Decl)!) : []) {
-            const bare = entry.type === 'TypeReference' && !(entry as ParseNode.TypeReference).TypeArguments
-              && (entry as ParseNode.TypeReference).TypeName.MemberNames.length === 0 ? (entry as ParseNode.TypeReference).TypeName.IdentifierReference.name : undefined;
-            if (bare && bare !== '_' && !resolveType(entry as ParseNode.Type)) {
-              report(`\`${bare}\` has no domain, so it is an argument, and no type named \`${bare}\` is in scope; a type parameter is declared as \`${bare}: type\``);
-            }
-          }
-        }
         for (const owner of analysis.Owners) {
           // A bodyless owner is a function's or a method's (rule 2); a class
           // operator's owner, which its class registers only with a body, has one.

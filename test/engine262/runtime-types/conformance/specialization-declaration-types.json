@@ -1,0 +1,1330 @@
+{
+  "description": "Declaration obligations for fixed specialization fragments: uncalled declarations, lexical/capture scopes, deferred type resolution, and symbolic controls.",
+  "cases": [
+    {
+      "name": "bare top",
+      "source": "function f<Missing>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 47,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 11,
+            "end": 18,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "bare nested",
+      "source": "function outer(){function f<Missing>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 17,
+            "end": 64,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 28,
+            "end": 35,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "bare method",
+      "source": "class C {f<Missing>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 9,
+            "end": 47,
+            "nodeType": "MethodDefinition"
+          },
+          "location": {
+            "start": 11,
+            "end": 18,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "bare object",
+      "source": "const object={f<Missing>(x:string):string{return x;}};\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 14,
+            "end": 52,
+            "nodeType": "MethodDefinition"
+          },
+          "location": {
+            "start": 16,
+            "end": 23,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "array top",
+      "source": "function f<[].<Missing>>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 52,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 15,
+            "end": 22,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "array nested",
+      "source": "function outer(){function f<[].<Missing>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 17,
+            "end": 69,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 32,
+            "end": 39,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "array method",
+      "source": "class C {f<[].<Missing>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 9,
+            "end": 52,
+            "nodeType": "MethodDefinition"
+          },
+          "location": {
+            "start": 15,
+            "end": 22,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "array object",
+      "source": "const object={f<[].<Missing>>(x:string):string{return x;}};\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 14,
+            "end": 57,
+            "nodeType": "MethodDefinition"
+          },
+          "location": {
+            "start": 20,
+            "end": 27,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "tuple top",
+      "source": "function f<[Missing,string]>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 56,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 12,
+            "end": 19,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "tuple nested",
+      "source": "function outer(){function f<[Missing,string]>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 17,
+            "end": 73,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 29,
+            "end": 36,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "tuple method",
+      "source": "class C {f<[Missing,string]>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 9,
+            "end": 56,
+            "nodeType": "MethodDefinition"
+          },
+          "location": {
+            "start": 12,
+            "end": 19,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "tuple object",
+      "source": "const object={f<[Missing,string]>(x:string):string{return x;}};\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 14,
+            "end": 61,
+            "nodeType": "MethodDefinition"
+          },
+          "location": {
+            "start": 17,
+            "end": 24,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "promise top",
+      "source": "function f<Promise.<Missing>>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 57,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 20,
+            "end": 27,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "promise nested",
+      "source": "function outer(){function f<Promise.<Missing>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 17,
+            "end": 74,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 37,
+            "end": 44,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "promise method",
+      "source": "class C {f<Promise.<Missing>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 9,
+            "end": 57,
+            "nodeType": "MethodDefinition"
+          },
+          "location": {
+            "start": 20,
+            "end": 27,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "promise object",
+      "source": "const object={f<Promise.<Missing>>(x:string):string{return x;}};\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 14,
+            "end": 62,
+            "nodeType": "MethodDefinition"
+          },
+          "location": {
+            "start": 25,
+            "end": 32,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "union top",
+      "source": "function f<Missing|string>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 54,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 11,
+            "end": 18,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "union nested",
+      "source": "function outer(){function f<Missing|string>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 17,
+            "end": 71,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 28,
+            "end": 35,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "union method",
+      "source": "class C {f<Missing|string>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 9,
+            "end": 54,
+            "nodeType": "MethodDefinition"
+          },
+          "location": {
+            "start": 11,
+            "end": 18,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "union object",
+      "source": "const object={f<Missing|string>(x:string):string{return x;}};\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 14,
+            "end": 59,
+            "nodeType": "MethodDefinition"
+          },
+          "location": {
+            "start": 16,
+            "end": 23,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "capture sibling top",
+      "source": "function f<Map.<Missing,const V>>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 61,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 16,
+            "end": 23,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "capture sibling nested",
+      "source": "function outer(){function f<Map.<Missing,const V>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 17,
+            "end": 78,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 33,
+            "end": 40,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "capture sibling method",
+      "source": "class C {f<Map.<Missing,const V>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 9,
+            "end": 61,
+            "nodeType": "MethodDefinition"
+          },
+          "location": {
+            "start": 16,
+            "end": 23,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "capture sibling object",
+      "source": "const object={f<Map.<Missing,const V>>(x:string):string{return x;}};\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 14,
+            "end": 66,
+            "nodeType": "MethodDefinition"
+          },
+          "location": {
+            "start": 21,
+            "end": 28,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "local alias",
+      "source": "function outer(){type Known=string;function f<[].<Known>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "forward local alias",
+      "source": "function outer(){function f<[].<Known>>(x:string):string{return x;}type Known=string;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "outer parameter",
+      "source": "function outer<T:type>(){function f<[].<T>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "class parameter",
+      "source": "class C<T:type>{f<[].<T>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "fixed capture sibling",
+      "source": "function f<Map.<string,const V>>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "capture reference",
+      "source": "function f<Map.<const K,const V>,K>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "mixed parameter",
+      "source": "function f<[].<string>,T:type>(x:T):T{return x;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "mixed parameter reference",
+      "source": "function f<T:type,[].<T>>(x:T):T{return x;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "tuple wildcard",
+      "source": "function f<[_,string]>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "missing beside symbolic",
+      "source": "function outer<T:type>(){function f<[T,Missing]>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 25,
+            "end": 76,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 39,
+            "end": 46,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "missing beside capture reference",
+      "source": "function f<const T:type,[T,Missing]>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 64,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 27,
+            "end": 34,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "alias missing",
+      "source": "type Known=Missing;function f<[].<Known>>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 74,
+            "nodeType": "Script"
+          },
+          "location": {
+            "start": 11,
+            "end": 18,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "ref contract",
+      "source": "function f<[].<Missing>>(ref x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 56,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 15,
+            "end": 22,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "local alias used bare",
+      "source": "function outer(){type Known=string;function f<Known>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "forward local alias used bare",
+      "source": "function outer(){function f<Known>(x:string):string{return x;}type Known=string;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "outer generic used bare",
+      "source": "function outer<T:type>(){function f<T>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "capture used bare",
+      "source": "function f<const T:type,T>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "inner alias shadows outer",
+      "source": "type Known=uint8;function outer(){type Known=string;function f<[].<Known>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "missing sibling after valid alias",
+      "source": "function outer(){type Known=string;function f<[Known,Missing]>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 35,
+            "end": 90,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 53,
+            "end": 60,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "forward alias closed computation",
+      "source": "function make(){return string;}function f<[].<Known>>(x:string):string{return x;}type Known=make();\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "local closed computation",
+      "source": "function outer(){function make(){return string;}type Known=make();function f<[].<Known>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "builder alias symbolic",
+      "source": "function make(T:type):type{return T;}function outer<T:type>(){type Known=make(T);function f<[].<Known>>(x:string):string{return x;}}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "missing namespace",
+      "source": "function f<[].<Absent.T>>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 53,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 15,
+            "end": 23,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "array extent capture",
+      "source": "function f<[const N].<string>>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "array extent wildcard",
+      "source": "function f<[_].<string>>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "fixed extent with capture",
+      "source": "function f<[4].<const E>>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "nested wildcard",
+      "source": "function f<Map.<_,string>>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "ref target missing",
+      "source": "function f<ref Missing>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 51,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 15,
+            "end": 22,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "class specialization missing",
+      "source": "class C<T:type>{}class C<[].<Missing>>{}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 17,
+            "end": 40,
+            "nodeType": "ClassDeclaration"
+          },
+          "location": {
+            "start": 29,
+            "end": 36,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "alias specialization missing",
+      "source": "type A<T:type>=T;type A<[].<Missing>>=string;\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 50,
+            "nodeType": "Script"
+          },
+          "location": {
+            "start": 28,
+            "end": 35,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "interface specialization missing",
+      "source": "interface A<T:type>{}interface A<[].<Missing>>{}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 53,
+            "nodeType": "Script"
+          },
+          "location": {
+            "start": 37,
+            "end": 44,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "generator missing",
+      "source": "function* f<[].<Missing>>(x:string){yield x;}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 45,
+            "nodeType": "GeneratorDeclaration"
+          },
+          "location": {
+            "start": 16,
+            "end": 23,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "async missing",
+      "source": "async function f<[].<Missing>>(x:string){return x;}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 51,
+            "nodeType": "AsyncFunctionDeclaration"
+          },
+          "location": {
+            "start": 21,
+            "end": 28,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "async generator missing",
+      "source": "async function* f<[].<Missing>>(x:string){yield x;}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 51,
+            "nodeType": "AsyncGeneratorDeclaration"
+          },
+          "location": {
+            "start": 22,
+            "end": 29,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "generator method missing",
+      "source": "class C {*f<[].<Missing>>(x:string){yield x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 9,
+            "end": 45,
+            "nodeType": "GeneratorMethod"
+          },
+          "location": {
+            "start": 16,
+            "end": 23,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "async method missing",
+      "source": "class C {async f<[].<Missing>>(x:string){return x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 9,
+            "end": 51,
+            "nodeType": "AsyncMethod"
+          },
+          "location": {
+            "start": 21,
+            "end": 28,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "async generator method missing",
+      "source": "class C {async *f<[].<Missing>>(x:string){yield x;}}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 9,
+            "end": 51,
+            "nodeType": "AsyncGeneratorMethod"
+          },
+          "location": {
+            "start": 22,
+            "end": 29,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "later annotation violation",
+      "source": "function f<[].<string>>(x:string):string{return x;}let value:uint8=\"bad\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 73,
+            "nodeType": "Script"
+          },
+          "location": {
+            "start": 67,
+            "end": 72,
+            "nodeType": "StringLiteral"
+          }
+        }
+      }
+    },
+    {
+      "name": "ordinary dynamic caller",
+      "source": "function call(f){return f(\"ok\");}call(x=>x);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "sibling alias called",
+      "source": "function a(){type Known=string;}function b(){function f<[].<Known>>(x:string):string{return x;}return f.<[].<string>>(\"ok\");}b();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "rule": "rt-specialization-contract",
+          "phase": "static",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 45,
+            "end": 95,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 56,
+            "end": 66,
+            "nodeType": "ArrayType"
+          }
+        }
+      }
+    },
+    {
+      "name": "capture-dependent union missing",
+      "source": "function f<const T:type,T|Missing>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 62,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 26,
+            "end": 33,
+            "nodeType": "TypeReference"
+          }
+        }
+      }
+    },
+    {
+      "name": "captured reference nested union valid",
+      "source": "function f<const T:type,T|string>(x:string):string{return x;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    }
+  ]
+}
