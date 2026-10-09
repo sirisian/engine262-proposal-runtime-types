@@ -1,0 +1,500 @@
+{
+  "specification": [
+    "sec-inference-fixpoint",
+    "sec-inference-constructor-components",
+    "sec-inference-resources"
+  ],
+  "cases": [
+    {
+      "name": "array-copy-forward",
+      "source": "function a(n:uint32){return [b(n)];} function b(n:uint32){return a(n);} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static",
+          "location": {
+            "nodeType": "FunctionDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "array-copy-reverse",
+      "source": "function b(n:uint32){return a(n);} function a(n:uint32){return [b(n)];} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static",
+          "location": {
+            "nodeType": "FunctionDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "object-copy-forward",
+      "source": "function a(n:uint32){return {value:b(n)};} function b(n:uint32){return a(n);} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static",
+          "location": {
+            "nodeType": "FunctionDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "object-copy-reverse",
+      "source": "function b(n:uint32){return a(n);} function a(n:uint32){return {value:b(n)};} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static",
+          "location": {
+            "nodeType": "FunctionDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "mixed-three-forward",
+      "source": "function a(n:uint32){return [b(n)];} function b(n:uint32){return c(n);} function c(n:uint32){return {value:a(n)};} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static",
+          "location": {
+            "nodeType": "FunctionDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "mixed-three-reverse",
+      "source": "function c(n:uint32){return {value:a(n)};} function b(n:uint32){return c(n);} function a(n:uint32){return [b(n)];} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static",
+          "location": {
+            "nodeType": "FunctionDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "finite-seed-forward",
+      "source": "function a(n:uint32){return n>1?[b(n)]:0;} function b(n:uint32){return a(n);} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static",
+          "location": {
+            "nodeType": "FunctionDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "finite-seed-reverse",
+      "source": "function b(n:uint32){return a(n);} function a(n:uint32){return n>1?[b(n)]:0;} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static",
+          "location": {
+            "nodeType": "FunctionDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "boolean-seed-forward",
+      "source": "function a(flag:boolean){return flag?{value:b(flag)}:null;} function b(other:boolean){return a(other);} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static",
+          "location": {
+            "nodeType": "FunctionDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "boolean-seed-reverse",
+      "source": "function b(other:boolean){return a(other);} function a(flag:boolean){return flag?{value:b(flag)}:null;} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static",
+          "location": {
+            "nodeType": "FunctionDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "two-components-forward",
+      "source": "function a(n:uint32){return [b(n)];} function b(n:uint32){return a(n);} function c(n:uint32){return {value:d(n)};} function d(n:uint32){return c(n);} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static",
+          "location": {
+            "nodeType": "FunctionDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "two-components-reverse",
+      "source": "function d(n:uint32){return c(n);} function c(n:uint32){return {value:d(n)};} function b(n:uint32){return a(n);} function a(n:uint32){return [b(n)];} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static",
+          "location": {
+            "nodeType": "FunctionDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "finite-outgoing-forward",
+      "source": "function a(n:uint32){return n>1?[b(n)]:c(n);} function b(n:uint32){return a(n);} function c(n:uint32){return 0;} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static",
+          "location": {
+            "nodeType": "FunctionDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "finite-outgoing-reverse",
+      "source": "function c(n:uint32){return 0;} function b(n:uint32){return a(n);} function a(n:uint32){return n>1?[b(n)]:c(n);} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static",
+          "location": {
+            "nodeType": "FunctionDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "growing-with-unrelated-unknown",
+      "source": "function a(n:uint32){return [b(n)];} function b(n:uint32){return a(n);} function c(n:uint32){return missing;} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static",
+          "location": {
+            "nodeType": "FunctionDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "acyclic-consumer-of-growth",
+      "source": "function wrap(n:uint32){return [a(n)];} function a(n:uint32){return [b(n)];} function b(n:uint32){return a(n);} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static",
+          "location": {
+            "nodeType": "FunctionDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "nested-component",
+      "source": "function outer(n:uint32){function a(m:uint32){return [b(m)];} function b(m:uint32){return a(m);} return a(n);} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static",
+          "location": {
+            "nodeType": "FunctionDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "acyclic-construction",
+      "source": "function a(n:uint32){return [b(n)];} function b(n:uint32){return [c(n)];} function c(n:uint32){return 0;} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "pure-copy-cycle",
+      "source": "function a(n:uint32){return b(n);} function b(n:uint32){return a(n);} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "seeded-copy-cycle",
+      "source": "function a(n:uint32){return n>1?b(n):0;} function b(n:uint32){return a(n);} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "constructor-outside-cycle",
+      "source": "function wrapper(n:uint32){return [a(n)];} function a(n:uint32){return b(n);} function b(n:uint32){return n>1?a(n):0;} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "projection-cancels",
+      "source": "function a(n:uint32){return {value:b(n)};} function b(n:uint32){return n>1?a(n).value:0;} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "unknown-absorbs",
+      "source": "function a(n:uint32){return [b(n)];} function b(n:uint32){return n>1?a(n):missing;} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "self-with-unknown-outgoing",
+      "source": "function a(n:uint32){return n>1?[a(n)]:c(n);} function c(n:uint32){return missing;} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "unknown-outgoing",
+      "source": "function a(n:uint32){return n>1?[b(n)]:c(n);} function b(n:uint32){return a(n);} function c(n:uint32){return missing;} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "explicit-any-break",
+      "source": "function a(n:uint32){return [b(n)];} function b(n:uint32):any{return a(n);} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "typed-property-break",
+      "source": "function a(n:uint32){return {(value:any):b(n)};} function b(n:uint32){return a(n);} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "parameter-shadow",
+      "source": "function a(b:any){return [b(b)];} function b(n:any){return a(n);} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "stable-name-different-scope",
+      "source": "function b(n:uint32){return 0;} function outer(n:uint32){function a(m:uint32){return [b(m)];} return a(n);} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "reassigned-target",
+      "source": "function a(n:uint32){return [b(n)];} function b(n:uint32){return a(n);} b=function(n:uint32):number{return 0;}; \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "seeded-copy-mismatch",
+      "source": "function a(n:uint32){return n>1?b(n):0;} function b(n:uint32){return a(n);} const bad:string=a(0);",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "projection-mismatch",
+      "source": "function a(n:uint32){return {value:b(n)};} function b(n:uint32){return n>1?a(n).value:0;} const bad:string=b(0);",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "legacy-cycle-automatic",
+      "source": "function a(){return [b()];} function b(){return a();} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static",
+          "location": {
+            "nodeType": "FunctionDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "legacy-cycle-forced",
+      "source": "function a(){return [b()];} function b(){return a();} \"ok\";",
+      "checking": "forced",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static",
+          "location": {
+            "nodeType": "FunctionDeclaration"
+          }
+        }
+      }
+    },
+    {
+      "name": "legacy-cycle-disabled",
+      "source": "function a(){return [b()];} function b(){return a();} \"ok\";",
+      "checking": "disabled",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    }
+  ]
+}

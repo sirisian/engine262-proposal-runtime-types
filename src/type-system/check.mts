@@ -43,7 +43,7 @@ import { isWellKnownNumericConstant } from './numeric-constants.mts';
 import { ForPatternPositions, PatternBindingNames, PatternHasGovernedPosition, PatternScopeOf } from './pattern-scopes.mts';
 import { resolvedAlias } from './resolving-aliases.mts';
 import { InferenceResources, type InferenceLimits } from './inference-limits.mts';
-import { HasLiteralConstructorGrowth } from './constructor-growth.mts';
+import { FindConstructorGrowth, LiteralConstructorEquation } from './constructor-growth.mts';
 import {
   type SignatureRecord, type MetadataRecord, type TypeRecord, type Known,
   type ParameterRecord, type TypeParameterRecord,
@@ -27217,16 +27217,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  const constructorGrowth = (item: ReturnInference): boolean => {
-    if (item.fn.type !== 'FunctionDeclaration' || !item.fn.BindingIdentifier || item.inputs?.size
-      || assignedNames.has(item.fn.BindingIdentifier.name) || hasDirectEval) return false;
+  const constructorGrowth = (items: readonly ReturnInference[]): Set<ReturnInference> => FindConstructorGrowth(items, (item) => {
+    if (item.fn.type !== 'FunctionDeclaration' || !item.fn.BindingIdentifier || item.inputs?.size || hasDirectEval) return undefined;
     const fn = item.fn;
     return inDeclarationScope(item, () => {
-      const callee = callableForm(lookupDeclared(fn.BindingIdentifier!.name));
-      return callee?.Kind === 'function' && callee.Signatures.length === 1
-        && callee.Signatures[0] === item.signature && HasLiteralConstructorGrowth(fn, item.parameterTypes);
+      const resolve = (name: string): ReturnInference | undefined => {
+        if (assignedNames.has(name)) return undefined;
+        const callee = callableForm(lookupDeclared(name));
+        if (callee?.Kind !== 'function' || callee.Signatures.length !== 1) return undefined;
+        const target = pendingBySignature.get(callee.Signatures[0]);
+        if (target?.fn.type !== 'FunctionDeclaration' || target.fn.BindingIdentifier?.name !== name
+          || target.parameterTypes.length !== item.parameterTypes.length
+          || !target.parameterTypes.every((type, i) => type === item.parameterTypes[i]
+            || !!type && !!item.parameterTypes[i] && SameType(type, item.parameterTypes[i]!))) return undefined;
+        return target;
+      };
+      if (resolve(fn.BindingIdentifier!.name) !== item) return undefined;
+      return LiteralConstructorEquation(fn, item.parameterTypes, resolve);
     });
-  };
+  });
 
   /** Complete dependency tasks before consumers read their published results. */
   const publishInferredReturns = (queue = pendingInferences.splice(0, pendingInferences.length)): void => {
@@ -27244,20 +27253,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         for (const item of work) driveInference(item.signature);
         if (!changedInferences.size) break;
         const next = new Set<ReturnInference>();
-        let growing: ReturnInference | undefined;
+        const growing = constructorGrowth([...changedInferences]);
         for (const item of changedInferences) {
-          if (constructorGrowth(item)) growing ??= item;
           for (const consumer of inferenceConsumers.get(item.signature) ?? []) {
             if (!inferencesInProgress.has(consumer.signature)) {
               next.add(consumer);
             }
           }
         }
-        if (growing) {
-          const completion = CreateTypeDiagnostic('rt-return-inference', growing.fn, diagnosticPhase, 'the return type of $1 has a constructor-preserving recursive dependency and cannot be inferred; write it', Value(nameOfDeclaration(growing.fn) ?? 'this function')) as ThrowCompletion;
+        if (growing.size) {
+          const declaration = [...growing][0];
+          const completion = CreateTypeDiagnostic('rt-return-inference', declaration.fn, diagnosticPhase, 'the return type of $1 has a constructor-preserving recursive dependency and cannot be inferred; write it', Value(nameOfDeclaration(declaration.fn) ?? 'this function')) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
-          withdrawInferredReturn(growing);
-          growing.signature.ProvisionalReturn = undefined;
+          for (const item of growing) {
+            withdrawInferredReturn(item);
+            item.signature.ProvisionalReturn = undefined;
+          }
           break;
         }
         if (!next.size) break;

@@ -44,10 +44,19 @@ test('finite projection can exhaust a small allowance and succeed with a larger 
 
 test('an unproved growing component reports resource exhaustion without an invented result', () => {
   const { run } = context({ results: 4 });
-  expect(run('function a(n:uint32){return [b(n)];} function b(n:uint32){return [a(n)];}')).toMatchObject({
+  expect(run('function a(n:uint32){return [b(n-1)];} function b(n:uint32){return [a(n-1)];}')).toMatchObject({
     completion: 'throw', bodyEntered: false, diagnostic: { code: 'RT_INFERENCE_LIMIT' },
   });
   expect(run('typeof a;')).toMatchObject({ completion: 'normal', value: 'undefined' });
+});
+
+test('a proved mutual constructor cycle retains its semantic diagnostic with bounded resources', () => {
+  const { run } = context({ results: 4 });
+  expect(run('function a(n:uint32){return [b(n)];} function b(n:uint32){return a(n);}')).toMatchObject({
+    completion: 'throw', bodyEntered: false, diagnostic: { code: 'RT_RETURN_INFERENCE' },
+  });
+  expect(run('typeof a + ":" + typeof b;')).toMatchObject({ completion: 'normal', value: 'undefined:undefined' });
+  expect(run('function a(n:uint32){return n;} "ok";')).toMatchObject({ completion: 'normal', value: 'ok' });
 });
 
 test('required dependency depth shares the source allowance', () => {
