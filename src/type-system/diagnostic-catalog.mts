@@ -1,5 +1,5 @@
 // Generated from proposal-runtime-types/diagnostics.json.
-// Catalog SHA-256: 342ce1a000d52a8bc8e790689961c501d13999e1f51eac92e4dbe09587748a99
+// Catalog SHA-256: b08e3a18b8ec80cebc22608d6a0fa1d2924b642d57edbfa1e6c82a02752f8eeb
 export const TypeDiagnosticCatalog = [
   {
     "code": "RT_DEFAULT_EVALUATION",
@@ -1665,9 +1665,34 @@ export const TypeDiagnosticCatalog = [
     ],
     "errorClass": "StaticTypeError",
     "specification": [
-      "sec-type-errors"
+      "sec-inference-fixpoint"
     ],
-    "explanation": "Return inference grows without a finite result; write an explicit return type.",
+    "explanation": "Return inference is proved not to converge to a finite result; write an explicit return type.",
+    "arguments": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "relatedLocations": [
+      "declaration",
+      "origin"
+    ]
+  },
+  {
+    "code": "RT_INFERENCE_LIMIT",
+    "rule": "rt-inference-limit",
+    "status": "provisional",
+    "applicability": "always",
+    "phases": [
+      "static",
+      "pre-evaluation"
+    ],
+    "errorClass": "StaticTypeError",
+    "specification": [
+      "sec-inference-resources"
+    ],
+    "explanation": "Return inference exhausted a host resource limit; this does not prove non-convergence and supplies no fallback result.",
     "arguments": {
       "type": "array",
       "items": {
@@ -2836,4 +2861,4 @@ export const TypeDiagnosticCatalog = [
 ] as const;
 export type TypeDiagnosticCode = typeof TypeDiagnosticCatalog[number]['code'];
 export type TypeDiagnosticRule = typeof TypeDiagnosticCatalog[number]['rule'];
-export const TypeDiagnosticCatalogHash = '342ce1a000d52a8bc8e790689961c501d13999e1f51eac92e4dbe09587748a99';
+export const TypeDiagnosticCatalogHash = 'b08e3a18b8ec80cebc22608d6a0fa1d2924b642d57edbfa1e6c82a02752f8eeb';

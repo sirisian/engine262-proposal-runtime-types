@@ -1,0 +1,444 @@
+{
+  "specification": [
+    "sec-inference-fixpoint",
+    "sec-inference-resources"
+  ],
+  "cases": [
+    {
+      "name": "projection-4-forward",
+      "source": "class Leaf { get value(): Leaf { return this; } }function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:node}}}};} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "projection-mismatch-4-forward",
+      "source": "class Leaf { get value(): Leaf { return this; } }function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:node}}}};} const value:number=f(0,new Leaf()); \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "projection-4-reverse",
+      "source": "function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:node}}}};}class Leaf { get value(): Leaf { return this; } } \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "projection-mismatch-4-reverse",
+      "source": "function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:node}}}};}class Leaf { get value(): Leaf { return this; } } const value:number=f(0,new Leaf()); \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "projection-10-forward",
+      "source": "class Leaf { get value(): Leaf { return this; } }function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}};} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "projection-mismatch-10-forward",
+      "source": "class Leaf { get value(): Leaf { return this; } }function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}};} const value:number=f(0,new Leaf()); \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "projection-10-reverse",
+      "source": "function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}};}class Leaf { get value(): Leaf { return this; } } \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "projection-mismatch-10-reverse",
+      "source": "function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}};}class Leaf { get value(): Leaf { return this; } } const value:number=f(0,new Leaf()); \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "projection-16-forward",
+      "source": "class Leaf { get value(): Leaf { return this; } }function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}}}}}}}};} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "projection-mismatch-16-forward",
+      "source": "class Leaf { get value(): Leaf { return this; } }function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}}}}}}}};} const value:number=f(0,new Leaf()); \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "projection-16-reverse",
+      "source": "function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}}}}}}}};}class Leaf { get value(): Leaf { return this; } } \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "projection-mismatch-16-reverse",
+      "source": "function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}}}}}}}};}class Leaf { get value(): Leaf { return this; } } const value:number=f(0,new Leaf()); \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "projection-24-forward",
+      "source": "class Leaf { get value(): Leaf { return this; } }function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}}}}}}}}}}}}}}}};} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "projection-mismatch-24-forward",
+      "source": "class Leaf { get value(): Leaf { return this; } }function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}}}}}}}}}}}}}}}};} const value:number=f(0,new Leaf()); \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "projection-24-reverse",
+      "source": "function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}}}}}}}}}}}}}}}};}class Leaf { get value(): Leaf { return this; } } \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "projection-mismatch-24-reverse",
+      "source": "function f(n:uint32,node:Leaf){return n>1?f(n,node).value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:{value:node}}}}}}}}}}}}}}}}}}}}}}}};}class Leaf { get value(): Leaf { return this; } } const value:number=f(0,new Leaf()); \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "projection-invalid-member-10",
+      "source": "function f(n:uint32){return n>1?f(n)[0]:[[[[[[[[[[(7 := uint8)]]]]]]]]]];} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNDECLARED_MEMBER",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "construction-cancelled-by-projection-10",
+      "source": "function f(n:uint32){return n>1?[f(n)[0]]:[[[[[[[[[[(7 := uint8)]]]]]]]]]];} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "projection-invalid-member-16",
+      "source": "function f(n:uint32){return n>1?f(n)[0]:[[[[[[[[[[[[[[[[(7 := uint8)]]]]]]]]]]]]]]]];} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNDECLARED_MEMBER",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "construction-cancelled-by-projection-16",
+      "source": "function f(n:uint32){return n>1?[f(n)[0]]:[[[[[[[[[[[[[[[[(7 := uint8)]]]]]]]]]]]]]]]];} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "growth-array",
+      "source": "function f(n:uint32){return [f(n)];} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-growth-array",
+      "source": "function outer(x:uint32){function f(n:uint32){return [f(n)];}} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "growth-nullable-array",
+      "source": "function f(n:uint32){return n>1?[f(n)]:null;} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-growth-nullable-array",
+      "source": "function outer(x:uint32){function f(n:uint32){return n>1?[f(n)]:null;}} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "growth-nullable-object",
+      "source": "function f(n:uint32){return n>1?{value:f(n)}:null;} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-growth-nullable-object",
+      "source": "function outer(x:uint32){function f(n:uint32){return n>1?{value:f(n)}:null;}} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "growth-nested",
+      "source": "function f(n:uint32){return [{value:[f(n)]}];} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-growth-nested",
+      "source": "function outer(x:uint32){function f(n:uint32){return [{value:[f(n)]}];}} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "finite-self-copy",
+      "source": "function f(n:uint32){return f(n);} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "unknown-absorption",
+      "source": "function f(n:uint32){return n>1?[f(n)]:globalThis.unknown;} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "known-contract-breaks-recursion",
+      "source": "function f(n:uint32):any{return [f(n)];} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "annotated-property-breaks-recursion",
+      "source": "function f(n:uint32){return {(value:any):f(n)};} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "shadowed-self-binding",
+      "source": "function f(f:()=>uint8){return [f()];} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "boolean-growth",
+      "source": "function f(flag:boolean){return flag?[f(flag)]:null;} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "finite-cycle-automatic",
+      "source": "function f(n:uint32){return n>1?g(n):7;} function g(n:uint32){return f(n);} \"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "finite-cycle-forced",
+      "source": "function f(n:uint32){return n>1?g(n):7;} function g(n:uint32){return f(n);} \"ok\";",
+      "checking": "forced",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    }
+  ]
+}

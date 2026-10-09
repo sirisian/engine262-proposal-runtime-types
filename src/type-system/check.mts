@@ -42,6 +42,8 @@ import { CheckReferencePermissions, ReferenceFunction, type ReferenceSlot, type 
 import { isWellKnownNumericConstant } from './numeric-constants.mts';
 import { ForPatternPositions, PatternBindingNames, PatternHasGovernedPosition, PatternScopeOf } from './pattern-scopes.mts';
 import { resolvedAlias } from './resolving-aliases.mts';
+import { InferenceResources, type InferenceLimits } from './inference-limits.mts';
+import { HasLiteralConstructorGrowth } from './constructor-growth.mts';
 import {
   type SignatureRecord, type MetadataRecord, type TypeRecord, type Known,
   type ParameterRecord, type TypeParameterRecord,
@@ -2733,7 +2735,8 @@ export function CheckDynamicFunction(expression: ParseNode): ObjectValue[] {
   const root = { type: 'Script', ScriptBody: { type: 'ScriptBody', StatementList: [statement] } } as unknown as ParseNode.Script;
   dynamicFunctionRoots.set(expression, root);
   const errors = checkCompletedDeclarations([statement] as never, root, CreateCheckSession());
-  return errors.length > 0 && TakeNarrowingRequests(root).length > 0 ? [] : errors;
+  return errors.length > 0 && !errors.some((error) => TypeDiagnosticOf(error)?.rule === 'rt-inference-limit')
+    && TakeNarrowingRequests(root).length > 0 ? [] : errors;
 }
 
 export function CheckScript(script: ParseNode.Script, afterTypeEvaluation = false): ObjectValue[] {
@@ -2802,8 +2805,32 @@ interface ReferenceSyntaxIdentities {
  * module's importer reads.
  */
 function checkCompletedDeclarations(statementList: readonly ParseNode[] | null, root: ParseNode, session: CheckSession, afterTypeEvaluation = false): ObjectValue[] {
+  const host = surroundingAgent.currentRealmRecord?.HostDefined as { returnInferenceBudget?: InferenceLimits } | undefined;
+  const inferenceResources = new InferenceResources(host?.returnInferenceBudget);
+  const finish = (errors: ObjectValue[]): ObjectValue[] => {
+    if (!inferenceResources.exhausted) return errors;
+    // Literal and earlier-pass publications belong to this failed check too.
+    // Source nodes keep their identities; no runtime object has been created.
+    const pending: unknown[] = [root];
+    const seen = new Set<object>();
+    while (pending.length) {
+      const node = pending.pop();
+      if (!node || typeof node !== 'object' || seen.has(node)) continue;
+      seen.add(node);
+      if (Array.isArray(node)) pending.push(...node);
+      else if (typeof (node as ParseNode).type === 'string') {
+        publishedReturnTypes.delete(node);
+        inferredConstTypes.delete(node);
+        for (const [key, child] of Object.entries(node)) {
+          if (key !== 'parent' && key !== 'location') pending.push(child);
+        }
+      }
+    }
+    return errors;
+  };
   const identities: ReferenceSyntaxIdentities = { nodes: new WeakMap(), alternatives: new WeakMap() };
-  const initialErrors = CheckStatementList(statementList, root, session, afterTypeEvaluation, undefined, undefined, identities);
+  const initialErrors = CheckStatementList(statementList, root, session, afterTypeEvaluation, undefined, undefined, identities, undefined, inferenceResources);
+  if (inferenceResources.exhausted) return finish(initialErrors);
   if (initialErrors.some((error) => TypeDiagnosticOf(error)?.rule === 'rt-layout'
     || TypeDiagnosticOf(error)?.rule === 'rt-unproductive-type')) return initialErrors;
   const sourceBindings = new WeakSet<ParseNode>();
@@ -2835,7 +2862,8 @@ function checkCompletedDeclarations(statementList: readonly ParseNode[] | null, 
   for (;;) {
     const bindings: BindingContractPass = { sourceBindings, rootScope, scopeFor, available: new Map(contracts), completed: new Map(), pending: false };
     const referenceStores = new Map<ParseNode, TypeRecord[]>();
-    const errors = CheckStatementList(statementList, root, session, afterTypeEvaluation, undefined, referenceStores, identities, bindings);
+    const errors = CheckStatementList(statementList, root, session, afterTypeEvaluation, undefined, referenceStores, identities, bindings, inferenceResources);
+    if (inferenceResources.exhausted) return finish(errors);
     const previousSize = contracts.size;
     for (const [node, type] of bindings.completed) if (!contracts.has(node)) contracts.set(node, type);
     // Rebuild every transfer and diagnostic from source. A newly completed
@@ -2844,8 +2872,8 @@ function checkCompletedDeclarations(statementList: readonly ParseNode[] | null, 
     if (bindings.pending && contracts.size !== previousSize) continue;
     // Alias targets belong to the completed flow of this pass. Reuse exactly
     // its available contracts, not a different set discovered afterward.
-    return referenceStores.size ? CheckStatementList(statementList, root, session, afterTypeEvaluation,
-      referenceStores, undefined, identities, { ...bindings, completed: new Map(), pending: false }) : errors;
+    return finish(referenceStores.size ? CheckStatementList(statementList, root, session, afterTypeEvaluation,
+      referenceStores, undefined, identities, { ...bindings, completed: new Map(), pending: false }, inferenceResources) : errors);
   }
 }
 
@@ -3041,7 +3069,7 @@ export function CheckModuleWithImports(module: ParseNode.Module, imported: Reado
 function CheckStatementList(statementList: readonly ParseNode[] | null, root: ParseNode, session?: CheckSession, afterTypeEvaluation = false,
   referenceStoreTargets?: ReadonlyMap<ParseNode, readonly TypeRecord[]>, collectedReferenceStores?: Map<ParseNode, TypeRecord[]>,
   referenceSyntax: ReferenceSyntaxIdentities = { nodes: new WeakMap(), alternatives: new WeakMap() },
-  bindingContracts?: BindingContractPass): ObjectValue[] {
+  bindingContracts?: BindingContractPass, inferenceResources = new InferenceResources()): ObjectValue[] {
   const unresolvedTypes = new Map<object, DeferredTypeCheck>();
   deferredTypeChecks.set(root, unresolvedTypes);
 
@@ -3057,7 +3085,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const reportType = (code: TypeDiagnosticRule, source: unknown, message: string, ...args: readonly Formattable[]): void => {
     const node = source && typeof source === 'object' && 'type' in source ? source as ParseNode : root;
     ReportTypeDiagnostic(errors, code, node, diagnosticPhase, message, ...args);
-    if (code === 'rt-layout' || code === 'rt-unproductive-type') invalidTypeGraph = true;
+    if (code === 'rt-layout' || code === 'rt-unproductive-type' || code === 'rt-inference-limit') invalidTypeGraph = true;
   };
   // The signatures this proposal gives the existing Array methods are contracts
   // on existing JavaScript (#sec-checked-code). Outside checked code their
@@ -26395,6 +26423,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // undefined has no answer yet; null is an unknown join. Pending binding
     // inputs are tracked separately. Neither state is the `never` seed.
     if (previous === result || (previous && result && SameType(previous, result))) return false;
+    inferenceResources.result(item.fn, result, (left, right) => left === right || !!left && !!right && SameType(left, right));
+    if (inferenceResources.exhausted) return false;
     item.signature.ProvisionalReturn = result;
     return true;
   };
@@ -26412,6 +26442,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const publishOrdinaryReturn = (item: ReturnInference, inferred: Known, anchorage: ReturnAnchorage): boolean => {
     let changed = updateProvisionalReturn(item, inferred);
+    if (inferenceResources.exhausted) return false;
     // A completed unknown contribution withdraws both the signature and its
     // runtime boundary; keeping an earlier `never` would reject real values.
     if (!inferred || (!item.signatureTyped && !anchorage.anchored)) {
@@ -26983,7 +27014,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           inferenceInputCollectors.pop();
         }
       });
-      if (invalidTypeGraph) return;
+      if (invalidTypeGraph || inferenceResources.exhausted) return;
       binding.inputs = inputs;
       if (inputs.size) {
         errors.splice(mark);
@@ -27020,7 +27051,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** Compute a dependency in its declaration environment, not its caller's. */
   const driveInference = (only: object): Known => {
     const item = pendingBySignature.get(only);
-    if (!item || inferencesInProgress.has(only)) return null;
+    if (!item || invalidTypeGraph || inferenceResources.exhausted || inferencesInProgress.has(only)) return null;
     if (inferenceWave?.has(only)) return item.signature.ProvisionalReturn ?? null;
     inferencesInProgress.add(only);
     activeReturnInferences.push(item);
@@ -27038,6 +27069,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!item.generator && !item.asyncFunction) {
             const anchorage: ReturnAnchorage = { anchored: false };
             const result = inferredReturnType(item.fn, item.parameterTypes, null, anchorage);
+            if (inferenceResources.exhausted) return;
             changed = publishOrdinaryReturn(item, result, anchorage);
           } else {
             const anchorage: ReturnAnchorage = { anchored: false };
@@ -27053,7 +27085,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const resolves = inferredReturnType(item.fn, item.parameterTypes, null, anchorage, 'resolve');
               if (resolves) result = libraryTypeRecord('Promise', [resolves, anyTypeRecord]);
             }
+            if (inferenceResources.exhausted) return;
             changed = updateProvisionalReturn(item, result);
+            if (inferenceResources.exhausted) return;
             if (result && (item.signatureTyped || anchorage.anchored)) {
               if (!item.signature.InferredReturn || !SameType(item.signature.InferredReturn, result)) {
                 item.signature.InferredReturn = result;
@@ -27183,37 +27217,28 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  const constructorGrowth = (item: ReturnInference): boolean => {
+    if (item.fn.type !== 'FunctionDeclaration' || !item.fn.BindingIdentifier || item.inputs?.size
+      || assignedNames.has(item.fn.BindingIdentifier.name) || hasDirectEval) return false;
+    const fn = item.fn;
+    return inDeclarationScope(item, () => {
+      const callee = callableForm(lookupDeclared(fn.BindingIdentifier!.name));
+      return callee?.Kind === 'function' && callee.Signatures.length === 1
+        && callee.Signatures[0] === item.signature && HasLiteralConstructorGrowth(fn, item.parameterTypes);
+    });
+  };
+
   /** Complete dependency tasks before consumers read their published results. */
   const publishInferredReturns = (queue = pendingInferences.splice(0, pendingInferences.length)): void => {
-    if (queue.length === 0) return;
+    if (queue.length === 0 || inferenceResources.exhausted) return;
     for (const item of queue) pendingBySignature.set(item.signature, item);
     const outerWave = inferenceWave;
     const outerChanges = changedInferences;
     const outerConsumers = inferenceConsumers;
-    // Propagating an existing union member does not construct a new type.
-    // Keep canonical members across the dependency worklist, independently of
-    // the number of declarations or the distance between a seed and a read.
-    const atoms: TypeRecord[] = [];
-    const atomIds = (type: Known | undefined): string => {
-      if (type === undefined) return 'unfinished';
-      if (!type) return 'unknown';
-      const members = type.Kind === 'union' ? type.Members : [type];
-      return members.map((member) => {
-        let id = atoms.findIndex((atom) => SameType(atom, member));
-        if (id < 0) {
-          id = atoms.length;
-          atoms.push(member);
-        }
-        return id;
-      }).sort((a, b) => a - b).join(',');
-    };
-    const tasks = new Set(queue);
-    const constructions = new Map<ReturnInference, number>();
-    const states = new Set<string>();
     let work = queue;
     try {
       inferenceConsumers = new Map();
-      while (work.length) {
+      while (work.length && !inferenceResources.exhausted) {
         inferenceWave = new Set();
         changedInferences = new Set();
         for (const item of work) driveInference(item.signature);
@@ -27221,45 +27246,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const next = new Set<ReturnInference>();
         let growing: ReturnInference | undefined;
         for (const item of changedInferences) {
-          tasks.add(item);
-          const before = atoms.length;
-          atomIds(item.signature.ProvisionalReturn);
-          atomIds(item.signature.InferredReturn);
-          if (atoms.length > before) {
-            const count = (constructions.get(item) ?? 0) + 1;
-            constructions.set(item, count);
-            if (count >= 8) growing ??= item;
-          }
+          if (constructorGrowth(item)) growing ??= item;
           for (const consumer of inferenceConsumers.get(item.signature) ?? []) {
             if (!inferencesInProgress.has(consumer.signature)) {
-              tasks.add(consumer);
               next.add(consumer);
             }
           }
         }
         if (growing) {
-          const completion = CreateTypeDiagnostic('rt-return-inference', root, diagnosticPhase, 'the return type of $1 grows at every step and cannot be inferred; write it', Value(nameOfDeclaration(growing.fn) ?? 'this function')) as ThrowCompletion;
+          const completion = CreateTypeDiagnostic('rt-return-inference', growing.fn, diagnosticPhase, 'the return type of $1 has a constructor-preserving recursive dependency and cannot be inferred; write it', Value(nameOfDeclaration(growing.fn) ?? 'this function')) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
           withdrawInferredReturn(growing);
           growing.signature.ProvisionalReturn = undefined;
           break;
         }
         if (!next.size) break;
-        // A repeated complete worklist state is an oscillation, not progress.
-        // Binding completion changes the input revision and starts a new state.
-        const state = JSON.stringify([bindingContractRevision, [...tasks].map((item) => [
-          atomIds(item.signature.ProvisionalReturn), atomIds(item.signature.InferredReturn), next.has(item),
-        ])]);
-        if (states.has(state)) {
-          const completion = CreateTypeDiagnostic('rt-return-inference', root, diagnosticPhase, 'the return type of $1 does not reach a fixpoint and cannot be inferred; write it', Value(nameOfDeclaration(work[0]!.fn) ?? 'this function')) as ThrowCompletion;
-          errors.push(completion.Value as ObjectValue);
-          for (const item of next) {
-            withdrawInferredReturn(item);
-            item.signature.ProvisionalReturn = undefined;
-          }
-          break;
-        }
-        states.add(state);
         work = [...next];
       }
     } finally {
@@ -27347,6 +27348,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    *    collected; the walk stops at every function form.
    */
   const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known = null, anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] } = { anchored: false }, mode: 'return' | 'yield' | 'resolve' | 'generator-return' = 'return'): Known => {
+    if (!inferenceResources.enter(fn)) return null;
     // A closure reads captured storage when called, not when its declaration
     // is visited. Its published result cannot freeze the current value facts
     // of the enclosing walk. Preserve the declared contracts and restore the
@@ -27370,6 +27372,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     try {
       return withCaptureContracts(() => inferredReturnTypeInScope(fn, parameterTypes, wanted, anchorage, mode));
     } finally {
+      inferenceResources.leave();
       if (ownReceiver) thisTypeFrames.pop();
       inferenceDepth -= 1;
       restoreFlow(outerFlow);
@@ -33514,7 +33517,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const walk = (node: ParseNode | readonly ParseNode[] | null | undefined): void => {
-    if (invalidTypeGraph) return;
+    if (invalidTypeGraph || inferenceResources.exhausted) return;
     const single = node && !Array.isArray(node) ? node as ParseNode : undefined;
     // Unreachable source is still checked, but cannot contribute an outgoing
     // edge. In particular it cannot revive a return with a later declaration.
@@ -34252,7 +34255,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // any of it is walked, which is what lets `f(300)` above `function
       // f(v: uint8) {}` be the Early Error it should be.
       declareFunctionSignatures(node as readonly ParseNode[]);
-      if (invalidTypeGraph) return;
+      if (invalidTypeGraph || inferenceResources.exhausted) return;
       publishInferredReturns();
       let unreachable: { facts: FlowFacts, exits: FlowExit[] } | undefined;
       try {
@@ -37140,9 +37143,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   hoistVarBindings(statementList);
   sweepTypePositions(statementList);
   walk(statementList);
-  if (!invalidTypeGraph) finishBindingContracts();
-  if (!invalidTypeGraph) finishTestObligations();
-  if (!invalidTypeGraph) finishInitializerObligations();
+  if (!invalidTypeGraph && !inferenceResources.exhausted) finishBindingContracts();
+  if (!invalidTypeGraph && !inferenceResources.exhausted) finishTestObligations();
+  if (!invalidTypeGraph && !inferenceResources.exhausted) finishInitializerObligations();
+  if (inferenceResources.exhausted) {
+    const { kind, declaration } = inferenceResources.exhausted;
+    for (const item of pendingBySignature.values()) {
+      withdrawInferredReturn(item);
+      item.signature.ProvisionalReturn = undefined;
+    }
+    errors.length = 0;
+    reportType('rt-inference-limit', declaration, 'return inference exhausted its $1 resource limit while checking $2; no result was inferred',
+      Value(kind), Value(nameOfDeclaration(declaration) ?? 'this function'));
+  }
   if (!invalidTypeGraph) collectCompletedBindings();
   if (invalidTypeGraph) {
     restoreFlow(new Map());

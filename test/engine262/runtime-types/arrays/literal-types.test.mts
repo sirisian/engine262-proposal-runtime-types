@@ -1,24 +1,10 @@
 import { expect, test } from 'vitest';
+import { observeScript } from '../harness.mts';
 import { Agent, ManagedRealm, setSurroundingAgent } from '#self';
 
 /**
- * Spec: #sec-array-and-tuple-types, #sec-array-and-tuple-types, #sec-conversions,
- * #sec-inference-fixpoint (r19).
- *
- * An array literal has no Static Type today. That is why r19 - the rule that
- * reports a return type which grows at every step of the fixpoint - is
- * implemented and unreachable: the shape the specification gives for it,
- * `function w(a: uint32) { return [w(a)]; }`, cannot grow when `[w(a)]` is
- * ~any~.
- *
- * This file pins three things so that the boundary between "not implemented"
- * and "not intended" is written down rather than rediscovered:
- *
- *   - what an ANNOTATION already makes work, which must not regress;
- *   - what a bare literal does today, marked `test.fails` where it is expected
- *     to change;
- *   - what is deliberately unchanged, because a binding without an annotation
- *     has the ~any~ Static Type whatever its initializer.
+ * Spec: #sec-array-and-tuple-types, #sec-conversions, #sec-inference-fixpoint.
+ * Array literal contracts, inferred returns, and their runtime boundaries.
  */
 
 function run(source: string) {
@@ -147,11 +133,11 @@ test('an array literal contributes to an inferred return', () => {
   expect(thrown('function g(a: uint32) { return [1]; } const s: string = g(1);')).toContain('[].<number>');
 });
 
-test('a return type that grows at every step is reported (r19)', () => {
-  // The rule is implemented; this is the shape that reaches it, and it cannot
-  // grow until an array literal has a type. The annotated form beside it is the
-  // remedy the diagnostic names.
-  expect(thrown('function w(a: uint32) { return [w(a)]; }')).toContain('grows at every step');
+test('a proven constructor cycle is reported before body entry', () => {
+  expect(observeScript('function w(a: uint32) { return [w(a)]; }')).toMatchObject({
+    completion: { Type: 'throw' }, bodyEntered: false, errorClass: 'StaticTypeError',
+    diagnostic: { code: 'RT_RETURN_INFERENCE', phase: 'static' },
+  });
 });
 
 test('the annotated remedy for a growing return is accepted', () => {
