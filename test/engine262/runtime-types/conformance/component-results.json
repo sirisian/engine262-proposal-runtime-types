@@ -1,0 +1,698 @@
+{
+  "specification": [
+    "sec-inference-resources"
+  ],
+  "cases": [
+    {
+      "name": "arrow-zero",
+      "source": "const f=(n:uint32)=>n; \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INFERENCE_LIMIT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "arrow-sufficient",
+      "source": "const f=(n:uint32)=>n; \"ok\";",
+      "budget": {
+        "results": 16
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "block-arrow-zero",
+      "source": "const f=(n:uint32)=>{return n;}; \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INFERENCE_LIMIT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "block-arrow-sufficient",
+      "source": "const f=(n:uint32)=>{return n;}; \"ok\";",
+      "budget": {
+        "results": 16
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "function-expression-zero",
+      "source": "const f=function(n:uint32){return n;}; \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INFERENCE_LIMIT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "function-expression-sufficient",
+      "source": "const f=function(n:uint32){return n;}; \"ok\";",
+      "budget": {
+        "results": 16
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-arrow-zero",
+      "source": "const f=async(n:uint32)=>n; \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INFERENCE_LIMIT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "async-arrow-sufficient",
+      "source": "const f=async(n:uint32)=>n; \"ok\";",
+      "budget": {
+        "results": 16
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-expression-zero",
+      "source": "const f=async function(n:uint32){return n;}; \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INFERENCE_LIMIT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "async-expression-sufficient",
+      "source": "const f=async function(n:uint32){return n;}; \"ok\";",
+      "budget": {
+        "results": 16
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generator-expression-zero",
+      "source": "const f=function*(n:uint32){yield n;return n;}; \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INFERENCE_LIMIT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generator-expression-sufficient",
+      "source": "const f=function*(n:uint32){yield n;return n;}; \"ok\";",
+      "budget": {
+        "results": 16
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-generator-expression-zero",
+      "source": "const f=async function*(n:uint32){yield n;return n;}; \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INFERENCE_LIMIT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "async-generator-expression-sufficient",
+      "source": "const f=async function*(n:uint32){yield n;return n;}; \"ok\";",
+      "budget": {
+        "results": 16
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "object-method-zero",
+      "source": "const x={f(n:uint32){return n;}}; \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INFERENCE_LIMIT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "object-method-sufficient",
+      "source": "const x={f(n:uint32){return n;}}; \"ok\";",
+      "budget": {
+        "results": 16
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "object-getter-zero",
+      "source": "const n:uint32=1; const x={get value(){return n;}}; \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INFERENCE_LIMIT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "object-getter-sufficient",
+      "source": "const n:uint32=1; const x={get value(){return n;}}; \"ok\";",
+      "budget": {
+        "results": 16
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "class-method-zero",
+      "source": "class C {f(n:uint32){return n;}} \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INFERENCE_LIMIT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-method-sufficient",
+      "source": "class C {f(n:uint32){return n;}} \"ok\";",
+      "budget": {
+        "results": 16
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "class-getter-zero",
+      "source": "class C {get value(){return (1:=uint32);}} \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INFERENCE_LIMIT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-getter-sufficient",
+      "source": "class C {get value(){return (1:=uint32);}} \"ok\";",
+      "budget": {
+        "results": 16
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "array-map-zero",
+      "source": "const xs:[].<uint32>=[1]; const ys=xs.map(x=>x); \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INFERENCE_LIMIT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "array-map-sufficient",
+      "source": "const xs:[].<uint32>=[1]; const ys=xs.map(x=>x); \"ok\";",
+      "budget": {
+        "results": 16
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "unknown-arrow-zero",
+      "source": "let n:any; const f=()=>n; \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INFERENCE_LIMIT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "unknown-arrow-sufficient",
+      "source": "let n:any; const f=()=>n; \"ok\";",
+      "budget": {
+        "results": 16
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "known-never-arrow-zero",
+      "source": "const f=(n:uint32)=>{throw n;}; \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INFERENCE_LIMIT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "known-never-arrow-sufficient",
+      "source": "const f=(n:uint32)=>{throw n;}; \"ok\";",
+      "budget": {
+        "results": 16
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "annotated-declaration",
+      "source": "function f(n:uint32):uint32{return n;} \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "annotated-arrow",
+      "source": "const f=(n:uint32):uint32=>n; \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "contextual-arrow",
+      "source": "const f:(n:uint32)=>uint32=n=>n; \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INFERENCE_LIMIT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "contextual-arrow-sufficient",
+      "source": "const f:(n:uint32)=>uint32=n=>n; \"ok\";",
+      "budget": {
+        "results": 16
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "annotated-getter",
+      "source": "class C {get value():uint32{return 1;}} \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "ordinary-one",
+      "source": "function f(n:uint32){return n;} \"ok\";",
+      "budget": {
+        "results": 1
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "arrow-one",
+      "source": "const f=(n:uint32)=>n; \"ok\";",
+      "budget": {
+        "results": 1
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generator-declaration-one",
+      "source": "function* f(n:uint32){yield n;return n;} \"ok\";",
+      "budget": {
+        "results": 1
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INFERENCE_LIMIT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generator-declaration-two",
+      "source": "function* f(n:uint32){yield n;return n;} \"ok\";",
+      "budget": {
+        "results": 2
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "generator-expression-one",
+      "source": "const f=function*(n:uint32){yield n;return n;}; \"ok\";",
+      "budget": {
+        "results": 1
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INFERENCE_LIMIT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generator-expression-two",
+      "source": "const f=function*(n:uint32){yield n;return n;}; \"ok\";",
+      "budget": {
+        "results": 2
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "async-generator-declaration-one",
+      "source": "async function* f(n:uint32){yield n;return n;} \"ok\";",
+      "budget": {
+        "results": 1
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INFERENCE_LIMIT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "async-generator-declaration-two",
+      "source": "async function* f(n:uint32){yield n;return n;} \"ok\";",
+      "budget": {
+        "results": 2
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "legacy-arrow-automatic",
+      "source": "const f=()=>1; \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INFERENCE_LIMIT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "legacy-arrow-forced",
+      "source": "const f=()=>1; \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "forced",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INFERENCE_LIMIT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "legacy-arrow-disabled",
+      "source": "const f=()=>1; \"ok\";",
+      "budget": {
+        "results": 0
+      },
+      "checking": "disabled",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "forward-declaration",
+      "source": "function f(){return value;} const value=(1:=uint32); \"ok\";",
+      "budget": {
+        "results": 1
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "forward-arrow",
+      "source": "const f=()=>value; const value=(1:=uint32); \"ok\";",
+      "budget": {
+        "results": 1
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "forward-callback",
+      "source": "const f=(n:uint32)=>{const x=()=>value; const value=n; return x;}; \"ok\";",
+      "budget": {
+        "results": 1
+      },
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    }
+  ]
+}

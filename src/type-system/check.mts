@@ -42,7 +42,7 @@ import { CheckReferencePermissions, ReferenceFunction, type ReferenceSlot, type 
 import { isWellKnownNumericConstant } from './numeric-constants.mts';
 import { ForPatternPositions, PatternBindingNames, PatternHasGovernedPosition, PatternScopeOf } from './pattern-scopes.mts';
 import { resolvedAlias } from './resolving-aliases.mts';
-import { InferenceResources, type InferenceLimits } from './inference-limits.mts';
+import { InferenceResources, type InferenceLimits, type InferenceComponent } from './inference-limits.mts';
 import { FindConstructorGrowth, LiteralConstructorEquation } from './constructor-growth.mts';
 import {
   type SignatureRecord, type MetadataRecord, type TypeRecord, type Known,
@@ -26423,7 +26423,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // undefined has no answer yet; null is an unknown join. Pending binding
     // inputs are tracked separately. Neither state is the `never` seed.
     if (previous === result || (previous && result && SameType(previous, result))) return false;
-    inferenceResources.result(item.fn, result, (left, right) => left === right || !!left && !!right && SameType(left, right));
     if (inferenceResources.exhausted) return false;
     item.signature.ProvisionalReturn = result;
     return true;
@@ -27358,8 +27357,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    *  - Returns inside a NESTED function belong to that function and are not
    *    collected; the walk stops at every function form.
    */
-  const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known = null, anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] } = { anchored: false }, mode: 'return' | 'yield' | 'resolve' | 'generator-return' = 'return'): Known => {
+  const inferredReturnType = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known = null, anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] } = { anchored: false }, mode: InferenceComponent = 'return'): Known => {
     if (!inferenceResources.enter(fn)) return null;
+    const inputs = new Set<PreparedBinding>();
+    inferenceInputCollectors.push(inputs);
     // A closure reads captured storage when called, not when its declaration
     // is visited. Its published result cannot freeze the current value facts
     // of the enclosing walk. Preserve the declared contracts and restore the
@@ -27381,8 +27382,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         && (adopted.Declaration as { type?: string })?.type === 'SelfThisMarker' ? owner : adopted ?? null);
     }
     try {
-      return withCaptureContracts(() => inferredReturnTypeInScope(fn, parameterTypes, wanted, anchorage, mode));
+      const result = withCaptureContracts(() => inferredReturnTypeInScope(fn, parameterTypes, wanted, anchorage, mode));
+      // An unanswered binding dependency is not a completed unknown answer.
+      if (!inputs.size) inferenceResources.result(fn, mode, result, (left, right) => left === right || !!left && !!right && SameType(left, right));
+      return inferenceResources.exhausted ? null : result;
     } finally {
+      inferenceInputCollectors.pop();
       inferenceResources.leave();
       if (ownReceiver) thisTypeFrames.pop();
       inferenceDepth -= 1;
@@ -27392,7 +27397,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  const inferredReturnTypeInScope = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known, anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] }, mode: 'return' | 'yield' | 'resolve' | 'generator-return'): Known => {
+  const inferredReturnTypeInScope = (fn: ParseNode, parameterTypes: readonly Known[], wanted: Known, anchorage: { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] }, mode: InferenceComponent): Known => {
     // A method's parameters are its UniqueFormalParameters, and a getter has
     // none at all.
     const params = (fn as { ArrowParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[] }).ArrowParameters

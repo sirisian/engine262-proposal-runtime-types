@@ -1,7 +1,11 @@
+import { isDeepStrictEqual } from 'node:util';
 import { expect, test } from 'vitest';
 import { InferenceResources, type InferenceLimits } from '../../../../src/type-system/inference-limits.mts';
+import type { Known } from '../../../../src/type-system/records.mts';
 import type { ParseNode } from '../../../../src/parser/ParseNode.mts';
 import { Agent, ManagedRealm, TypeDiagnosticOf, EnsureCompletion, setSurroundingAgent } from '#self';
+
+const sameAnswer = (a: Known, b: Known) => isDeepStrictEqual(a, b);
 
 function context(limits: InferenceLimits, enabled = true) {
   const agent = new Agent({ features: enabled ? ['runtime-types'] : [] });
@@ -90,11 +94,11 @@ test('exact allowances are usable and exhaustion remains sticky while unwinding'
   expect(resources.enter(declaration)).toBe(true);
   const first = { Kind: 'union', Members: [] } as const;
   const second = { Kind: 'any' } as const;
-  resources.result(declaration, first, Object.is);
-  resources.result(declaration, second, Object.is);
-  resources.result(declaration, first, Object.is);
+  resources.result(declaration, 'return', first, sameAnswer);
+  resources.result(declaration, 'return', second, sameAnswer);
+  resources.result(declaration, 'return', first, sameAnswer);
   expect(resources.exhausted).toBeUndefined();
-  resources.result(declaration, null, Object.is);
+  resources.result(declaration, 'return', null, sameAnswer);
   expect(resources.exhausted?.kind).toBe('results');
   resources.leave();
   resources.leave();
@@ -107,3 +111,79 @@ for (const value of [-1, NaN, Infinity, 0.5, Number.MAX_SAFE_INTEGER + 1]) {
     expect(() => new InferenceResources({ evaluations: value })).toThrow(RangeError);
   });
 }
+
+test('yield and completion answers share a declaration allowance without sharing their component identity', () => {
+  const declaration = { type: 'GeneratorDeclaration' } as ParseNode;
+  const resources = new InferenceResources({ results: 1 });
+  resources.result(declaration, 'yield', null, sameAnswer);
+  resources.result(declaration, 'yield', null, sameAnswer);
+  expect(resources.exhausted).toBeUndefined();
+  resources.result(declaration, 'generator-return', null, sameAnswer);
+  expect(resources.exhausted?.kind).toBe('results');
+});
+
+test('a mutable callable answer cannot rewrite previously charged results', () => {
+  const declaration = { type: 'FunctionDeclaration' } as ParseNode;
+  const number = { Kind: 'primitive', Name: 'number', Arguments: [] } as const;
+  const string = { Kind: 'primitive', Name: 'string', Arguments: [] } as const;
+  const signature = { Parameters: [], Return: null, InferredReturn: number as Known };
+  const answer = { Kind: 'array', Extent: 'dynamic', Element: { Kind: 'function', Signatures: [signature] } } as const;
+  const resources = new InferenceResources({ results: 2 });
+  resources.result(declaration, 'return', answer, sameAnswer);
+  signature.InferredReturn = string;
+  resources.result(declaration, 'return', answer, sameAnswer);
+  signature.InferredReturn = number;
+  resources.result(declaration, 'return', answer, sameAnswer);
+  expect(resources.exhausted).toBeUndefined();
+  signature.InferredReturn = { Kind: 'primitive', Name: 'boolean', Arguments: [] };
+  resources.result(declaration, 'return', answer, sameAnswer);
+  expect(resources.exhausted?.kind).toBe('results');
+});
+
+test('historical nominal answers preserve declaration and activation identities', () => {
+  const declaration = { type: 'FunctionDeclaration' } as ParseNode;
+  const nominalDeclaration = { type: 'InterfaceDeclaration' } as ParseNode;
+  const identity = {};
+  const type = { Kind: 'nominal', Declaration: nominalDeclaration, DeclarationIdentity: identity, Arguments: [] } as const;
+  const resources = new InferenceResources({ results: 1 });
+  const sameIdentity = (a: Known, b: Known) => a?.Kind === 'nominal' && b?.Kind === 'nominal'
+    && a.Declaration === b.Declaration && a.DeclarationIdentity === b.DeclarationIdentity
+    && isDeepStrictEqual(a.Arguments, b.Arguments);
+  resources.result(declaration, 'return', type, sameIdentity);
+  resources.result(declaration, 'return', { ...type }, sameIdentity);
+  expect(resources.exhausted).toBeUndefined();
+  resources.result(declaration, 'return', { ...type, DeclarationIdentity: {} }, sameIdentity);
+  expect(resources.exhausted?.kind).toBe('results');
+});
+
+test('historical deferred answers retain their environment identity', () => {
+  const declaration = { type: 'FunctionDeclaration' } as ParseNode;
+  const type = { Kind: 'deferred', Operator: 'keyof', Operands: [], DefaultEnvironment: {} } as const;
+  const resources = new InferenceResources({ results: 1 });
+  const sameIdentity = (a: Known, b: Known) => a?.Kind === 'deferred' && b?.Kind === 'deferred'
+    && a.Operator === b.Operator && a.DefaultEnvironment === b.DefaultEnvironment
+    && isDeepStrictEqual(a.Operands, b.Operands);
+  resources.result(declaration, 'return', type, sameIdentity);
+  resources.result(declaration, 'return', { ...type }, sameIdentity);
+  expect(resources.exhausted).toBeUndefined();
+  resources.result(declaration, 'return', { ...type, DefaultEnvironment: {} }, sameIdentity);
+  expect(resources.exhausted?.kind).toBe('results');
+});
+
+test('exhausted literal queries leave no declarations and a later check can succeed', () => {
+  const { realm, run } = context({ results: 0 });
+  expect(run('var f=(n:uint32)=>n;')).toMatchObject({ completion: 'throw', bodyEntered: false,
+    diagnostic: { code: 'RT_INFERENCE_LIMIT' } });
+  expect(run('typeof f;')).toMatchObject({ completion: 'normal', value: 'undefined' });
+  (realm.HostDefined as { returnInferenceBudget: InferenceLimits }).returnInferenceBudget = { results: 1 };
+  expect(run('var f=(n:uint32)=>n; "ok";')).toMatchObject({ completion: 'normal', value: 'ok' });
+});
+
+test('recording a deeply nested answer does not recurse on the native stack', () => {
+  const declaration = { type: 'FunctionDeclaration' } as ParseNode;
+  let answer: Known = { Kind: 'primitive', Name: 'number', Arguments: [] };
+  for (let i = 0; i < 16000; i += 1) answer = { Kind: 'array', Extent: 'dynamic', Element: answer };
+  const resources = new InferenceResources({ results: 1 });
+  resources.result(declaration, 'return', answer, sameAnswer);
+  expect(resources.exhausted).toBeUndefined();
+});
