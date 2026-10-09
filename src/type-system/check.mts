@@ -15206,7 +15206,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * narrowing reach it. The topic was never the problem; a plain binding in the
    * same ternary failed identically.
    */
-  const conditionalArmTypes = (test: ParseNode | undefined, typeTrue: () => Known, typeFalse: () => Known): [Known, Known] => {
+  const conditionalArmTypes = <T,>(test: ParseNode | undefined, typeTrue: () => T, typeFalse: () => T): [T, T] => {
     if (!test) return [typeTrue(), typeFalse()];
     const entry = captureFlow();
     const live = flowLive;
@@ -17992,6 +17992,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // Direct calls complete their selected signature after overload selection.
         if (!called && bound?.Kind === 'function' && immutablyBound(referenced, node)) {
           for (const signature of bound.Signatures) {
+            observeInferenceInputs(signature);
             const task = pendingBySignature.get(signature);
             if (!signature.Return && task?.local) {
               // A stable alias does not prove that its initializer still
@@ -18134,6 +18135,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const rejected: ObjectValue[] = [];
         let pending = false;
         const Signatures = base.Signatures.flatMap((signature) => {
+          observeInferenceInputs(signature);
           const parameters = signature.TypeParameters;
           if (!parameters?.length) return [];
           const bindings = new Map<string, TypeRecord>();
@@ -18607,7 +18609,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const only = selected as {
             Return: Known, InferredReturn?: Known, ProvisionalReturn?: Known, TypeParameters?: readonly TypeParameterRecord[],
           };
-          if (!only.Return && (!only.InferredReturn || baselineGeneratorSignatures.has(only) || inferenceWave && !inferenceWave.has(only))
+          if (!only.Return && ((only.ProvisionalReturn === undefined
+              && (!only.InferredReturn || baselineGeneratorSignatures.has(only)))
+              || inferenceWave && !inferenceWave.has(only))
             && !inferencesInProgress.has(only as object)) {
             driveInference(only as object);
           }
@@ -26344,6 +26348,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // again after a captured binding acquires its initializer contract.
   let inferenceWave: Set<object> | undefined;
   let changedInferences: Set<ReturnInference> | undefined;
+  let inferenceConsumers: Map<object, Set<ReturnInference>> | undefined;
+  const activeReturnInferences: ReturnInference[] = [];
   const baselineGeneratorSignatures = new WeakSet<object>();
 
   const inDeclarationScope = <T,>(item: InferenceScope, action: () => T): T => {
@@ -26637,6 +26643,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (const inputs of inferenceInputCollectors) inputs.add(binding);
   };
   const observeInferenceInputs = (signature: object): void => {
+    if (inferenceConsumers && pendingBySignature.has(signature)) {
+      let consumers = inferenceConsumers.get(signature);
+      if (!consumers) inferenceConsumers.set(signature, consumers = new Set());
+      // A contribution-local signature is reconstructed with its enclosing
+      // query. Record that query as a consumer of the stable dependency too.
+      for (const consumer of activeReturnInferences) if (!consumer.local) consumers.add(consumer);
+    }
     for (const input of pendingBySignature.get(signature)?.inputs ?? []) observeBindingInput(input);
   };
 
@@ -26995,6 +27008,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!item || inferencesInProgress.has(only)) return null;
     if (inferenceWave?.has(only)) return item.signature.ProvisionalReturn ?? null;
     inferencesInProgress.add(only);
+    activeReturnInferences.push(item);
     const inputs = new Set<PreparedBinding>();
     inferenceInputCollectors.push(inputs);
     inferenceDepth += 1;
@@ -27047,6 +27061,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     } finally {
       inferenceDepth -= 1;
       inferencesInProgress.delete(only);
+      activeReturnInferences.pop();
       inferenceInputCollectors.pop();
       item.inputs = inputs;
       observeInferenceInputs(only);
@@ -27101,6 +27116,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const declared = lookupDeclared(expr.name);
       return !!declared && declared.Kind !== 'any';
     }
+    if (expr?.type === 'ConditionalExpression') {
+      // Joining or widening arms does not manufacture an annotation. Read
+      // their provenance in the same branch environments as their types.
+      const expression = expr;
+      const [yes, no] = conditionalArmTypes(expression.ShortCircuitExpression,
+        () => derivesFromDeclaration(expression.AssignmentExpression_a, staticType(expression.AssignmentExpression_a)),
+        () => derivesFromDeclaration(expression.AssignmentExpression_b, staticType(expression.AssignmentExpression_b)));
+      return yes || no;
+    }
     if (expr?.type === 'CallExpression') {
       const callee = callableForm(staticType(expr.CallExpression));
       if (callee?.Kind === 'function') {
@@ -27148,27 +27172,83 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (const item of queue) pendingBySignature.set(item.signature, item);
     const outerWave = inferenceWave;
     const outerChanges = changedInferences;
+    const outerConsumers = inferenceConsumers;
+    // Propagating an existing union member does not construct a new type.
+    // Keep canonical members across the dependency worklist, independently of
+    // the number of declarations or the distance between a seed and a read.
+    const atoms: TypeRecord[] = [];
+    const atomIds = (type: Known | undefined): string => {
+      if (type === undefined) return 'unfinished';
+      if (!type) return 'unknown';
+      const members = type.Kind === 'union' ? type.Members : [type];
+      return members.map((member) => {
+        let id = atoms.findIndex((atom) => SameType(atom, member));
+        if (id < 0) {
+          id = atoms.length;
+          atoms.push(member);
+        }
+        return id;
+      }).sort((a, b) => a - b).join(',');
+    };
+    const tasks = new Set(queue);
+    const constructions = new Map<ReturnInference, number>();
+    const states = new Set<string>();
+    let work = queue;
     try {
-      // Acyclic dependencies settle on demand, irrespective of function form
-      // or source order. Recursive results retain the existing growth guard.
-      for (let pass = 0; pass < 8; pass += 1) {
+      inferenceConsumers = new Map();
+      while (work.length) {
         inferenceWave = new Set();
         changedInferences = new Set();
-        for (const item of queue) driveInference(item.signature);
+        for (const item of work) driveInference(item.signature);
         if (!changedInferences.size) break;
-        if (pass === 7) {
-          // A stable sibling is not evidence of recursive type growth.
-          for (const item of changedInferences) {
-            const completion = CreateTypeDiagnostic('rt-return-inference', root, diagnosticPhase, 'the return type of $1 grows at every step and cannot be inferred; write it', Value(nameOfDeclaration(item.fn) ?? 'this function')) as ThrowCompletion;
-            errors.push(completion.Value as ObjectValue);
+        const next = new Set<ReturnInference>();
+        let growing: ReturnInference | undefined;
+        for (const item of changedInferences) {
+          tasks.add(item);
+          const before = atoms.length;
+          atomIds(item.signature.ProvisionalReturn);
+          atomIds(item.signature.InferredReturn);
+          if (atoms.length > before) {
+            const count = (constructions.get(item) ?? 0) + 1;
+            constructions.set(item, count);
+            if (count >= 8) growing ??= item;
+          }
+          for (const consumer of inferenceConsumers.get(item.signature) ?? []) {
+            if (!inferencesInProgress.has(consumer.signature)) {
+              tasks.add(consumer);
+              next.add(consumer);
+            }
+          }
+        }
+        if (growing) {
+          const completion = CreateTypeDiagnostic('rt-return-inference', root, diagnosticPhase, 'the return type of $1 grows at every step and cannot be inferred; write it', Value(nameOfDeclaration(growing.fn) ?? 'this function')) as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
+          withdrawInferredReturn(growing);
+          growing.signature.ProvisionalReturn = undefined;
+          break;
+        }
+        if (!next.size) break;
+        // A repeated complete worklist state is an oscillation, not progress.
+        // Binding completion changes the input revision and starts a new state.
+        const state = JSON.stringify([bindingContractRevision, [...tasks].map((item) => [
+          atomIds(item.signature.ProvisionalReturn), atomIds(item.signature.InferredReturn), next.has(item),
+        ])]);
+        if (states.has(state)) {
+          const completion = CreateTypeDiagnostic('rt-return-inference', root, diagnosticPhase, 'the return type of $1 does not reach a fixpoint and cannot be inferred; write it', Value(nameOfDeclaration(work[0]!.fn) ?? 'this function')) as ThrowCompletion;
+          errors.push(completion.Value as ObjectValue);
+          for (const item of next) {
             withdrawInferredReturn(item);
             item.signature.ProvisionalReturn = undefined;
           }
+          break;
         }
+        states.add(state);
+        work = [...next];
       }
     } finally {
       inferenceWave = outerWave;
       changedInferences = outerChanges;
+      inferenceConsumers = outerConsumers;
     }
   };
 

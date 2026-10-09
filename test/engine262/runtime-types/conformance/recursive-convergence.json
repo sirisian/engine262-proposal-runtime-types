@@ -1,0 +1,696 @@
+{
+  "specification": [
+    "sec-inference-fixpoint",
+    "sec-anchored-contributions",
+    "sec-return-publication-dependencies",
+    "sec-narrowfrom"
+  ],
+  "cases": [
+    {
+      "name": "primitive-3-forward",
+      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return f1(n);} const result:uint32=f2(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "primitive-3-reverse",
+      "source": "function f2(n:uint32){return f1(n);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);} const result:uint32=f2(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "primitive-3-odd-first",
+      "source": "function f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f2(n:uint32){return f1(n);} const result:uint32=f2(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "primitive-8-forward",
+      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return f6(n);} const result:uint32=f7(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "primitive-8-reverse",
+      "source": "function f7(n:uint32){return f6(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);} const result:uint32=f7(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "primitive-8-odd-first",
+      "source": "function f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f7(n:uint32){return f6(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);} const result:uint32=f7(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "primitive-12-forward",
+      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);} const result:uint32=f11(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "primitive-12-reverse",
+      "source": "function f11(n:uint32){return f10(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);} const result:uint32=f11(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "primitive-12-odd-first",
+      "source": "function f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f11(n:uint32){return f10(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);} const result:uint32=f11(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "primitive-20-forward",
+      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return n > 1 ? f12(n) : f10(n);}\nfunction f12(n:uint32){return n > 1 ? f13(n) : f11(n);}\nfunction f13(n:uint32){return n > 1 ? f14(n) : f12(n);}\nfunction f14(n:uint32){return n > 1 ? f15(n) : f13(n);}\nfunction f15(n:uint32){return n > 1 ? f16(n) : f14(n);}\nfunction f16(n:uint32){return n > 1 ? f17(n) : f15(n);}\nfunction f17(n:uint32){return n > 1 ? f18(n) : f16(n);}\nfunction f18(n:uint32){return n > 1 ? f19(n) : f17(n);}\nfunction f19(n:uint32){return f18(n);} const result:uint32=f19(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "primitive-20-reverse",
+      "source": "function f19(n:uint32){return f18(n);}\nfunction f18(n:uint32){return n > 1 ? f19(n) : f17(n);}\nfunction f17(n:uint32){return n > 1 ? f18(n) : f16(n);}\nfunction f16(n:uint32){return n > 1 ? f17(n) : f15(n);}\nfunction f15(n:uint32){return n > 1 ? f16(n) : f14(n);}\nfunction f14(n:uint32){return n > 1 ? f15(n) : f13(n);}\nfunction f13(n:uint32){return n > 1 ? f14(n) : f12(n);}\nfunction f12(n:uint32){return n > 1 ? f13(n) : f11(n);}\nfunction f11(n:uint32){return n > 1 ? f12(n) : f10(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);} const result:uint32=f19(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "primitive-20-odd-first",
+      "source": "function f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f11(n:uint32){return n > 1 ? f12(n) : f10(n);}\nfunction f13(n:uint32){return n > 1 ? f14(n) : f12(n);}\nfunction f15(n:uint32){return n > 1 ? f16(n) : f14(n);}\nfunction f17(n:uint32){return n > 1 ? f18(n) : f16(n);}\nfunction f19(n:uint32){return f18(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f12(n:uint32){return n > 1 ? f13(n) : f11(n);}\nfunction f14(n:uint32){return n > 1 ? f15(n) : f13(n);}\nfunction f16(n:uint32){return n > 1 ? f17(n) : f15(n);}\nfunction f18(n:uint32){return n > 1 ? f19(n) : f17(n);} const result:uint32=f19(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "primitive-40-forward",
+      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return n > 1 ? f12(n) : f10(n);}\nfunction f12(n:uint32){return n > 1 ? f13(n) : f11(n);}\nfunction f13(n:uint32){return n > 1 ? f14(n) : f12(n);}\nfunction f14(n:uint32){return n > 1 ? f15(n) : f13(n);}\nfunction f15(n:uint32){return n > 1 ? f16(n) : f14(n);}\nfunction f16(n:uint32){return n > 1 ? f17(n) : f15(n);}\nfunction f17(n:uint32){return n > 1 ? f18(n) : f16(n);}\nfunction f18(n:uint32){return n > 1 ? f19(n) : f17(n);}\nfunction f19(n:uint32){return n > 1 ? f20(n) : f18(n);}\nfunction f20(n:uint32){return n > 1 ? f21(n) : f19(n);}\nfunction f21(n:uint32){return n > 1 ? f22(n) : f20(n);}\nfunction f22(n:uint32){return n > 1 ? f23(n) : f21(n);}\nfunction f23(n:uint32){return n > 1 ? f24(n) : f22(n);}\nfunction f24(n:uint32){return n > 1 ? f25(n) : f23(n);}\nfunction f25(n:uint32){return n > 1 ? f26(n) : f24(n);}\nfunction f26(n:uint32){return n > 1 ? f27(n) : f25(n);}\nfunction f27(n:uint32){return n > 1 ? f28(n) : f26(n);}\nfunction f28(n:uint32){return n > 1 ? f29(n) : f27(n);}\nfunction f29(n:uint32){return n > 1 ? f30(n) : f28(n);}\nfunction f30(n:uint32){return n > 1 ? f31(n) : f29(n);}\nfunction f31(n:uint32){return n > 1 ? f32(n) : f30(n);}\nfunction f32(n:uint32){return n > 1 ? f33(n) : f31(n);}\nfunction f33(n:uint32){return n > 1 ? f34(n) : f32(n);}\nfunction f34(n:uint32){return n > 1 ? f35(n) : f33(n);}\nfunction f35(n:uint32){return n > 1 ? f36(n) : f34(n);}\nfunction f36(n:uint32){return n > 1 ? f37(n) : f35(n);}\nfunction f37(n:uint32){return n > 1 ? f38(n) : f36(n);}\nfunction f38(n:uint32){return n > 1 ? f39(n) : f37(n);}\nfunction f39(n:uint32){return f38(n);} const result:uint32=f39(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "primitive-40-reverse",
+      "source": "function f39(n:uint32){return f38(n);}\nfunction f38(n:uint32){return n > 1 ? f39(n) : f37(n);}\nfunction f37(n:uint32){return n > 1 ? f38(n) : f36(n);}\nfunction f36(n:uint32){return n > 1 ? f37(n) : f35(n);}\nfunction f35(n:uint32){return n > 1 ? f36(n) : f34(n);}\nfunction f34(n:uint32){return n > 1 ? f35(n) : f33(n);}\nfunction f33(n:uint32){return n > 1 ? f34(n) : f32(n);}\nfunction f32(n:uint32){return n > 1 ? f33(n) : f31(n);}\nfunction f31(n:uint32){return n > 1 ? f32(n) : f30(n);}\nfunction f30(n:uint32){return n > 1 ? f31(n) : f29(n);}\nfunction f29(n:uint32){return n > 1 ? f30(n) : f28(n);}\nfunction f28(n:uint32){return n > 1 ? f29(n) : f27(n);}\nfunction f27(n:uint32){return n > 1 ? f28(n) : f26(n);}\nfunction f26(n:uint32){return n > 1 ? f27(n) : f25(n);}\nfunction f25(n:uint32){return n > 1 ? f26(n) : f24(n);}\nfunction f24(n:uint32){return n > 1 ? f25(n) : f23(n);}\nfunction f23(n:uint32){return n > 1 ? f24(n) : f22(n);}\nfunction f22(n:uint32){return n > 1 ? f23(n) : f21(n);}\nfunction f21(n:uint32){return n > 1 ? f22(n) : f20(n);}\nfunction f20(n:uint32){return n > 1 ? f21(n) : f19(n);}\nfunction f19(n:uint32){return n > 1 ? f20(n) : f18(n);}\nfunction f18(n:uint32){return n > 1 ? f19(n) : f17(n);}\nfunction f17(n:uint32){return n > 1 ? f18(n) : f16(n);}\nfunction f16(n:uint32){return n > 1 ? f17(n) : f15(n);}\nfunction f15(n:uint32){return n > 1 ? f16(n) : f14(n);}\nfunction f14(n:uint32){return n > 1 ? f15(n) : f13(n);}\nfunction f13(n:uint32){return n > 1 ? f14(n) : f12(n);}\nfunction f12(n:uint32){return n > 1 ? f13(n) : f11(n);}\nfunction f11(n:uint32){return n > 1 ? f12(n) : f10(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);} const result:uint32=f39(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "primitive-40-odd-first",
+      "source": "function f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f11(n:uint32){return n > 1 ? f12(n) : f10(n);}\nfunction f13(n:uint32){return n > 1 ? f14(n) : f12(n);}\nfunction f15(n:uint32){return n > 1 ? f16(n) : f14(n);}\nfunction f17(n:uint32){return n > 1 ? f18(n) : f16(n);}\nfunction f19(n:uint32){return n > 1 ? f20(n) : f18(n);}\nfunction f21(n:uint32){return n > 1 ? f22(n) : f20(n);}\nfunction f23(n:uint32){return n > 1 ? f24(n) : f22(n);}\nfunction f25(n:uint32){return n > 1 ? f26(n) : f24(n);}\nfunction f27(n:uint32){return n > 1 ? f28(n) : f26(n);}\nfunction f29(n:uint32){return n > 1 ? f30(n) : f28(n);}\nfunction f31(n:uint32){return n > 1 ? f32(n) : f30(n);}\nfunction f33(n:uint32){return n > 1 ? f34(n) : f32(n);}\nfunction f35(n:uint32){return n > 1 ? f36(n) : f34(n);}\nfunction f37(n:uint32){return n > 1 ? f38(n) : f36(n);}\nfunction f39(n:uint32){return f38(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f12(n:uint32){return n > 1 ? f13(n) : f11(n);}\nfunction f14(n:uint32){return n > 1 ? f15(n) : f13(n);}\nfunction f16(n:uint32){return n > 1 ? f17(n) : f15(n);}\nfunction f18(n:uint32){return n > 1 ? f19(n) : f17(n);}\nfunction f20(n:uint32){return n > 1 ? f21(n) : f19(n);}\nfunction f22(n:uint32){return n > 1 ? f23(n) : f21(n);}\nfunction f24(n:uint32){return n > 1 ? f25(n) : f23(n);}\nfunction f26(n:uint32){return n > 1 ? f27(n) : f25(n);}\nfunction f28(n:uint32){return n > 1 ? f29(n) : f27(n);}\nfunction f30(n:uint32){return n > 1 ? f31(n) : f29(n);}\nfunction f32(n:uint32){return n > 1 ? f33(n) : f31(n);}\nfunction f34(n:uint32){return n > 1 ? f35(n) : f33(n);}\nfunction f36(n:uint32){return n > 1 ? f37(n) : f35(n);}\nfunction f38(n:uint32){return n > 1 ? f39(n) : f37(n);} const result:uint32=f39(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "array-20-forward",
+      "source": "function f0(n:uint32){return n > 1 ? f1(n) : [(7 := uint32)];}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return n > 1 ? f12(n) : f10(n);}\nfunction f12(n:uint32){return n > 1 ? f13(n) : f11(n);}\nfunction f13(n:uint32){return n > 1 ? f14(n) : f12(n);}\nfunction f14(n:uint32){return n > 1 ? f15(n) : f13(n);}\nfunction f15(n:uint32){return n > 1 ? f16(n) : f14(n);}\nfunction f16(n:uint32){return n > 1 ? f17(n) : f15(n);}\nfunction f17(n:uint32){return n > 1 ? f18(n) : f16(n);}\nfunction f18(n:uint32){return n > 1 ? f19(n) : f17(n);}\nfunction f19(n:uint32){return f18(n);} const result:uint32=f19(0)[0];String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "array-20-reverse",
+      "source": "function f19(n:uint32){return f18(n);}\nfunction f18(n:uint32){return n > 1 ? f19(n) : f17(n);}\nfunction f17(n:uint32){return n > 1 ? f18(n) : f16(n);}\nfunction f16(n:uint32){return n > 1 ? f17(n) : f15(n);}\nfunction f15(n:uint32){return n > 1 ? f16(n) : f14(n);}\nfunction f14(n:uint32){return n > 1 ? f15(n) : f13(n);}\nfunction f13(n:uint32){return n > 1 ? f14(n) : f12(n);}\nfunction f12(n:uint32){return n > 1 ? f13(n) : f11(n);}\nfunction f11(n:uint32){return n > 1 ? f12(n) : f10(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : [(7 := uint32)];} const result:uint32=f19(0)[0];String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "array-20-odd-first",
+      "source": "function f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f11(n:uint32){return n > 1 ? f12(n) : f10(n);}\nfunction f13(n:uint32){return n > 1 ? f14(n) : f12(n);}\nfunction f15(n:uint32){return n > 1 ? f16(n) : f14(n);}\nfunction f17(n:uint32){return n > 1 ? f18(n) : f16(n);}\nfunction f19(n:uint32){return f18(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : [(7 := uint32)];}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f12(n:uint32){return n > 1 ? f13(n) : f11(n);}\nfunction f14(n:uint32){return n > 1 ? f15(n) : f13(n);}\nfunction f16(n:uint32){return n > 1 ? f17(n) : f15(n);}\nfunction f18(n:uint32){return n > 1 ? f19(n) : f17(n);} const result:uint32=f19(0)[0];String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "projection-20-forward",
+      "source": "function f0(n:uint32){return n > 1 ? f1(n)[0] : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? [f2(n)] : [f0(n)];}\nfunction f2(n:uint32){return n > 1 ? f3(n)[0] : f1(n)[0];}\nfunction f3(n:uint32){return n > 1 ? [f4(n)] : [f2(n)];}\nfunction f4(n:uint32){return n > 1 ? f5(n)[0] : f3(n)[0];}\nfunction f5(n:uint32){return n > 1 ? [f6(n)] : [f4(n)];}\nfunction f6(n:uint32){return n > 1 ? f7(n)[0] : f5(n)[0];}\nfunction f7(n:uint32){return n > 1 ? [f8(n)] : [f6(n)];}\nfunction f8(n:uint32){return n > 1 ? f9(n)[0] : f7(n)[0];}\nfunction f9(n:uint32){return n > 1 ? [f10(n)] : [f8(n)];}\nfunction f10(n:uint32){return n > 1 ? f11(n)[0] : f9(n)[0];}\nfunction f11(n:uint32){return n > 1 ? [f12(n)] : [f10(n)];}\nfunction f12(n:uint32){return n > 1 ? f13(n)[0] : f11(n)[0];}\nfunction f13(n:uint32){return n > 1 ? [f14(n)] : [f12(n)];}\nfunction f14(n:uint32){return n > 1 ? f15(n)[0] : f13(n)[0];}\nfunction f15(n:uint32){return n > 1 ? [f16(n)] : [f14(n)];}\nfunction f16(n:uint32){return n > 1 ? f17(n)[0] : f15(n)[0];}\nfunction f17(n:uint32){return n > 1 ? [f18(n)] : [f16(n)];}\nfunction f18(n:uint32){return n > 1 ? f19(n)[0] : f17(n)[0];}\nfunction f19(n:uint32){return [f18(n)];} const result:uint32=f19(0)[0];String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "projection-20-reverse",
+      "source": "function f19(n:uint32){return [f18(n)];}\nfunction f18(n:uint32){return n > 1 ? f19(n)[0] : f17(n)[0];}\nfunction f17(n:uint32){return n > 1 ? [f18(n)] : [f16(n)];}\nfunction f16(n:uint32){return n > 1 ? f17(n)[0] : f15(n)[0];}\nfunction f15(n:uint32){return n > 1 ? [f16(n)] : [f14(n)];}\nfunction f14(n:uint32){return n > 1 ? f15(n)[0] : f13(n)[0];}\nfunction f13(n:uint32){return n > 1 ? [f14(n)] : [f12(n)];}\nfunction f12(n:uint32){return n > 1 ? f13(n)[0] : f11(n)[0];}\nfunction f11(n:uint32){return n > 1 ? [f12(n)] : [f10(n)];}\nfunction f10(n:uint32){return n > 1 ? f11(n)[0] : f9(n)[0];}\nfunction f9(n:uint32){return n > 1 ? [f10(n)] : [f8(n)];}\nfunction f8(n:uint32){return n > 1 ? f9(n)[0] : f7(n)[0];}\nfunction f7(n:uint32){return n > 1 ? [f8(n)] : [f6(n)];}\nfunction f6(n:uint32){return n > 1 ? f7(n)[0] : f5(n)[0];}\nfunction f5(n:uint32){return n > 1 ? [f6(n)] : [f4(n)];}\nfunction f4(n:uint32){return n > 1 ? f5(n)[0] : f3(n)[0];}\nfunction f3(n:uint32){return n > 1 ? [f4(n)] : [f2(n)];}\nfunction f2(n:uint32){return n > 1 ? f3(n)[0] : f1(n)[0];}\nfunction f1(n:uint32){return n > 1 ? [f2(n)] : [f0(n)];}\nfunction f0(n:uint32){return n > 1 ? f1(n)[0] : (7 := uint32);} const result:uint32=f19(0)[0];String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "projection-20-odd-first",
+      "source": "function f1(n:uint32){return n > 1 ? [f2(n)] : [f0(n)];}\nfunction f3(n:uint32){return n > 1 ? [f4(n)] : [f2(n)];}\nfunction f5(n:uint32){return n > 1 ? [f6(n)] : [f4(n)];}\nfunction f7(n:uint32){return n > 1 ? [f8(n)] : [f6(n)];}\nfunction f9(n:uint32){return n > 1 ? [f10(n)] : [f8(n)];}\nfunction f11(n:uint32){return n > 1 ? [f12(n)] : [f10(n)];}\nfunction f13(n:uint32){return n > 1 ? [f14(n)] : [f12(n)];}\nfunction f15(n:uint32){return n > 1 ? [f16(n)] : [f14(n)];}\nfunction f17(n:uint32){return n > 1 ? [f18(n)] : [f16(n)];}\nfunction f19(n:uint32){return [f18(n)];}\nfunction f0(n:uint32){return n > 1 ? f1(n)[0] : (7 := uint32);}\nfunction f2(n:uint32){return n > 1 ? f3(n)[0] : f1(n)[0];}\nfunction f4(n:uint32){return n > 1 ? f5(n)[0] : f3(n)[0];}\nfunction f6(n:uint32){return n > 1 ? f7(n)[0] : f5(n)[0];}\nfunction f8(n:uint32){return n > 1 ? f9(n)[0] : f7(n)[0];}\nfunction f10(n:uint32){return n > 1 ? f11(n)[0] : f9(n)[0];}\nfunction f12(n:uint32){return n > 1 ? f13(n)[0] : f11(n)[0];}\nfunction f14(n:uint32){return n > 1 ? f15(n)[0] : f13(n)[0];}\nfunction f16(n:uint32){return n > 1 ? f17(n)[0] : f15(n)[0];}\nfunction f18(n:uint32){return n > 1 ? f19(n)[0] : f17(n)[0];} const result:uint32=f19(0)[0];String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "unknown-20-forward",
+      "source": "globalThis.seed=\"s\";function f0(n:uint32){return n > 1 ? f1(n) : globalThis.seed;}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return n > 1 ? f12(n) : f10(n);}\nfunction f12(n:uint32){return n > 1 ? f13(n) : f11(n);}\nfunction f13(n:uint32){return n > 1 ? f14(n) : f12(n);}\nfunction f14(n:uint32){return n > 1 ? f15(n) : f13(n);}\nfunction f15(n:uint32){return n > 1 ? f16(n) : f14(n);}\nfunction f16(n:uint32){return n > 1 ? f17(n) : f15(n);}\nfunction f17(n:uint32){return n > 1 ? f18(n) : f16(n);}\nfunction f18(n:uint32){return n > 1 ? f19(n) : f17(n);}\nfunction f19(n:uint32){return f18(n);} const result:string=f19(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-20-reverse",
+      "source": "globalThis.seed=\"s\";function f19(n:uint32){return f18(n);}\nfunction f18(n:uint32){return n > 1 ? f19(n) : f17(n);}\nfunction f17(n:uint32){return n > 1 ? f18(n) : f16(n);}\nfunction f16(n:uint32){return n > 1 ? f17(n) : f15(n);}\nfunction f15(n:uint32){return n > 1 ? f16(n) : f14(n);}\nfunction f14(n:uint32){return n > 1 ? f15(n) : f13(n);}\nfunction f13(n:uint32){return n > 1 ? f14(n) : f12(n);}\nfunction f12(n:uint32){return n > 1 ? f13(n) : f11(n);}\nfunction f11(n:uint32){return n > 1 ? f12(n) : f10(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : globalThis.seed;} const result:string=f19(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-20-odd-first",
+      "source": "globalThis.seed=\"s\";function f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f11(n:uint32){return n > 1 ? f12(n) : f10(n);}\nfunction f13(n:uint32){return n > 1 ? f14(n) : f12(n);}\nfunction f15(n:uint32){return n > 1 ? f16(n) : f14(n);}\nfunction f17(n:uint32){return n > 1 ? f18(n) : f16(n);}\nfunction f19(n:uint32){return f18(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : globalThis.seed;}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f12(n:uint32){return n > 1 ? f13(n) : f11(n);}\nfunction f14(n:uint32){return n > 1 ? f15(n) : f13(n);}\nfunction f16(n:uint32){return n > 1 ? f17(n) : f15(n);}\nfunction f18(n:uint32){return n > 1 ? f19(n) : f17(n);} const result:string=f19(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "generic-12-forward",
+      "source": "function f0<T:type>(n:uint32){return n > 1 ? f1.<T>(n) : (7 := uint32);}\nfunction f1<T:type>(n:uint32){return n > 1 ? f2.<T>(n) : f0.<T>(n);}\nfunction f2<T:type>(n:uint32){return n > 1 ? f3.<T>(n) : f1.<T>(n);}\nfunction f3<T:type>(n:uint32){return n > 1 ? f4.<T>(n) : f2.<T>(n);}\nfunction f4<T:type>(n:uint32){return n > 1 ? f5.<T>(n) : f3.<T>(n);}\nfunction f5<T:type>(n:uint32){return n > 1 ? f6.<T>(n) : f4.<T>(n);}\nfunction f6<T:type>(n:uint32){return n > 1 ? f7.<T>(n) : f5.<T>(n);}\nfunction f7<T:type>(n:uint32){return n > 1 ? f8.<T>(n) : f6.<T>(n);}\nfunction f8<T:type>(n:uint32){return n > 1 ? f9.<T>(n) : f7.<T>(n);}\nfunction f9<T:type>(n:uint32){return n > 1 ? f10.<T>(n) : f8.<T>(n);}\nfunction f10<T:type>(n:uint32){return n > 1 ? f11.<T>(n) : f9.<T>(n);}\nfunction f11<T:type>(n:uint32){return f10.<T>(n);} const result:uint32=f11.<uint8>(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "generic-12-reverse",
+      "source": "function f11<T:type>(n:uint32){return f10.<T>(n);}\nfunction f10<T:type>(n:uint32){return n > 1 ? f11.<T>(n) : f9.<T>(n);}\nfunction f9<T:type>(n:uint32){return n > 1 ? f10.<T>(n) : f8.<T>(n);}\nfunction f8<T:type>(n:uint32){return n > 1 ? f9.<T>(n) : f7.<T>(n);}\nfunction f7<T:type>(n:uint32){return n > 1 ? f8.<T>(n) : f6.<T>(n);}\nfunction f6<T:type>(n:uint32){return n > 1 ? f7.<T>(n) : f5.<T>(n);}\nfunction f5<T:type>(n:uint32){return n > 1 ? f6.<T>(n) : f4.<T>(n);}\nfunction f4<T:type>(n:uint32){return n > 1 ? f5.<T>(n) : f3.<T>(n);}\nfunction f3<T:type>(n:uint32){return n > 1 ? f4.<T>(n) : f2.<T>(n);}\nfunction f2<T:type>(n:uint32){return n > 1 ? f3.<T>(n) : f1.<T>(n);}\nfunction f1<T:type>(n:uint32){return n > 1 ? f2.<T>(n) : f0.<T>(n);}\nfunction f0<T:type>(n:uint32){return n > 1 ? f1.<T>(n) : (7 := uint32);} const result:uint32=f11.<uint8>(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "generic-12-odd-first",
+      "source": "function f1<T:type>(n:uint32){return n > 1 ? f2.<T>(n) : f0.<T>(n);}\nfunction f3<T:type>(n:uint32){return n > 1 ? f4.<T>(n) : f2.<T>(n);}\nfunction f5<T:type>(n:uint32){return n > 1 ? f6.<T>(n) : f4.<T>(n);}\nfunction f7<T:type>(n:uint32){return n > 1 ? f8.<T>(n) : f6.<T>(n);}\nfunction f9<T:type>(n:uint32){return n > 1 ? f10.<T>(n) : f8.<T>(n);}\nfunction f11<T:type>(n:uint32){return f10.<T>(n);}\nfunction f0<T:type>(n:uint32){return n > 1 ? f1.<T>(n) : (7 := uint32);}\nfunction f2<T:type>(n:uint32){return n > 1 ? f3.<T>(n) : f1.<T>(n);}\nfunction f4<T:type>(n:uint32){return n > 1 ? f5.<T>(n) : f3.<T>(n);}\nfunction f6<T:type>(n:uint32){return n > 1 ? f7.<T>(n) : f5.<T>(n);}\nfunction f8<T:type>(n:uint32){return n > 1 ? f9.<T>(n) : f7.<T>(n);}\nfunction f10<T:type>(n:uint32){return n > 1 ? f11.<T>(n) : f9.<T>(n);} const result:uint32=f11.<uint8>(0);String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "if-impossible-test",
+      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);} if (f11(0) is string) {}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "while-impossible-test",
+      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);} while (f11(0) is string) {}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "do-impossible-test",
+      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);} do {} while (f11(0) is string);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "for-impossible-test",
+      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);} for (;f11(0) is string;) {}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "conditional-impossible-test",
+      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);} const x = (f11(0) is string) ? 1 : 0;",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "logical-impossible-test",
+      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);} const x = (f11(0) is string) && 1;",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "array-growth",
+      "source": "function grow(n:uint32){return [grow(n)];}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "rule": "rt-return-inference",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nullable-array-growth",
+      "source": "function grow(n:uint32){return n>1?[grow(n)]:null;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "rule": "rt-return-inference",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nullable-object-growth",
+      "source": "function grow(n:uint32){return n>1?{value:grow(n)}:null;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "rule": "rt-return-inference",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-array-growth",
+      "source": "function outer(x:uint32){return w(x);function w(n:uint32){return [w(n)];}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "rule": "rt-return-inference",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "always-true-forward",
+      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);}if(f11(0) is uint32){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "switch-forward",
+      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);}switch(f11(0)){case \"bad\":break;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "nullish-forward",
+      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);}const x=f11(0)??1;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "for-of-forward",
+      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);}for(const x of [f11(0)]){if(x is string){}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "stored-flow-forward",
+      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);}const x:uint32|string=f11(0);if(x is string){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "async-forward",
+      "source": "async function f0(n:uint32){return n>1?await f1(n):(7 := uint32);}\nasync function f1(n:uint32){return n>1?await f2(n):await f0(n);}\nasync function f2(n:uint32){return n>1?await f3(n):await f1(n);}\nasync function f3(n:uint32){return n>1?await f4(n):await f2(n);}\nasync function f4(n:uint32){return n>1?await f5(n):await f3(n);}\nasync function f5(n:uint32){return n>1?await f6(n):await f4(n);}\nasync function f6(n:uint32){return n>1?await f7(n):await f5(n);}\nasync function f7(n:uint32){return n>1?await f8(n):await f6(n);}\nasync function f8(n:uint32){return n>1?await f9(n):await f7(n);}\nasync function f9(n:uint32){return n>1?await f10(n):await f8(n);}\nasync function f10(n:uint32){return n>1?await f11(n):await f9(n);}\nasync function f11(n:uint32){return await f10(n);}function consume():Promise.<string>{return f11(0);} \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generator-forward",
+      "source": "function* f0(n:uint32){return n>1?yield* f1(n):(7 := uint32);}\nfunction* f1(n:uint32){return n>1?yield* f2(n):yield* f0(n);}\nfunction* f2(n:uint32){return n>1?yield* f3(n):yield* f1(n);}\nfunction* f3(n:uint32){return n>1?yield* f4(n):yield* f2(n);}\nfunction* f4(n:uint32){return n>1?yield* f5(n):yield* f3(n);}\nfunction* f5(n:uint32){return n>1?yield* f6(n):yield* f4(n);}\nfunction* f6(n:uint32){return n>1?yield* f7(n):yield* f5(n);}\nfunction* f7(n:uint32){return n>1?yield* f8(n):yield* f6(n);}\nfunction* f8(n:uint32){return n>1?yield* f9(n):yield* f7(n);}\nfunction* f9(n:uint32){return n>1?yield* f10(n):yield* f8(n);}\nfunction* f10(n:uint32){return n>1?yield* f11(n):yield* f9(n);}\nfunction* f11(n:uint32){return yield* f10(n);}const result:uint32=f11(0).next().value;String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "always-true-reverse",
+      "source": "function f11(n:uint32){return f10(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}if(f11(0) is uint32){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "switch-reverse",
+      "source": "function f11(n:uint32){return f10(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}switch(f11(0)){case \"bad\":break;}",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "nullish-reverse",
+      "source": "function f11(n:uint32){return f10(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}const x=f11(0)??1;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true
+      }
+    },
+    {
+      "name": "for-of-reverse",
+      "source": "function f11(n:uint32){return f10(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}for(const x of [f11(0)]){if(x is string){}}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "stored-flow-reverse",
+      "source": "function f11(n:uint32){return f10(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}const x:uint32|string=f11(0);if(x is string){}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "async-reverse",
+      "source": "async function f11(n:uint32){return await f10(n);}\nasync function f10(n:uint32){return n>1?await f11(n):await f9(n);}\nasync function f9(n:uint32){return n>1?await f10(n):await f8(n);}\nasync function f8(n:uint32){return n>1?await f9(n):await f7(n);}\nasync function f7(n:uint32){return n>1?await f8(n):await f6(n);}\nasync function f6(n:uint32){return n>1?await f7(n):await f5(n);}\nasync function f5(n:uint32){return n>1?await f6(n):await f4(n);}\nasync function f4(n:uint32){return n>1?await f5(n):await f3(n);}\nasync function f3(n:uint32){return n>1?await f4(n):await f2(n);}\nasync function f2(n:uint32){return n>1?await f3(n):await f1(n);}\nasync function f1(n:uint32){return n>1?await f2(n):await f0(n);}\nasync function f0(n:uint32){return n>1?await f1(n):(7 := uint32);}function consume():Promise.<string>{return f11(0);} \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generator-reverse",
+      "source": "function* f11(n:uint32){return yield* f10(n);}\nfunction* f10(n:uint32){return n>1?yield* f11(n):yield* f9(n);}\nfunction* f9(n:uint32){return n>1?yield* f10(n):yield* f8(n);}\nfunction* f8(n:uint32){return n>1?yield* f9(n):yield* f7(n);}\nfunction* f7(n:uint32){return n>1?yield* f8(n):yield* f6(n);}\nfunction* f6(n:uint32){return n>1?yield* f7(n):yield* f5(n);}\nfunction* f5(n:uint32){return n>1?yield* f6(n):yield* f4(n);}\nfunction* f4(n:uint32){return n>1?yield* f5(n):yield* f3(n);}\nfunction* f3(n:uint32){return n>1?yield* f4(n):yield* f2(n);}\nfunction* f2(n:uint32){return n>1?yield* f3(n):yield* f1(n);}\nfunction* f1(n:uint32){return n>1?yield* f2(n):yield* f0(n);}\nfunction* f0(n:uint32){return n>1?yield* f1(n):(7 := uint32);}const result:uint32=f11(0).next().value;String(result);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "dependent-generic-forward",
+      "source": "function f0<T:type>(n:uint32,v:T){return n>1?f1.<T>(n,v):v;}\nfunction f1<T:type>(n:uint32,v:T){return n>1?f2.<T>(n,v):f0.<T>(n,v);}\nfunction f2<T:type>(n:uint32,v:T){return n>1?f3.<T>(n,v):f1.<T>(n,v);}\nfunction f3<T:type>(n:uint32,v:T){return n>1?f4.<T>(n,v):f2.<T>(n,v);}\nfunction f4<T:type>(n:uint32,v:T){return n>1?f5.<T>(n,v):f3.<T>(n,v);}\nfunction f5<T:type>(n:uint32,v:T){return n>1?f6.<T>(n,v):f4.<T>(n,v);}\nfunction f6<T:type>(n:uint32,v:T){return n>1?f7.<T>(n,v):f5.<T>(n,v);}\nfunction f7<T:type>(n:uint32,v:T){return n>1?f8.<T>(n,v):f6.<T>(n,v);}\nfunction f8<T:type>(n:uint32,v:T){return n>1?f9.<T>(n,v):f7.<T>(n,v);}\nfunction f9<T:type>(n:uint32,v:T){return n>1?f10.<T>(n,v):f8.<T>(n,v);}\nfunction f10<T:type>(n:uint32,v:T){return n>1?f11.<T>(n,v):f9.<T>(n,v);}\nfunction f11<T:type>(n:uint32,v:T){return f10.<T>(n,v);}const value:uint8=f11.<uint8>(0,7);String(value);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "private-cycle-forward",
+      "source": "function f0(n){return n>1?f1(n):\"s\";}\nfunction f1(n){return n>1?f2(n):f0(n);}\nfunction f2(n){return n>1?f3(n):f1(n);}\nfunction f3(n){return n>1?f4(n):f2(n);}\nfunction f4(n){return n>1?f5(n):f3(n);}\nfunction f5(n){return n>1?f6(n):f4(n);}\nfunction f6(n){return n>1?f7(n):f5(n);}\nfunction f7(n){return n>1?f8(n):f6(n);}\nfunction f8(n){return n>1?f9(n):f7(n);}\nfunction f9(n){return n>1?f10(n):f8(n);}\nfunction f10(n){return n>1?f11(n):f9(n);}\nfunction f11(n){return n>1?f12(n):f10(n);}\nfunction f12(n){return n>1?f13(n):f11(n);}\nfunction f13(n){return n>1?f14(n):f12(n);}\nfunction f14(n){return n>1?f15(n):f13(n);}\nfunction f15(n){return n>1?f16(n):f14(n);}\nfunction f16(n){return n>1?f17(n):f15(n);}\nfunction f17(n){return n>1?f18(n):f16(n);}\nfunction f18(n){return n>1?f19(n):f17(n);}\nfunction f19(n){return f18(n);}function typed(n:uint32){return f19(n);}const s:string=typed(0);s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "private-cycle-runtime-forward",
+      "source": "function f0(n){return n>1?f1(n):\"s\";}\nfunction f1(n){return n>1?f2(n):f0(n);}\nfunction f2(n){return n>1?f3(n):f1(n);}\nfunction f3(n){return n>1?f4(n):f2(n);}\nfunction f4(n){return n>1?f5(n):f3(n);}\nfunction f5(n){return n>1?f6(n):f4(n);}\nfunction f6(n){return n>1?f7(n):f5(n);}\nfunction f7(n){return n>1?f8(n):f6(n);}\nfunction f8(n){return n>1?f9(n):f7(n);}\nfunction f9(n){return n>1?f10(n):f8(n);}\nfunction f10(n){return n>1?f11(n):f9(n);}\nfunction f11(n){return n>1?f12(n):f10(n);}\nfunction f12(n){return n>1?f13(n):f11(n);}\nfunction f13(n){return n>1?f14(n):f12(n);}\nfunction f14(n){return n>1?f15(n):f13(n);}\nfunction f15(n){return n>1?f16(n):f14(n);}\nfunction f16(n){return n>1?f17(n):f15(n);}\nfunction f17(n){return n>1?f18(n):f16(n);}\nfunction f18(n){return n>1?f19(n):f17(n);}\nfunction f19(n){return f18(n);}const s:number=f19(0);String(s);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "dependent-generic-reverse",
+      "source": "function f11<T:type>(n:uint32,v:T){return f10.<T>(n,v);}\nfunction f10<T:type>(n:uint32,v:T){return n>1?f11.<T>(n,v):f9.<T>(n,v);}\nfunction f9<T:type>(n:uint32,v:T){return n>1?f10.<T>(n,v):f8.<T>(n,v);}\nfunction f8<T:type>(n:uint32,v:T){return n>1?f9.<T>(n,v):f7.<T>(n,v);}\nfunction f7<T:type>(n:uint32,v:T){return n>1?f8.<T>(n,v):f6.<T>(n,v);}\nfunction f6<T:type>(n:uint32,v:T){return n>1?f7.<T>(n,v):f5.<T>(n,v);}\nfunction f5<T:type>(n:uint32,v:T){return n>1?f6.<T>(n,v):f4.<T>(n,v);}\nfunction f4<T:type>(n:uint32,v:T){return n>1?f5.<T>(n,v):f3.<T>(n,v);}\nfunction f3<T:type>(n:uint32,v:T){return n>1?f4.<T>(n,v):f2.<T>(n,v);}\nfunction f2<T:type>(n:uint32,v:T){return n>1?f3.<T>(n,v):f1.<T>(n,v);}\nfunction f1<T:type>(n:uint32,v:T){return n>1?f2.<T>(n,v):f0.<T>(n,v);}\nfunction f0<T:type>(n:uint32,v:T){return n>1?f1.<T>(n,v):v;}const value:uint8=f11.<uint8>(0,7);String(value);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "private-cycle-reverse",
+      "source": "function f19(n){return f18(n);}\nfunction f18(n){return n>1?f19(n):f17(n);}\nfunction f17(n){return n>1?f18(n):f16(n);}\nfunction f16(n){return n>1?f17(n):f15(n);}\nfunction f15(n){return n>1?f16(n):f14(n);}\nfunction f14(n){return n>1?f15(n):f13(n);}\nfunction f13(n){return n>1?f14(n):f12(n);}\nfunction f12(n){return n>1?f13(n):f11(n);}\nfunction f11(n){return n>1?f12(n):f10(n);}\nfunction f10(n){return n>1?f11(n):f9(n);}\nfunction f9(n){return n>1?f10(n):f8(n);}\nfunction f8(n){return n>1?f9(n):f7(n);}\nfunction f7(n){return n>1?f8(n):f6(n);}\nfunction f6(n){return n>1?f7(n):f5(n);}\nfunction f5(n){return n>1?f6(n):f4(n);}\nfunction f4(n){return n>1?f5(n):f3(n);}\nfunction f3(n){return n>1?f4(n):f2(n);}\nfunction f2(n){return n>1?f3(n):f1(n);}\nfunction f1(n){return n>1?f2(n):f0(n);}\nfunction f0(n){return n>1?f1(n):\"s\";}function typed(n:uint32){return f19(n);}const s:string=typed(0);s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "private-cycle-runtime-reverse",
+      "source": "function f19(n){return f18(n);}\nfunction f18(n){return n>1?f19(n):f17(n);}\nfunction f17(n){return n>1?f18(n):f16(n);}\nfunction f16(n){return n>1?f17(n):f15(n);}\nfunction f15(n){return n>1?f16(n):f14(n);}\nfunction f14(n){return n>1?f15(n):f13(n);}\nfunction f13(n){return n>1?f14(n):f12(n);}\nfunction f12(n){return n>1?f13(n):f11(n);}\nfunction f11(n){return n>1?f12(n):f10(n);}\nfunction f10(n){return n>1?f11(n):f9(n);}\nfunction f9(n){return n>1?f10(n):f8(n);}\nfunction f8(n){return n>1?f9(n):f7(n);}\nfunction f7(n){return n>1?f8(n):f6(n);}\nfunction f6(n){return n>1?f7(n):f5(n);}\nfunction f5(n){return n>1?f6(n):f4(n);}\nfunction f4(n){return n>1?f5(n):f3(n);}\nfunction f3(n){return n>1?f4(n):f2(n);}\nfunction f2(n){return n>1?f3(n):f1(n);}\nfunction f1(n){return n>1?f2(n):f0(n);}\nfunction f0(n){return n>1?f1(n):\"s\";}const s:number=f19(0);String(s);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "dependent-generic-odd-first",
+      "source": "function f1<T:type>(n:uint32,v:T){return n>1?f2.<T>(n,v):f0.<T>(n,v);}\nfunction f3<T:type>(n:uint32,v:T){return n>1?f4.<T>(n,v):f2.<T>(n,v);}\nfunction f5<T:type>(n:uint32,v:T){return n>1?f6.<T>(n,v):f4.<T>(n,v);}\nfunction f7<T:type>(n:uint32,v:T){return n>1?f8.<T>(n,v):f6.<T>(n,v);}\nfunction f9<T:type>(n:uint32,v:T){return n>1?f10.<T>(n,v):f8.<T>(n,v);}\nfunction f11<T:type>(n:uint32,v:T){return f10.<T>(n,v);}\nfunction f0<T:type>(n:uint32,v:T){return n>1?f1.<T>(n,v):v;}\nfunction f2<T:type>(n:uint32,v:T){return n>1?f3.<T>(n,v):f1.<T>(n,v);}\nfunction f4<T:type>(n:uint32,v:T){return n>1?f5.<T>(n,v):f3.<T>(n,v);}\nfunction f6<T:type>(n:uint32,v:T){return n>1?f7.<T>(n,v):f5.<T>(n,v);}\nfunction f8<T:type>(n:uint32,v:T){return n>1?f9.<T>(n,v):f7.<T>(n,v);}\nfunction f10<T:type>(n:uint32,v:T){return n>1?f11.<T>(n,v):f9.<T>(n,v);}const value:uint8=f11.<uint8>(0,7);String(value);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "private-cycle-odd-first",
+      "source": "function f1(n){return n>1?f2(n):f0(n);}\nfunction f3(n){return n>1?f4(n):f2(n);}\nfunction f5(n){return n>1?f6(n):f4(n);}\nfunction f7(n){return n>1?f8(n):f6(n);}\nfunction f9(n){return n>1?f10(n):f8(n);}\nfunction f11(n){return n>1?f12(n):f10(n);}\nfunction f13(n){return n>1?f14(n):f12(n);}\nfunction f15(n){return n>1?f16(n):f14(n);}\nfunction f17(n){return n>1?f18(n):f16(n);}\nfunction f19(n){return f18(n);}\nfunction f0(n){return n>1?f1(n):\"s\";}\nfunction f2(n){return n>1?f3(n):f1(n);}\nfunction f4(n){return n>1?f5(n):f3(n);}\nfunction f6(n){return n>1?f7(n):f5(n);}\nfunction f8(n){return n>1?f9(n):f7(n);}\nfunction f10(n){return n>1?f11(n):f9(n);}\nfunction f12(n){return n>1?f13(n):f11(n);}\nfunction f14(n){return n>1?f15(n):f13(n);}\nfunction f16(n){return n>1?f17(n):f15(n);}\nfunction f18(n){return n>1?f19(n):f17(n);}function typed(n:uint32){return f19(n);}const s:string=typed(0);s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "private-cycle-runtime-odd-first",
+      "source": "function f1(n){return n>1?f2(n):f0(n);}\nfunction f3(n){return n>1?f4(n):f2(n);}\nfunction f5(n){return n>1?f6(n):f4(n);}\nfunction f7(n){return n>1?f8(n):f6(n);}\nfunction f9(n){return n>1?f10(n):f8(n);}\nfunction f11(n){return n>1?f12(n):f10(n);}\nfunction f13(n){return n>1?f14(n):f12(n);}\nfunction f15(n){return n>1?f16(n):f14(n);}\nfunction f17(n){return n>1?f18(n):f16(n);}\nfunction f19(n){return f18(n);}\nfunction f0(n){return n>1?f1(n):\"s\";}\nfunction f2(n){return n>1?f3(n):f1(n);}\nfunction f4(n){return n>1?f5(n):f3(n);}\nfunction f6(n){return n>1?f7(n):f5(n);}\nfunction f8(n){return n>1?f9(n):f7(n);}\nfunction f10(n){return n>1?f11(n):f9(n);}\nfunction f12(n){return n>1?f13(n):f11(n);}\nfunction f14(n){return n>1?f15(n):f13(n);}\nfunction f16(n){return n>1?f17(n):f15(n);}\nfunction f18(n){return n>1?f19(n):f17(n);}const s:number=f19(0);String(s);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "switch-forward-forced",
+      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);}switch(f11(0)){case \"bad\":break;}",
+      "checking": "forced",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DISJOINT_COMPARISON",
+          "rule": "rt-disjoint-comparison",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nullish-forward-forced",
+      "source": "function f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f11(n:uint32){return f10(n);}const x=f11(0)??1;",
+      "checking": "forced",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "switch-reverse-forced",
+      "source": "function f11(n:uint32){return f10(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}switch(f11(0)){case \"bad\":break;}",
+      "checking": "forced",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DISJOINT_COMPARISON",
+          "rule": "rt-disjoint-comparison",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nullish-reverse-forced",
+      "source": "function f11(n:uint32){return f10(n);}\nfunction f10(n:uint32){return n > 1 ? f11(n) : f9(n);}\nfunction f9(n:uint32){return n > 1 ? f10(n) : f8(n);}\nfunction f8(n:uint32){return n > 1 ? f9(n) : f7(n);}\nfunction f7(n:uint32){return n > 1 ? f8(n) : f6(n);}\nfunction f6(n:uint32){return n > 1 ? f7(n) : f5(n);}\nfunction f5(n:uint32){return n > 1 ? f6(n) : f4(n);}\nfunction f4(n:uint32){return n > 1 ? f5(n) : f3(n);}\nfunction f3(n:uint32){return n > 1 ? f4(n) : f2(n);}\nfunction f2(n:uint32){return n > 1 ? f3(n) : f1(n);}\nfunction f1(n:uint32){return n > 1 ? f2(n) : f0(n);}\nfunction f0(n:uint32){return n > 1 ? f1(n) : (7 := uint32);}const x=f11(0)??1;",
+      "checking": "forced",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "rule": "rt-impossible-test",
+          "phase": "static"
+        }
+      }
+    }
+  ]
+}
