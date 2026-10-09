@@ -3088,6 +3088,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const defaultConversions: DefaultConversionCheck[] = [];
   const specializedDefaultBindings: ReadonlyMap<string, TypeRecord>[] = [];
   const genericDefaults: GenericDefaultCheck[] = [];
+  const genericApplicationInputs = new WeakMap<ParseNode, PreparedBinding>();
   const whereChecks = new Map<object, GenericWhereCheck[]>();
   const recordWhereCheck = (application: object, declaration: GenericWhereCheck['declaration'], bindings: ReadonlyMap<string, TypeRecord>): void => {
     const clauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
@@ -14951,16 +14952,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         });
         return;
       }
+      // Operator obligations apply even when the comparison result is discarded.
       case 'EqualityExpression':
-        // Loose vector equality has the same contextual-result obligation as
-        // ordering. Leave discarded strict scalar equality's policy unchanged.
-        if (node.operator === '==' || node.operator === '!=') {
-          staticType(node);
-        } else {
-          validateDiscardedExpression(node.EqualityExpression);
-          validateDiscardedExpression(node.RelationalExpression);
-        }
-        return;
       case 'RelationalExpression':
       case 'AdditiveExpression':
       case 'MultiplicativeExpression':
@@ -15365,7 +15358,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       inner = next;
     }
     if (inner?.type === 'MatchExpression') return checkMatchExpression(inner, contextual);
-    if (inner?.type === 'DoExpression' && inner.star) return checkDoGenerator(inner, contextual);
+    if (inner?.type === 'DoExpression') return inner.star ? checkDoGenerator(inner, contextual) : checkDoExpression(inner, contextual);
     if (inner?.type === 'NewExpression' && contextual) checkCollectionSeed(inner, contextual);
     if (inner && contextual) {
       contextualCallTypes.set(inner, contextual);
@@ -17794,7 +17787,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'DoExpression': {
         const d = node as ParseNode.DoExpression;
         if (!d.star) {
-          return completionTypeOf(d.Block?.StatementList);
+          return checkDoExpression(d, doContexts.get(d) ?? null);
         }
         return checkDoGenerator(d, doGeneratorContexts.get(d) ?? null);
       }
@@ -18139,6 +18132,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         while (parent?.type === 'ParenthesizedExpression') parent = parent.parent;
         const asCallee = parent?.type === 'CallExpression';
         const rejected: ObjectValue[] = [];
+        let pending = false;
         const Signatures = base.Signatures.flatMap((signature) => {
           const parameters = signature.TypeParameters;
           if (!parameters?.length) return [];
@@ -18151,7 +18145,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             rejected.push(...errors.splice(before));
             return [];
           }
-          if (bindings.size !== parameters.length) return [signature];
+          if (bindings.size !== parameters.length) {
+            // #sec-generic-specialization: a stored application publishes only
+            // after its defaults are complete. Its original signature would
+            // ask a later call to infer the explicit arguments a second time.
+            if (!asCallee) {
+              pending = true;
+              if (genericDefaults.some((check) => check.application === specialization)) {
+                let input = genericApplicationInputs.get(specialization);
+                if (!input) {
+                  input = { frames: frames.slice(), varFrames: varFrames.slice(), typeScopes: typeParameterScopes.slice(),
+                    node: specialization, expression: specialization, constant: true, owner: frames.at(-1)!, name: '', evaluationPending: true };
+                  genericApplicationInputs.set(specialization, input);
+                }
+                // Evaluation completes this dependency in the next checking
+                // pass. An unavailable signature is not an inferred `any`.
+                observeBindingInput(input);
+              }
+            }
+            return [signature];
+          }
           // Canonicalized member signatures retain their generic parameter
           // declarations even when they no longer have the original record identity.
           let genericOwner: ParseNode | undefined = parameters[0]?.Declaration;
@@ -18171,7 +18184,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return [specialized];
         });
         if (Signatures.length === 0 && rejected.length) errors.push(rejected[0]);
-        return { ...base, Signatures };
+        return pending ? null : { ...base, Signatures };
       }
       case 'ObjectLiteral':
         // An object literal HAS a type. #table-type-record-kinds, quoted
@@ -19863,9 +19876,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           && classDeclarationOf(operandTypes[1] as TypeRecord) !== undefined
           && !IsSubtype(operandTypes[0] as TypeRecord, operandTypes[1] as TypeRecord, [])
           && !IsSubtype(operandTypes[1] as TypeRecord, operandTypes[0] as TypeRecord, []);
+        // #sec-narrowing: a narrowed literal record does not make a mutable
+        // annotated binding a written literal or an immutable literal name.
+        const namesLiteral = (index: number): boolean => {
+          const operand = unparenthesized(operandNodes[index]);
+          return operandTypes[index]?.Kind === 'void'
+            || !!singleValueOperandType(operand, operandTypes[1 - index])
+            || (operand.type === 'UnaryExpression' && operand.operator === 'void' && literalExpressionType(operand.UnaryExpression) !== null);
+        };
         if ((strictOperator === '===' || strictOperator === '!==')
             && operandTypes.length === 2 && operandTypes[0] && operandTypes[1]
-            && !literalOperandType(operandTypes[0]) && !literalOperandType(operandTypes[1])
+            && !namesLiteral(0) && !namesLiteral(1)
             && (classPair || AreDisjoint(operandTypes[0] as TypeRecord, operandTypes[1] as TypeRecord)
               || closedSetsDisjoint(operandTypes[0] as TypeRecord, operandTypes[1] as TypeRecord))) {
           reportType('rt-disjoint-comparison', node, '$1 and $2 are disjoint, so this comparison is always $3', Value(displayType(operandTypes[0] as TypeRecord)), Value(displayType(operandTypes[1] as TypeRecord)), Value(strictOperator === '===' ? 'false' : 'true'));
@@ -25962,6 +25983,50 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  const completionSwitches: Map<ParseNode, boolean>[] = [];
+  const doContexts = new WeakMap<ParseNode, Known>();
+  const checkingDoExpressions = new Set<ParseNode>();
+
+  // #sec-completiontypeof: context belongs to the reached producers. Query
+  // them during a scoped walk, without exporting that query's flow effects.
+  const checkDoExpression = (node: ParseNode.DoExpression, contextual: Known, visit = false): Known => {
+    if (contextual) doContexts.set(node, contextual);
+    if (!contextual) {
+      if (!visit) return completionTypeOf(node.Block?.StatementList);
+      walk(node.Block);
+      return null;
+    }
+    if (checkingDoExpressions.has(node)) return null;
+    checkingDoExpressions.add(node);
+    const check = (): Known => {
+      const switches = new Map<ParseNode, boolean>();
+      completionSwitches.push(switches);
+      try {
+        markCompletionContext(node.Block!, contextual);
+        walk(node.Block);
+        return completionTypeOf(node.Block?.StatementList, switches);
+      } finally {
+        completionSwitches.pop();
+      }
+    };
+    try {
+      if (visit) return check();
+      let result: Known = null;
+      const exits = flowExits;
+      flowExits = [];
+      try {
+        inInitializerContext(captureInitializerContext(), () => {
+          result = check();
+        });
+      } finally {
+        flowExits = exits;
+      }
+      return result;
+    } finally {
+      checkingDoExpressions.delete(node);
+    }
+  };
+
   const doGeneratorContexts = new Journaled<Known>();
   const doGeneratorResults = new WeakMap<ParseNode, { revision: number, contextual: Known, type: Known }>();
   const checkingDoGenerators = new Set<ParseNode>();
@@ -26110,8 +26175,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * #sec-do-expression-early-errors have already removed the forms whose
    * completion type would have been hard to state.
    */
-  const completionTypeOf = (list: readonly ParseNode[] | undefined): Known => {
-    const values = CompletionValues(list, switchCoversDiscriminant, nonReturningEvaluation);
+  const completionTypeOf = (list: readonly ParseNode[] | undefined, switches?: ReadonlyMap<ParseNode, boolean>): Known => {
+    const values = CompletionValues(list, (node) => switches?.get(node) ?? switchCoversDiscriminant(node), nonReturningEvaluation);
     if (values.length === 0) return neverType;
     let result: Known = null;
     for (const value of values) {
@@ -26361,7 +26426,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     type?: Known, completed?: boolean, flowIncomplete?: boolean, independentFlow?: boolean, storeTarget?: TypeRecord,
     contribution?: { flowIndependent: boolean, thisTypes: Known[], flow?: FlowFacts },
     context?: InitializerContext, inputs?: Set<PreparedBinding>, deferredErrors?: ObjectValue[],
-    publication?: BindingContractKey,
+    publication?: BindingContractKey, evaluationPending?: boolean,
   };
   const bindingReady = (binding: PreparedBinding): boolean => !binding.flowIncomplete
     && !binding.inputs?.size && (!!binding.completed || !!binding.type);
@@ -26835,7 +26900,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (final) {
       errors.push(...completedBindingErrors);
-      for (const binding of pendingBindingContracts) errors.push(...binding.deferredErrors ?? []);
+      const awaitsEvaluation = (binding: PreparedBinding, seen = new Set<PreparedBinding>()): boolean => {
+        if (seen.has(binding)) return false;
+        seen.add(binding);
+        return !!binding.evaluationPending || [...binding.inputs ?? []].some((input) => awaitsEvaluation(input, seen));
+      };
+      for (const binding of pendingBindingContracts) {
+        if (!awaitsEvaluation(binding)) errors.push(...binding.deferredErrors ?? []);
+      }
     }
   };
   const finishBindingContractsWork = (): void => {
@@ -34793,6 +34865,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'SwitchStatement': {
+        completionSwitches.at(-1)?.set(n, switchCoversDiscriminant(n));
         const expression = unparenthesized(n.Expression);
         // proposal-runtime-types (spec sec-enums, sec-narrowing): a switch over an
         // enumerator must label its cases with enumerators of that enum, and a
@@ -35976,7 +36049,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'DoExpression':
         if (n.star) checkDoGenerator(n, doGeneratorContexts.get(n) ?? null);
-        else walk(n.Block);
+        else checkDoExpression(n, doContexts.get(n) ?? null, true);
         return;
       case 'YieldExpression': {
         // `yield*` DELEGATES to an iterable, so its operand is iterated and the

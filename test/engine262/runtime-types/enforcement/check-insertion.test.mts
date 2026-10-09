@@ -1028,7 +1028,8 @@ test('the literal rule reaches equality and case labels', () => {
   // it still asks whether a typed value and a Number are the same value.
   expect(evaluated('let n = 65; String((65 := uint16) === n);')).toBe('false');
   expect(evaluated('function anyv() { return 65; } String((65 := uint16) === anyv());')).toBe('false');
-  expect(evaluated('String((65 := uint16) === (65 := uint8));')).toBe('false');
+  expectStaticTypeError('String((65 := uint16) === (65 := uint8));');
+  expect(evaluated('function equal(a: any, b: any) { return a === b; } String(equal((65 := uint16), (65 := uint8)));')).toBe('false');
   // A literal the type cannot hold is simply not equal to any value of it - a
   // comparison asks a question, so it answers rather than throwing.
   expect(evaluated('String((65 := uint8) === 300);')).toBe('false');

@@ -1,0 +1,606 @@
+{
+  "cases": [
+    {
+      "name": "stored specialization has own parameter scope",
+      "source": "const N=8;function sized(n:uint32):type{return type [n/8].<uint8>;}function f<N:uint32,U:type=sized(N)>(x:U):U{return x;}const g=f.<16>;g([1,2]);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "labelled do producer",
+      "source": "let n: uint8 = do { done: { 1; break done; \"unreachable\"; } }; String(n);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "nested labelled do producer",
+      "source": "let n: uint8 = do { outer: { inner: { 2; break outer; } \"unreachable\"; } }; String(n);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "2"
+      }
+    },
+    {
+      "name": "abrupt finally do producer",
+      "source": "let n: uint8 = do { done: { try { \"s\"; break done; } finally { 3; break done; } } }; String(n);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "3"
+      }
+    },
+    {
+      "name": "class primitive comparison with narrowed binding",
+      "source": "function __never() { class C {} class D2 {} let c: C = new C(); let d: D2 = new D2(); enum E { A = 1, B = 2 } let e: E = E.A; let s: string = \"x\"; let n: uint8 = uint8(1); let q = c === s; }",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DISJOINT_COMPARISON",
+          "rule": "rt-disjoint-comparison",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "enum primitive comparison with narrowed binding",
+      "source": "function __never() { class C {} class D2 {} let c: C = new C(); let d: D2 = new D2(); enum E { A = 1, B = 2 } let e: E = E.A; let s: string = \"x\"; let n: uint8 = uint8(1); let q = e === s; }",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DISJOINT_COMPARISON",
+          "rule": "rt-disjoint-comparison",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "direct specialization control",
+      "source": "const N=8;function sized(n:uint32):type{return type [n/8].<uint8>;}function f<N:uint32,U:type=sized(N)>(x:U):U{return x;}f.<16>([1,2]);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "named stored specialization",
+      "source": "const N=8;function sized(n:uint32):type{return type [n/8].<uint8>;}function f<N:uint32,U:type=sized(N)>(x:U):U{return x;}const g=f.<N:16>;g([1,2]);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "independent stored defaults",
+      "source": "const N=8;function sized(n:uint32):type{return type [n/8].<uint8>;}function f<N:uint32,U:type=sized(N)>(x:U):U{return x;}const a=f.<8>;const b=f.<16>;a([1]);b([1,2]);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "stored specialization parenthesized",
+      "source": "const N=8;function sized(n:uint32):type{return type [n/8].<uint8>;}function f<N:uint32,U:type=sized(N)>(x:U):U{return x;}const g=(f.<16>);g([1,2]);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "stored specialization inferred declaration",
+      "source": "const N=8;function sized(n:uint32):type{return type [n/8].<uint8>;}function f<N:uint32,U:type=sized(N)>(x:U):U{return x;}const g:=f.<16>;g([1,2]);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "stored alias keeps completed signature",
+      "source": "const N=8;function sized(n:uint32):type{return type [n/8].<uint8>;}function f<N:uint32,U:type=sized(N)>(x:U):U{return x;}const g=f.<16>;const h=g;h([1,2]);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "stored result enforces argument extent",
+      "source": "const N=8;function sized(n:uint32):type{return type [n/8].<uint8>;}function f<N:uint32,U:type=sized(N)>(x:U):U{return x;}const g=f.<16>;g([1]);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "stored default cannot borrow omitted own value",
+      "source": "const N=8;function sized(n:uint32):type{return type [n/8].<uint8>;}function f<N:uint32,U:type=sized(N)>(x:U):U{return x;}const g=f.<>;",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "rule": "rt-generic-argument",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "stored default chain",
+      "source": "function sized(n:uint32):type{return type [n/8].<uint8>;}function f<N:uint32,U:type=sized(N),V:type=U>(x:V):V{return x;}const g=f.<16>;g([1,2]);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "do producer nested lexical binding",
+      "source": "const x=\"outer\";let n:uint8=do{done:{const x=4;x;break done;}};String(n);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "4"
+      }
+    },
+    {
+      "name": "do normal finally preserves earlier producer",
+      "source": "let n:uint8=do{done:{try{5;break done;}finally{\"ignored\";}}};String(n);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "5"
+      }
+    },
+    {
+      "name": "do value captured before finally assignment",
+      "source": "let x:uint8=6;let n:uint8=do{done:{try{x;break done;}finally{x=7;}}};String(n)+\":\"+String(x);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "6:7"
+      }
+    },
+    {
+      "name": "do context reaches branches",
+      "source": "function f(b:boolean):uint8{return do{if(b){8;}else{9;}};}String(f(true))+\":\"+String(f(false));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "8:9"
+      }
+    },
+    {
+      "name": "do branch local literals",
+      "source": "function f(b:boolean):uint8{return do{if(b){const x=8;x;}else{const x=9;x;}};}String(f(true))+\":\"+String(f(false));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "8:9"
+      }
+    },
+    {
+      "name": "do context reaches call argument",
+      "source": "function f(x:uint8):uint8{return x;}String(f(do{done:{10;break done;}}));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "10"
+      }
+    },
+    {
+      "name": "do context reaches assignment",
+      "source": "let x:uint8=0;x=do{done:{11;break done;}};String(x);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "11"
+      }
+    },
+    {
+      "name": "do context reaches nested do",
+      "source": "let x:uint8=do{done:{(do{12;});break done;}};String(x);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "12"
+      }
+    },
+    {
+      "name": "do preserves actual effects once",
+      "source": "let calls:number=0;function hit(){calls+=1;}let n:uint8=do{hit();13;};String(n)+\":\"+String(calls);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "13:1"
+      }
+    },
+    {
+      "name": "do narrowing in producer scope",
+      "source": "function f(x:uint8|string):uint8{return do{if(typeof x===\"string\"){14;}else{x;}};}String(f(\"s\"))+\":\"+String(f(uint8(15)));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "14:15"
+      }
+    },
+    {
+      "name": "do invalid reached producer",
+      "source": "let n:uint8=do{done:{\"bad\";break done;1;}};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "do normal finally does not replace bad producer",
+      "source": "let n:uint8=do{done:{try{\"bad\";break done;}finally{1;}}};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "do abrupt finally replaces good producer",
+      "source": "let n:uint8=do{done:{try{1;break done;}finally{\"bad\";break done;}}};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "do uncontextualized number does not convert",
+      "source": "let n:uint8=do{const x:number=1;x;};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "do empty completion is undefined",
+      "source": "let n:uint8=do{done:{break done;}};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "do out of range completion",
+      "source": "let n:uint8=do{done:{300;break done;}};",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "mutable annotated discarded comparison",
+      "source": "function unused(){class C{}let c:C=new C();let s:string=\"x\";c===s;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DISJOINT_COMPARISON",
+          "rule": "rt-disjoint-comparison",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "annotated const literal",
+      "source": "function unused(){class C{}let c:C=new C();const s:string=\"x\";c===s;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DISJOINT_COMPARISON",
+          "rule": "rt-disjoint-comparison",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "reversed comparison",
+      "source": "function unused(){class C{}let c:C=new C();let s:string=\"x\";s!==c;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DISJOINT_COMPARISON",
+          "rule": "rt-disjoint-comparison",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "annotated narrowed alias",
+      "source": "function unused(){class C{}let c:C=new C();let s:string=\"x\";let t:string=s;c===t;}",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DISJOINT_COMPARISON",
+          "rule": "rt-disjoint-comparison",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "written literal comparison exemption",
+      "source": "function unused(){class C{}let c:C=new C();c===\"x\";}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "unannotated constant literal exemption",
+      "source": "function unused(){class C{}let c:C=new C();const s=\"x\";c===s;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "parenthesized constant literal exemption",
+      "source": "function unused(){class C{}let c:C=new C();const s=\"x\";c===(s);}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "literal const shadowed by annotated local",
+      "source": "const s=\"outer\";function f(c:any){const s:string=\"inner\";return c===s;}f(\"inner\");\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "mutable source shadowed by literal constant",
+      "source": "let s:string=\"outer\";function unused(){class C{}let c:C=new C();const s=\"inner\";c===s;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "loose comparison is independent",
+      "source": "function unused(){class C{}let c:C=new C();let s:string=\"x\";c==s;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "enum written member exemption",
+      "source": "function unused(){enum E{A=1,B=2}let e:E=E.A;e===E.B;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "enum underlying same value",
+      "source": "function unused(){enum E{A=1}let e:E=E.A;let n:number=1;e===n;}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "nullable overlap remains valid",
+      "source": "function f(x:string|null,y:null){return x===y;}f(null,null);\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "contextual exhaustive enum switch",
+      "source": "enum E:uint8{A,B}function f(e:E){const x:number=do{switch(e){case E.A:1;break;case E.B:2;break;}};}\"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "do local enum scope",
+      "source": "let n:uint8=do{enum E{A,B}function choose():E{return E.A;}let e:E=choose();switch(e){case E.A:1;break;case E.B:2;break;}};String(n);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "uncontextualized do loop continues",
+      "source": "function f(){let n=0;for(const x of [1,2,3]){const y=do{if(x===2)continue;x};n+=y;}return n;}String(f());",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "4"
+      }
+    },
+    {
+      "name": "uncontextualized do loop breaks",
+      "source": "let n=0;for(let i=0;i<5;i+=1){const x=do{if(i>1)break;i};n+=x;}String(n);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "1"
+      }
+    },
+    {
+      "name": "stored specialization identity",
+      "source": "function sized(n:uint32):type{return type [n/8].<uint8>;}function f<N:uint32,U:type=sized(N)>(x:U):U{return x;}const g=f.<16>;String(g===f.<16>);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "true"
+      }
+    },
+    {
+      "name": "do producer narrowed by inner guard",
+      "source": "function f(x:uint8|string):uint8{return do{done:{if(typeof x===\"string\"){17;break done;}x;}};}String(f(\"s\"))+\":\"+String(f(uint8(18)));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "17:18"
+      }
+    },
+    {
+      "name": "written enumerator across primitive",
+      "source": "function f(){enum E{A=1}let s:string=\"x\";let q=s===E.A;}\"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "untyped mutable binding",
+      "source": "function f(){class C{}let c:C=new C();let s=\"x\";let q=c===s;}\"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "legacy automatic",
+      "source": "function f(){let x=1;let s=\"x\";let q=x===s;}\"ok\";",
+      "checking": "automatic",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "legacy forced",
+      "source": "function f(){let x=1;let s=\"x\";let q=x===s;}\"ok\";",
+      "checking": "forced",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DISJOINT_COMPARISON",
+          "rule": "rt-disjoint-comparison",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed comparison argument",
+      "source": "String((65 := uint16) === (65 := uint8));",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DISJOINT_COMPARISON",
+          "rule": "rt-disjoint-comparison",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed comparison stored",
+      "source": "let q=(65 := uint16) === (65 := uint8);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DISJOINT_COMPARISON",
+          "rule": "rt-disjoint-comparison",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed comparison gradual",
+      "source": "function equal(a:any,b:any){return a===b;}String(equal((65:=uint16),(65:=uint8)));",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "false"
+      }
+    }
+  ]
+}
