@@ -18789,8 +18789,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return null;
       }
       if (inferenceDepth > 0 && baselineGeneratorSignatures.has(only)) {
-        if (inferencesInProgress.has(only)) return neverType;
-        return only.ProvisionalReturn ?? only.InferredReturn ?? null;
+        if (inferencesInProgress.has(only)) return only.ProvisionalReturn === undefined ? neverType : only.ProvisionalReturn;
+        return only.ProvisionalReturn === undefined ? only.InferredReturn ?? null : only.ProvisionalReturn;
       }
       if (only.Return || only.InferredReturn) {
             if (!only.Return && only.InferredReturn) {
@@ -18810,12 +18810,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return only.Return ?? only.InferredReturn ?? null;
           }
           if (inferenceDepth > 0) {
-            // A call of a function whose inference is running: a recursive
-            // reference, which contributes `never` rather than an unknown.
+            // Seed a recursive reference only before its first answer. A
+            // completed unknown join must not turn back into `never`.
             if (inferencesInProgress.has(only as object)) {
-              return neverType;
+              return only.ProvisionalReturn === undefined ? neverType : only.ProvisionalReturn;
             }
-            return only.ProvisionalReturn ?? driveInference(only as object);
+            return only.ProvisionalReturn === undefined ? driveInference(only as object) : only.ProvisionalReturn;
           }
           return null;
         }
@@ -26369,32 +26369,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   type ReturnAnchorage = { anchored: boolean, from?: string | null, origins?: { type: TypeRecord, from: string }[] };
 
+  const updateProvisionalReturn = (item: ReturnInference, result: Known): boolean => {
+    const previous = item.signature.ProvisionalReturn;
+    // undefined has no answer yet; null is an unknown join. Pending binding
+    // inputs are tracked separately. Neither state is the `never` seed.
+    if (previous === result || (previous && result && SameType(previous, result))) return false;
+    item.signature.ProvisionalReturn = result;
+    return true;
+  };
+
+  const withdrawInferredReturn = (item: ReturnInference): boolean => {
+    const previous = item.signature.InferredReturn;
+    const fallback = item.generator ? generatorDeclaredType(null, item.generator.asyncGenerator) : undefined;
+    item.signature.InferredReturn = fallback;
+    if (item.generator) baselineGeneratorSignatures.add(item.signature);
+    publishedReturnTypes.delete(item.fn);
+    publishedAnchors.delete(item.signature);
+    publishedOrigins.delete(item.signature);
+    return !!previous !== !!fallback || !!(previous && fallback && !SameType(previous, fallback));
+  };
+
   const publishOrdinaryReturn = (item: ReturnInference, inferred: Known, anchorage: ReturnAnchorage): boolean => {
-    let changed = false;
-    // Every queued function gets a PROVISIONAL type, whether or not it
-    // participates, so that a participating function asking about this one
-    // gets an answer. Publication is the separate step below.
-    // Compared by SameType, not by identity: each pass builds a fresh
-    // record, so an identity test reported a change every time. The
-    // fixpoint then ran its full pass budget on every program and never
-    // detected non-convergence, because it could not tell a type that grows
-    // from one that is merely rebuilt.
-    if (inferred && (!item.signature.ProvisionalReturn
-      || !SameType(item.signature.ProvisionalReturn, inferred))) {
-      item.signature.ProvisionalReturn = inferred;
-      changed = true;
-    }
-    // A join of ~any~ publishes nothing: a function whose result is unknown
-    // is indistinguishable from one that never participated.
-    if (!inferred) {
-      return changed;
+    let changed = updateProvisionalReturn(item, inferred);
+    // A completed unknown contribution withdraws both the signature and its
+    // runtime boundary; keeping an earlier `never` would reject real values.
+    if (!inferred || (!item.signatureTyped && !anchorage.anchored)) {
+      return withdrawInferredReturn(item) || changed;
     }
     // Participation: the signature declares a type, or a contribution is
     // anchored. The second is what carries a type one call past the
     // annotation that established it.
-    if (!item.signatureTyped && !anchorage.anchored) {
-      return changed;
-    }
     // #sec-inferred-result-type as harmonized: where every contribution is
     // valueless the join is `void`, which is the annotation such a function
     // would have been given. A bare `undefined` join is exactly that case,
@@ -26410,10 +26414,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (anchorage.from) {
       publishedAnchors.set(item.signature as object, anchorage.from);
-    }
+    } else publishedAnchors.delete(item.signature);
     if (anchorage.origins && anchorage.origins.length > 0) {
       publishedOrigins.set(item.signature as object, anchorage.origins);
-    }
+    } else publishedOrigins.delete(item.signature);
     // Preserve the symbolic declaration contract. The runtime boundary
     // substitutes this invocation's bindings before conversion; omitting a
     // dependent result would let an untyped caller bypass its enforcement.
@@ -27020,10 +27024,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const resolves = inferredReturnType(item.fn, item.parameterTypes, null, anchorage, 'resolve');
               if (resolves) result = libraryTypeRecord('Promise', [resolves, anyTypeRecord]);
             }
-            if (result && (!item.signature.ProvisionalReturn || !SameType(item.signature.ProvisionalReturn, result))) {
-              item.signature.ProvisionalReturn = result;
-              changed = true;
-            }
+            changed = updateProvisionalReturn(item, result);
             if (result && (item.signatureTyped || anchorage.anchored)) {
               if (!item.signature.InferredReturn || !SameType(item.signature.InferredReturn, result)) {
                 item.signature.InferredReturn = result;
@@ -27031,7 +27032,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
               baselineGeneratorSignatures.delete(only);
               if ((item.asyncFunction || item.receiver) && !mentionsTypeParameter(result)) publishedReturnTypes.set(item.fn, result);
-            }
+            } else changed = withdrawInferredReturn(item) || changed;
           }
           if (changed && !item.local) changedInferences?.add(item);
         } finally {
@@ -27160,7 +27161,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           for (const item of changedInferences) {
             const completion = CreateTypeDiagnostic('rt-return-inference', root, diagnosticPhase, 'the return type of $1 grows at every step and cannot be inferred; write it', Value(nameOfDeclaration(item.fn) ?? 'this function')) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
-            item.signature.InferredReturn = undefined;
+            withdrawInferredReturn(item);
             item.signature.ProvisionalReturn = undefined;
           }
         }

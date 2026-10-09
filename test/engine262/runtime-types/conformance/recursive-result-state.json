@@ -1,0 +1,498 @@
+{
+  "specification": [
+    "sec-inference-fixpoint",
+    "sec-anchored-contributions",
+    "sec-return-publication-dependencies",
+    "sec-published-return-types"
+  ],
+  "cases": [
+    {
+      "name": "unknown-True-forward-a",
+      "source": "globalThis.seed = \"s\";function a(n: uint32) { return n > 0 ? b(n) : globalThis.seed; }function b(n: uint32) { return a(n); }const s: string = a(0); s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-True-forward-b",
+      "source": "globalThis.seed = \"s\";function a(n: uint32) { return n > 0 ? b(n) : globalThis.seed; }function b(n: uint32) { return a(n); }const s: string = b(0); s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-True-reverse-a",
+      "source": "globalThis.seed = \"s\";function b(n: uint32) { return a(n); }function a(n: uint32) { return n > 0 ? b(n) : globalThis.seed; }const s: string = a(0); s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-True-reverse-b",
+      "source": "globalThis.seed = \"s\";function b(n: uint32) { return a(n); }function a(n: uint32) { return n > 0 ? b(n) : globalThis.seed; }const s: string = b(0); s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-False-forward-a",
+      "source": "globalThis.seed = \"s\";function a(n) { return n > 0 ? b(n) : globalThis.seed; }function b(n) { return a(n); }const s: string = a(0); s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-False-forward-b",
+      "source": "globalThis.seed = \"s\";function a(n) { return n > 0 ? b(n) : globalThis.seed; }function b(n) { return a(n); }const s: string = b(0); s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-False-reverse-a",
+      "source": "globalThis.seed = \"s\";function b(n) { return a(n); }function a(n) { return n > 0 ? b(n) : globalThis.seed; }const s: string = a(0); s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-False-reverse-b",
+      "source": "globalThis.seed = \"s\";function b(n) { return a(n); }function a(n) { return n > 0 ? b(n) : globalThis.seed; }const s: string = b(0); s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-ladder-3-forward",
+      "source": "globalThis.seed=\"s\";function f0(n:uint32) { return n > 1 ? f1(n) : globalThis.seed; }function f1(n:uint32) { return n > 1 ? f2(n) : f0(n); }function f2(n:uint32) { return f1(n); }const s:string=f2(0);s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-ladder-3-reverse",
+      "source": "globalThis.seed=\"s\";function f2(n:uint32) { return f1(n); }function f1(n:uint32) { return n > 1 ? f2(n) : f0(n); }function f0(n:uint32) { return n > 1 ? f1(n) : globalThis.seed; }const s:string=f2(0);s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-ladder-6-forward",
+      "source": "globalThis.seed=\"s\";function f0(n:uint32) { return n > 1 ? f1(n) : globalThis.seed; }function f1(n:uint32) { return n > 1 ? f2(n) : f0(n); }function f2(n:uint32) { return n > 1 ? f3(n) : f1(n); }function f3(n:uint32) { return n > 1 ? f4(n) : f2(n); }function f4(n:uint32) { return n > 1 ? f5(n) : f3(n); }function f5(n:uint32) { return f4(n); }const s:string=f5(0);s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-ladder-6-reverse",
+      "source": "globalThis.seed=\"s\";function f5(n:uint32) { return f4(n); }function f4(n:uint32) { return n > 1 ? f5(n) : f3(n); }function f3(n:uint32) { return n > 1 ? f4(n) : f2(n); }function f2(n:uint32) { return n > 1 ? f3(n) : f1(n); }function f1(n:uint32) { return n > 1 ? f2(n) : f0(n); }function f0(n:uint32) { return n > 1 ? f1(n) : globalThis.seed; }const s:string=f5(0);s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "inferred-binding-requires-known-result",
+      "source": "globalThis.seed = \"s\"; function a(n: uint32) { return n > 0 ? b(n) : globalThis.seed; } function b(n: uint32) { return a(n); } const s := b(0); s;",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DECLARATION_INFERENCE",
+          "rule": "rt-declaration-inference",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "unknown-result-retains-consumer-boundary",
+      "source": "globalThis.seed = \"s\"; function a(n: uint32) { return n > 0 ? b(n) : globalThis.seed; } function b(n: uint32) { return a(n); } const s: number = b(0); String(s);",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "unknown-result-allows-both-union-arms",
+      "source": "globalThis.seed = \"s\"; function a(n: uint32) { return n > 0 ? b(n) : globalThis.seed; } function b(n: uint32) { return a(n); } const s: string | uint32 = b(0); if (s is string) { \"yes\"; } else { \"no\"; }",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "yes"
+      }
+    },
+    {
+      "name": "stored-callable-withdraws-stale-result",
+      "source": "globalThis.seed = \"s\"; function a(n: uint32) { return n > 0 ? b(n) : globalThis.seed; } function b(n: uint32) { return a(n); } const g = b; const s: string = g(0); s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "uncalled-wrapper-does-not-restore-stale-result",
+      "source": "globalThis.seed = \"s\"; function a(n: uint32) { return n > 0 ? b(n) : globalThis.seed; } function b(n: uint32) { return a(n); } function consumer(){const s:string=b(0);return s;} consumer();",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "typed-wrapper-withdraws-stale-result",
+      "source": "globalThis.seed = \"s\"; function a(n: uint32) { return n > 0 ? b(n) : globalThis.seed; } function b(n: uint32) { return a(n); } function c(n:uint32){return b(n);} const s:string=c(0);s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "method-wrapper-withdraws-stale-result",
+      "source": "globalThis.seed = \"s\"; function a(n: uint32) { return n > 0 ? b(n) : globalThis.seed; } function b(n: uint32) { return a(n); } class C { m(n:uint32){return b(n);} } const s:string=new C().m(0);s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "generator-unknown-return-component",
+      "source": "globalThis.seed=\"s\";function* a(n:uint32){if(n>0){return yield* b(n);}return globalThis.seed;}function* b(n:uint32){return yield* a(n);}const s:string=b(0).next().value; s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "generic-explicit-unknown-result",
+      "source": "globalThis.seed=\"s\";function a<T: type>(n:uint32,v:T){return n > 0 ? b.<T>(n,v) : globalThis.seed;}function b<T: type>(n:uint32,v:T){return a.<T>(n,v);}const s:string=b.<uint32>(0,0);s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "generic-inferred-unknown-result",
+      "source": "globalThis.seed=\"s\";function a<T: type>(n:uint32,v:T){return n > 0 ? b.<T>(n,v) : globalThis.seed;}function b<T: type>(n:uint32,v:T){return a.<T>(n,v);}const s:string=b(0,0);s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-caller-does-not-anchor-False-forward",
+      "source": "globalThis.seed=\"s\";function a(n) { return n > 0 ? b(n) : globalThis.seed; }function b(n) { return a(n); }function c(n:uint32){return b(n);} const s:string=c(0);s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-generic-consumer-False-forward",
+      "source": "globalThis.seed=\"s\";function a(n) { return n > 0 ? b(n) : globalThis.seed; }function b(n) { return a(n); }function identity<T:type>(v:T):T{return v;} const s:string=identity(b(0));s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-caller-does-not-anchor-True-forward",
+      "source": "globalThis.seed=\"s\";function a(n: uint32) { return n > 0 ? b(n) : globalThis.seed; }function b(n: uint32) { return a(n); }function c(n:uint32){return b(n);} const s:string=c(0);s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-generic-consumer-True-forward",
+      "source": "globalThis.seed=\"s\";function a(n: uint32) { return n > 0 ? b(n) : globalThis.seed; }function b(n: uint32) { return a(n); }function identity<T:type>(v:T):T{return v;} const s:string=identity(b(0));s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-inside-array-forward",
+      "source": "globalThis.seed=\"s\";function a(n:uint32){return n > 0 ? b(n) : globalThis.seed;}function b(n:uint32){return [a(n)];}const s:string=b(0)[0];s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-inside-object-forward",
+      "source": "globalThis.seed=\"s\";function a(n:uint32){return n > 0 ? b(n) : globalThis.seed;}function b(n:uint32){return ({value:a(n)});}const s:string=b(0).value;s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "known-cycle-forward",
+      "source": "function a(n:uint32){return n > 0 ? b(n) : (7 := uint32);}function b(n:uint32){return a(n);}const s:uint32=b(0);String(s);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "known-cycle-rejects-mismatch-forward",
+      "source": "function a(n:uint32){return n > 0 ? b(n) : (7 := uint32);}function b(n:uint32){return a(n);}const s:string=b(0);s;",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "known-cycle-rejects-argument-forward",
+      "source": "function a(n:uint32){return n > 0 ? b(n) : (7 := uint32);}function b(n:uint32){return a(n);}b(\"bad\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "unknown-caller-does-not-anchor-False-reverse",
+      "source": "globalThis.seed=\"s\";function b(n) { return a(n); }function a(n) { return n > 0 ? b(n) : globalThis.seed; }function c(n:uint32){return b(n);} const s:string=c(0);s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-generic-consumer-False-reverse",
+      "source": "globalThis.seed=\"s\";function b(n) { return a(n); }function a(n) { return n > 0 ? b(n) : globalThis.seed; }function identity<T:type>(v:T):T{return v;} const s:string=identity(b(0));s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-caller-does-not-anchor-True-reverse",
+      "source": "globalThis.seed=\"s\";function b(n: uint32) { return a(n); }function a(n: uint32) { return n > 0 ? b(n) : globalThis.seed; }function c(n:uint32){return b(n);} const s:string=c(0);s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-generic-consumer-True-reverse",
+      "source": "globalThis.seed=\"s\";function b(n: uint32) { return a(n); }function a(n: uint32) { return n > 0 ? b(n) : globalThis.seed; }function identity<T:type>(v:T):T{return v;} const s:string=identity(b(0));s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-inside-array-reverse",
+      "source": "globalThis.seed=\"s\";function b(n:uint32){return [a(n)];}function a(n:uint32){return n > 0 ? b(n) : globalThis.seed;}const s:string=b(0)[0];s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "unknown-inside-object-reverse",
+      "source": "globalThis.seed=\"s\";function b(n:uint32){return ({value:a(n)});}function a(n:uint32){return n > 0 ? b(n) : globalThis.seed;}const s:string=b(0).value;s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "known-cycle-reverse",
+      "source": "function b(n:uint32){return a(n);}function a(n:uint32){return n > 0 ? b(n) : (7 := uint32);}const s:uint32=b(0);String(s);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "7"
+      }
+    },
+    {
+      "name": "known-cycle-rejects-mismatch-reverse",
+      "source": "function b(n:uint32){return a(n);}function a(n:uint32){return n > 0 ? b(n) : (7 := uint32);}const s:string=b(0);s;",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "rule": "rt-return-contract",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "known-cycle-rejects-argument-reverse",
+      "source": "function b(n:uint32){return a(n);}function a(n:uint32){return n > 0 ? b(n) : (7 := uint32);}b(\"bad\");",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "legacy-cycle-automatic",
+      "source": "globalThis.seed=\"s\"; function a(n){return n>0?b(n):globalThis.seed;} function b(n){return a(n);} b(0);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      },
+      "checking": "automatic"
+    },
+    {
+      "name": "legacy-cycle-forced",
+      "source": "globalThis.seed=\"s\"; function a(n){return n>0?b(n):globalThis.seed;} function b(n){return a(n);} b(0);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      },
+      "checking": "forced"
+    },
+    {
+      "name": "legacy-cycle-disabled",
+      "source": "globalThis.seed=\"s\"; function a(n){return n>0?b(n):globalThis.seed;} function b(n){return a(n);} b(0);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      },
+      "checking": "disabled"
+    },
+    {
+      "name": "unseeded",
+      "source": "function loop(n:uint32){return loop(n);} \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "unknown-self",
+      "source": "globalThis.seed=\"s\"; function a(n:uint32){return n > 0 ? a(n) : globalThis.seed;} a(0);",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "declared-any",
+      "source": "globalThis.seed=\"s\"; function a(n:uint32):any{return n > 0 ? b(n) : globalThis.seed;} function b(n:uint32){return a(n);} const s:string=b(0);s;",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "s"
+      }
+    },
+    {
+      "name": "ladder-3-forward",
+      "source": "function f0(n: uint32) { return n > 1 ? f1(n) : (7 := uint32); }\nfunction f1(n: uint32) { return n > 1 ? f2(n) : f0(n); }\nfunction f2(n: uint32) { return f1(n); }\n \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "ladder-3-reverse",
+      "source": "function f2(n: uint32) { return f1(n); }\nfunction f1(n: uint32) { return n > 1 ? f2(n) : f0(n); }\nfunction f0(n: uint32) { return n > 1 ? f1(n) : (7 := uint32); }\n \"ok\";",
+      "expected": {
+        "completion": "normal",
+        "bodyEntered": true,
+        "value": "ok"
+      }
+    },
+    {
+      "name": "growth-array",
+      "source": "function w(a: uint32) { return [w(a)]; } \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "rule": "rt-return-inference",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "growth-nullable",
+      "source": "function w(a: uint32) { return a > 0 ? [w(a)] : null; } \"ok\";",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_INFERENCE",
+          "rule": "rt-return-inference",
+          "phase": "static"
+        }
+      }
+    }
+  ]
+}

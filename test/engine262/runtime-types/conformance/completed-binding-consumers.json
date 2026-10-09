@@ -495,8 +495,8 @@
         "bodyEntered": false,
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "code": "RT_IMPOSSIBLE_TEST",
-          "rule": "rt-impossible-test",
+          "code": "RT_DISJOINT_COMPARISON",
+          "rule": "rt-disjoint-comparison",
           "phase": "static",
           "errorClass": "StaticTypeError"
         }
