@@ -44,6 +44,7 @@ import { ForPatternPositions, PatternBindingNames, PatternHasGovernedPosition, P
 import { resolvedAlias } from './resolving-aliases.mts';
 import { InferenceResources, type InferenceLimits, type InferenceComponent } from './inference-limits.mts';
 import { FindConstructorGrowth, LiteralConstructorEquation } from './constructor-growth.mts';
+import { ReusableCheckingContext, SnapshotCheckingContext, SameCheckingContext } from './checking-context.mts';
 import {
   type SignatureRecord, type MetadataRecord, type TypeRecord, type Known,
   type ParameterRecord, type TypeParameterRecord,
@@ -2853,7 +2854,7 @@ function checkCompletedDeclarations(statementList: readonly ParseNode[] | null, 
     const candidates = scopes.get(node) ?? [];
     const existing = candidates.find((scope) => scope.parent === parent && SameBindingContext(scope.inputs, inputs));
     if (existing) return existing;
-    const scope: BindingContractScope = { parent, node, inputs: SnapshotBindingContext(inputs), bindings: new Map() };
+    const scope: BindingContractScope = { parent, node, inputs: SnapshotCheckingContext(inputs), bindings: new Map() };
     candidates.push(scope);
     scopes.set(node, candidates);
     return scope;
@@ -2889,69 +2890,21 @@ interface BindingContractScope {
 // and metadata. Type equivalence alone does not identify a checking context.
 // Source nodes and opaque engine values keep their identities; no runtime
 // value is copied, initialized or made live by this compiler-owned snapshot.
-function ReusableBindingContext(value: unknown, seen = new Set<object>()): boolean {
-  if (!value || typeof value !== 'object' || seen.has(value)) return true;
-  seen.add(value);
-  if (typeof (value as { type?: unknown }).type === 'string') return true;
-  if (value instanceof Value) return value === Value.undefined || value === Value.null
-    || value === Value.true || value === Value.false
-    || [JSStringValue.prototype, NumberValue.prototype, BigIntValue.prototype].includes(Object.getPrototypeOf(value));
-  const stableKey = (key: unknown): boolean => !key || typeof key !== 'object'
-    || typeof (key as { type?: unknown }).type === 'string';
-  if (value instanceof Map) return [...value].every(([key, item]) => stableKey(key) && ReusableBindingContext(item, seen));
-  if (value instanceof Set) return [...value].every(stableKey);
-  const proto = Object.getPrototypeOf(value);
-  if (!Array.isArray(value) && proto !== Object.prototype && proto !== null) return false;
-  return Reflect.ownKeys(value).every((key) => {
-    const item = (value as Record<PropertyKey, unknown>)[key];
-    // Activation identities and deferred environments are not stable merely
-    // because another pass built a structurally equal object. Keep these
-    // judgments in their original context instead of exporting a contract.
-    return (key !== 'DeclarationIdentity' && key !== 'DefaultEnvironment' || item === undefined)
-      && ReusableBindingContext(item, seen);
+function ReusableBindingContext(value: unknown): boolean {
+  return ReusableCheckingContext(value, (item) => {
+    if (!(item instanceof Value)) return undefined;
+    return item === Value.undefined || item === Value.null || item === Value.true || item === Value.false
+      || [JSStringValue.prototype, NumberValue.prototype, BigIntValue.prototype].includes(Object.getPrototypeOf(item));
   });
 }
 
-function SnapshotBindingContext(value: unknown, seen = new Map<object, unknown>()): unknown {
-  if (!value || typeof value !== 'object') return value;
-  if (seen.has(value)) return seen.get(value);
-  const proto = Object.getPrototypeOf(value);
-  if (typeof (value as { type?: unknown }).type === 'string'
-    || !Array.isArray(value) && !(value instanceof Map) && !(value instanceof Set)
-      && proto !== Object.prototype && proto !== null) return value;
-  if (value instanceof Map) {
-    const copy = new Map();
-    seen.set(value, copy);
-    for (const [key, item] of value) copy.set(key, SnapshotBindingContext(item, seen));
-    return copy;
-  }
-  if (value instanceof Set) return new Set(value);
-  const copy: Record<PropertyKey, unknown> = Array.isArray(value) ? [] as unknown as Record<PropertyKey, unknown> : Object.create(proto);
-  seen.set(value, copy);
-  for (const key of Reflect.ownKeys(value)) copy[key] = SnapshotBindingContext((value as Record<PropertyKey, unknown>)[key], seen);
-  return copy;
-}
-
-function SameBindingContext(a: unknown, b: unknown, seen = new Map<object, Set<object>>()): boolean {
-  if (Object.is(a, b)) return true;
-  if (a instanceof JSStringValue && b instanceof JSStringValue
-    || a instanceof NumberValue && b instanceof NumberValue
-    || a instanceof BigIntValue && b instanceof BigIntValue) return SameValue(a, b);
-  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
-  const proto = Object.getPrototypeOf(a);
-  if (proto !== Object.getPrototypeOf(b) || typeof (a as { type?: unknown }).type === 'string'
-    || !Array.isArray(a) && !(a instanceof Map) && !(a instanceof Set)
-      && proto !== Object.prototype && proto !== null) return false;
-  if (seen.get(a)?.has(b)) return true;
-  if (!seen.has(a)) seen.set(a, new Set());
-  seen.get(a)!.add(b);
-  if (a instanceof Map && b instanceof Map) return a.size === b.size
-    && [...a].every(([key, value]) => b.has(key) && SameBindingContext(value, b.get(key), seen));
-  if (a instanceof Set && b instanceof Set) return a.size === b.size && [...a].every((value) => b.has(value));
-  const left = Reflect.ownKeys(a);
-  const right = Reflect.ownKeys(b);
-  return left.length === right.length && left.every((key) => Object.hasOwn(b, key)
-    && SameBindingContext((a as Record<PropertyKey, unknown>)[key], (b as Record<PropertyKey, unknown>)[key], seen));
+function SameBindingContext(a: unknown, b: unknown): boolean {
+  return SameCheckingContext(a, b, (left, right) => {
+    if (left instanceof JSStringValue && right instanceof JSStringValue
+      || left instanceof NumberValue && right instanceof NumberValue
+      || left instanceof BigIntValue && right instanceof BigIntValue) return SameValue(left, right);
+    return undefined;
+  });
 }
 
 interface BindingContractPass {
