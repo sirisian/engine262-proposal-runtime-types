@@ -18178,9 +18178,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             && clauses?.length && [...bindings.values()].every((type) => !mentionsTypeParameter(type))) {
             recordWhereCheck(node, declaration, bindings);
           }
+          // Complete the declaration-owned dependency before copying its
+          // signature. The private approximation is instantiated separately;
+          // it is not a published result of the specialized function value.
+          const source = signature as typeof signature & { ProvisionalReturn?: Known };
+          if (!source.Return && source.ProvisionalReturn === undefined
+            && !inferencesInProgress.has(source)) driveInference(source);
+          observeInferenceInputs(source);
+          const provisional = source.ProvisionalReturn === undefined && inferencesInProgress.has(source)
+            ? neverType : source.ProvisionalReturn;
           const substituted = substituteTypeParameters({ Kind: 'function', Signatures: [signature] }, bindings);
           const specialized = { ...(substituted as typeof base).Signatures[0]!,
-            TypeParameters: undefined };
+            TypeParameters: undefined,
+            ...(provisional !== undefined ? { ProvisionalReturn: substituteFreeTypeParameters(provisional, bindings,
+              parameters.map((parameter) => parameter.Declaration)) } : {}),
+          };
           if (declaration) signatureDeclarations.set(specialized, declaration);
           formalPatternBindings.set(specialized, bindings);
           return [specialized];
@@ -18609,9 +18621,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const only = selected as {
             Return: Known, InferredReturn?: Known, ProvisionalReturn?: Known, TypeParameters?: readonly TypeParameterRecord[],
           };
-          if (!only.Return && ((only.ProvisionalReturn === undefined
-              && (!only.InferredReturn || baselineGeneratorSignatures.has(only)))
-              || inferenceWave && !inferenceWave.has(only))
+          // A worklist schedules changed dependencies. A read of an existing
+          // approximation must not recursively expand an entire cycle again.
+          if (!only.Return && only.ProvisionalReturn === undefined
+            && (!only.InferredReturn || baselineGeneratorSignatures.has(only))
             && !inferencesInProgress.has(only as object)) {
             driveInference(only as object);
           }
@@ -18672,7 +18685,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   return { Kind: 'tuple', Elements: supplied.map((type) => ({ Type: type!, Rest: false, Initial: 'none' as const })) } as TypeRecord;
                 });
               }
-              const declaredOrPublished = only.Return ?? only.InferredReturn ?? null;
+              const declaredOrPublished = only.Return ?? only.InferredReturn ?? (inferenceDepth > 0
+                ? only.ProvisionalReturn === undefined && inferencesInProgress.has(only) ? neverType : only.ProvisionalReturn
+                : null);
               // #sec-constructing-a-generic-class, the same ladder for a call:
               // explicit arguments, then the CONTEXTUAL type - what the position
               // requires, matched against the declared return - then the value
@@ -27045,7 +27060,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 changed = true;
               }
               baselineGeneratorSignatures.delete(only);
-              if ((item.asyncFunction || item.receiver) && !mentionsTypeParameter(result)) publishedReturnTypes.set(item.fn, result);
+              // A symbolic protocol result supersedes an earlier concrete
+              // approximation too. The invocation instantiates its bindings.
+              if (item.asyncFunction || item.receiver) publishedReturnTypes.set(item.fn, result);
             } else changed = withdrawInferredReturn(item) || changed;
           }
           if (changed && !item.local) changedInferences?.add(item);
@@ -28037,7 +28054,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // as a string and is still refused, which is the property the concise
           // path's own comment insists on.
           deferContribution(() => {
-            const t = wanted ? staticTypeIn(expr, wanted) : staticType(expr);
+            const source = wanted ? staticTypeIn(expr, wanted) : staticType(expr);
+            // Settlement distributes over a union of direct values and
+            // Promises before those contributions enter the recursive join.
+            const t = mode === 'resolve' || mode === 'generator-return' && fn.type.startsWith('AsyncGenerator')
+              ? awaitedElementType(source) : source;
             if (!t) {
               unknown = true;
               return;
@@ -28059,16 +28080,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (origin) {
                 (anchorage.origins ??= []).push({ type: widen(t) as TypeRecord, from: origin });
               }
-            }
-            if ((mode === 'resolve' || mode === 'generator-return' && fn.type.startsWith('AsyncGenerator'))
-                && t.Kind === 'nominal' && t.LibraryName === 'Promise'
-                && t.Arguments.length > 0 && typeof t.Arguments[0] !== 'number') {
-              // A promise contribution contributes what it RESOLVES with: an
-              // async function returning a promise resolves with that promise's
-              // value rather than with the promise, which is the flattening
-              // `await` performs and which the published type must match.
-              contributions.push(t.Arguments[0] as TypeRecord);
-              return;
             }
             // #sec-never-type: `never` is the identity of union, so a `never`
             // contribution vanishes from a join that has any other member. That
