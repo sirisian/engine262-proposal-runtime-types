@@ -182,8 +182,11 @@ export function ResolveBindingDeclaration(reference: ParseNode, name: string): B
         if (found) return found;
       }
     }
-    const typeParameters = (at.TypeParameters as { TypeParameterList?: readonly AnyNode[] } | null | undefined)?.TypeParameterList;
-    if (typeParameters?.some((tp) => (tp.BindingIdentifier as { name?: string } | undefined)?.name === name)) {
+    const typeList = at.TypeParameters as { TypeParameterList?: readonly AnyNode[], Captures?: readonly AnyNode[] } | null | undefined;
+    // Specialization captures bind in the same declaration scope as ordinary
+    // parameters; a same-spelled outer type cannot replace a capture reference.
+    const typeParameters = [...(typeList?.TypeParameterList ?? []), ...(typeList?.Captures ?? [])];
+    if (typeParameters.some((tp) => (tp.BindingIdentifier as { name?: string } | undefined)?.name === name)) {
       return { kind: 'type-parameter', node: at };
     }
     if (isFunctionLike(at)) {

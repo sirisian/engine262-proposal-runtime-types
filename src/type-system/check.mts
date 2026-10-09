@@ -6531,6 +6531,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   /** Alias declarations found by the name pre-pass, resolved on demand. */
   const aliasNodes = new Map<string, ParseNode>();
 
+  const declarationAt = (reference: ParseNode, name: string, external?: ParseNode): ParseNode | undefined => {
+    const binding = ResolveBindingDeclaration(reference, name);
+    if (binding) return binding.kind === 'import' ? external
+      : ['class', 'type', 'function'].includes(binding.kind) ? binding.node : undefined;
+    if (!external) return undefined;
+    let source = external;
+    while (source.parent) source = source.parent;
+    let referenceSource = reference;
+    while (referenceSource.parent) referenceSource = referenceSource.parent;
+    return source === referenceSource ? undefined : external;
+  };
+  const visibleDeclarations = (reference: ParseNode, declarations: ReadonlyMap<string, ParseNode>): Map<string, ParseNode> =>
+    new Map([...declarations].flatMap(([name, declaration]) => {
+      const selected = declarationAt(reference, name, declaration);
+      return selected?.type === declaration.type ? [[name, selected] as const] : [];
+    }));
+
   /**
    * One stable Symbol per symbol-`const` DECLARATION, minted for the checker's
    * own use. A Property Type Record's [[Key]] is "a String or a Symbol", so a
@@ -9905,8 +9922,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * record per declaration, and an enum resolved freshly on each mention would
    * give the checker two records for one enum where the runtime has one.
    */
-  const enumTypeOf = (name: string): Known => {
-    const node = lookupEnum(name)?.declaration ?? enumNodes.get(name);
+  const enumTypeOf = (name: string, declaration?: ParseNode): Known => {
+    const node = declaration ?? lookupEnum(name)?.declaration ?? enumNodes.get(name);
     if (!node) {
       return null;
     }
@@ -10269,7 +10286,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   // ---- type aliases and the resolution of a written type ------------
 
-  const resolvingAliases = new Set<string>();
+  const resolvingAliases = new Set<ParseNode>();
+  const resolvingAliasRecords = new Map<ParseNode, TypeRecord>();
 
   /**
    * A generic alias's body with every parameter bound to its
@@ -10318,8 +10336,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return resolvedBody ? substituteTypeParameters(resolvedBody, bindings) : null;
   };
 
-  const lookupAlias = (name: string, declaration?: ParseNode): Known => {
-    for (let i = declaration && declaration !== aliasNodes.get(name) ? -1 : frames.length - 1; i >= 0; i -= 1) {
+  // `null` permits only the external/session binding, never a source registry
+  // candidate. An explicit declaration is resolved by identity, independently
+  // of the caller's same-spelled frame entries.
+  const lookupAlias = (name: string, declaration?: ParseNode | null): Known => {
+    if (declaration && resolvingAliasRecords.has(declaration)) return resolvingAliasRecords.get(declaration)!;
+    for (let i = declaration ? -1 : declaration === null ? 0 : frames.length - 1; i >= 0; i -= 1) {
       const t = frames[i].aliases.get(name);
       if (t) {
         return t;
@@ -10331,12 +10353,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // is resolved from that here, or the parameter would be ~any~ and an
     // alias-typed parameter would accept an out-of-range literal the inline
     // spelling refuses.
-    const node = declaration ?? aliasNodes.get(name);
-    if (node !== undefined && !resolvingAliases.has(name)) {
+    const node = declaration === undefined ? aliasNodes.get(name) : declaration;
+    if (node && !resolvingAliases.has(node)) {
       // An alias naming itself would otherwise recur forever; the walk's own
       // registration handles a legitimate recursive type by publishing a
       // placeholder first.
-      resolvingAliases.add(name);
+      resolvingAliases.add(node);
       try {
         const declared = (node as unknown as { Type?: ParseNode.Type | null }).Type;
         if (!declared) {
@@ -10376,9 +10398,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         return resolved;
       } finally {
-        resolvingAliases.delete(name);
+        resolvingAliases.delete(node);
       }
     }
+    if (node) return null;
     // Nothing in THIS source text
     // answers: either the alias is only mentioned here and declared elsewhere,
     // or its Type is a |ComputedType| - `type G = makeG();` - which resolves by
@@ -11914,7 +11937,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           aliases.set(name, type);
         }
       }
-      unresolvedTypes.set(node, { node, constants, aliases, functions: new Map(functionNodes), runtimeNames: new Set([...enumNodes.keys(), ...classNodes.keys()]) });
+      unresolvedTypes.set(node, { node, constants, aliases, functions: visibleDeclarations(node, functionNodes),
+        runtimeNames: new Set([...visibleDeclarations(node, enumNodes).keys(), ...visibleDeclarations(node, classNodes).keys()]) });
     }
     return result;
   };
@@ -11948,11 +11972,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'TypeReference': {
         const intrinsicName = node.TypeName.IdentifierReference.name;
         const lexicalBinding = ResolveBindingDeclaration(node.TypeName.IdentifierReference, intrinsicName);
-        if (lexicalBinding?.kind === 'parameter' && !typeParameterInScope(intrinsicName)) return null;
+        const parameterInScope = typeParameterInScope(intrinsicName)
+          && (!lexicalBinding || lexicalBinding.kind === 'type-parameter');
+        const selected = declarationAt(node.TypeName.IdentifierReference, intrinsicName,
+          classNodes.get(intrinsicName) ?? aliasNodes.get(intrinsicName) ?? interfaceNodes.get(intrinsicName) ?? enumNodes.get(intrinsicName));
+        const aliasDeclaration = selected?.type === 'TypeAliasDeclaration' ? selected : undefined;
+        const classDeclaration = selected?.type === 'ClassDeclaration' || selected?.type === 'ClassExpression' ? selected : undefined;
+        const interfaceDeclaration = selected?.type === 'InterfaceDeclaration' ? selected : undefined;
+        const enumDeclaration = selected?.type === 'EnumDeclaration' ? selected : undefined;
+        const selectedClass = (): Known => classDeclaration ? instanceTypeOf(classDeclaration) : null;
+        const selectedInterface = (): Known => interfaceDeclaration
+          ? interfaceTypeOfNode(interfaceDeclaration, interfaceDeclarations.get(intrinsicName)) : null;
+        const selectedAlias = (): Known => aliasDeclaration ? lookupAlias(intrinsicName, aliasDeclaration)
+          : !lexicalBinding || lexicalBinding.kind === 'import' ? lookupAlias(intrinsicName, null) : null;
+        if (lexicalBinding?.kind === 'parameter' && !parameterInScope) return null;
         // A named class expression has a private binding in its own body;
         // it is absent from the surrounding declaration map.
         if (!node.TypeArguments && node.TypeName.MemberNames.length === 0
-            && !typeParameterInScope(intrinsicName) && !shadowedByProgram(intrinsicName)) {
+            && !parameterInScope && !shadowedByProgram(intrinsicName)) {
           for (let parent: ParseNode | undefined = node.parent; parent; parent = parent.parent) {
             if (parent.type === 'ClassExpression' && parent.BindingIdentifier?.name === intrinsicName) {
               return instanceTypeOf(parent);
@@ -11960,8 +11997,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
         if (node.TypeName.MemberNames.length === 0 && intrinsicParameters(intrinsicName)
-            && !lexicalBinding && !typeParameterInScope(intrinsicName) && !shadowedByProgram(intrinsicName)
-            && !aliasNodes.has(intrinsicName) && !classNodes.has(intrinsicName) && !interfaceNodes.has(intrinsicName)) {
+            && !lexicalBinding && !parameterInScope && !shadowedByProgram(intrinsicName)
+            && !aliasDeclaration && !classDeclaration && !interfaceDeclaration) {
           if (!node.TypeArguments && isHigherKindedPosition(node)) return intrinsicDeclarationRecord(intrinsicName)!;
           const written = node.TypeArguments?.TypeArgumentList ?? [];
           const arguments_: (TypeRecord | number)[] = [];
@@ -11978,18 +12015,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return builtinTypeRecord(intrinsicName, bound.Arguments) ?? libraryTypeRecord(intrinsicName, bound.Arguments);
         }
         if (node.TypeArguments && node.TypeName.MemberNames.length === 0 && libraryTypeParameters(intrinsicName)
-            && !typeParameterInScope(intrinsicName) && !shadowedByProgram(intrinsicName)
-            && !aliasNodes.has(intrinsicName) && !classNodes.has(intrinsicName) && !interfaceNodes.has(intrinsicName)) {
+            && !lexicalBinding && !parameterInScope && !shadowedByProgram(intrinsicName)
+            && !aliasDeclaration && !classDeclaration && !interfaceDeclaration) {
           const arguments_ = resolvedLibraryArguments(intrinsicName, node.TypeArguments.TypeArgumentList);
           if (!arguments_) return null;
           checkWeakKeyConstraint(intrinsicName, arguments_);
           return libraryTypeRecord(intrinsicName, arguments_);
         }
         const appliedName = node.TypeName.IdentifierReference.name;
-        const lexicalDeclaration = lexicalBinding?.node;
-        const genericDeclaration = lexicalBinding?.kind === 'type'
-          && (lexicalDeclaration?.type === 'TypeAliasDeclaration' || lexicalDeclaration?.type === 'InterfaceDeclaration')
-          ? lexicalDeclaration : !lexicalBinding ? aliasNodes.get(appliedName) ?? interfaceNodes.get(appliedName) : undefined;
+        const genericDeclaration = aliasDeclaration ?? interfaceDeclaration;
         const genericParameters = (genericDeclaration as ParseNode.TypeAliasDeclaration | ParseNode.InterfaceDeclaration | undefined)?.TypeParameters?.TypeParameterList ?? [];
         const higherKindedArgument = !node.TypeArguments && isHigherKindedPosition(node);
         // #sec-higher-kinded-parameters: this position binds the declaration,
@@ -12001,7 +12035,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // binds defaults exactly as an empty application does. The cached
         // declaration body still contains unbound parameters.
         const applyBareAlias = !node.TypeArguments && genericDeclaration?.type === 'TypeAliasDeclaration'
-          && genericParameters.length > 0 && !typeParameterInScope(appliedName)
+          && genericParameters.length > 0 && !parameterInScope
           && !higherKindedArgument;
         if (node.TypeName.MemberNames.length > 0 || node.TypeArguments || applyBareAlias) {
           const args: (TypeRecord | number)[] = [];
@@ -12011,7 +12045,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // array - which exists per application. Statically the head is a
             // parameter in scope and the member is unknowable, so the type is
             // deferred (null): the binder evaluates it under the frame.
-            if (typeParameterInScope(node.TypeName.IdentifierReference.name)) {
+            if (parameterInScope) {
               return null;
             }
             // A QUALIFIED name - `Reflect.Block`. This answered null
@@ -12027,7 +12061,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // The BASE name decides: `Reflect.Block` means the intrinsic only
               // where the program has not bound `Reflect` itself.
               const base = node.TypeName.IdentifierReference.name;
-              const declaration = enumNodes.get(base);
+              const declaration = enumDeclaration;
               const evaluated = declaration && (!lexicalBinding || lexicalBinding.node === declaration)
                 ? evaluatedEnums.get(declaration) : undefined;
               const value = node.TypeName.MemberNames.length === 1
@@ -12079,8 +12113,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
             }
             if (genericDeclaration.type === 'TypeAliasDeclaration') {
-              if (resolvingAliases.has(appliedName)) return null;
-              resolvingAliases.add(appliedName);
+              if (resolvingAliases.has(genericDeclaration)) return null;
+              resolvingAliases.add(genericDeclaration);
               typeParameterScopes.push(new Map(bindings));
               try {
                 const body = resolveType(genericDeclaration.Type);
@@ -12088,7 +12122,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 return body && substituteTypeParameters(body, bindings);
               } finally {
                 typeParameterScopes.pop();
-                resolvingAliases.delete(appliedName);
+                resolvingAliases.delete(genericDeclaration);
               }
             }
             const declared = interfaceTypeOfNode(genericDeclaration, interfaceDeclarations.get(appliedName));
@@ -12121,7 +12155,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // binding took `any`, and every judgment the annotation was written
             // to make went unmade, the constraint check among them.
             const namedBase = node.TypeName.IdentifierReference.name;
-            const userDeclared = (classTypeOf(namedBase) ?? interfaceTypeOf(namedBase)) as {
+            const userDeclared = (selectedClass() ?? selectedInterface()) as {
               Declaration?: { TypeParameters?: { TypeParameterList?: readonly {
                 BindingIdentifier?: { name?: string },
               }[] } },
@@ -12141,7 +12175,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               reportType('rt-generic-argument', node, '$1', Value(message));
               return null;
             }
-            const userParams = (classNodes.get(namedBase) as ParseNode.ClassDeclaration | undefined)?.TypeParameters?.TypeParameterList;
+            const userParams = (classDeclaration as ParseNode.ClassDeclaration | undefined)?.TypeParameters?.TypeParameterList;
             const filled = order.ordered.map((arg, index) => arg ?? userParams?.[index]?.TypeParameterDefault);
             const missing = filled.findIndex((arg) => !arg);
             if (missing !== -1) {
@@ -12150,7 +12184,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             orderedArgList = filled as readonly ParseNode.Type[];
           }
-          const applicationDeclaration = classNodes.get(node.TypeName.IdentifierReference.name) ?? aliasNodes.get(node.TypeName.IdentifierReference.name);
+          const applicationDeclaration = classDeclaration ?? aliasDeclaration;
           const applicationParameters = (applicationDeclaration as { TypeParameters?: ParseNode.TypeParameters | null } | undefined)?.TypeParameters?.TypeParameterList ?? [];
           for (const [index, a] of orderedArgList.entries()) {
             const r = (applicationParameters[index]?.Arity ?? 0) > 0 ? kindedArgumentOf(a) : resolveType(a);
@@ -12185,11 +12219,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             reportType('rt-integer-width', node, 'an integer width must be an integer from 1 through 65536');
             return null;
           }
-          const appliedBuiltin = builtinTypeRecord(baseName, args);
+          const appliedBuiltin = lexicalBinding ? null : builtinTypeRecord(baseName, args);
           if (!requireWellFormedVector(appliedBuiltin)) {
             return null;
           }
-          const bareBuiltin = builtinTypeRecord(baseName);
+          const bareBuiltin = lexicalBinding ? null : builtinTypeRecord(baseName);
           const builtinTakesArguments = args.length > 0 && !!appliedBuiltin
             && (!bareBuiltin || !SameType(bareBuiltin, appliedBuiltin));
           // #sec-parameterized-types: after a base that declares NO type
@@ -12204,13 +12238,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // an argument that denotes a plain TYPE is never a metadata value:
           // `uint8.<uint8>` was accepted as though it named something.
           {
-            const inScope = typeParameterInScope(baseName);
-            const declared = (inScope ? null : (classTypeOf(baseName) ?? interfaceTypeOf(baseName))) as {
+            const inScope = parameterInScope;
+            const declared = (inScope ? null : (selectedClass() ?? selectedInterface())) as {
               Kind?: string, LibraryName?: string, Declaration?: { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null },
             } | null;
             const nominalBase = declared && !declared.LibraryName
               && (declared.Declaration?.TypeParameters?.TypeParameterList?.length ?? 0) === 0 ? declared as unknown as TypeRecord : null;
-            const aliasDecl = inScope || declared ? undefined : aliasNodes.get(baseName) as {
+            const aliasDecl = inScope || declared ? undefined : aliasDeclaration as {
               TypeParameters?: { TypeParameterList?: readonly unknown[] } | null,
             } | undefined;
             const aliasBase = !!aliasDecl && (aliasDecl.TypeParameters?.TypeParameterList?.length ?? 0) === 0;
@@ -12266,7 +12300,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // here. Without this, `Box.<{ a: uint8 }>` became `Box.<{ }>` with
             // the shape as metadata and refused the shape's own members.
             const baseName = node.TypeName.IdentifierReference.name;
-            const baseDecl = aliasNodes.get(baseName) as {
+            const baseDecl = aliasDeclaration as {
               TypeParameters?: { TypeParameterList?: readonly unknown[] } | null,
             } | undefined;
             const baseIsGeneric = (baseDecl?.TypeParameters?.TypeParameterList?.length ?? 0) > 0;
@@ -12278,9 +12312,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // `string.<{ brand }>` at instantiation, which is what "a brand over
             // a type parameter SURVIVES instantiation" means.
             const base = bareBuiltin
-              ?? (typeParameterInScope(baseName)
+              ?? (parameterInScope
                 ? ({ Kind: 'parameter', Name: baseName } as TypeRecord)
-                : (baseIsGeneric ? null : lookupAlias(baseName) as TypeRecord | null));
+                : (baseIsGeneric ? null : selectedAlias() as TypeRecord | null));
             if (base) {
               const metadata = MetadataObjectFromType(args[0] as TypeRecord, base);
               const record: TypeRecord = { Kind: 'parameterized', Base: base, Metadata: metadata as unknown as MetadataRecord };
@@ -12327,7 +12361,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // reason - it answers with its argument, not with a record named
           // Identity - and only when applied, so a bare `Identity` stays a
           // declaration a higher-kinded parameter can bind.
-          if (parameterizedName === 'Identity' && !lookupAlias(parameterizedName)) {
+          if (parameterizedName === 'Identity' && !lexicalBinding && !selectedAlias()) {
             const reduced = identityRecord(args);
             if (reduced) {
               return reduced;
@@ -12341,8 +12375,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // arguments on its own path and calls the same check there.
           // A source declaration wins over a same-spelled library generic.
           // Otherwise `class Set<T>` annotations acquire intrinsic signatures.
-          const userDeclared = classNodes.has(parameterizedName) || interfaceNodes.has(parameterizedName)
-            || aliasNodes.has(parameterizedName);
+          const userDeclared = !!lexicalBinding || !!selected;
           if (!userDeclared) checkWeakKeyConstraint(parameterizedName, args);
           if (!userDeclared && parameterizedName === 'Composite' && !shadowedByProgram('Composite')) checkCompositeArgument(args);
           if (!userDeclared && parameterizedName === 'SoA' && !shadowedByProgram('SoA')) checkSoAElement(args);
@@ -12370,7 +12403,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // The EXPRESSION path already does this: `(type G.<uint8>)` answers
           // `{ t: uint.<8> }`, substituted and correct. This is that answer,
           // reached from an annotation.
-          const aliasDecl = aliasNodes.get(parameterizedName) as unknown as {
+          const aliasDecl = aliasDeclaration as unknown as {
             TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null,
             Type?: ParseNode.Type | null,
           } | undefined;
@@ -12427,7 +12460,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
               typeParameterScopes.push(scope);
               let body: Known = null;
-              const guardName = parameterizedName;
+              const guardName = aliasDecl as ParseNode;
               const alreadyResolving = resolvingAliases.has(guardName);
               if (!alreadyResolving) {
                 resolvingAliases.add(guardName);
@@ -12462,14 +12495,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           //
           // This half ALONE over-refuses: see the substitution at the object
           // literal check, which is the other half and cannot be separated.
-          const userInterface = interfaceTypeOf(parameterizedName) as TypeRecord | null;
+          const userInterface = selectedInterface() as TypeRecord | null;
           if (userInterface && userInterface.Kind === 'nominal') {
             // #sec-specialization-lists: an application of an interface family with a
             // case whose list matches takes the case's REFINED contract - its
             // record, captures bound - once the arguments are known. Open, it
             // keeps the primary's contract, which every case refines, so nothing
             // is assumed that a case could contradict.
-            const primaryNode = interfaceNodes.get(parameterizedName) as ParseNode;
+            const primaryNode = interfaceDeclaration as ParseNode;
             const interfaceCases = aliasCasesOf(primaryNode);
             if (interfaceCases.length > 0) {
               const chosen = aliasCaseSelection(primaryNode, interfaceCases, parameterizedName, args as readonly (TypeRecord | number)[]);
@@ -12482,7 +12515,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             return CanonicalizeType({ ...userInterface, Arguments: args });
           }
-          const userClass = classTypeOf(parameterizedName);
+          const userClass = selectedClass();
           if (userClass && userClass.Kind === 'nominal') {
             // proposal-runtime-types #sec-higher-kinded-parameters: this is the
             // resolver a type ANNOTATION reaches, and the runtime's is the one
@@ -12563,7 +12596,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // annotations, its return annotation, and its body - so `function
         // first<T>(): T {}` has a return type to read and a call of it is
         // checked. Consulted first, because an inner binding shadows.
-        if (typeParameterInScope(name)) {
+        if (parameterInScope) {
           // #sec-issubtype: a parameter is a subtype of its constraint, so the
           // record has to carry one for that step to fire.
           const constraint = typeParameterConstraintOf(name);
@@ -12597,12 +12630,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // A source class named Range (or Map, etc.) denotes that class in its
         // own annotations, just as it does in `new Range()`. The library name
         // must not substitute an unrelated intrinsic type for the parameter.
-        const lexical = ResolveBindingDeclaration(node.TypeName.IdentifierReference, name)?.node;
-        if (lexical?.type === 'InterfaceDeclaration') {
-          return interfaceTypeOfNode(lexical, interfaceDeclarations.get(name));
-        }
-        if (lexical?.type === 'TypeAliasDeclaration') return lookupAlias(name, lexical);
-        return refuseBareGeneric(node, classTypeOf(name) ?? lookupAlias(name) ?? enumTypeOf(name) ?? interfaceTypeOf(name) ?? (shadowedByProgram(name) ? null : builtinTypeRecord(name) ?? iterationInterfaceRecord(name) ?? libraryTypeRecord(name)) ?? (shadowedByProgram(name) ? null : (BoundTypeRecordForName(name) as Known | undefined)) ?? namedNumericLiteralRecord(name));
+        if (aliasDeclaration) return lookupAlias(name, aliasDeclaration);
+        if (interfaceDeclaration) return selectedInterface();
+        if (classDeclaration) return refuseBareGeneric(node, selectedClass());
+        if (enumDeclaration) return enumTypeOf(name, enumDeclaration);
+        if (lexicalBinding && lexicalBinding.kind !== 'import') return lexicalBinding.kind === 'const'
+          ? establishedTypeObjectTarget(node.TypeName.IdentifierReference) : null;
+        return refuseBareGeneric(node, selectedAlias() ?? (shadowedByProgram(name) ? null : builtinTypeRecord(name) ?? iterationInterfaceRecord(name) ?? libraryTypeRecord(name)) ?? (shadowedByProgram(name) ? null : (BoundTypeRecordForName(name) as Known | undefined)) ?? namedNumericLiteralRecord(name));
       }
       case 'PredefinedType':
         return node.keyword === 'void' ? voidType : makePrimitive('null');
@@ -28671,7 +28705,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // lands on the record the frame already holds.
       const early_placeholder = { Kind: 'object', Properties: [], IndexSignatures: [] } as unknown as TypeRecord;
       scope.set(earlyName, early_placeholder);
-      const earlyResolved = resolveType(early.Type);
+      resolvingAliasRecords.set(n, early_placeholder);
+      let earlyResolved: Known;
+      try {
+        earlyResolved = resolveType(early.Type);
+      } finally {
+        resolvingAliasRecords.delete(n);
+      }
       if (!earlyResolved) {
         scope.delete(earlyName);
         continue;
@@ -34688,12 +34728,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const previousAlias = aliasScope.get(n.BindingIdentifier.name);
         if (isPlainAlias) {
           aliasScope.set(n.BindingIdentifier.name, placeholder);
+          resolvingAliasRecords.set(n, placeholder);
         }
         const aliasParameters = pushTypeParameterScopeOf(n, 'type-only');
         let resolved: Known;
         try {
           resolved = resolveType(n.Type);
         } finally {
+          resolvingAliasRecords.delete(n);
           if (aliasParameters) typeParameterScopes.pop();
         }
         if (isPlainAlias && !resolved) {
