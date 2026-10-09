@@ -26033,11 +26033,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /** #sec-do-generator-expressions: context supplies Y/R/N; the body is a function boundary. */
   const checkDoGenerator = (node: ParseNode.DoExpression, contextual: Known): Known => {
+    if (inferenceResources.exhausted) return null;
     if (contextual) doGeneratorContexts.set(node, contextual);
     const cached = doGeneratorResults.get(node);
     if (cached?.revision === typeRevision && cached.contextual === contextual) return cached.type;
     if (checkingDoGenerators.has(node)) return contextual;
     checkingDoGenerators.add(node);
+    let queries = 0;
+    let collectingInputs = false;
+    const inputs = new Set<PreparedBinding>();
     try {
       if (!contextual) {
         let position: ParseNode = node;
@@ -26050,17 +26054,50 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const expected = contextual?.Kind === 'nominal' && contextual.LibraryName === name ? contextual : null;
       const checkingType = expected ?? libraryTypeRecord(name, [anyTypeRecord, anyTypeRecord, voidType]);
       const contributions: GeneratorContributions = { yielded: [], returned: [] };
-      enterFunction([], null, node.GeneratorBody, true, undefined, checkingType, true, expected, contributions);
-      const join = (types: Known[], fallback: TypeRecord): TypeRecord => types.length === 0 ? fallback
-        : types.some((type) => !type || type.Kind === 'any') ? anyTypeRecord
-          : CanonicalizeType({ Kind: 'union', Members: types.map((type) => widen(type!)!) });
-      const returned = join(contributions.returned, voidType);
-      const result = expected ?? libraryTypeRecord(name, [join(contributions.yielded, neverType),
-        returned.Kind === 'primitive' && returned.Name === 'undefined' ? voidType : returned, voidType]);
-      if (result && !mentionsTypeParameter(result)) publishedReturnTypes.set(node, result);
-      doGeneratorResults.set(node, { revision: typeRevision, contextual, type: result });
+      if (!expected) {
+        // #sec-inference-resources: this traversal computes two component
+        // queries together. Both remain active until the body has been read.
+        // Context-supplied components need operand checks, not these joins.
+        for (const _component of ['yield', 'generator-return']) {
+          if (!inferenceResources.enter(node)) return null;
+          queries += 1;
+        }
+        inferenceInputCollectors.push(inputs);
+        collectingInputs = true;
+      }
+      enterFunction([], null, node.GeneratorBody, true, undefined, checkingType, true, expected,
+        expected ? undefined : contributions);
+      if (inferenceResources.exhausted) return null;
+      const join = (types: Known[], fallback: TypeRecord): Known => types.length === 0 ? fallback
+        : types.some((type) => !type) ? null
+          : types.some((type) => type!.Kind === 'any') ? anyTypeRecord
+            : CanonicalizeType({ Kind: 'union', Members: types.map((type) => widen(type!)!) });
+      let result: Known = expected;
+      if (!expected) {
+        const yielded = join(contributions.yielded, neverType);
+        const returned = join(contributions.returned, voidType);
+        // A pending prerequisite is not a completed unknown answer. Record
+        // completed components before wrapping unknowns as carrier `any`.
+        if (!inputs.size) {
+          const same = (left: Known, right: Known) => left === right || !!left && !!right && SameType(left, right);
+          inferenceResources.result(node, 'yield', yielded, same);
+          inferenceResources.result(node, 'generator-return', returned, same);
+        }
+        if (inferenceResources.exhausted) return null;
+        result = libraryTypeRecord(name, [yielded ?? anyTypeRecord,
+          returned?.Kind === 'primitive' && returned.Name === 'undefined' ? voidType : returned ?? anyTypeRecord, voidType]);
+      }
+      if (!inputs.size) {
+        if (result && !mentionsTypeParameter(result)) publishedReturnTypes.set(node, result);
+        doGeneratorResults.set(node, { revision: typeRevision, contextual, type: result });
+      }
       return result;
     } finally {
+      if (collectingInputs) inferenceInputCollectors.pop();
+      while (queries > 0) {
+        inferenceResources.leave();
+        queries -= 1;
+      }
       checkingDoGenerators.delete(node);
     }
   };

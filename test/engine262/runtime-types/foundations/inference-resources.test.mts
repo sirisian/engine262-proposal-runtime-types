@@ -187,3 +187,91 @@ test('recording a deeply nested answer does not recurse on the native stack', ()
   resources.result(declaration, 'return', answer, sameAnswer);
   expect(resources.exhausted).toBeUndefined();
 });
+
+for (const prefix of ['', 'async ']) {
+  const expression = `${prefix}do * { yield (1 := uint8); return (2 := uint8); }`;
+  const generator = prefix ? 'AsyncGenerator' : 'Generator';
+
+  for (const kind of ['evaluations', 'results', 'depth'] as const) {
+    test(`${prefix}do * observes zero ${kind} before body entry`, () => {
+      expect(context({ [kind]: 0 }).run(`const values = ${expression}; "ok";`)).toMatchObject({
+        completion: 'throw', bodyEntered: false,
+        diagnostic: { code: 'RT_INFERENCE_LIMIT', rule: 'rt-inference-limit', phase: 'static' },
+      });
+    });
+  }
+
+  test(`${prefix}do * charges equal yield and completion types separately, once each`, () => {
+    const source = `const values = ${expression}; "ok";`;
+    expect(context({ results: 1 }).run(source)).toMatchObject({
+      completion: 'throw', bodyEntered: false, diagnostic: { code: 'RT_INFERENCE_LIMIT' },
+    });
+    expect(context({ results: 2 }).run(source)).toMatchObject({
+      completion: 'normal', bodyEntered: true, value: 'ok', diagnostic: undefined,
+    });
+  });
+
+  for (const body of ['', 'yield globalThis.unknown;', 'return globalThis.unknown;']) {
+    test(`${prefix}do * accounts for empty and unknown components: ${body}`, () => {
+      const source = `const values = ${prefix}do * { ${body} }; "ok";`;
+      expect(context({ results: 1 }).run(source)).toMatchObject({
+        completion: 'throw', bodyEntered: false, diagnostic: { code: 'RT_INFERENCE_LIMIT' },
+      });
+      expect(context({ results: 2 }).run(source)).toMatchObject({ completion: 'normal', value: 'ok' });
+    });
+  }
+
+  test(`${prefix}do * with contextual components checks operands without inferring them`, () => {
+    const { run } = context({ evaluations: 0, results: 0, depth: 0 });
+    expect(run(`const values: ${generator}.<uint8, uint8, void> = ${expression}; "ok";`)).toMatchObject({
+      completion: 'normal', bodyEntered: true, value: 'ok', diagnostic: undefined,
+    });
+    expect(run(`const wrong: ${generator}.<uint8, void, void> = ${prefix}do * { yield "wrong"; };`)).toMatchObject({
+      completion: 'throw', bodyEntered: false, diagnostic: { code: 'RT_ASSIGNABILITY' },
+    });
+  });
+
+  test(`${prefix}do * restores the source boundary after exhaustion`, () => {
+    const { realm, run } = context({ results: 0 });
+    const source = `var values = ${expression}; "ok";`;
+    expect(run(source)).toMatchObject({ completion: 'throw', bodyEntered: false,
+      diagnostic: { code: 'RT_INFERENCE_LIMIT' } });
+    expect(run('typeof values;')).toMatchObject({ completion: 'normal', value: 'undefined' });
+    (realm.HostDefined as { returnInferenceBudget: InferenceLimits }).returnInferenceBudget = { results: 2 };
+    expect(run(source)).toMatchObject({ completion: 'normal', bodyEntered: true, value: 'ok' });
+  });
+
+  test(`${prefix}do * completes a later capture within its two-answer allowance`, () => {
+    const source = `const values = ${prefix}do * { yield later; return later; }; const later = (1 := uint8); "ok";`;
+    expect(context({ results: 2 }).run(source)).toMatchObject({
+      completion: 'normal', bodyEntered: true, value: 'ok', diagnostic: undefined,
+    });
+    expect(context({ results: 0 }).run(source)).toMatchObject({
+      completion: 'throw', bodyEntered: false, diagnostic: { code: 'RT_INFERENCE_LIMIT' },
+    });
+  });
+}
+
+test('nested generator expressions share the containing inference depth allowance', () => {
+  const source = 'const values = do * { yield do * { yield (1 := uint8); }; }; "ok";';
+  expect(context({ depth: 2 }).run(source)).toMatchObject({
+    completion: 'throw', bodyEntered: false, diagnostic: { code: 'RT_INFERENCE_LIMIT' },
+  });
+  expect(context({ depth: 4, results: 2 }).run(source)).toMatchObject({ completion: 'normal', value: 'ok' });
+});
+
+test('a contextual generator does not exempt nested function inference', () => {
+  expect(context({ results: 0 }).run('const values: Generator.<uint8, void, void> = do * { function read(n:uint8) { return n; } yield read(1); };')).toMatchObject({
+    completion: 'throw', bodyEntered: false, diagnostic: { code: 'RT_INFERENCE_LIMIT' },
+  });
+});
+
+test('generator inference exhaustion precedes an incidental carrier mismatch', () => {
+  const source = 'const wrong: string = do * { yield (1 := uint8); };';
+  expect(context({ results: 0 }).run(source)).toMatchObject({
+    completion: 'throw', bodyEntered: false, diagnostic: { code: 'RT_INFERENCE_LIMIT' },
+  });
+  expect(context({ results: 2 }).run(source)).toMatchObject({
+    completion: 'throw', bodyEntered: false, diagnostic: { code: 'RT_ASSIGNABILITY' },
+  });
+});
