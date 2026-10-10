@@ -13504,12 +13504,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const finishTypeArgumentBindings = (typeParams: readonly TypeParameterRecord[], into: Map<string, TypeRecord>,
-    validation: { complete: boolean, application: GenericDefaultCheck['application'], mayInfer?: (name: string) => boolean }): void => {
+    validation: { complete: boolean, application: GenericDefaultCheck['application'], mayInfer?: (name: string) => boolean, pendingArguments?: ReadonlySet<string> }): void => {
     const scope = new Map<string, Known>();
     typeParams.forEach((p) => scope.set(p.Name, null));
     typeParameterScopes.push(scope);
     try {
       for (const tp of typeParams) {
+        // A supplied argument whose description is not available still occupies
+        // its slot. It cannot select a default or become a missing argument.
+        if (validation.pendingArguments?.has(tp.Name)) continue;
         if (!into.has(tp.Name) && tp.DefaultNode) {
           // A later default must wait for an earlier default's binding, not
           // publish that parameter's placeholder as an application result.
@@ -13579,7 +13582,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  const bindExplicitTypeArguments = (typeParams: readonly TypeParameterRecord[], argNodes: readonly ParseNode[], into: Map<string, TypeRecord>, validation?: { complete: boolean, application: GenericDefaultCheck['application'] }): void => {
+  const bindExplicitTypeArguments = (typeParams: readonly TypeParameterRecord[], argNodes: readonly ParseNode[], into: Map<string, TypeRecord>, validation?: { complete: boolean, application: GenericDefaultCheck['application'] }): ReadonlySet<string> => {
+    const pendingArguments = new Set<string>();
+    const pendingAssignment = (): ReadonlySet<string> => new Set(typeParams.map((parameter) => parameter.Name));
     if (validation && !validation.complete) requireTypeArgumentArity(argNodes, typeParams, 'the call');
     type Entry = { node: ParseNode | null, record: TypeRecord | null, name: string | undefined };
     const entries: Entry[] = [];
@@ -13597,7 +13602,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const completion = CreateTypeDiagnostic('rt-assignability', root, diagnosticPhase, '$1 is not assignable to $2', Value(`the value ${head}`), Value('a tuple or an array of stated extent, as a spread type argument')) as ThrowCompletion;
             errors.push(completion.Value as ObjectValue);
           }
-          return;
+          return pendingAssignment();
         }
         const extent = (t as { Extent?: number | string }).Extent;
         if (t.Kind === 'tuple') {
@@ -13614,11 +13619,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // without the program running it.
           const completion = CreateTypeDiagnostic('rt-assignability', root, diagnosticPhase, '$1 is not assignable to $2', Value(displayType(t)), Value('a tuple or an array of stated extent, as a spread type argument')) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
-          return;
+          return pendingAssignment();
         } else {
           // A pack in scope (`...Ts`, a ~parameter~ record) or anything else the
           // checker cannot expand: bind nothing here; the runtime binds it.
-          return;
+          return pendingAssignment();
         }
       } else {
         entries.push({ node: a, record: null, name: typeArgumentNameOfShared(a) });
@@ -13658,9 +13663,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // a name on an array type - are the parser's.
         reportType('rt-generic-argument', root, '$1', Value(messages[assigned.kind]));
       }
-      return;
+      return pendingAssignment();
     }
-    let unresolved = false;
     const kinded = new Map<string, TypeRecord>();
     typeParams.forEach((tp, k) => {
       const run = assigned.runs[k]!;
@@ -13694,7 +13698,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const resolvedRun = run.map((e) => e.record ?? resolveType(e.node as ParseNode.Type));
       if (resolvedRun.some((r) => !r)) {
-        unresolved = true;
+        pendingArguments.add(tp.Name);
         return;
       }
       if (tp.Variadic && (resolvedRun.length > 0 || !tp.DefaultNode)) {
@@ -13706,12 +13710,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         into.set(tp.Name, resolvedRun[0] as TypeRecord);
       }
     });
-    if (validation) finishTypeArgumentBindings(typeParams, into, { ...validation, complete: validation.complete && !unresolved });
+    if (validation) finishTypeArgumentBindings(typeParams, into, { ...validation, complete: validation.complete && pendingArguments.size === 0, pendingArguments });
     if (kinded.size > 0) {
       let owner: ParseNode | undefined = typeParams[0]?.Declaration;
       while (owner && !(owner as { TypeParameters?: unknown }).TypeParameters) owner = owner.parent as ParseNode | undefined;
       if (owner) checkKindedApplications(owner, kinded, into);
     }
+    return pendingArguments;
   };
 
   // ---- standard-library signatures ----------------------------------
@@ -32072,10 +32077,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           type?: string, TypeArguments?: { TypeArgumentList?: readonly ParseNode[] },
         } | undefined;
         const argNodes = spec?.type === 'TypeArgumentsExpression' ? spec.TypeArguments?.TypeArgumentList : undefined;
+        let pendingExplicitArguments: ReadonlySet<string> | undefined;
         if (argNodes && argNodes.length > 0) {
           // bindExplicitTypeArguments orders named arguments before binding
           // them, using the shared ordering for type application sites.
-          bindExplicitTypeArguments(generic, argNodes, bindings);
+          pendingExplicitArguments = bindExplicitTypeArguments(generic, argNodes, bindings);
         } else {
           // THE CONTEXT RUNG, before the arguments. "A call binds from its
           // context before its arguments" - the run time does this and the
@@ -32193,6 +32199,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
         finishTypeArgumentBindings(generic, bindings, {
+          pendingArguments: pendingExplicitArguments,
           complete: !mapped.spread && !(argNodes?.some((argument) => !resolveType(argument as ParseNode.Type)))
             && mapped.entries.every(({ node }) => {
               const type = argumentStaticType(node);
