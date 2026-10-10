@@ -17778,6 +17778,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               ...(adopted.Initial !== undefined ? { Initial: adopted.Initial } : {}), DeclaredDefault: adopted.DeclaredDefault } : record;
           });
           let Return = literal.TypeAnnotation ? resolveType(literal.TypeAnnotation.Type) : null;
+          // Preserve the provenance of this query's callable contract, not
+          // merely the fact that its source is a function literal. A carrier
+          // such as Promise<any> does not itself supply declaration evidence.
+          const declared = (type: Known): boolean => !!type && type.Kind !== 'any';
+          let anchored = types.some(declared) || declared(Return) || declared(wantedReturn)
+            || declared(contextualThisTypes.get(node) ?? null);
           if (Return && generator) Return = generatorDeclaredType(Return, asyncGenerator);
           // A literal at a function-typed position TAKES that position's return type
           // (#sec-contextual-types: "the signature so taken is the Static Type of the
@@ -17797,16 +17803,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const mode = generator ? 'yield' : asyncFunction ? 'resolve' : 'return';
             const wanted = generator ? generatorParameters(wantedReturn)?.Yield ?? null
               : asyncFunction ? awaitedElementType(wantedReturn) : wantedReturn;
-            const inferred = inferredReturnType(node, types, wanted, { anchored: false }, mode);
-            if (inferred) {
-              if (generator) {
-                const returned = inferredReturnType(node, types, generatorParameters(wantedReturn)?.Return ?? null,
-                  { anchored: false }, 'generator-return');
+            const provenance = { anchored: false };
+            const inferred = inferredReturnType(node, types, wanted, provenance, mode);
+            const signatureTyped = types.some((type) => type !== null);
+            if (declared(inferred) && (signatureTyped || provenance.anchored)) anchored = true;
+            if (generator) {
+              // Yield and completion are independent contributions. An unknown
+              // yield must not hide a declaration-derived completion contract.
+              const returned = inferredReturnType(node, types, generatorParameters(wantedReturn)?.Return ?? null,
+                provenance, 'generator-return');
+              if (declared(returned) && (signatureTyped || provenance.anchored)) anchored = true;
+              if (inferred || returned) {
                 Return = libraryTypeRecord(asyncGenerator ? 'AsyncGenerator' : 'Generator',
-                  [inferred, returned ?? anyTypeRecord, generatorParameters(wantedReturn)?.Next ?? voidType]);
-              } else {
-                Return = asyncFunction ? libraryTypeRecord('Promise', [inferred, anyTypeRecord]) : inferred;
+                  [inferred ?? anyTypeRecord, returned ?? anyTypeRecord, generatorParameters(wantedReturn)?.Next ?? voidType]);
               }
+            } else if (inferred) {
+              Return = asyncFunction ? libraryTypeRecord('Promise', [inferred, anyTypeRecord]) : inferred;
             }
             Return ??= wantedReturn;
           }
@@ -17815,7 +17827,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!Return && !literal.TypeAnnotation && types.every((type) => !type)
               && !typedInvocationSignature(node)) return null;
           const adoptedThis = contextualThisTypes.get(node);
-          return {
+          const result = {
             Kind: 'function',
             Signatures: [{
               Parameters, Return: Return ?? anyTypeRecord, Untyped: false,
@@ -17825,7 +17837,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 ? { TypeParameters: typeParameterRecordsOf(literal.TypeParameters.TypeParameterList) } : {}),
               ...(adoptedThis ? { ThisType: adoptedThis } : {}),
             }],
-          } as unknown as Known;
+          } as unknown as TypeRecord;
+          if (anchored) literalContractAnchors.add(result);
+          return result;
         } finally {
           if (genericScope) typeParameterScopes.pop();
         }
@@ -27211,6 +27225,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /** Array literals every element of which is a literal; they anchor nothing. */
   const literalDerivedArrays = new WeakSet<object>();
+  // Query results, rather than source nodes: the same literal can be described
+  // under different contexts. A private approximation never creates an anchor.
+  const literalContractAnchors = new WeakSet<object>();
 
   /**
    * Whether a TYPE has exactly one value: a ~literal~, or the ~primitive~
@@ -27231,10 +27248,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * narrowing and parentheses. Transparent inference locals retain their
    * initializer's provenance separately from its widened type. For other
    * expressions, self-describing literals supply no declaration evidence.
+   * A function literal retains any declaration-derived signature positions or
+   * participating inferred result from its particular type query.
    *
    * A known, non-literal contribution is NOT therefore anchored, because a
    * form that DESCRIBES ITSELF derives from no declaration either: an object
-   * literal is `{}`, a function expression is `() => void`, `null` is `null`.
+   * literal is `{}`, an unannotated function can be `() => void`, `null` is `null`.
    * Two tests are applied - the TYPE has exactly one value
    * (`selfDescribingType`), or the EXPRESSION is a self-describing literal
    * FORM, which is the same point for an object or function whose type has
@@ -27286,14 +27305,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return false;
     }
     switch ((expr as { type?: string }).type) {
-      case 'ObjectLiteral':
-      case 'ArrayLiteral':
       case 'FunctionExpression':
       case 'ArrowFunction':
       case 'AsyncFunctionExpression':
       case 'AsyncArrowFunction':
       case 'GeneratorExpression':
       case 'AsyncGeneratorExpression':
+        return literalContractAnchors.has(t);
+      case 'ObjectLiteral':
+      case 'ArrayLiteral':
       case 'ClassExpression':
       case 'RegularExpressionLiteral':
       case 'TemplateLiteral':

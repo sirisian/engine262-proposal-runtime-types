@@ -1,0 +1,1106 @@
+{
+  "description": "Callable literal contribution provenance: explicit/contextual positions and participating inferred results seed publication; private shapes and unknown carriers do not.",
+  "specification": [
+    "sec-anchored-contributions",
+    "sec-dependent-result-instantiation",
+    "sec-inference-and-function-forms"
+  ],
+  "cases": [
+    {
+      "name": "function parameter invalid unused consumer",
+      "steps": [
+        {
+          "source": "function make(){return function(x:string){return x;};}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "function parameter valid",
+      "steps": [
+        {
+          "source": "function make(){return function(x:string){return x;};}const fn=make();fn(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function result invalid unused consumer",
+      "steps": [
+        {
+          "source": "function make(){return function():string{return \"ok\";};}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "function result valid",
+      "steps": [
+        {
+          "source": "function make(){return function():string{return \"ok\";};}const fn=make();fn();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "arrow parameter invalid unused consumer",
+      "steps": [
+        {
+          "source": "function make(){return (x:string)=>x;}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "arrow parameter valid",
+      "steps": [
+        {
+          "source": "function make(){return (x:string)=>x;}const fn=make();fn(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "arrow result invalid unused consumer",
+      "steps": [
+        {
+          "source": "function make(){return ():string=>\"ok\";}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "arrow result valid",
+      "steps": [
+        {
+          "source": "function make(){return ():string=>\"ok\";}const fn=make();fn();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit parameter with unknown result invalid unused consumer",
+      "steps": [
+        {
+          "source": "function make(){return function(x:string){return globalThis.unknown;};}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit parameter with unknown result valid",
+      "steps": [
+        {
+          "source": "function make(){return function(x:string){return globalThis.unknown;};}const fn=make();String(typeof fn);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "function"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any parameter with published literal result invalid unused consumer",
+      "steps": [
+        {
+          "source": "function make(){return (x:any)=>\"ok\";}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "any parameter with published literal result valid",
+      "steps": [
+        {
+          "source": "function make(){return (x:any)=>\"ok\";}const fn=make();fn(1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function captured result invalid unused consumer",
+      "steps": [
+        {
+          "source": "let seed:string=\"ok\";function make(){return function(){return seed;};}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "function captured result valid",
+      "steps": [
+        {
+          "source": "let seed:string=\"ok\";function make(){return function(){return seed;};}const fn=make();fn();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "arrow captured result invalid unused consumer",
+      "steps": [
+        {
+          "source": "let seed:string=\"ok\";function make(){return ()=>seed;}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "arrow captured result valid",
+      "steps": [
+        {
+          "source": "let seed:string=\"ok\";function make(){return ()=>seed;}const fn=make();fn();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async function captured result invalid unused consumer",
+      "steps": [
+        {
+          "source": "let seed:string=\"ok\";function make(){return async function(){return seed;};}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "async function captured result valid",
+      "steps": [
+        {
+          "source": "let seed:string=\"ok\";function make(){return async function(){return seed;};}const fn=make();String(typeof fn);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "function"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async arrow captured result invalid unused consumer",
+      "steps": [
+        {
+          "source": "let seed:string=\"ok\";function make(){return async ()=>seed;}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "async arrow captured result valid",
+      "steps": [
+        {
+          "source": "let seed:string=\"ok\";function make(){return async ()=>seed;}const fn=make();String(typeof fn);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "function"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generator captured yield invalid unused consumer",
+      "steps": [
+        {
+          "source": "let seed:string=\"ok\";function make(){return function*(){yield seed;};}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "generator captured yield valid",
+      "steps": [
+        {
+          "source": "let seed:string=\"ok\";function make(){return function*(){yield seed;};}const fn=make();String(typeof fn);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "function"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async generator captured yield invalid unused consumer",
+      "steps": [
+        {
+          "source": "let seed:string=\"ok\";function make(){return async function*(){yield seed;};}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "async generator captured yield valid",
+      "steps": [
+        {
+          "source": "let seed:string=\"ok\";function make(){return async function*(){yield seed;};}const fn=make();String(typeof fn);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "function"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generator captured completion with unknown yield invalid unused consumer",
+      "steps": [
+        {
+          "source": "let seed:string=\"ok\";function make(){return function*(){yield globalThis.unknown;return seed;};}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "generator captured completion with unknown yield valid",
+      "steps": [
+        {
+          "source": "let seed:string=\"ok\";function make(){return function*(){yield globalThis.unknown;return seed;};}const fn=make();String(typeof fn);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "function"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async generator captured completion with unknown yield invalid unused consumer",
+      "steps": [
+        {
+          "source": "let seed:string=\"ok\";function make(){return async function*(){yield globalThis.unknown;return seed;};}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "async generator captured completion with unknown yield valid",
+      "steps": [
+        {
+          "source": "let seed:string=\"ok\";function make(){return async function*(){yield globalThis.unknown;return seed;};}const fn=make();String(typeof fn);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "function"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async parameter invalid unused consumer",
+      "steps": [
+        {
+          "source": "function make(){return async function(x:string){return x;};}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "async parameter valid",
+      "steps": [
+        {
+          "source": "function make(){return async function(x:string){return x;};}const fn=make();String(typeof fn);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "function"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async arrow parameter invalid unused consumer",
+      "steps": [
+        {
+          "source": "function make(){return async (x:string)=>x;}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "async arrow parameter valid",
+      "steps": [
+        {
+          "source": "function make(){return async (x:string)=>x;}const fn=make();String(typeof fn);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "function"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generator parameter invalid unused consumer",
+      "steps": [
+        {
+          "source": "function make(){return function*(x:string){yield x;};}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "generator parameter valid",
+      "steps": [
+        {
+          "source": "function make(){return function*(x:string){yield x;};}const fn=make();String(typeof fn);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "function"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async generator parameter invalid unused consumer",
+      "steps": [
+        {
+          "source": "function make(){return async function*(x:string){yield x;};}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "async generator parameter valid",
+      "steps": [
+        {
+          "source": "function make(){return async function*(x:string){yield x;};}const fn=make();String(typeof fn);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "function"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain function remains private",
+      "steps": [
+        {
+          "source": "function unknownFlag():any{return true;}let flag:boolean=unknownFlag();function privateResult(){return \"ok\";}function make(){return function(){return \"ok\";};}let outcome=\"missed\";try{const q:number=make();}catch(e){outcome=e.name;}outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain arrow remains private",
+      "steps": [
+        {
+          "source": "function unknownFlag():any{return true;}let flag:boolean=unknownFlag();function privateResult(){return \"ok\";}function make(){return ()=>\"ok\";}let outcome=\"missed\";try{const q:number=make();}catch(e){outcome=e.name;}outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain async remains private",
+      "steps": [
+        {
+          "source": "function unknownFlag():any{return true;}let flag:boolean=unknownFlag();function privateResult(){return \"ok\";}function make(){return async ()=>\"ok\";}let outcome=\"missed\";try{const q:number=make();}catch(e){outcome=e.name;}outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain generator remains private",
+      "steps": [
+        {
+          "source": "function unknownFlag():any{return true;}let flag:boolean=unknownFlag();function privateResult(){return \"ok\";}function make(){return function*(){yield \"ok\";};}let outcome=\"missed\";try{const q:number=make();}catch(e){outcome=e.name;}outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain async generator remains private",
+      "steps": [
+        {
+          "source": "function unknownFlag():any{return true;}let flag:boolean=unknownFlag();function privateResult(){return \"ok\";}function make(){return async function*(){yield \"ok\";};}let outcome=\"missed\";try{const q:number=make();}catch(e){outcome=e.name;}outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit any result remains private",
+      "steps": [
+        {
+          "source": "function unknownFlag():any{return true;}let flag:boolean=unknownFlag();function privateResult(){return \"ok\";}function make(){return ():any=>\"ok\";}let outcome=\"missed\";try{const q:number=make();}catch(e){outcome=e.name;}outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "only unknown any positions remains private",
+      "steps": [
+        {
+          "source": "function unknownFlag():any{return true;}let flag:boolean=unknownFlag();function privateResult(){return \"ok\";}function make(){return (x:any)=>x;}let outcome=\"missed\";try{const q:number=make();}catch(e){outcome=e.name;}outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic syntax alone remains private",
+      "steps": [
+        {
+          "source": "function unknownFlag():any{return true;}let flag:boolean=unknownFlag();function privateResult(){return \"ok\";}function make(){return function<T:type>(){return \"ok\";};}let outcome=\"missed\";try{const q:number=make();}catch(e){outcome=e.name;}outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "private callee result remains private",
+      "steps": [
+        {
+          "source": "function unknownFlag():any{return true;}let flag:boolean=unknownFlag();function privateResult(){return \"ok\";}function make(){return ()=>privateResult();}let outcome=\"missed\";try{const q:number=make();}catch(e){outcome=e.name;}outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed control only remains private",
+      "steps": [
+        {
+          "source": "function unknownFlag():any{return true;}let flag:boolean=unknownFlag();function privateResult(){return \"ok\";}function make(){return ()=>flag?1:2;}let outcome=\"missed\";try{const q:number=make();}catch(e){outcome=e.name;}outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown async carrier remains private",
+      "steps": [
+        {
+          "source": "function unknownFlag():any{return true;}let flag:boolean=unknownFlag();function privateResult(){return \"ok\";}function make(){return async ()=>globalThis.unknown;}let outcome=\"missed\";try{const q:number=make();}catch(e){outcome=e.name;}outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown generator carrier remains private",
+      "steps": [
+        {
+          "source": "function unknownFlag():any{return true;}let flag:boolean=unknownFlag();function privateResult(){return \"ok\";}function make(){return function*(){yield globalThis.unknown;};}let outcome=\"missed\";try{const q:number=make();}catch(e){outcome=e.name;}outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "original captured default invalid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){type R<U:type=T>=U;return function f<V:type=R.<>>(x:V):V{return x;};}const f=outer.<string>();function use<T:type>(){const g=f.<>;return g(1);}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "original captured default valid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){type R<U:type=T>=U;return function f<V:type=R.<>>(x:V):V{return x;};}const f=outer.<string>();function use<T:type>(){const g=f.<>;return g(\"ok\");}use.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct captured default invalid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){return function f<V:type=T>(x:V):V{return x;};}const f=outer.<string>();function use<T:type>(){const g=f.<>;return g(1);}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct captured default valid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){return function f<V:type=T>(x:V):V{return x;};}const f=outer.<string>();function use<T:type>(){const g=f.<>;return g(\"ok\");}use.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed captured default invalid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){type R<U:type=T>=identity(U);return function f<V:type=R.<>>(x:V):V{return x;};}const f=outer.<string>();function use<T:type>(){const g=f.<>;return g(1);}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed captured default valid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){type R<U:type=T>=identity(U);return function f<V:type=R.<>>(x:V):V{return x;};}const f=outer.<string>();function use<T:type>(){const g=f.<>;return g(\"ok\");}use.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct generic activations",
+      "steps": [
+        {
+          "source": "function outer<T:type>(){type R<U:type=T>=U;return function f<V:type=R.<> >(x:V):V{return x;};}const s=outer.<string>();const n=outer.<uint8>();const a=s.<>;const b=n.<>;a(\"ok\")+String(b(1));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const literal extraction",
+      "steps": [
+        {
+          "source": "function make(){const fn=(x:string)=>x;return fn;}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "let literal extraction",
+      "steps": [
+        {
+          "source": "function make(){let fn=(x:string)=>x;return fn;}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "mutable captured value keeps its contract",
+      "steps": [
+        {
+          "source": "let seed:string|number=\"ok\";function make(){return ()=>seed;}seed=1;String(make()());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "untyped shadow does not borrow capture",
+      "steps": [
+        {
+          "source": "let seed:string=\"ok\";function make(){return (seed)=>seed;}let result=\"missed\";try{const q:number=make();}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "private wrapper chain",
+      "steps": [
+        {
+          "source": "function a(){return b();}function b(){return c();}function c(){return ()=>\"ok\";}let result=\"missed\";try{const q:number=a();}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed wrapper chain",
+      "steps": [
+        {
+          "source": "function a(){return b();}function b(){return c();}function c(){return (x:string)=>x;}function use(){const q:number=a();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "anchored conditional arm",
+      "steps": [
+        {
+          "source": "function unknownFlag():any{return true;}let flag:boolean=unknownFlag();function make(){return flag?((x:string)=>x):((x:string)=>x);}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "contextual literal result",
+      "steps": [
+        {
+          "source": "function make():()=>uint8{return ()=>3;}const fn=make();String(Reflect.typeOf(fn()));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "uint.<8>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contextual signature preserved through binding",
+      "steps": [
+        {
+          "source": "function make(){const fn:()=>uint8=()=>3;return fn;}const fn=make();String(Reflect.typeOf(fn()));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "uint.<8>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflected producer reports callable contract",
+      "steps": [
+        {
+          "source": "function make(){return (x:string)=>x;}function declared():(x:string)=>string{return (x:string)=>x;}String(Reflect.typeOf(make)===Reflect.typeOf(declared));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed closure still checks any crossing",
+      "steps": [
+        {
+          "source": "function make(){return (x:uint8)=>x;}const fn:any=make();let result=\"missed\";try{fn(\"bad\");}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declaration derived literal inferred through typed local",
+      "steps": [
+        {
+          "source": "function make(){return ()=>{let x:string=\"ok\";return x;};}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed check then independent literal",
+      "steps": [
+        {
+          "source": "function make(){return function(x:string){return x;};}function use(){const q:number=make();}\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        },
+        {
+          "source": "function laterMake(){return function(x:string){return x;};}const laterFn=laterMake();laterFn(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    }
+  ]
+}
