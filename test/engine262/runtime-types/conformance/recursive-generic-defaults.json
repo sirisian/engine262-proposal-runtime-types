@@ -1,0 +1,771 @@
+{
+  "cases": [
+    {
+      "name": "unused self default",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "used self default",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;type K=R.<>;\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed self default",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;function build(){return type R.<>;}type K=build();\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit bypass",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;type K=R.<uint8>;let x:K=1;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unused function application",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;function f(x:R.<>):R.<> {return x;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite reentry",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<string>>=T;type K=R.<>;let x:K=\"ok\";x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite mutual defaults",
+      "steps": [
+        {
+          "source": "type A<T:type=B.<> >=T;type B<T:type=A.<string>>=T;type K=A.<>;let x:K=\"ok\";x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mutual default cycle",
+      "steps": [
+        {
+          "source": "type A<T:type=B.<> >=T;type B<T:type=A.<> >=T;type K=A.<>;\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default tuple growth",
+      "steps": [
+        {
+          "source": "type R<T:type=[R.<>]>=T;type K=R.<>;\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default named recursive",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<U:uint8>,U:type=uint8>=T;type K=R.<>;\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "unused generic dependent default",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;function f<U:type>(x:U){return x;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function default uses alias",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;function f<T:type=R.<> >():T {throw 1;}function unused(){f();}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "class default uses alias",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;class C<T:type=R.<> >{x:T;}function unused(){let c:C.<>;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "interface default uses alias",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;interface I<T:type=R.<> >{x:T;}function unused(){let c:I.<>;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "failure cleanup",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;type K=R.<>;\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "type Good<T:type=string>=T;type K2=Good.<>;let x:K2=\"ok\";x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite chain 8",
+      "steps": [
+        {
+          "source": "type A0<T:type=A1.<> >=T;type A1<T:type=A2.<> >=T;type A2<T:type=A3.<> >=T;type A3<T:type=A4.<> >=T;type A4<T:type=A5.<> >=T;type A5<T:type=A6.<> >=T;type A6<T:type=A7.<> >=T;type A7<T:type=string>=T;type K=A0.<>;let x:K=\"ok\";x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite chain 32",
+      "steps": [
+        {
+          "source": "type A0<T:type=A1.<> >=T;type A1<T:type=A2.<> >=T;type A2<T:type=A3.<> >=T;type A3<T:type=A4.<> >=T;type A4<T:type=A5.<> >=T;type A5<T:type=A6.<> >=T;type A6<T:type=A7.<> >=T;type A7<T:type=A8.<> >=T;type A8<T:type=A9.<> >=T;type A9<T:type=A10.<> >=T;type A10<T:type=A11.<> >=T;type A11<T:type=A12.<> >=T;type A12<T:type=A13.<> >=T;type A13<T:type=A14.<> >=T;type A14<T:type=A15.<> >=T;type A15<T:type=A16.<> >=T;type A16<T:type=A17.<> >=T;type A17<T:type=A18.<> >=T;type A18<T:type=A19.<> >=T;type A19<T:type=A20.<> >=T;type A20<T:type=A21.<> >=T;type A21<T:type=A22.<> >=T;type A22<T:type=A23.<> >=T;type A23<T:type=A24.<> >=T;type A24<T:type=A25.<> >=T;type A25<T:type=A26.<> >=T;type A26<T:type=A27.<> >=T;type A27<T:type=A28.<> >=T;type A28<T:type=A29.<> >=T;type A29<T:type=A30.<> >=T;type A30<T:type=A31.<> >=T;type A31<T:type=string>=T;type K=A0.<>;let x:K=\"ok\";x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite chain 64",
+      "steps": [
+        {
+          "source": "type A0<T:type=A1.<> >=T;type A1<T:type=A2.<> >=T;type A2<T:type=A3.<> >=T;type A3<T:type=A4.<> >=T;type A4<T:type=A5.<> >=T;type A5<T:type=A6.<> >=T;type A6<T:type=A7.<> >=T;type A7<T:type=A8.<> >=T;type A8<T:type=A9.<> >=T;type A9<T:type=A10.<> >=T;type A10<T:type=A11.<> >=T;type A11<T:type=A12.<> >=T;type A12<T:type=A13.<> >=T;type A13<T:type=A14.<> >=T;type A14<T:type=A15.<> >=T;type A15<T:type=A16.<> >=T;type A16<T:type=A17.<> >=T;type A17<T:type=A18.<> >=T;type A18<T:type=A19.<> >=T;type A19<T:type=A20.<> >=T;type A20<T:type=A21.<> >=T;type A21<T:type=A22.<> >=T;type A22<T:type=A23.<> >=T;type A23<T:type=A24.<> >=T;type A24<T:type=A25.<> >=T;type A25<T:type=A26.<> >=T;type A26<T:type=A27.<> >=T;type A27<T:type=A28.<> >=T;type A28<T:type=A29.<> >=T;type A29<T:type=A30.<> >=T;type A30<T:type=A31.<> >=T;type A31<T:type=A32.<> >=T;type A32<T:type=A33.<> >=T;type A33<T:type=A34.<> >=T;type A34<T:type=A35.<> >=T;type A35<T:type=A36.<> >=T;type A36<T:type=A37.<> >=T;type A37<T:type=A38.<> >=T;type A38<T:type=A39.<> >=T;type A39<T:type=A40.<> >=T;type A40<T:type=A41.<> >=T;type A41<T:type=A42.<> >=T;type A42<T:type=A43.<> >=T;type A43<T:type=A44.<> >=T;type A44<T:type=A45.<> >=T;type A45<T:type=A46.<> >=T;type A46<T:type=A47.<> >=T;type A47<T:type=A48.<> >=T;type A48<T:type=A49.<> >=T;type A49<T:type=A50.<> >=T;type A50<T:type=A51.<> >=T;type A51<T:type=A52.<> >=T;type A52<T:type=A53.<> >=T;type A53<T:type=A54.<> >=T;type A54<T:type=A55.<> >=T;type A55<T:type=A56.<> >=T;type A56<T:type=A57.<> >=T;type A57<T:type=A58.<> >=T;type A58<T:type=A59.<> >=T;type A59<T:type=A60.<> >=T;type A60<T:type=A61.<> >=T;type A61<T:type=A62.<> >=T;type A62<T:type=A63.<> >=T;type A63<T:type=string>=T;type K=A0.<>;let x:K=\"ok\";x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unused function alias default",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;function f<T:type=R.<> >(x:T):T{return x;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unused class alias default",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;class C<T:type=R.<> >{x:T;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unused interface alias default",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;interface I<T:type=R.<> >{x:T;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function explicit bypass",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;function f<T:type=R.<> >(x:T):T{return x;}f.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function inference bypass",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;function f<T:type=R.<> >(x:T):T{return x;}f(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class explicit bypass",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;class C<T:type=R.<> >{x:T;}function f(c:C.<string>){return c.x;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "interface explicit bypass",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;interface I<T:type=R.<> >{x:T;}function f(c:I.<string>){return c.x;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mutual unused",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;type A<T:type=B.<> >=T;type B<T:type=A.<> >=T;\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function expression application",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;function f<T:type=R.<> >(x:T):T{return x;}function unused(){const g=f.<>;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "class bare default",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;class C<T:type=R.<> >{x:T;}function unused(){let c:C;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "class new default",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;class C<T:type=R.<> >{x:T;}function unused(){new C.<>();}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "interface bare default",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;interface I<T:type=R.<> >{x:T;}function unused(){let c:I;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "caught exhaustion",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;function build(){try{return type R.<>;}catch(e){return type string;}}type K=build();\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default before consumer mismatch",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<> >=T;type K=R.<>;function f():K{return \"wrong\";}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite alias consumer True",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<string>>=T;type K=R.<>;function f():K{return \"ok\";}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite alias consumer False",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<string>>=T;type K=R.<>;function f():K{return 1;}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite function consumer True",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<string>>=T;function f<T:type=R.<> >(x:T):T{return x;}function unused(){const g=f.<>;g(\"ok\");}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite function consumer False",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<string>>=T;function f<T:type=R.<> >(x:T):T{return x;}function unused(){const g=f.<>;g(1);}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite interface consumer True",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<string>>=T;interface I<T:type=R.<> >{x:T;}function f():I.<> {return {x:\"ok\"};}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite interface consumer False",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<string>>=T;interface I<T:type=R.<> >{x:T;}function f():I.<> {return {x:1};}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured alias default True",
+      "steps": [
+        {
+          "source": "function outer<T:type>(){type R<U:type=T>=U;return function f<V:type=R.<> >(x:V):V{return x;};}const f=outer.<string>();function use<T:type>(){const g=f.<>;return g(\"ok\");}use.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed finite different inputs",
+      "steps": [
+        {
+          "source": "function build(T:type){if(T===uint8)return type string;return type R.<uint8>;}type R<U:type,T:type=build(U)> = T;type K=R.<boolean>;let x:K=\"ok\";x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later dependent default",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<string>>=T;function f<T:type=R.<>,U:type=T>(x:U):U{return x;}const g=f.<>;g(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite default then exhausted independent application",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<string>>=T;type K=R.<>;\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        },
+        {
+          "source": "type Loop<T:type=Loop.<> >=T;type Bad=Loop.<>;\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "type Other<T:type=string>=T;type Good=Other.<>;let x:Good=\"ok\";x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "recursive union",
+      "steps": [
+        {
+          "source": "type R<T:type=R.<>|string>=T;type K=R.<>;\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "recursive array",
+      "steps": [
+        {
+          "source": "type R<T:type=[].<R.<>>>=T;type K=R.<>;\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "recursive object",
+      "steps": [
+        {
+          "source": "type R<T:type={x:R.<>}>=T;type K=R.<>;\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "recursive function",
+      "steps": [
+        {
+          "source": "type R<T:type=(x:R.<>)=>R.<>>=T;type K=R.<>;\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

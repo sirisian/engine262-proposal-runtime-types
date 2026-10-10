@@ -9462,7 +9462,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return true;
   };
 
-  const fillClassDefaults = (userClass: Known, args: readonly (TypeRecord | number | undefined)[]): (TypeRecord | number)[] => {
+  const fillClassDefaults = (userClass: Known, args: readonly (TypeRecord | number | undefined)[], application: GenericDefaultCheck['application']): (TypeRecord | number)[] => {
     if (!userClass || userClass.Kind !== 'nominal') {
       return args.filter((arg): arg is TypeRecord | number => arg !== undefined);
     }
@@ -9490,13 +9490,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       const pdefault = (q as unknown as { TypeParameterDefault?: ParseNode.Type }).TypeParameterDefault;
+      const parameters = typeParameterRecordsOf((decl as ParseNode.ClassDeclaration).TypeParameters?.TypeParameterList);
+      const check: GenericDefaultCheck | undefined = pdefault ? { application, node: pdefault,
+        parameters, bindings: new Map(bindings), captures: parameters[i]?.Captures } : undefined;
       // Resolved with the class's parameters in scope - `U = [].<T>` names T -
       // and the parameter records then replaced by the bindings so far.
       const pushed = pdefault ? pushTypeParameterScopeOf(decl) : false;
       let resolved: Known = null;
       enterFamilyPattern();
       try {
-        resolved = pdefault ? resolveType(pdefault) : null;
+        resolved = check ? EvaluatedGenericType(check) ?? resolveType(check.node) : null;
+        if (!resolved && check) {
+          // A present but pending default is not a missing argument. Retain
+          // the application and its inputs until metered evaluation finishes.
+          if (!describingGenericDefaults.size) genericDefaults.push(check);
+          resolved = deferredFamilyDefault(check.node, (parameter) => bindings.get(parameter) ?? null) ?? null;
+        }
       } finally {
         leaveFamilyPattern();
         if (pushed) {
@@ -9565,7 +9574,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     // Fill what can be filled and report what cannot; the report names the
     // first parameter without a default.
-    return CanonicalizeType({ ...(resolved as TypeRecord), Arguments: fillClassDefaults(resolved, []) } as TypeRecord) as Known;
+    const completed = fillClassDefaults(resolved, [], node as ParseNode.TypeReference);
+    if (completed.some((a) => typeof a !== 'number' && a.Kind === 'deferred' && a.DefaultNode)) return null;
+    return CanonicalizeType({ ...(resolved as TypeRecord), Arguments: completed } as TypeRecord) as Known;
   };
 
   /**
@@ -11805,7 +11816,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return { Kind: 'function', Signatures } as unknown as Known;
   };
 
+  // Describing a default is speculative: only an application needing it
+  // evaluates it. Re-entry supplies no completed type or cycle diagnostic;
+  // the requiring application retains its ordinary evaluation obligation.
+  const describingGenericDefaults = new Set<ParseNode.Type>();
   const resolveType = (node: ParseNode.Type): Known => {
+    const isDefault = node.parent?.type === 'TypeParameter' && node.parent.TypeParameterDefault === node;
+    if (!isDefault) return resolveTypeInContext(node);
+    if (describingGenericDefaults.has(node)) return null;
+    describingGenericDefaults.add(node);
+    try {
+      return resolveTypeInContext(node);
+    } finally {
+      describingGenericDefaults.delete(node);
+    }
+  };
+
+  const resolveTypeInContext = (node: ParseNode.Type): Known => {
     // A pattern's constructor is a family, not a bare application of it.
     if ((node as ParseNode).type === 'TypeName') {
       const name = node as unknown as ParseNode.TypeName;
@@ -12047,13 +12074,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (higherKindedArgument && genericDeclaration?.type === 'TypeAliasDeclaration' && genericParameters.length > 0) {
           return { Kind: 'nominal', Declaration: genericDeclaration, Arguments: [] } as TypeRecord;
         }
-        // #sec-parameterized-types: a bare alias in a concrete type position
+        // #sec-parameterized-types: a bare alias or interface in a concrete type position
         // binds defaults exactly as an empty application does. The cached
         // declaration body still contains unbound parameters.
-        const applyBareAlias = !node.TypeArguments && genericDeclaration?.type === 'TypeAliasDeclaration'
+        const applyBareGeneric = !node.TypeArguments && genericDeclaration
           && genericParameters.length > 0 && !parameterInScope
           && !higherKindedArgument;
-        if (node.TypeName.MemberNames.length > 0 || node.TypeArguments || applyBareAlias) {
+        if (node.TypeName.MemberNames.length > 0 || node.TypeArguments || applyBareGeneric) {
           const args: (TypeRecord | number)[] = [];
           if (node.TypeName.MemberNames.length > 0) {
             // #sec-computed-constraints: `I.length` in a default or a
@@ -12600,7 +12627,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const declaration = (userClass as unknown as { Declaration?: ParseNode }).Declaration;
               if (declaration && kinded.size > 0) checkKindedApplications(declaration, kinded, firstOrder);
             }
-            const completed = fillClassDefaults(userClass, args);
+            const completed = fillClassDefaults(userClass, args, node);
             if (!inFamilyPattern() && completed.some((a) => typeof a !== 'number' && a.Kind === 'deferred' && a.DefaultNode)) return null;
             return CanonicalizeType({ ...userClass, Arguments: completed });
           }
@@ -13490,7 +13517,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const resolved = pending ? null : EvaluatedGenericType(check) ?? tp.Default ?? resolveType(tp.DefaultNode);
           const supplied = resolved && substituteFreeTypeParameters(resolved, into, typeParams.map((parameter) => parameter.Declaration));
           if (supplied) into.set(tp.Name, supplied);
-          else if ([...into.values()].every((type) => !mentionsTypeParameter(type))) {
+          else if (!describingGenericDefaults.size && [...into.values()].every((type) => !mentionsTypeParameter(type))) {
             genericDefaults.push(check);
           }
         }
@@ -13507,7 +13534,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             parameters: typeParams, bindings: new Map(into), captures: tp.Captures, constraint: true };
           const evaluated = EvaluatedGenericType(check);
           if (evaluated) bound = evaluated;
-          else genericDefaults.push(check);
+          else if (!describingGenericDefaults.size) genericDefaults.push(check);
         }
         // #sec-the-type-type: "`type` is the type whose values are the Type
         // Objects ... it is the Static Type of a type name or type expression
@@ -19764,7 +19791,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 // `new A.<>(5)` and `new Grid.<8>()` bind their defaults, as the
                 // runtime's SpecializeGenericClass does (#sec-type-references).
                 const ordered = orderTypeArgumentsShared(specParams.map((q) => q.BindingIdentifier.name), valueArgs, argNameAt);
-                const completed = fillClassDefaults(base, ordered.ok ? ordered.ordered : valueArgs);
+                const completed = fillClassDefaults(base, ordered.ok ? ordered.ordered : valueArgs, node);
                 if (completed.some((a) => typeof a !== 'number' && a.Kind === 'deferred' && a.DefaultNode)) return null;
                 return CanonicalizeType({ ...base, Arguments: completed });
               }

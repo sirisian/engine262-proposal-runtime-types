@@ -342,7 +342,7 @@ function* evaluateGenericSource(check: GenericDefaultCheck): PlainEvaluator<Type
         return !bound || whereInputNeedsRuntimeValue(bound);
       }
       if (binding.kind === 'function') return binding.node.type !== 'FunctionDeclaration';
-      if (binding.node.type === 'TypeAliasDeclaration') return !!binding.node.TypeParameters;
+      if (binding.node.type === 'TypeAliasDeclaration') return false;
       return true;
     })) return false;
     for (const reference of LexicalFreeReferences(source)) {
@@ -350,7 +350,8 @@ function* evaluateGenericSource(check: GenericDefaultCheck): PlainEvaluator<Type
       if (!binding && !builtinTypeRecord(reference.name) && !BoundTypeRecordForName(reference.name)
         && !FRAGMENT_FLOOR.includes(reference.name) && !ERROR_CONSTRUCTORS.includes(reference.name)) return false;
       if (binding?.kind === 'function' && !available(binding.node)) return false;
-      if (binding?.node.type === 'TypeAliasDeclaration' && !available(binding.node.Type)) return false;
+      if (binding?.node.type === 'TypeAliasDeclaration'
+          && !available(binding.node.TypeParameters ? binding.node : binding.node.Type)) return false;
     }
     return true;
   };
@@ -358,7 +359,7 @@ function* evaluateGenericSource(check: GenericDefaultCheck): PlainEvaluator<Type
   const context = surroundingAgent.runningExecutionContext;
   const outer = context.LexicalEnvironment;
   const functions = new Map<ParseNode, Value>();
-  const aliases = new Map<ParseNode, TypeRecord>();
+  const aliases = new Map<ParseNode, Value>();
   const activeAliases = new Set<ParseNode>();
   // Each helper has its own environment and generic frame: spelling alone
   // cannot merge a helper's captured T with the caller's independent T.
@@ -392,6 +393,14 @@ function* evaluateGenericSource(check: GenericDefaultCheck): PlainEvaluator<Type
       }
       // Cache the function before its dependencies, allowing mutual recursion.
       if (source.type === 'FunctionDeclaration') functions.set(source, X(InstantiateFunctionObject(source, scope, context.PrivateEnvironment)));
+      if (source.type === 'TypeAliasDeclaration' && source.TypeParameters) {
+        // A default may apply a generic alias, including itself. Capture its
+        // declaration environment before following dependencies; ordinary
+        // instantiation will bind its arguments under the shared budget.
+        const descriptor = GetTypeObject(CreateGenericAliasRecord(source, scope, undefined));
+        aliases.set(source, descriptor);
+        bind(source.BindingIdentifier.name, descriptor);
+      }
       for (const reference of LexicalFreeReferences(source)) {
         const binding = ResolveBindingDeclaration(reference, reference.name);
         if (binding?.kind === 'function' && binding.node.type === 'FunctionDeclaration') {
@@ -402,6 +411,10 @@ function* evaluateGenericSource(check: GenericDefaultCheck): PlainEvaluator<Type
           bind(reference.name, functions.get(binding.node)!);
         } else if (binding?.node.type === 'TypeAliasDeclaration') {
           const alias = binding.node;
+          if (!aliases.has(alias) && alias.TypeParameters) {
+            const prepared = Q(yield* prepare(alias));
+            if (!prepared) return undefined;
+          }
           if (!aliases.has(alias)) {
             if (activeAliases.has(alias)) return undefined;
             activeAliases.add(alias);
@@ -411,14 +424,14 @@ function* evaluateGenericSource(check: GenericDefaultCheck): PlainEvaluator<Type
             context.LexicalEnvironment = prepared.scope;
             pushTypeParameterFrame(prepared.frame);
             try {
-              aliases.set(alias, Q(yield* TypeNodeToTypeRecord(alias.Type)));
+              aliases.set(alias, GetTypeObject(Q(yield* TypeNodeToTypeRecord(alias.Type))));
             } finally {
               popTypeParameterFrame();
               context.LexicalEnvironment = saved;
               activeAliases.delete(alias);
             }
           }
-          bind(reference.name, GetTypeObject(aliases.get(alias)!));
+          bind(reference.name, aliases.get(alias)!);
         }
       }
       return { scope, frame };
