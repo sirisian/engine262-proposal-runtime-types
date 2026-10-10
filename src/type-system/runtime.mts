@@ -62,6 +62,7 @@ import { CanonicalizeType, GetTypeObject, isTypeObject, isClassTypeObject } from
 import { invalidTupleRest } from './tuple-rests.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization, ClassTypeEnvironmentOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { GenericWhereVerified } from './generic-where.mts';
+import { GenericAliasContextOf } from './generic-alias-context.mts';
 import { bindLibraryTypeArguments, libraryTypeParameters } from './library-type-arguments.mts';
 import { MergePartialStructures, RuntimePartialContributions } from './partial-types.mts';
 import { wrapToType } from './arithmetic.mts';
@@ -1039,57 +1040,36 @@ function mentionsThis(clauses: readonly ParseNode.WhereClause[]): boolean {
   return false;
 }
 
-export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclaration, argRecords: readonly TypeRecord[]): PlainEvaluator<TypeRecord> {
+export function* InstantiateGenericAlias(
+  declaration: ParseNode.TypeAliasDeclaration,
+  argRecords: readonly TypeRecord[],
+  descriptor?: TypeRecord,
+  argNames: readonly (string | undefined)[] = argRecords.map(() => undefined),
+): PlainEvaluator<TypeRecord> {
+  const captured = GenericAliasContextOf(descriptor);
+  const context = surroundingAgent.runningExecutionContext;
+  const savedEnvironment = context.LexicalEnvironment;
+  // Written arguments have already evaluated in the caller. Alias defaults,
+  // constraints and expansion cannot read the caller's generic bindings.
+  const savedFrames = captured ? typeParameterFrames.splice(0) : undefined;
+  if (captured) {
+    context.LexicalEnvironment = captured.Environment;
+    pushTypeParameterFrame(new Map(captured.Bindings));
+  }
+  try {
+    return yield* InstantiateGenericAliasInContext(declaration, argRecords, argNames);
+  } finally {
+    context.LexicalEnvironment = savedEnvironment;
+    if (savedFrames) typeParameterFrames.splice(0, typeParameterFrames.length, ...savedFrames);
+  }
+}
+
+function* InstantiateGenericAliasInContext(
+  declaration: ParseNode.TypeAliasDeclaration,
+  argRecords: readonly TypeRecord[],
+  argNames: readonly (string | undefined)[],
+): PlainEvaluator<TypeRecord> {
   const params = declaration.TypeParameters?.TypeParameterList ?? [];
-  // #sec-generics: a trailing parameter with a DEFAULT may be omitted, so an
-  // alias may be written with fewer arguments than parameters - and with none
-  // at all where every parameter has one, which is what makes a bare `A` a type
-  // for `type A<T = uint8> = [].<T>`. Each omitted parameter takes its default,
-  // resolved with the bindings made so far so that a later default may name an
-  // earlier parameter.
-  const firstDefault = params.findIndex((p) => (p as unknown as { TypeParameterDefault?: unknown }).TypeParameterDefault);
-  const leastArgs = firstDefault === -1 ? params.length : firstDefault;
-  if (argRecords.length < leastArgs || argRecords.length > params.length) {
-    // The parameter list decides what
-    // `.<...>` MEANS, so it has to decide the error too, and say which parameter
-    // is at fault. Both arities reported "$1 is not a type" - which is false of
-    // the alias, unhelpful about the application, and actively misleading now
-    // that `Grid.<>` is a legal spelling: a reader of `Box.<>` was told `Box` was
-    // not a type rather than that `T` has no default to fall back on.
-    const missing = params[argRecords.length] as { BindingIdentifier?: { name?: string } } | undefined;
-    if (argRecords.length < leastArgs && missing?.BindingIdentifier?.name) {
-      return Throw.TypeError(
-        'no type argument for the required parameter $1 of $2',
-        Value(missing.BindingIdentifier.name),
-        Value(declaration.BindingIdentifier.name),
-      );
-    }
-    return Throw.TypeError(
-      '$1 takes $2 type arguments, and $3 were supplied',
-      Value(declaration.BindingIdentifier.name),
-      Value(String(params.length)),
-      Value(String(argRecords.length)),
-    );
-  }
-  if (argRecords.length < params.length) {
-    const filled = [...argRecords];
-    const frame = new Map<string, TypeRecord>();
-    for (let i = 0; i < params.length; i += 1) {
-      const name = params[i]!.BindingIdentifier?.name;
-      if (i >= filled.length) {
-        pushTypeParameterFrame(frame);
-        try {
-          filled.push(Q(yield* TypeNodeToTypeRecord((params[i] as unknown as { TypeParameterDefault: ParseNode.Type }).TypeParameterDefault)));
-        } finally {
-          popTypeParameterFrame();
-        }
-      }
-      if (name) {
-        bindTypeParameter(frame, name, filled[i]!, params[i]);
-      }
-    }
-    argRecords = filled;
-  }
   // proposal-runtime-types #sec-evaluation-budget: instantiating an alias is
   // type-level evaluation and must be metered. Without this a self-referential
   // alias - `type R<T> = R.<T>` - recursed until the HOST stack overflowed,
@@ -1117,6 +1097,8 @@ export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclara
         Value(declaration.BindingIdentifier.name),
       );
     }
+    const frame = new Map<string, TypeRecord>();
+    argRecords = Q(yield* BindTypeArgumentRecordsInto(params, argRecords, argNames, frame, declaration.BindingIdentifier.name));
     // #sec-specialization-lists: an application of an alias family with CASES selects
     // its right-hand side as a class application selects its body - by the
     // function rule, once its arguments are closed, as they are here - and the
@@ -1131,10 +1113,6 @@ export function* InstantiateGenericAlias(declaration: ParseNode.TypeAliasDeclara
         caseFrame = selected.Frame;
       }
     }
-    const frame = new Map<string, TypeRecord>();
-    params.forEach((p, i) => {
-      bindTypeParameter(frame, (p as { BindingIdentifier: { name: string } }).BindingIdentifier.name, argRecords[i], p);
-    });
     for (const [captured, record] of caseFrame ?? []) {
       frame.set(captured, record);
     }
@@ -4963,12 +4941,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
             const aliasDecl = boundDecl.Declaration as ParseNode.TypeAliasDeclaration;
             return Q(yield* InstantiateGenericAlias(
               aliasDecl,
-              Q(yield* OrderNamedTypeArguments(
-                aliasDecl.TypeParameters?.TypeParameterList ?? [],
-                argRecords,
-                argNames,
-                aliasDecl.BindingIdentifier.name,
-              )),
+              argRecords, boundDecl, argNames,
             ));
           }
           if (boundDecl.Kind === 'nominal') {
@@ -5525,12 +5498,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
         const record = value.TypeRecord;
         if (record.Kind === 'nominal' && record.Declaration.type === 'TypeAliasDeclaration' && (record.Declaration as ParseNode.TypeAliasDeclaration).TypeParameters) {
           const decl2 = record.Declaration as ParseNode.TypeAliasDeclaration;
-          return Q(yield* InstantiateGenericAlias(decl2, Q(yield* OrderNamedTypeArguments(
-            decl2.TypeParameters?.TypeParameterList ?? [],
-            argRecords,
-            argNames2,
-            decl2.BindingIdentifier.name,
-          ))));
+          return Q(yield* InstantiateGenericAlias(decl2, argRecords, record, argNames2));
         }
         baseRecord = record;
       } else if (value instanceof ObjectValue) {
@@ -6947,7 +6915,6 @@ function ExtentNamesOpenParameter(expression: unknown): boolean {
 import { intrinsicDeclarationRecord, intrinsicDeclarationName } from './records.mts';
 import { prepareFamilyPattern, finishFamilyPattern, FamilyPatternError, enterFamilyPattern, leaveFamilyPattern, deferredFamilyDefault, deferredDeclarationDefault } from './family-patterns.mts';
 import { bindIntrinsicArguments, intrinsicParameters, isHigherKindedArgument, isIntrinsicNamespace } from './intrinsic-generics.mts';
-
 import { rememberDeclaredConstraint } from './records.mts';
 
 /** Evaluate a default in the binder, never in a pure subtype/inclusion query. */

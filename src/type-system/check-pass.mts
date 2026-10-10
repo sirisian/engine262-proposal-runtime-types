@@ -33,6 +33,7 @@ import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import { LexicalFreeReferences, ResolveBindingDeclaration } from './compile-time-evaluability.mts';
 import { TypeExpressionEvaluabilityViolation } from './builder-evaluability.mts';
 import { resolvedAlias } from './resolving-aliases.mts';
+import { CreateGenericAliasRecord } from './generic-alias-context.mts';
 import { BeginFragmentEvaluation, EndFragmentEvaluation } from './fragment-library.mts';
 import { Evaluate, Get, GetValue, inspect, Throw, DeclarativeEnvironmentRecord, InstantiateFunctionObject, surroundingAgent } from '#self';
 
@@ -461,9 +462,9 @@ function* prepareDeferredTypeEnvironment(obligation: DeferredTypeCheck): PlainEv
       const binding = ResolveBindingDeclaration(reference, name);
       if (binding?.kind === 'function' && binding.node.type === 'FunctionDeclaration') {
         if (!available(binding.node)) return false;
-      } else if (binding?.node.type === 'TypeAliasDeclaration' && !binding.node.TypeParameters) {
+      } else if (binding?.node.type === 'TypeAliasDeclaration') {
         if (resolvedAlias(outer, name, binding.node)) continue;
-        if (!available(binding.node.Type)) return false;
+        if (!available(binding.node.TypeParameters ? binding.node : binding.node.Type)) return false;
       } else if (binding?.kind === 'import') {
         // Imports retain their actual target and required-boundary failure.
         continue;
@@ -494,6 +495,11 @@ function* prepareDeferredTypeEnvironment(obligation: DeferredTypeCheck): PlainEv
       if (source.type === 'FunctionDeclaration') {
         functions.set(source, X(InstantiateFunctionObject(source, scope, context.PrivateEnvironment)));
       }
+      if (source.type === 'TypeAliasDeclaration' && source.TypeParameters) {
+        const descriptor = GetTypeObject(CreateGenericAliasRecord(source, scope, undefined));
+        aliases.set(source, descriptor);
+        bind(source.BindingIdentifier.name, descriptor);
+      }
       for (const reference of LexicalFreeReferences(source)) {
         const name = reference.name;
         const binding = ResolveBindingDeclaration(reference, name);
@@ -506,12 +512,16 @@ function* prepareDeferredTypeEnvironment(obligation: DeferredTypeCheck): PlainEv
             if (!prepared) return undefined;
           }
           bind(name, functions.get(binding.node)!);
-        } else if (binding?.node.type === 'TypeAliasDeclaration' && !binding.node.TypeParameters) {
+        } else if (binding?.node.type === 'TypeAliasDeclaration') {
           const declaration = binding.node;
           const published = resolvedAlias(outer, name, declaration);
           if (published) {
             bind(name, GetTypeObject(published));
             continue;
+          }
+          if (!aliases.has(declaration) && declaration.TypeParameters) {
+            const prepared = Q(yield* prepare(declaration));
+            if (!prepared) return undefined;
           }
           if (!aliases.has(declaration)) {
             if (activeAliases.has(declaration)) return undefined;
@@ -694,7 +704,13 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     const frame = new Map<string, TypeRecord>();
     for (const parameter of parameters) {
       const name = parameter.BindingIdentifier.name;
-      bindTypeParameter(frame, name, check.bindings.get(name)!, parameter);
+      // Alias applications use the ordinary binder's value domains. Keep
+      // the checked predicate's inputs identical to its runtime inputs.
+      if (check.declaration.type === 'TypeAliasDeclaration') {
+        Q(yield* BindTypeParameterTyped(frame, name, check.bindings.get(name)!, parameter));
+      } else {
+        bindTypeParameter(frame, name, check.bindings.get(name)!, parameter);
+      }
     }
     const available = new Set(frame.keys());
     for (const clause of check.clauses) {

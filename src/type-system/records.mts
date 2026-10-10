@@ -627,8 +627,8 @@ export type TypeRecord =
   | {
     readonly Kind: 'nominal',
     readonly Declaration: ParseNode,
-    // An interface declaration's actual lexical binding, including its activation.
-    // This opaque identity retains no environment, program value or reference.
+    // An interface binding or an internal generic-alias declaration context.
+    // Opaque identity; expanded transparent aliases do not carry this field.
     readonly DeclarationIdentity?: object,
     readonly Arguments: readonly (TypeRecord | number)[],
     // proposal-runtime-types: evaluated enum member values, and the

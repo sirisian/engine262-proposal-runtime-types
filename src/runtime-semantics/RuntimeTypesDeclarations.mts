@@ -1,3 +1,4 @@
+import { CreateGenericAliasRecord } from '../type-system/generic-alias-context.mts';
 import { InstallTypeLayoutProperties } from '../type-system/layout-properties.mts';
 import { RememberArrayCapacity } from '../type-system/array-capacity-origin.mts';
 import { IsPartialDeclaration, MergePartialStructures, RuntimePartialContributions } from '../type-system/partial-types.mts';
@@ -40,7 +41,7 @@ import { OriginOfNode, RecordTypeOrigin, RecordDeclaredMemberOrigins } from '../
 import { BindTypeParameterTyped, toNumericArgument,
   InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord, spreadElementsOf,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
-import { OrderNamedTypeArguments, BindTypeArgumentsInto, MetadataObjectFromType } from '../type-system/runtime.mts';
+import { currentTypeParameterFrame, BindTypeArgumentsInto, MetadataObjectFromType } from '../type-system/runtime.mts';
 import { InferGenericBindings, TakePendingCalleeContext, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import type { EnvironmentRecord } from '../execution-context/Environment.mts';
 import { bindLibraryTypeArguments, RememberLibraryApplication } from '../type-system/library-type-arguments.mts';
@@ -183,7 +184,7 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
     if (node.TypeParameters) {
       // A generic alias binds uninstantiated; instantiation substitutes the
       // parameters and interns the result.
-      value = GetTypeObject({ Kind: 'nominal', Declaration: node, Arguments: [] });
+      value = GetTypeObject(CreateGenericAliasRecord(node, env, currentTypeParameterFrame()));
     } else {
       // #sec-gettypeobject: the alias binds the interned Type Object of its Type.
       //
@@ -1588,6 +1589,7 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
         Kind: 'parameter' as const,
         Name: (param as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? 'T',
       })) as unknown as readonly TypeRecord[],
+      shape,
     ))
     : shape;
   if (claimShape && claimShape.Kind === 'object') {
@@ -3017,13 +3019,7 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
       // honoured names in TYPE position and dropped them in expression
       // position, so `G8` and `type G8 = Grid.<Cols: 8>` disagreed.
       const aliasDecl = record.Declaration as ParseNode.TypeAliasDeclaration;
-      const orderedAliasArgs = Q(yield* OrderNamedTypeArguments(
-        aliasDecl.TypeParameters?.TypeParameterList ?? [],
-        argRecords,
-        argNames,
-        aliasDecl.BindingIdentifier.name,
-      ));
-      const instantiated = Q(yield* InstantiateGenericAlias(aliasDecl, orderedAliasArgs));
+      const instantiated = Q(yield* InstantiateGenericAlias(aliasDecl, argRecords, record, argNames));
       return GetTypeObject(instantiated);
     }
     // proposal-runtime-types: everything that is NOT a generic alias fell
@@ -3215,5 +3211,4 @@ function isFamilyShorthandTypeObject(name: string, value: Value): boolean {
 }
 
 import { intrinsicDeclarationName } from '../type-system/records.mts';
-
 import { libraryTypeRecord } from '../type-system/records.mts';

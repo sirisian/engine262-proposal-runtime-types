@@ -1,0 +1,799 @@
+{
+  "description": "Declaration environments for closed generic alias dependencies; authored expected completions and phases.",
+  "cases": [
+    {
+      "name": "closed valid",
+      "steps": [
+        {
+          "source": "type Target<T:type>=[T];function build(){return type Target.<string>;}function outer(){type Target<T:type>=[uint8];type Known=build();function f(x:Known):Known{return [\"ok\"];}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "free alias valid",
+      "steps": [
+        {
+          "source": "type Free=string;type Target<T:type>=[Free];function build(){type Free=uint8;return type Target.<uint8>;}function outer(){type Target<T:type>=[uint8];type Known=build();function f(x:Known):Known{return [\"ok\"];}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default valid",
+      "steps": [
+        {
+          "source": "type Free=string;type Target<T:type=Free>=[T];function build(){type Free=uint8;return type Target.<>;}function outer(){type Target<T:type>=[uint8];type Known=build();function f(x:Known):Known{return [\"ok\"];}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named default valid",
+      "steps": [
+        {
+          "source": "type Free=string;type Target<T:type=Free,U:type=T>=[T];function build(){type Free=uint8;return type Target.<U:uint8>;}function outer(){type Target<T:type>=[uint8];type Known=build();function f(x:Known):Known{return [\"ok\"];}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "transitive valid",
+      "steps": [
+        {
+          "source": "type Free=string;type Inner<T:type>=[Free];type Target<T:type>=Inner.<T>;function build(){type Free=uint8;return type Target.<uint8>;}function outer(){type Target<T:type>=[uint8];type Known=build();function f(x:Known):Known{return [\"ok\"];}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "helper valid",
+      "steps": [
+        {
+          "source": "type Free=string;function leaf(){return type Free;}type Target<T:type>=[leaf()];function build(){type Free=uint8;return type Target.<uint8>;}function outer(){type Target<T:type>=[uint8];type Known=build();function f(x:Known):Known{return [\"ok\"];}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "runtime captured valid",
+      "steps": [
+        {
+          "source": "function make(T:type){type Box<U:type>=[T];return function(){return type Box.<uint8>;};}const a=make(uint8);const b=make(string);const K=a();let x:K=[1];\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "runtime generic captured valid",
+      "steps": [
+        {
+          "source": "function make<T:type>(){type Box<U:type>=[T];return function(){return type Box.<uint8>;};}const a=make.<uint8>();const b=make.<string>();const K=a();let x:K=[1];\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed invalid",
+      "steps": [
+        {
+          "source": "type Target<T:type>=[T];function build(){return type Target.<string>;}function outer(){type Target<T:type>=[uint8];type Known=build();function f(x:Known):Known{return [1];}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "free alias invalid",
+      "steps": [
+        {
+          "source": "type Free=string;type Target<T:type>=[Free];function build(){type Free=uint8;return type Target.<uint8>;}function outer(){type Target<T:type>=[uint8];type Known=build();function f(x:Known):Known{return [1];}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default invalid",
+      "steps": [
+        {
+          "source": "type Free=string;type Target<T:type=Free>=[T];function build(){type Free=uint8;return type Target.<>;}function outer(){type Target<T:type>=[uint8];type Known=build();function f(x:Known):Known{return [1];}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "named default invalid",
+      "steps": [
+        {
+          "source": "type Free=string;type Target<T:type=Free,U:type=T>=[T];function build(){type Free=uint8;return type Target.<U:uint8>;}function outer(){type Target<T:type>=[uint8];type Known=build();function f(x:Known):Known{return [1];}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "transitive invalid",
+      "steps": [
+        {
+          "source": "type Free=string;type Inner<T:type>=[Free];type Target<T:type>=Inner.<T>;function build(){type Free=uint8;return type Target.<uint8>;}function outer(){type Target<T:type>=[uint8];type Known=build();function f(x:Known):Known{return [1];}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "helper invalid",
+      "steps": [
+        {
+          "source": "type Free=string;function leaf(){return type Free;}type Target<T:type>=[leaf()];function build(){type Free=uint8;return type Target.<uint8>;}function outer(){type Target<T:type>=[uint8];type Known=build();function f(x:Known):Known{return [1];}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "runtime captured invalid",
+      "steps": [
+        {
+          "source": "function make(T:type){type Box<U:type>=[T];return function(){return type Box.<uint8>;};}const a=make(uint8);const b=make(string);const K=a();let x:K=[\"wrong\"];\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "runtime generic captured invalid",
+      "steps": [
+        {
+          "source": "function make<T:type>(){type Box<U:type>=[T];return function(){return type Box.<uint8>;};}const a=make.<uint8>();const b=make.<string>();const K=a();let x:K=[\"wrong\"];\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "caller written argument",
+      "steps": [
+        {
+          "source": "type Free=string;type Target<T:type>=[T,Free];function build(){type Free=uint8;return type Target.<Free>;}type K=build();function f(x:K):K{return [1,\"ok\"];}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending parameter",
+      "steps": [
+        {
+          "source": "function outer(T:type){type Box<U:type>=[T];function build(){return type Box.<uint8>;}type Known=build();function f(x:Known):Known{return [1];}}\"pending\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "pending"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending generic parameter",
+      "steps": [
+        {
+          "source": "function outer<T:type>(){type Box<U:type>=[T];function build(){return type Box.<uint8>;}type Known=build();function f(x:Known):Known{return [1];}}\"pending\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "pending"
+          }
+        }
+      ]
+    },
+    {
+      "name": "caller parameter shadow",
+      "steps": [
+        {
+          "source": "type T=string;type Box<U:type>=[T];function build<T:type>(){return type Box.<T>;}String(build.<uint8>()===type [string]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dependent named default",
+      "steps": [
+        {
+          "source": "type Pair<T:type=string,U:type=T,V:type=uint8>=[T,U,V];function build(){return type Pair.<V:uint8>;}type K=build();function f():K{return [\"a\",\"b\",1];}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "higher kind captured",
+      "steps": [
+        {
+          "source": "function make(T:type){type Box<U:type>=[T,U];function choose<F<_>:type>(){return type F.<uint8>;}return function(){return choose.<Box>();};}const a=make(string);const b=make(boolean);String(a()===type [string,uint8])+\"/\"+String(b()===type [boolean,uint8]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested source alias valid",
+      "steps": [
+        {
+          "source": "function owner(){type Free=string;type Box<T:type>=[Free];function build(){type Free=uint8;return type Box.<uint8>;}function inner(){type Box<T:type>=[uint8];type Known=build();function f():Known{return [\"ok\"];}}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "missing source alias valid",
+      "steps": [
+        {
+          "source": "type Box<T:type>=[Missing];function build(){type Missing=uint8;return type Box.<string>;}function outer(){type Known=build();function f():Known{return [\"ok\"];}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default earlier parameter valid",
+      "steps": [
+        {
+          "source": "type Box<T:type=string,U:type=T,V:type=uint8>=[U];function build(){return type Box.<V:uint8>;}function outer(){type Known=build();function f():Known{return [\"ok\"];}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constraint scope valid",
+      "steps": [
+        {
+          "source": "type Bound=uint8;type Box<T:type extends Bound>=[T];function build(){type Bound=string;return type Box.<uint8>;}function outer(){type Known=build();} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic source valid",
+      "steps": [
+        {
+          "source": "Function(\"type Free=string;type Box<T:type>=[Free];function build(){type Free=uint8;return type Box.<uint8>;}type Known=build();function f():Known{return [\\\"ok\\\"];}return \\\"ok\\\";\")();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "transitive mutual helper valid",
+      "steps": [
+        {
+          "source": "type Box<T:type>=[T];function a(n){return n?b(n-1):type Box.<string>;}function b(n){return a(n);}function outer(){type Box<T:type>=[uint8];type Known=a(2);function f():Known{return [\"ok\"];}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constant expression capture valid",
+      "steps": [
+        {
+          "source": "const N=8;function leaf(){return N===8?type string:type uint8;}type Box<T:type>=[leaf()];function build(){const N=16;return type Box.<uint8>;}function outer(){type Known=build();function f():Known{return [\"ok\"];}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "specialization capture valid",
+      "steps": [
+        {
+          "source": "type Free=string;type Box<T:type>=[uint8];type Box<boolean>=[Free];function build(){type Free=uint8;return type Box.<boolean>;}function outer(){type Known=build();function f():Known{return [\"ok\"];}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested source alias invalid",
+      "steps": [
+        {
+          "source": "function owner(){type Free=string;type Box<T:type>=[Free];function build(){type Free=uint8;return type Box.<uint8>;}function inner(){type Box<T:type>=[uint8];type Known=build();function f():Known{return [1];}}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "missing source alias invalid",
+      "steps": [
+        {
+          "source": "type Box<T:type>=[Missing];function build(){type Missing=uint8;return type Box.<string>;}function outer(){type Known=build();function f():Known{return [1];}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default earlier parameter invalid",
+      "steps": [
+        {
+          "source": "type Box<T:type=string,U:type=T,V:type=uint8>=[U];function build(){return type Box.<V:uint8>;}function outer(){type Known=build();function f():Known{return [1];}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "constraint scope invalid",
+      "steps": [
+        {
+          "source": "type Bound=uint8;type Box<T:type extends Bound>=[T];function build(){type Bound=string;return type Box.<string>;}function outer(){type Known=build();} \"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic source invalid",
+      "steps": [
+        {
+          "source": "Function(\"type Free=string;type Box<T:type>=[Free];function build(){type Free=uint8;return type Box.<uint8>;}type Known=build();function f():Known{return [1];}return \\\"ok\\\";\")();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "transitive mutual helper invalid",
+      "steps": [
+        {
+          "source": "type Box<T:type>=[T];function a(n){return n?b(n-1):type Box.<string>;}function b(n){return a(n);}function outer(){type Box<T:type>=[uint8];type Known=a(2);function f():Known{return [1];}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "constant expression capture invalid",
+      "steps": [
+        {
+          "source": "const N=8;function leaf(){return N===8?type string:type uint8;}type Box<T:type>=[leaf()];function build(){const N=16;return type Box.<uint8>;}function outer(){type Known=build();function f():Known{return [1];}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "specialization capture invalid",
+      "steps": [
+        {
+          "source": "type Free=string;type Box<T:type>=[uint8];type Box<boolean>=[Free];function build(){type Free=uint8;return type Box.<boolean>;}function outer(){type Known=build();function f():Known{return [1];}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "two ordinary activations",
+      "steps": [
+        {
+          "source": "function make(T:type){type Box<U:type>=[T,U];return function(){return type Box.<uint8>;};}const a=make(string);const b=make(boolean);String(a()===type [string,uint8])+\"/\"+String(b()===type [boolean,uint8])+\"/\"+String(a()===type [string,uint8]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two generic activations",
+      "steps": [
+        {
+          "source": "function make<T:type>(){type Box<U:type=T>=[T,U];return function(){return type Box.<>;};}const a=make.<string>();const b=make.<boolean>();String(a()===type [string,string])+\"/\"+String(b()===type [boolean,boolean])+\"/\"+String(a()===type [string,string]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "caller frame restored",
+      "steps": [
+        {
+          "source": "type T=string;type Box<U:type>=[T,U];function f<T:type>(){const k=type Box.<uint8>;return String(k===type [string,uint8])+\"/\"+String(type T===type boolean);}f.<boolean>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed context then independent",
+      "steps": [
+        {
+          "source": "type Free=string;type Box<T:type>=[Free];function build(){return type Box.<uint8>;}function outer(){type Known=build();function f():Known{return [1];}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "type Clean<T:type>=[T];function fresh(){return type Clean.<uint8>;}type K=fresh();function f():K{return [1];}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic recursive budget then independent",
+      "steps": [
+        {
+          "source": "type R<T:type>=R.<T>;function build(){return type R.<uint8>;}type Known=build();\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION_LIMIT",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "type R2<T:type>=[T];function build2(){return type R2.<string>;}type Good=build2();\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "transparent expanded identity",
+      "steps": [
+        {
+          "source": "function make(T:type){type Box<U:type>=[T,U];return function(){return type Box.<uint8>;};}const a=make(string);const b=make(string);String(a()===b());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending ordinary then called valid",
+      "steps": [
+        {
+          "source": "function make(T:type){type Box<U:type>=[T];function build(){return type Box.<uint8>;}return build();}String(make(string)===type [string]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested specialization True",
+      "steps": [
+        {
+          "source": "function owner(){type Free=string;type Box<T:type>=[uint8];type Box<boolean>=[Free];function build(){type Free=uint8;return type Box.<boolean>;}function outer(){type Known=build();function f():Known{return [\"ok\"];}}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed alias trial True",
+      "steps": [
+        {
+          "source": "type Box<T:type>=T;function pick(B){return B===type 0?type Box.<uint8>:type Box.<string>;}function one<B:type extends 0|1>(x:pick(B)):string{return \"bound\";}function unused(){one(1:=uint8);}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested specialization False",
+      "steps": [
+        {
+          "source": "function owner(){type Free=string;type Box<T:type>=[uint8];type Box<boolean>=[Free];function build(){type Free=uint8;return type Box.<boolean>;}function outer(){type Known=build();function f():Known{return [1];}}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed alias trial False",
+      "steps": [
+        {
+          "source": "type Box<T:type>=T;function pick(B){return true?type Box.<uint8>:type Box.<string>;}function one<B:type extends 0|1>(x:pick(B)):string{return \"bound\";}function unused(){one(1:=uint8);}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_SPECIALIZATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "specialization generic capture activations",
+      "steps": [
+        {
+          "source": "function make<T:type>(){type Box<U:type>=[uint8];type Box<boolean>=[T];return function(){return type Box.<boolean>;};}const a=make.<string>();const b=make.<boolean>();String(a()===type [string])+\"/\"+String(b()===type [boolean]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    }
+  ]
+}
