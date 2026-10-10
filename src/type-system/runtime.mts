@@ -31,6 +31,8 @@ import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumeri
 import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
 import type { OverloadSignature } from './overloads.mts';
 import { PublishedReturnTypeOf } from './check.mts';
+import { EvaluateGenericSource } from './check-pass.mts';
+import type { TypeParameterRecord } from './records.mts';
 import { skipDebugger } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
@@ -3690,6 +3692,43 @@ export function SubstituteTypeArguments(
   return walk(structure);
 }
 
+/** Complete captured, closed bounds for the callable comparison that needs them. */
+function* CompleteCallableConstraints(type: TypeRecord, runtimeEnvironment = false): PlainEvaluator<TypeRecord> {
+  if (type.Kind !== 'function' || !type.Signatures.some((signature) =>
+    signature.TypeParameters?.some((parameter) => parameter.ConstraintNode
+      && (!parameter.Constraint || parameter.Constraint.Kind === 'deferred')))) return type;
+  // The relation itself stays pure. A comparison may require a captured bound
+  // whose source description was deferred while the producer was generic.
+  // Reuse the declaration-aware preparation path; it refuses inputs that still
+  // need an own parameter or unavailable runtime value. Do not bind defaults,
+  // enter the producer's body, or write a result onto its shared declaration.
+  const Signatures: SignatureRecord[] = [];
+  BeginTypeEvaluation();
+  try {
+    for (const signature of type.Signatures) {
+      const parameters = signature.TypeParameters;
+      if (!parameters) {
+        Signatures.push(signature);
+        continue;
+      }
+      const TypeParameters: TypeParameterRecord[] = [];
+      for (const parameter of parameters) {
+        let Constraint = parameter.Constraint;
+        if (parameter.ConstraintNode && (!Constraint || Constraint.Kind === 'deferred')) {
+          const completed = Q(yield* EvaluateGenericSource({ node: parameter.ConstraintNode,
+            parameters, bindings: new Map(), captures: parameter.Captures }, runtimeEnvironment));
+          if (completed) Constraint = completed;
+        }
+        TypeParameters.push({ ...parameter, Constraint });
+      }
+      Signatures.push({ ...signature, TypeParameters });
+    }
+    return { ...type, Signatures };
+  } finally {
+    EndTypeEvaluation();
+  }
+}
+
 export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> {
   // proposal-runtime-types #sec-references-and-borrowing: a Reference Value is
   // of a `ref T` when the storage it borrows currently holds a T. The check
@@ -4409,8 +4448,21 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       if (!IsCallable(value)) {
         return false;
       }
-      const declared = RuntimeTypeOf(value);
-      if (IsAssignable(declared, t)) {
+      const target = Q(yield* CompleteCallableConstraints(t));
+      let declared = RuntimeTypeOf(value);
+      const context = surroundingAgent.runningExecutionContext;
+      const savedEnvironment = context.LexicalEnvironment;
+      const environment = (value as { Environment?: typeof savedEnvironment }).Environment;
+      const capturedFrame = (value as { TypeParameterFrame?: Map<string, TypeRecord> }).TypeParameterFrame;
+      if (environment) context.LexicalEnvironment = environment;
+      if (capturedFrame) pushTypeParameterFrame(capturedFrame);
+      try {
+        declared = Q(yield* CompleteCallableConstraints(declared, environment !== undefined));
+      } finally {
+        if (capturedFrame) popTypeParameterFrame();
+        context.LexicalEnvironment = savedEnvironment;
+      }
+      if (IsAssignable(declared, target)) {
         return true;
       }
       // #sec-this-adoption at the boundary: a NON-ARROW function whose signature
@@ -4430,7 +4482,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
             Signatures: (declared as { Signatures: readonly { ThisType?: TypeRecord }[] }).Signatures
               .map((g) => (g.ThisType === undefined ? { ...g, ThisType: wantedThis } : g)),
           } as unknown as TypeRecord;
-          return IsAssignable(adopted, t);
+          return IsAssignable(adopted, target);
         }
       }
       return false;
@@ -6688,6 +6740,7 @@ export function* functionRecordFromSignature(params: readonly ParseNode.Function
   // carries their Type Parameter Records - the interface-member site passed
   // neither, so a generic method signature dropped its parameters on the
   // floor and `T` in `on<T>(h: (e: T) => void)` had nothing to resolve to.
+  const capturedFrame = currentTypeParameterFrame();
   let pushedTypeParameterFrame = false;
   let tpFrame: Map<string, TypeRecord> | null = null;
   if (typeParameters && typeParameters.length > 0) {
@@ -6767,7 +6820,11 @@ export function* functionRecordFromSignature(params: readonly ParseNode.Function
     Kind: 'function',
     Signatures: [
       typeParameters && typeParameters.length > 0
-        ? { Parameters, Return, ThisType, TypeParameters: typeParameterRecordsOf(typeParameters).map((r) => ({ ...r, Parameter: tpFrame!.get(r.Name) })) }
+        ? { Parameters, Return, ThisType, TypeParameters: typeParameterRecordsOf(typeParameters).map((r) => ({ ...r,
+          Constraint: (tpFrame!.get(r.Name) as { Constraint?: TypeRecord })?.Constraint ?? r.Constraint,
+          Captures: r.Captures?.map((capture) => ({ ...capture,
+            Type: substituteFreeTypeParameters(capture.Type, capturedFrame ?? new Map())! })),
+          Parameter: tpFrame!.get(r.Name) })) }
         : { Parameters, Return, ThisType },
     ],
   };
@@ -6972,8 +7029,9 @@ export function* FillGenericConstraintFrame(params: readonly ParseNode.TypeParam
     if (node && !containsComputedType(node)) {
       const Constraint = Q(yield* TypeNodeToTypeRecord(node));
       const Name = parameter.BindingIdentifier.name;
+      // Runtime instantiation must not replace the declaration's symbolic
+      // description with the concrete bound of one activation.
       frame.set(Name, { Kind: 'parameter', Name, Constraint });
-      rememberDeclaredConstraint(node, Constraint);
     }
   }
 }

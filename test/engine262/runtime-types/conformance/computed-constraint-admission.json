@@ -1,0 +1,728 @@
+{
+  "cases": [
+    {
+      "name": "Ralias direct",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends R.<>>(y:V):V{return y;};}const fn=outer.<string>(\"x\");fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ralias caller shadow",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends R.<>>(y:V):V{return y;};}const fn=outer.<string>(\"x\");function use<T:type>(){type R=uint8;return fn.<string>(\"ok\");}use.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ralias activations",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends R.<>>(y:V):V{return y;};}const a=outer.<string>(\"x\");const b=outer.<uint8>(1);a.<string>(\"ok\")+String(b.<uint8>(2));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ralias wrong static",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends R.<>>(y:V):V{return y;};}const fn=outer.<string>(\"x\");function use(){fn.<uint8>(1);}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ralias any wrong bound",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends R.<>>(y:V):V{return y;};}const fn:any=outer.<string>(\"x\");let result=\"missed\";try{fn.<uint8>(1);}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ralias any valid crossing",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends R.<>>(y:V):V{return y;};}const fn:any=outer.<string>(\"x\");let g:<V:type extends string>(y:V)=>V=fn;g.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ralias any invalid crossing",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends R.<>>(y:V):V{return y;};}const fn:any=outer.<string>(\"x\");let result=\"missed\";try{let g:<V:type extends uint8>(y:V)=>V=fn;}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ralias unconstrained crossing",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends R.<>>(y:V):V{return y;};}const fn:any=outer.<string>(\"x\");let result=\"missed\";try{let g:<V:type>(y:V)=>V=fn;}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity(T) direct",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends identity(T)>(y:V):V{return y;};}const fn=outer.<string>(\"x\");fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity(T) caller shadow",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends identity(T)>(y:V):V{return y;};}const fn=outer.<string>(\"x\");function use<T:type>(){type R=uint8;return fn.<string>(\"ok\");}use.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity(T) activations",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends identity(T)>(y:V):V{return y;};}const a=outer.<string>(\"x\");const b=outer.<uint8>(1);a.<string>(\"ok\")+String(b.<uint8>(2));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity(T) wrong static",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends identity(T)>(y:V):V{return y;};}const fn=outer.<string>(\"x\");function use(){fn.<uint8>(1);}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity(T) any wrong bound",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends identity(T)>(y:V):V{return y;};}const fn:any=outer.<string>(\"x\");let result=\"missed\";try{fn.<uint8>(1);}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity(T) any valid crossing",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends identity(T)>(y:V):V{return y;};}const fn:any=outer.<string>(\"x\");let g:<V:type extends string>(y:V)=>V=fn;g.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity(T) any invalid crossing",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends identity(T)>(y:V):V{return y;};}const fn:any=outer.<string>(\"x\");let result=\"missed\";try{let g:<V:type extends uint8>(y:V)=>V=fn;}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity(T) unconstrained crossing",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends identity(T)>(y:V):V{return y;};}const fn:any=outer.<string>(\"x\");let result=\"missed\";try{let g:<V:type>(y:V)=>V=fn;}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "T direct",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends T>(y:V):V{return y;};}const fn=outer.<string>(\"x\");fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "T caller shadow",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends T>(y:V):V{return y;};}const fn=outer.<string>(\"x\");function use<T:type>(){type R=uint8;return fn.<string>(\"ok\");}use.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "T activations",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends T>(y:V):V{return y;};}const a=outer.<string>(\"x\");const b=outer.<uint8>(1);a.<string>(\"ok\")+String(b.<uint8>(2));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "T wrong static",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends T>(y:V):V{return y;};}const fn=outer.<string>(\"x\");function use(){fn.<uint8>(1);}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "T any wrong bound",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends T>(y:V):V{return y;};}const fn:any=outer.<string>(\"x\");let result=\"missed\";try{fn.<uint8>(1);}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "T any valid crossing",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends T>(y:V):V{return y;};}const fn:any=outer.<string>(\"x\");let g:<V:type extends string>(y:V)=>V=fn;g.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "T any invalid crossing",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends T>(y:V):V{return y;};}const fn:any=outer.<string>(\"x\");let result=\"missed\";try{let g:<V:type extends uint8>(y:V)=>V=fn;}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "T unconstrained crossing",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends T>(y:V):V{return y;};}const fn:any=outer.<string>(\"x\");let result=\"missed\";try{let g:<V:type>(y:V)=>V=fn;}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed direct computed source",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function f<V:type extends identity(string)>(x:V):V{return x;}const a:any=f;let result=\"missed\";try{let g:<V:type>(x:V)=>V=a;}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "own dependent stays deferred",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function f<T:type,U:type extends identity(T)>(x:U):U{return x;}const a:any=f;let g:<T:type,U:type extends identity(T)>(x:U)=>U=a;g.<string,string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default unused",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends R.<> =fail()>(y:V):V{return y;};}const fn=outer.<string>(\"x\");fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "anonymous producer without value parameter",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){type R<U:type=T>=identity(U);return function<V:type extends R.<> >(y:V):V{return y;};}const fn=outer.<string>();fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named producer without value parameter",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){type R<U:type=T>=identity(U);return function f<V:type extends R.<> >(y:V):V{return y;};}const fn=outer.<string>();fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed union wider source to narrower target",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){return function f<V:type extends identity(T)>(y:V):V{return y;};}const fn:any=outer.<string|number>(\"x\");let g:<V:type extends string>(y:V)=>V=fn;g.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed narrower source to wider target",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){return function f<V:type extends identity(T)>(y:V):V{return y;};}const fn:any=outer.<string>(\"x\");let outcome=\"missed\";try{let g:<V:type extends string|number>(y:V)=>V=fn;}catch(e){outcome=e.name;}outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "throwing bound restoration",
+      "steps": [
+        {
+          "source": "function fail():type{throw new Error(\"bound ran\");}function f<V:type extends fail()>(x:V):V{return x;}const fn:any=f;let outcome=\"missed\";try{let g:<V:type>(x:V)=>V=fn;}catch(e){outcome=e.name;}outcome;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "function after<V:type extends string>(x:V):V{return x;}const retry:any=after;let accepted:<V:type extends string>(x:V)=>V=retry;accepted.<string>(\"restored\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "restored"
+          }
+        }
+      ]
+    },
+    {
+      "name": "cached source independent repeated boundary",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){return function f<V:type extends identity(T)>(y:V):V{return y;};}const a:any=outer.<string>(\"x\");const b:any=outer.<uint8>(1);let ga:<V:type extends string>(y:V)=>V=a;let gb:<V:type extends uint8>(y:V)=>V=b;let gc:<V:type extends string>(y:V)=>V=a;ga.<string>(\"a\")+String(gb.<uint8>(2))+gc.<string>(\"c\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a2c"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed target same capture",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function apply<T:type>(a:any):string{let g:<V:type extends identity(T)>(y:V)=>V=a;return \"ok\";}function f<V:type extends string>(y:V):V{return y;}apply.<string>(f);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed target wrong capture",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function apply<T:type>(a:any):string{let g:<V:type extends identity(T)>(y:V)=>V=a;return \"missed\";}function f<V:type extends uint8>(y:V):V{return y;}let out=\"missed\";try{apply.<string>(f);}catch(e){out=e.name;}out;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unused dependent reflection",
+      "steps": [
+        {
+          "source": "function fail(t:type):type{throw new Error(\"bound ran\");}function f<T:type,V:type extends fail(T)>(x:V):V{return x;}Reflect.typeOf(f);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "recursive bound unused",
+      "steps": [
+        {
+          "source": "function bound(t:type):type{return bound(t);}function outer<T:type>(x:T){return function f<V:type extends bound(T)>(y:V):V{return y;};}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed bound runtime failure restored",
+      "steps": [
+        {
+          "source": "function fail(t:type):type{throw new TypeError(\"bound ran\");}function outer<T:type>(x:T):any{return function f<V:type extends fail(T)>(y:V):V{return y;};}const fn:any=outer.<string>(\"x\");let result=\"missed\";try{let g:<V:type>(y:V)=>V=fn;}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        },
+        {
+          "source": "function after<V:type extends string>(x:V):V{return x;}const retry:any=after;let accepted:<V:type extends string>(x:V)=>V=retry;accepted.<string>(\"restored\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "restored"
+          }
+        }
+      ]
+    },
+    {
+      "name": "alias chain",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type A<U:type=T>=identity(U);type B<U:type=A.<> >=U;return function f<V:type extends B.<> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary wrapper",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends R.<> >(y:V):V{return y;};}function wrap(){return outer.<string>(\"x\");}const fn=wrap();fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "concise producer",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends R.<> >(y:V):V{return y;};}const wrap=()=>outer.<string>(\"x\");const fn=wrap();fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "separate script consumer",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends R.<> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");\"created\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "created"
+          }
+        },
+        {
+          "source": "function consumer<T:type>(){return fn.<string>(\"ok\");}consumer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any argument inference",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends R.<> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");const arg:any=\"ok\";fn(arg);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named type argument",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends R.<> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");fn.<V:string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value captured computed bound",
+      "steps": [
+        {
+          "source": "function bound(n:uint32):type{return n===8 ? type string : type uint8;}function outer<N:uint32>(x:uint8){return function f<V:type extends bound(N)>(y:V):V{return y;};}const fn=outer.<8>(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection repeat before admission",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends R.<> >(y:V):V{return y;};}const fn:any=outer.<string>(\"x\");const a=Reflect.typeOf(fn);const b=Reflect.typeOf(fn);let g:<V:type extends string>(y:V)=>V=fn;g.<string>(a===b ? \"ok\" : \"bad\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "live helper retains outer capture at source admission",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T):any{function bound():type{return T;}return function middle<T:type>(x:T):any{return function f<V:type extends bound()>(y:V):V{return y;};};}const mid:any=outer.<string>(\"x\");const fn:any=mid.<uint8>(1);let g:<V:type extends string>(y:V)=>V=fn;g.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "live helper refuses intermediate capture at source admission",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T):any{function bound():type{return T;}return function middle<T:type>(x:T):any{return function f<V:type extends bound()>(y:V):V{return y;};};}const mid:any=outer.<string>(\"x\");const fn:any=mid.<uint8>(1);let out=\"missed\";try{let g:<V:type extends uint8>(y:V)=>V=fn;}catch(e){out=e.name;}out;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        },
+        {
+          "source": "let good:<V:type extends string>(y:V)=>V=fn;good.<string>(\"restored\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "restored"
+          }
+        }
+      ]
+    }
+  ]
+}

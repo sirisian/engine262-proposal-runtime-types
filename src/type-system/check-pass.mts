@@ -320,7 +320,7 @@ function isUninitializedImportRead(error: unknown): boolean {
 }
 
 /** Evaluate a required generic source with its original lexical declarations. */
-function* evaluateGenericSource(check: GenericDefaultCheck): PlainEvaluator<TypeRecord | undefined> {
+export function* EvaluateGenericSource(check: Pick<GenericDefaultCheck, 'node' | 'parameters' | 'bindings' | 'captures'>, runtimeEnvironment = false): PlainEvaluator<TypeRecord | undefined> {
   const inputs = new Map((check.captures ?? []).map((capture) => [capture.Declaration, capture.Type]));
   for (const parameter of check.parameters) {
     const bound = check.bindings.get(parameter.Name);
@@ -442,6 +442,10 @@ function* evaluateGenericSource(check: GenericDefaultCheck): PlainEvaluator<Type
   }
   BeginFragmentEvaluation();
   try {
+    // A live callable already supplies its declaration environment and frame.
+    // Keep its actual helper closures: rebuilding one from a flattened frame
+    // can replace an outer capture with an intermediate same-named binder.
+    if (runtimeEnvironment) return Q(yield* TypeNodeToTypeRecord(check.node));
     const prepared = Q(yield* prepare(check.node));
     if (!prepared) return undefined;
     context.LexicalEnvironment = prepared.scope;
@@ -632,7 +636,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   for (;;) {
     let resolved = false;
     for (const check of GenericDefaultChecksOf(root)) {
-      const result = EnsureCompletion(yield* evaluateGenericSource(check));
+      const result = EnsureCompletion(yield* EvaluateGenericSource(check));
       if (result.Type !== 'normal') {
         if (IsBudgetExhausted()) return result;
         if (check.constraint) return CreateTypeDiagnostic('rt-type-evaluation', check.node, 'pre-evaluation',

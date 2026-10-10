@@ -5449,7 +5449,11 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, optio
     ReturnType,
     ...(Narrows ? { Narrows } : {}),
     ...(genericTypeParameters && genericTypeParameters.length > 0
-      ? { TypeParameters: typeParameterRecordsOf(genericTypeParameters).map((r) => ({ ...r, Parameter: genericFrame?.get(r.Name) })) }
+      ? { TypeParameters: typeParameterRecordsOf(genericTypeParameters).map((r) => ({ ...r,
+        Constraint: (genericFrame?.get(r.Name) as { Constraint?: TypeRecord } | undefined)?.Constraint ?? r.Constraint,
+        Captures: r.Captures?.map((capture) => ({ ...capture,
+          Type: substituteFreeTypeParameters(capture.Type, capturedFrame ?? new Map())! })),
+        Parameter: genericFrame?.get(r.Name) })) }
       : {}),
   };
   } finally {
