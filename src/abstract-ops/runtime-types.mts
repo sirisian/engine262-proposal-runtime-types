@@ -1,3 +1,4 @@
+import { publishedReturnTypeOfFunction, instantiateGenericCapture } from '../type-system/runtime.mts';
 import { primitiveMembership } from '../type-system/runtime.mts';
 import { currentTypeParameterFrame } from '../type-system/runtime.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
@@ -22,7 +23,7 @@ import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { skipDebugger } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf, PublishedNarrowingOf } from '../type-system/check.mts';
-import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue, typeParameterRecordsOf, substituteFreeTypeParameters, mentionsTypeParameter } from '../type-system/records.mts';
+import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue, typeParameterRecordsOf } from '../type-system/records.mts';
 import { IsAssignable, IsSubtype, SameMetadata, SameType, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
 import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver } from '../type-system/layout.mts';
 import type { PrivateName } from '../value.mts';
@@ -5137,18 +5138,11 @@ export function* EnforceReturnType(fn: AnnotatedFunction, value: Value): ValueEv
     // the published type is a claim nothing verifies: the checker hands it to
     // every caller and no boundary ever tests that the value leaving the
     // function is of it.
-    const code = fn.ECMAScriptCode as { parent?: object } | null | undefined;
-    const published = code?.parent ? PublishedReturnTypeOf(code.parent) : undefined;
+    const published = publishedReturnTypeOfFunction(fn, currentTypeParameterFrame());
     if (published && published.Kind !== 'void') {
       // `void` is vacuous here for the reason #sec-void-type gives for a
       // declared one: it constrains the consumer, not the value leaving.
-      // The declaration's contract can mention a captured generic parameter.
-      // Body evaluation has installed the closure's frame and this call's own
-      // bindings, with lexical shadowing. Instantiate at this boundary rather
-      // than enforcing a bare parameter or changing the shared declaration.
-      const instantiated = mentionsTypeParameter(published)
-        ? substituteFreeTypeParameters(published, currentTypeParameterFrame() ?? new Map())! : published;
-      return Q(yield* RequireType(value, instantiated));
+      return Q(yield* RequireType(value, published));
     }
     return value;
   }
@@ -5452,7 +5446,7 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, optio
       ? { TypeParameters: typeParameterRecordsOf(genericTypeParameters).map((r) => ({ ...r,
         Constraint: (genericFrame?.get(r.Name) as { Constraint?: TypeRecord } | undefined)?.Constraint ?? r.Constraint,
         Captures: r.Captures?.map((capture) => ({ ...capture,
-          Type: substituteFreeTypeParameters(capture.Type, capturedFrame ?? new Map())! })),
+          Type: instantiateGenericCapture(capture, capturedFrame) })),
         Parameter: genericFrame?.get(r.Name) })) }
       : {}),
   };
@@ -5998,10 +5992,7 @@ export function* returnTypeRecordOf(fn: Value): PlainEvaluator<TypeRecord | null
     // to be visible at this point too, or `() => f()` enforces nothing while
     // `() => { return f(); }` enforces, which is the same function written two
     // ways (#sec-inferred-return-types).
-    const code = (fn as AnnotatedFunction).ECMAScriptCode as { parent?: object } | null | undefined;
-    const published = code?.parent ? PublishedReturnTypeOf(code.parent) : undefined;
-    const instantiated = published && mentionsTypeParameter(published)
-      ? substituteFreeTypeParameters(published, currentTypeParameterFrame() ?? new Map()) : published;
+    const instantiated = publishedReturnTypeOfFunction(fn, currentTypeParameterFrame());
     return instantiated && instantiated.Kind !== 'void' && instantiated.Kind !== 'parameter' ? instantiated : null;
   }
   const attempted = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation.Type));

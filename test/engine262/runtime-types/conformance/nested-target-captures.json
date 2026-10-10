@@ -1,0 +1,524 @@
+{
+  "cases": [
+    {
+      "name": "R.<> declaration valid",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn=mid.<uint8>(1);String(fn.<string>(\"ok\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "R.<> wrong static",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn=mid.<uint8>(1);function unused(){fn.<uint8>(1);}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "R.<> wrong dynamic",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn:any=mid.<uint8>(1);let out=\"missed\";try{fn.<uint8>(1);}catch(e){out=e.name;}out;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bound() declaration valid",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends bound() >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn=mid.<uint8>(1);String(fn.<string>(\"ok\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bound() wrong static",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends bound() >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn=mid.<uint8>(1);function unused(){fn.<uint8>(1);}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "bound() wrong dynamic",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends bound() >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn:any=mid.<uint8>(1);let out=\"missed\";try{fn.<uint8>(1);}catch(e){out=e.name;}out;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "T declaration valid",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends T >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn=mid.<uint8>(1);String(fn.<uint8>(2));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "T wrong static",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends T >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn=mid.<uint8>(1);function unused(){fn.<string>(\"wrong\");}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "T wrong dynamic",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends T >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn:any=mid.<uint8>(1);let out=\"missed\";try{fn.<string>(\"wrong\");}catch(e){out=e.name;}out;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "alternating activations False",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const m1=outer.<string>(\"x\");const m2=outer.<uint8>(1);const f1=m1.<uint8>(1);const f2=m2.<string>(\"x\");const f3=m1.<uint16>(2);f1.<string>(\"a\")+String(f2.<uint8>(2))+f3.<string>(\"c\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a2c"
+          }
+        }
+      ]
+    },
+    {
+      "name": "alternating activations True",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const m2=outer.<uint8>(1);const m1=outer.<string>(\"x\");const f1=m1.<uint8>(1);const f2=m2.<string>(\"x\");const f3=m1.<uint16>(2);f1.<string>(\"a\")+String(f2.<uint8>(2))+f3.<string>(\"c\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a2c"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrapper function wrap(){return mid.<uint8>(1);}",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");function wrap(){return mid.<uint8>(1);}const fn=wrap();fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrapper const wrap=()=>mid.<uint8>(1);",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const wrap=()=>mid.<uint8>(1);const fn=wrap();fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrapper const wrap=()=>{return mid.<uint8>(1);};",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const wrap=()=>{return mid.<uint8>(1);};const fn=wrap();fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflect middle before",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const a=Reflect.typeOf(mid);const b=Reflect.typeOf(mid);if(a!==b)throw new Error(\"identity\");const fn=mid.<uint8>(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflect middle after",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn=mid.<uint8>(1);const a=Reflect.typeOf(mid);const b=Reflect.typeOf(mid);if(a!==b)throw new Error(\"identity\");fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflect middle unrelated",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");function see<T:type>(){const a=Reflect.typeOf(mid);const b=Reflect.typeOf(mid);if(a!==b)throw new Error(\"identity\");}see.<boolean>();const fn=mid.<uint8>(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any admission target string",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn:any=mid.<uint8>(1);let out=\"missed\";try{let g:<V:type extends string>(y:V)=>V=fn;out=g.<string>(\"ok\");}catch(e){out=e.name;}String(out);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any admission target uint8",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn:any=mid.<uint8>(1);let out=\"missed\";try{let g:<V:type extends uint8>(y:V)=>V=fn;out=g.<uint8>(1);}catch(e){out=e.name;}String(out);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two middle levels",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){return function deeper<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};};}const mid=outer.<string>(\"x\");const deep=mid.<uint8>(1);const fn=deep.<boolean>(true);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two independently captured bounds",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function outerBound():type{return T;}return function middle<T:type>(x:T){function middleBound():type{return T;}return function f<A:type extends outerBound(),B:type extends middleBound()>(a:A,b:B):A{return a;};};}const mid=outer.<string>(\"x\");const fn=mid.<uint8>(1);fn.<string,uint8>(\"ok\",2);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured value shadow",
+      "steps": [
+        {
+          "source": "function bound(n:uint32):type{return n===8 ? type string : type uint8;}function outer<N:uint32>(){function get():type{return bound(N);}return function middle<N:uint32>(){return function f<V:type extends get()>(y:V):V{return y;};};}const mid=outer.<8>();const fn=mid.<16>();fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "separate script",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn=mid.<uint8>(1);\"created\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "created"
+          }
+        },
+        {
+          "source": "function consumer<T:type>(){return fn.<string>(\"ok\");}consumer.<uint16>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any failure restoration",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn:any=mid.<uint8>(1);let g:<V:type extends uint8>(y:V)=>V=fn;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "let good:<V:type extends string>(y:V)=>V=fn;good.<string>(\"restored\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "restored"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unused own default",
+      "steps": [
+        {
+          "source": "function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type,Z:type=fail()>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn=mid.<uint8,boolean>(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "alpha rename outer A middle T",
+      "steps": [
+        {
+          "source": "function outer<A:type>(x:A){function bound():type{return A;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn=mid.<uint8>(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "alpha rename outer T middle B",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<B:type>(x:B){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn=mid.<uint8>(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "alpha rename outer A middle B",
+      "steps": [
+        {
+          "source": "function outer<A:type>(x:A){function bound():type{return A;}return function middle<B:type>(x:B){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn=mid.<uint8>(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured defaults 28",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type=R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn=mid.<uint8>(1);const g=fn.<>;g(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured defaults 29",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<>,W:type=V>(y:W):W{return y;};};}const mid=outer.<string>(\"x\");const fn=mid.<uint8>(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unrelated caller preserves helper environment",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");function run<T:type>(){function bound():type{return type boolean;}const fn=mid.<uint8>(1);return fn.<string>(\"ok\");}run.<uint16>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "final own binder shadows both producers",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<T:type extends R.<> >(y:T):T{return y;};};}const mid=outer.<string>(\"x\");const fn=mid.<uint8>(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflected source then wrong and restored target",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn:any=mid.<uint8>(1);const a=Reflect.typeOf(fn);const b=Reflect.typeOf(fn);let out=\"missed\";try{let bad:<V:type extends uint8>(y:V)=>V=fn;}catch(e){out=e.name;}let good:<V:type extends string>(y:V)=>V=fn;good.<string>(out===\"TypeError\" && a===b ? \"ok\" : \"bad\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "non generic intermediate closure",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle(x:uint8){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn=mid(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bound capture remains after rejecting dynamic own argument",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}return function middle<T:type>(x:T){type R<U:type=bound()> =U;return function f<V:type extends R.<> >(y:V):V{return y;};};}const mid:any=outer.<string>(\"x\");let bad=\"missed\";try{mid.<uint8>(\"bad\");}catch(e){bad=e.name;}const fn=mid.<uint8>(1);fn.<string>(bad===\"TypeError\" ? \"ok\" : \"bad\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    }
+  ]
+}

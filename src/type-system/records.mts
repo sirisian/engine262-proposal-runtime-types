@@ -2143,9 +2143,11 @@ export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string,
 
 /** Substitute an enclosing environment without applying a returned generic signature. */
 export const substituteFreeTypeParameters = (t: Known, bindings: ReadonlyMap<string, TypeRecord>,
-  declarations?: readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[]): Known => makeSubstitution(bindings, null, { bindings, declarations })(t);
+  declarations?: readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[],
+  byDeclaration?: ReadonlyMap<ParseNode.TypeParameter | ParseNode.CaptureBinding, TypeRecord>): Known => makeSubstitution(bindings, null, { bindings, declarations, byDeclaration })(t);
 
 interface CaptureSubstitution {
+  readonly byDeclaration?: ReadonlyMap<ParseNode.TypeParameter | ParseNode.CaptureBinding, TypeRecord>;
   readonly bindings: ReadonlyMap<string, TypeRecord>;
   readonly declarations?: readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[];
 }
@@ -2318,8 +2320,11 @@ const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string
               // Captures identify free declarations even when an inner binder
               // has the same spelling. Applying a root signature supplies only
               // that root's declarations; free substitution supplies captures.
+              const bound = captures.byDeclaration?.get(capture.Declaration);
               const relevant = captures.declarations && !captures.declarations.includes(capture.Declaration)
-                ? new Map<string, TypeRecord>() : captures.bindings;
+                ? new Map<string, TypeRecord>()
+                : captures.byDeclaration
+                  ? new Map(bound ? [[capture.Declaration.BindingIdentifier.name, bound]] : []) : captures.bindings;
               return { ...capture, Type: makeSubstitution(relevant, null)(capture.Type)! };
             }) } : {}),
             ...(parameter.Parameter ? { Parameter: apply(parameter.Parameter)! } : {}),

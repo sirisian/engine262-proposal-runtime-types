@@ -38,7 +38,7 @@ import { substituteTypeParameters, type TypeRecord } from '../type-system/record
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { FunctionProto_toString, type BoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
 import {
-  currentTypeParameterFrame, pushTypeParameterFrame, popTypeParameterFrame,
+  currentTypeParameterFrame, copyTypeParameterFrame, pushTypeParameterFrame, popTypeParameterFrame,
   pushContextualType, popContextualType, TakePendingCalleeContext, SetPendingCalleeContext, SetBodyContext,
 } from '../type-system/runtime.mts';
 import { resolveOverloadChecked } from '../type-system/overloads.mts';
@@ -271,14 +271,15 @@ function* ordinaryCallEvaluateBody(F: ECMAScriptFunctionObject, argumentsList: A
     // class's `T`. The name a method declares is left to the method.
     const own = functionTypeParameters(F as never);
     if (own && own.length > 0) {
-      const filtered = new Map(captured);
+      const filtered = copyTypeParameterFrame(captured, own);
       for (const p of own) {
         const name = (p as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;
         if (name) {
           filtered.delete(name);
         }
       }
-      toPush = filtered.size > 0 ? filtered : undefined;
+      // Hidden declarations still supply retained captures when no name is visible.
+      toPush = filtered;
     }
   }
   if (toPush !== undefined) {

@@ -32,7 +32,7 @@ import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
 import type { OverloadSignature } from './overloads.mts';
 import { PublishedReturnTypeOf } from './check.mts';
 import { EvaluateGenericSource } from './check-pass.mts';
-import type { TypeParameterRecord } from './records.mts';
+import type { GenericTypeCapture, TypeParameterRecord } from './records.mts';
 import { skipDebugger } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
@@ -312,17 +312,63 @@ export function takePendingCheckerBindings(): boolean {
   return v;
 }
 
+// Name lookup and capture identity are distinct: an inner T shadows reads of
+// T, but cannot replace a capture of an outer declaration. Keep identities on
+// frames, never on interned Type Records, and preserve them when copying.
+const declarationBindings = new WeakMap<ReadonlyMap<string, TypeRecord>, Map<ParseNode.TypeParameter | ParseNode.CaptureBinding, TypeRecord>>();
+
+export function copyTypeParameterFrame(frame: ReadonlyMap<string, TypeRecord>,
+  excluding: readonly ParseNode.TypeParameter[] = []): Map<string, TypeRecord> {
+  const copy = new Map(frame);
+  const declarations = declarationBindings.get(frame);
+  if (declarations) {
+    declarationBindings.set(copy, new Map([...declarations]
+      .filter(([declaration]) => !excluding.includes(declaration as ParseNode.TypeParameter))));
+  }
+  return copy;
+}
+
+export function instantiateGenericCapture(capture: GenericTypeCapture,
+  frame: ReadonlyMap<string, TypeRecord> | undefined): TypeRecord {
+  const bound = frame && declarationBindings.get(frame)?.get(capture.Declaration);
+  return bound ? substituteFreeTypeParameters(capture.Type,
+    new Map([[capture.Declaration.BindingIdentifier.name, bound]]))! : capture.Type;
+}
+
+/** Instantiate a closure's publication before applying this call's own binders. */
+export function publishedReturnTypeOfFunction(value: unknown, application?: ReadonlyMap<string, TypeRecord>): TypeRecord | undefined {
+  const fn = value as { ECMAScriptCode?: { parent?: object } | null, TypeParameterFrame?: ReadonlyMap<string, TypeRecord> };
+  const declaration = fn.ECMAScriptCode?.parent as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } } | undefined;
+  const published = declaration && PublishedReturnTypeOf(declaration);
+  if (!published || !mentionsTypeParameter(published)) return published;
+  const own = declaration?.TypeParameters?.TypeParameterList ?? [];
+  const captured = fn.TypeParameterFrame ? copyTypeParameterFrame(fn.TypeParameterFrame, own) : new Map<string, TypeRecord>();
+  for (const parameter of own) captured.delete(parameter.BindingIdentifier.name);
+  const closed = substituteFreeTypeParameters(published, captured, undefined,
+    declarationBindings.get(captured) ?? new Map())!;
+  if (!application) return closed;
+  const bindings = new Map<string, TypeRecord>();
+  for (const parameter of own) {
+    const bound = application.get(parameter.BindingIdentifier.name);
+    if (bound) bindings.set(parameter.BindingIdentifier.name, bound);
+  }
+  return substituteFreeTypeParameters(closed, bindings, own)!;
+}
+
 export function currentTypeParameterFrame(): Map<string, TypeRecord> | undefined {
   if (typeParameterFrames.length === 0) {
     return undefined;
   }
   // Flattened innermost-last, so a nested specialization shadows an outer one.
   const merged = new Map<string, TypeRecord>();
+  const declarations = new Map<ParseNode.TypeParameter | ParseNode.CaptureBinding, TypeRecord>();
   for (const frame of typeParameterFrames) {
     for (const [name, record] of frame) {
       merged.set(name, record);
     }
+    for (const [declaration, record] of declarationBindings.get(frame) ?? []) declarations.set(declaration, record);
   }
+  declarationBindings.set(merged, declarations);
   return merged;
 }
 
@@ -459,6 +505,14 @@ export function bindTypeParameter(
     valueParameterBindings.add(record as unknown as object);
   }
   frame.set(name, record);
+  if (param && typeof param === 'object') {
+    let declarations = declarationBindings.get(frame);
+    if (!declarations) {
+      declarations = new Map();
+      declarationBindings.set(frame, declarations);
+    }
+    declarations.set(param as ParseNode.TypeParameter, record);
+  }
 }
 
 /** Whether _record_ is a value parameter's binding. */
@@ -669,7 +723,7 @@ export function* BindTypeArgumentsInto(
   // defaults use the function's declaring environment and captured bindings.
   const context = surroundingAgent.runningExecutionContext;
   const savedEnvironment = context.LexicalEnvironment;
-  const captured = declarationContext?.TypeParameterFrame ? new Map(declarationContext.TypeParameterFrame) : null;
+  const captured = declarationContext?.TypeParameterFrame ? copyTypeParameterFrame(declarationContext.TypeParameterFrame, params) : null;
   if (captured) {
     for (const parameter of params) captured.delete(parameter.BindingIdentifier.name);
     pushTypeParameterFrame(captured);
@@ -2844,16 +2898,7 @@ function deriveSignatureType(value: ObjectValue): TypeRecord {
       } as TypeRecord);
     }
   }
-  const published = F.ECMAScriptCode?.parent ? PublishedReturnTypeOf(F.ECMAScriptCode.parent) : undefined;
-  // Reflection can inspect an escaped closure outside its creating call.
-  // Its captured arguments, not an unrelated caller's current frame, bind
-  // the free parameters of the published result. Own binders still shadow.
-  let instantiated = published ?? null;
-  if (published && F.TypeParameterFrame && mentionsTypeParameter(published)) {
-    const captured = new Map(F.TypeParameterFrame);
-    for (const signature of declared) for (const parameter of (signature as { TypeParameters?: readonly { Name: string }[] }).TypeParameters ?? []) captured.delete(parameter.Name);
-    instantiated = substituteFreeTypeParameters(published, captured);
-  }
+  const instantiated = publishedReturnTypeOfFunction(F) ?? null;
   const Signatures = declared.map((o) => ({
     Parameters: o.Parameters,
     ...(o.Narrows ? { Narrows: o.Narrows } : {}),
@@ -6823,7 +6868,7 @@ export function* functionRecordFromSignature(params: readonly ParseNode.Function
         ? { Parameters, Return, ThisType, TypeParameters: typeParameterRecordsOf(typeParameters).map((r) => ({ ...r,
           Constraint: (tpFrame!.get(r.Name) as { Constraint?: TypeRecord })?.Constraint ?? r.Constraint,
           Captures: r.Captures?.map((capture) => ({ ...capture,
-            Type: substituteFreeTypeParameters(capture.Type, capturedFrame ?? new Map())! })),
+            Type: instantiateGenericCapture(capture, capturedFrame) })),
           Parameter: tpFrame!.get(r.Name) })) }
         : { Parameters, Return, ThisType },
     ],
