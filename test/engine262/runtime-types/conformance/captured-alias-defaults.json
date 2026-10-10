@@ -1,0 +1,585 @@
+{
+  "description": "Declaration-identified captures through generic alias defaults, constraints and bodies; publication stays subject to inference participation.",
+  "specification": [
+    "sec-generic-constraint-contexts",
+    "sec-dependent-result-instantiation",
+    "sec-anchored-contributions"
+  ],
+  "cases": [
+    {
+      "name": "alias body invalid unused consumer",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;} function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function inner<V:type=R.<>>(y:V):V{return y;};} const fn=outer.<string>(\"x\");function use<T:type>(){const g=fn.<>;return g(1);}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "alias body valid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;} function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function inner<V:type=R.<>>(y:V):V{return y;};} const fn=outer.<string>(\"x\");function use<T:type>(){const g=fn.<>;return g(\"ok\");}use.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "alias default invalid unused consumer",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;} function outer<T:type>(x:T){type R<U:type=identity(T)> = U;return function inner<V:type=R.<>>(y:V):V{return y;};} const fn=outer.<string>(\"x\");function use<T:type>(){const g=fn.<>;return g(1);}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "alias default valid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;} function outer<T:type>(x:T){type R<U:type=identity(T)> = U;return function inner<V:type=R.<>>(y:V):V{return y;};} const fn=outer.<string>(\"x\");function use<T:type>(){const g=fn.<>;return g(\"ok\");}use.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "transitive aliases invalid unused consumer",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;} function outer<T:type>(x:T){type Q<U:type=T>=identity(U);type R<U:type=Q.<> >=U;return function inner<V:type=R.<>>(y:V):V{return y;};} const fn=outer.<string>(\"x\");function use<T:type>(){const g=fn.<>;return g(1);}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "transitive aliases valid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;} function outer<T:type>(x:T){type Q<U:type=T>=identity(U);type R<U:type=Q.<> >=U;return function inner<V:type=R.<>>(y:V):V{return y;};} const fn=outer.<string>(\"x\");function use<T:type>(){const g=fn.<>;return g(\"ok\");}use.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "alias helper invalid unused consumer",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;} function outer<T:type>(x:T){type R<U:type=T>=U;function get():type{return type R.<>;}return function inner<V:type=get()>(y:V):V{return y;};} const fn=outer.<string>(\"x\");function use<T:type>(){const g=fn.<>;return g(1);}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "alias helper valid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;} function outer<T:type>(x:T){type R<U:type=T>=U;function get():type{return type R.<>;}return function inner<V:type=get()>(y:V):V{return y;};} const fn=outer.<string>(\"x\");function use<T:type>(){const g=fn.<>;return g(\"ok\");}use.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nongeneric intermediary invalid unused consumer",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;} function outer<T:type>(x:T){type Q<U:type=T>=identity(U);type R=Q.<>;return function inner<V:type=R>(y:V):V{return y;};} const fn=outer.<string>(\"x\");function use<T:type>(){const g=fn.<>;return g(1);}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nongeneric intermediary valid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;} function outer<T:type>(x:T){type Q<U:type=T>=identity(U);type R=Q.<>;return function inner<V:type=R>(y:V):V{return y;};} const fn=outer.<string>(\"x\");function use<T:type>(){const g=fn.<>;return g(\"ok\");}use.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same named returned binder invalid unused consumer",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;} function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function inner<T:type=R.<>>(y:T):T{return y;};} const fn=outer.<string>(\"x\");function use<T:type>(){const g=fn.<>;return g(1);}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "same named returned binder valid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;} function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function inner<T:type=R.<>>(y:T):T{return y;};} const fn=outer.<string>(\"x\");function use<T:type>(){const g=fn.<>;return g(\"ok\");}use.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "own alias binder invalid unused consumer",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;} function outer<T:type>(x:T){type R<T:type=string>=identity(T);return function inner<V:type=R.<>>(y:V):V{return y;};} const fn=outer.<uint8>(1);function use<T:type>(){const g=fn.<>;return g(1);}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "own alias binder valid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;} function outer<T:type>(x:T){type R<T:type=string>=identity(T);return function inner<V:type=R.<>>(y:V):V{return y;};} const fn=outer.<uint8>(1);function use<T:type>(){const g=fn.<>;return g(\"ok\");}use.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "alias constraint invalid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;} function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends R.<> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");function use<T:type>(){return fn.<uint8>(1);}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid alias constraint in an unused body",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;} function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type extends R.<> >(y:V):V{return y;};}function use<T:type>(){const fn=outer.<string>(\"x\");return fn.<string>(\"ok\");}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intermediate shadow invalid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;} function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function middle<T:type>(x:T){return function f<V:type=R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn=mid.<uint8>(1);function use<T:type>(){const g=fn.<>;return g(1);}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "intermediate shadow valid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;} function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function middle<T:type>(x:T){return function f<V:type=R.<> >(y:V):V{return y;};};}const mid=outer.<string>(\"x\");const fn=mid.<uint8>(1);function use<T:type>(){const g=fn.<>;return g(\"ok\");}use.<boolean>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value capture invalid",
+      "steps": [
+        {
+          "source": "function sized(n:uint32):type{return type [n/8].<uint8>;}function outer<N:uint32>(x:boolean){type R<U:type=sized(N)> = U;return function f<V:type=R.<> >(y:V):V{return y;};}const fn=outer.<16>(true);function use<N:uint32>(){const g=fn.<>;g([1]);return \"ok\";}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "value capture valid",
+      "steps": [
+        {
+          "source": "function sized(n:uint32):type{return type [n/8].<uint8>;}function outer<N:uint32>(x:boolean){type R<U:type=sized(N)> = U;return function f<V:type=R.<> >(y:V):V{return y;};}const fn=outer.<16>(true);function use<N:uint32>(){const g=fn.<>;g([1,2]);return \"ok\";}use.<8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct activations False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type=R.<> >(y:V):V{return y;};}const s=outer.<string>(\"x\");const n=outer.<uint8>(1);const a=s.<>;const b=n.<>;a(\"ok\")+String(b(1));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct invalid s False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type=R.<> >(y:V):V{return y;};}const s=outer.<string>(\"x\");const n=outer.<uint8>(1);function use<T:type>(){const g=s.<>;return g(1);}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct invalid n False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type=R.<> >(y:V):V{return y;};}const s=outer.<string>(\"x\");const n=outer.<uint8>(1);function use<T:type>(){const g=n.<>;return g(\"bad\");}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct activations True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type=R.<> >(y:V):V{return y;};}const n=outer.<uint8>(1);const s=outer.<string>(\"x\");const a=s.<>;const b=n.<>;a(\"ok\")+String(b(1));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct invalid s True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type=R.<> >(y:V):V{return y;};}const n=outer.<uint8>(1);const s=outer.<string>(\"x\");function use<T:type>(){const g=s.<>;return g(1);}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct invalid n True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type=T>=identity(U);return function f<V:type=R.<> >(y:V):V{return y;};}const n=outer.<uint8>(1);const s=outer.<string>(\"x\");function use<T:type>(){const g=n.<>;return g(\"bad\");}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "unused throwing default",
+      "steps": [
+        {
+          "source": "function fail(t:type):type{throw new Error(\"default failure\");}function outer<T:type>(x:T){type R<U:type=T>=fail(U);return function f<V:type=R.<> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit bypass throwing default",
+      "steps": [
+        {
+          "source": "function fail(t:type):type{throw new Error(\"default failure\");}function outer<T:type>(x:T){type R<U:type=T>=fail(U);return function f<V:type=R.<> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");const g=fn.<string>;g(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inference bypass throwing default",
+      "steps": [
+        {
+          "source": "function fail(t:type):type{throw new Error(\"default failure\");}function outer<T:type>(x:T){type R<U:type=T>=fail(U);return function f<V:type=R.<> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");fn(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "required throwing default",
+      "steps": [
+        {
+          "source": "function fail(t:type):type{throw new Error(\"default failure\");}function outer<T:type>(x:T){type R<U:type=T>=fail(U);return function f<V:type=R.<> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");function use(){const g=fn.<>;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "producer body stays unexecuted",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){throw new Error(\"ordinary body\");type R<U:type=T>=identity(U);return function f<V:type=R.<> >(y:V):V{return y;};}function use(){const fn=outer.<string>(\"x\");const g=fn.<>;return g(1);}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "symbolic default control invalid unused consumer",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;} function outer<T:type>(x:T){type R<U:type=T>=U;return function f<V:type=R.<> >(y:V):V{return y;};} const fn=outer.<string>(\"x\");function use<T:type>(){const g=fn.<>;return g(1);}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static",
+              "checked": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "symbolic default control valid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;} function outer<T:type>(x:T){type R<U:type=T>=U;return function f<V:type=R.<> >(y:V):V{return y;};} const fn=outer.<string>(\"x\");function use<T:type>(){const g=fn.<>;return g(\"ok\");}use.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failure then independent default",
+      "steps": [
+        {
+          "source": "function fail(t:type):type{throw new Error(\"default failure\");}function outer<T:type>(x:T){type R<U:type=T>=fail(U);return function f<V:type=R.<> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");function use(){const g=fn.<>;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation",
+              "checked": true
+            }
+          }
+        },
+        {
+          "source": "function identity(t:type):type{return t;} function laterOuter<T:type>(x:T){type R<U:type=identity(T)> = U;return function inner<V:type=R.<>>(y:V):V{return y;};} const laterFn=laterOuter.<string>(\"x\");function laterUse<T:type>(){const g=laterFn.<>;return g(\"ok\");}laterUse.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    }
+  ]
+}

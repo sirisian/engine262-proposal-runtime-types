@@ -4495,7 +4495,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 .TypeParameters?.TypeParameterList?.find((p) => p.BindingIdentifier.name === reference.name);
               if (parameter && !own.has(parameter)) captures.set(parameter, parameterTypeRecord(reference.name));
             } else if (binding?.kind === 'function') collect(binding.node);
-            else if (binding?.node.type === 'TypeAliasDeclaration' && !binding.node.TypeParameters) collect(binding.node.Type);
+            // Traverse the whole declaration so its own generic parameters
+            // remain bound, while defaults and the body expose outer captures.
+            else if (binding?.node.type === 'TypeAliasDeclaration') collect(binding.node);
           }
         };
         if (tp.TypeParameterConstraint) collect(tp.TypeParameterConstraint);
