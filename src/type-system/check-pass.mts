@@ -26,12 +26,13 @@ import {
   RecheckAfterTypeEvaluation, HasDeferredGuardChecks, DeferredTypeChecksOf, SetEvaluatedTypeNode, SetEvaluatedEnum,
   TakeDeferredMetadataChecks, TakeDeferredCrossingChecks, TakeDeferredMeetChecks, TakeUnclaimedKeyChecks, TakeNarrowingRequests, SetNarrowingResolutions,
   TakeDefaultRequirements, GenericWhereChecksOf, DefaultConversionChecksOf, GenericDefaultChecksOf, SetEvaluatedGenericDefault,
-  type DeferredMetadataCheck, type NarrowingRequest, type NarrowingResolution, type GenericDefaultCheck,
+  type DeferredTypeCheck, type DeferredMetadataCheck, type NarrowingRequest, type NarrowingResolution, type GenericDefaultCheck,
 } from './check.mts';
 import { BeginTypeEvaluation, BudgetExhaustionKind, EndTypeEvaluation, IsBudgetExhausted } from './budget.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import { LexicalFreeReferences, ResolveBindingDeclaration } from './compile-time-evaluability.mts';
 import { TypeExpressionEvaluabilityViolation } from './builder-evaluability.mts';
+import { resolvedAlias } from './resolving-aliases.mts';
 import { BeginFragmentEvaluation, EndFragmentEvaluation } from './fragment-library.mts';
 import { Evaluate, Get, GetValue, inspect, Throw, DeclarativeEnvironmentRecord, InstantiateFunctionObject, surroundingAgent } from '#self';
 
@@ -442,6 +443,118 @@ function* evaluateGenericSource(check: GenericDefaultCheck): PlainEvaluator<Type
   }
 }
 
+/** Reconstruct a closed obligation from each producer's lexical declarations. */
+function* prepareDeferredTypeEnvironment(obligation: DeferredTypeCheck): PlainEvaluator<DeclarativeEnvironmentRecord | undefined> {
+  const context = surroundingAgent.runningExecutionContext;
+  const outer = context.LexicalEnvironment;
+  const functions = new Map<ParseNode, Value>();
+  const aliases = new Map<ParseNode, Value>();
+  const activeAliases = new Set<ParseNode>();
+  const sameBinding = (reference: ParseNode, name: string): boolean =>
+    ResolveBindingDeclaration(reference, name)?.node === ResolveBindingDeclaration(obligation.node, name)?.node;
+  const checked = new Set<ParseNode>();
+  const available = (source: ParseNode): boolean => {
+    if (checked.has(source)) return true;
+    checked.add(source);
+    for (const reference of LexicalFreeReferences(source)) {
+      const name = reference.name;
+      const binding = ResolveBindingDeclaration(reference, name);
+      if (binding?.kind === 'function' && binding.node.type === 'FunctionDeclaration') {
+        if (!available(binding.node)) return false;
+      } else if (binding?.node.type === 'TypeAliasDeclaration' && !binding.node.TypeParameters) {
+        if (resolvedAlias(outer, name, binding.node)) continue;
+        if (!available(binding.node.Type)) return false;
+      } else if (binding?.kind === 'import') {
+        // Imports retain their actual target and required-boundary failure.
+        continue;
+      } else if ((binding && obligation.constants.has(binding.node))
+          || (binding?.kind === 'type-parameter' && binding.node === obligation.trial?.declaration)
+          || (sameBinding(reference, name) && (obligation.aliases.has(name) || obligation.computedAt?.bindings.has(name)))) {
+        continue;
+      } else if (binding) {
+        // An unavailable nested binding is not a same-named outer value.
+        return false;
+      }
+    }
+    return true;
+  };
+  if (!available(obligation.node)) return undefined;
+  function* prepare(source: ParseNode, formingAlias?: ParseNode): PlainEvaluator<DeclarativeEnvironmentRecord | undefined> {
+    const scope = new DeclarativeEnvironmentRecord(outer);
+    const previous = context.LexicalEnvironment;
+    context.LexicalEnvironment = scope;
+    try {
+      const bind = (name: string, value: Value): void => {
+        if (scope.bindings.has(Value(name))) return;
+        X(scope.CreateImmutableBinding(Value(name), Value.true));
+        X(scope.InitializeBinding(Value(name), value));
+      };
+      // Publish the helper before following dependencies so mutual function
+      // recursion reuses that helper and its own environment.
+      if (source.type === 'FunctionDeclaration') {
+        functions.set(source, X(InstantiateFunctionObject(source, scope, context.PrivateEnvironment)));
+      }
+      for (const reference of LexicalFreeReferences(source)) {
+        const name = reference.name;
+        const binding = ResolveBindingDeclaration(reference, name);
+        // Alias formation supplies its own recursive placeholder. It is not
+        // an independently completed dependency or an initialized binding.
+        if (formingAlias && binding?.node === formingAlias) continue;
+        if (binding?.kind === 'function' && binding.node.type === 'FunctionDeclaration') {
+          if (!functions.has(binding.node)) {
+            const prepared = Q(yield* prepare(binding.node));
+            if (!prepared) return undefined;
+          }
+          bind(name, functions.get(binding.node)!);
+        } else if (binding?.node.type === 'TypeAliasDeclaration' && !binding.node.TypeParameters) {
+          const declaration = binding.node;
+          const published = resolvedAlias(outer, name, declaration);
+          if (published) {
+            bind(name, GetTypeObject(published));
+            continue;
+          }
+          if (!aliases.has(declaration)) {
+            if (activeAliases.has(declaration)) return undefined;
+            activeAliases.add(declaration);
+            try {
+              const prepared = Q(yield* prepare(declaration.Type, declaration));
+              if (!prepared) return undefined;
+              const saved = context.LexicalEnvironment;
+              context.LexicalEnvironment = prepared;
+              try {
+                // Shape-only formation retains alias/refinement semantics
+                // without initializing or publishing a program binding.
+                Q(yield* Evaluate_RuntimeTypesBindingDeclaration(declaration, true, (record) => {
+                  aliases.set(declaration, GetTypeObject(record));
+                }));
+              } finally {
+                context.LexicalEnvironment = saved;
+              }
+            } finally {
+              activeAliases.delete(declaration);
+            }
+          }
+          bind(name, aliases.get(declaration)!);
+        } else if (binding && obligation.constants.has(binding.node)) {
+          bind(name, obligation.constants.get(binding.node)!);
+        } else if (binding?.kind !== 'import' && sameBinding(reference, name)) {
+          if (obligation.aliases.has(name)) bind(name, GetTypeObject(obligation.aliases.get(name)!));
+        }
+      }
+      return scope;
+    } finally {
+      context.LexicalEnvironment = previous;
+    }
+  }
+  BeginFragmentEvaluation();
+  try {
+    return Q(yield* prepare(obligation.node));
+  } finally {
+    EndFragmentEvaluation();
+    context.LexicalEnvironment = outer;
+  }
+}
+
 function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Module): PlainEvaluator {
   const items = sourcePreparationItems(root);
   // A |ComputedType| alias -
@@ -815,8 +928,12 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   for (const obligation of obligations) {
     const context = surroundingAgent.runningExecutionContext;
     const outer = context.LexicalEnvironment;
-    const scope = new DeclarativeEnvironmentRecord(outer);
-    const bindings = new Map(obligation.constants);
+    const prepared = EnsureCompletion(yield* prepareDeferredTypeEnvironment(obligation));
+    if (prepared.Type !== 'normal') {
+      return CreateTypeDiagnostic('rt-type-evaluation', obligation.node, 'pre-evaluation', 'a closed type annotation could not be evaluated to a type: $1', Value(inspect(prepared.Value)));
+    }
+    if (!prepared.Value) continue;
+    const scope = prepared.Value;
     // A computed operator result's captures are bound in a type-parameter
     // frame around its evaluation, as dispatch binds them: a count as a
     // literal value parameter, which a type position - `vector.<..., N>` -
@@ -828,73 +945,6 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       computedFrame.set(name, typeof bound === 'number'
         ? markValueParameterBinding({ Kind: 'literal', Value: Value(bound), Base: builtinTypeRecord('number', []) } as unknown as TypeRecord)
         : bound.Kind === 'object' ? markValueParameterBinding(bound) : bound);
-    }
-    const dependencies = new Set<string>();
-    const seenDependencies = new Set<object>();
-    const visitDependencies = (value: unknown): void => {
-      if (!value || typeof value !== 'object' || seenDependencies.has(value)) return;
-      seenDependencies.add(value);
-      if (Array.isArray(value)) {
-        value.forEach(visitDependencies);
-        return;
-      }
-      const node = value as ParseNode;
-      if (typeof node.type !== 'string') return;
-      if (node.type === 'IdentifierReference') dependencies.add(node.name);
-      for (const [key, child] of Object.entries(node)) {
-        if (!['parent', 'location', 'sourceText', 'ContextualType'].includes(key)) visitDependencies(child);
-      }
-    };
-    visitDependencies(obligation.node);
-    // A value binding that has not initialized is a runtime dependency. It
-    // must not be mistaken for an absent type name, nor executed ahead of the
-    // surrounding statements. The ordinary annotation boundary remains.
-    let deferred = false;
-    for (const name of dependencies) {
-      if (bindings.has(name) || obligation.functions.has(name) || obligation.aliases.has(name)) continue;
-      let environment: typeof scope.OuterEnv = outer;
-      let found = false;
-      while (environment) {
-        if (X(environment.HasBinding(Value(name))) === Value.true) {
-          found = true;
-          const value = EnsureCompletion(yield* environment.GetBindingValue(Value(name), Value.true));
-          if (value.Type !== 'normal') deferred = true;
-          break;
-        }
-        environment = environment.OuterEnv;
-      }
-      if (!found && obligation.runtimeNames.has(name)) deferred = true;
-    }
-    // A builder may close over runtime state. Only execute closed builders
-    // here; evaluating such a closure speculatively could mutate that state.
-    const allowed = new Set([...bindings.keys(), ...obligation.aliases.keys(), ...obligation.functions.keys(),
-      ...FRAGMENT_FLOOR, ...ERROR_CONSTRUCTORS]);
-    for (const name of dependencies) {
-      const fn = obligation.functions.get(name);
-      if (!fn) continue;
-      const before = new Set(dependencies);
-      visitDependencies(fn);
-      for (const dependency of dependencies) {
-        if (!before.has(dependency) && (builtinTypeRecord(dependency) || BoundTypeRecordForName(dependency))) allowed.add(dependency);
-      }
-      if (FirstFreeReference(fn, allowed)) deferred = true;
-    }
-    if (deferred) continue;
-    for (const [name, type] of obligation.aliases) {
-      // Import facts describe the binding's type, not its value. Resolve the
-      // live binding in the Module Environment instead of fabricating a Type
-      // Object that shadows an imported builder, namespace, or value.
-      if (ResolveBindingDeclaration(obligation.node, name)?.kind === 'import') continue;
-      bindings.set(name, GetTypeObject(type));
-    }
-    for (const [name, fn] of obligation.functions) {
-      if (fn.type === 'FunctionDeclaration') {
-        bindings.set(name, X(InstantiateFunctionObject(fn, scope, context.PrivateEnvironment)));
-      }
-    }
-    for (const [name, value] of bindings) {
-      X(scope.CreateImmutableBinding(Value(name), Value.true));
-      X(scope.InitializeBinding(Value(name), value));
     }
     context.LexicalEnvironment = scope;
     try {

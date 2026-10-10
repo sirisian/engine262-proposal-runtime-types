@@ -6,6 +6,7 @@ import { EnsureCompletion } from '../completion.mts';
 import { skipDebugger } from '../evaluator.mts';
 import { MostSpecificPrimitiveOperator, OperandNamesCapture } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { setNodeParent } from '../parse.mts';
 import { surroundingAgent } from '../execution-context/Agent.mts';
 import { ContractFactsOf, NumericArmRank, RegisteredPrimitiveOperators, GoverningMetaTypes, MetadataMismatchDescription } from '../abstract-ops/runtime-types.mts';
 import { SameValue, ToBoolean } from '../abstract-ops/all.mts';
@@ -2645,10 +2646,9 @@ export function AdoptedReceiverTypeOf(node: object): TypeRecord | undefined {
 const deferredGuardChecks = new WeakSet<object>();
 export interface DeferredTypeCheck {
   node: ParseNode.Type;
-  constants: ReadonlyMap<string, Value>;
-  functions: ReadonlyMap<string, ParseNode>;
+  /** Closed value inputs retain their producing declaration, not the consumer's spelling. */
+  constants: ReadonlyMap<ParseNode, Value>;
   aliases: ReadonlyMap<string, TypeRecord>;
-  runtimeNames: ReadonlySet<string>;
   /**
    * A CALL whose type parameter only trial specialization can bind: the pass
    * runs the trial over the arguments' Static Types rather than evaluating
@@ -2731,6 +2731,8 @@ export function DynamicFunctionCheckRoot(expression: ParseNode): ParseNode.Scrip
 }
 
 export function CheckDynamicFunction(expression: ParseNode): ObjectValue[] {
+  // The combined dynamic-function parse is a lexical source of its own.
+  setNodeParent(expression, undefined);
   ClassifyDynamicFunction(expression);
   const statement = { type: 'ExpressionStatement', Expression: expression } as unknown as ParseNode;
   const root = { type: 'Script', ScriptBody: { type: 'ScriptBody', StatementList: [statement] } } as unknown as ParseNode.Script;
@@ -3024,6 +3026,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   referenceSyntax: ReferenceSyntaxIdentities = { nodes: new WeakMap(), alternatives: new WeakMap() },
   bindingContracts?: BindingContractPass, inferenceResources = new InferenceResources()): ObjectValue[] {
   const unresolvedTypes = new Map<object, DeferredTypeCheck>();
+  const deferredConstants = new Map<ParseNode, Value>();
   deferredTypeChecks.set(root, unresolvedTypes);
 
   // ---- outputs and the pre-scan -------------------------------------
@@ -6542,11 +6545,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     while (referenceSource.parent) referenceSource = referenceSource.parent;
     return source === referenceSource ? undefined : external;
   };
-  const visibleDeclarations = (reference: ParseNode, declarations: ReadonlyMap<string, ParseNode>): Map<string, ParseNode> =>
-    new Map([...declarations].flatMap(([name, declaration]) => {
-      const selected = declarationAt(reference, name, declaration);
-      return selected?.type === declaration.type ? [[name, selected] as const] : [];
-    }));
+
 
   /**
    * One stable Symbol per symbol-`const` DECLARATION, minted for the checker's
@@ -11945,24 +11944,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     examine(node);
     if (open) unresolvedTypes.delete(node);
     if (!open && !defaultSource && ['TypeReference', 'ComputedType', 'ArrayType', 'KeyOfType', 'IndexedAccessType', 'ParameterizedType'].includes(node.type)) {
-      const constants = new Map<string, Value>();
+      const constants = new Map(deferredConstants);
       const aliases = new Map<string, TypeRecord>();
       for (const frame of frames) {
         for (const name of frame.declaredNames) {
-          constants.delete(name);
           aliases.delete(name);
-        }
-        for (const [name, value] of frame.constLiteralValues) {
-          if (value <= BigInt(Number.MAX_SAFE_INTEGER) && value >= BigInt(Number.MIN_SAFE_INTEGER)) {
-            constants.set(name, Value(Number(value)));
-          }
         }
         for (const [name, type] of frame.aliases) {
           aliases.set(name, type);
         }
       }
-      unresolvedTypes.set(node, { node, constants, aliases, functions: visibleDeclarations(node, functionNodes),
-        runtimeNames: new Set([...visibleDeclarations(node, enumNodes).keys(), ...visibleDeclarations(node, classNodes).keys()]) });
+      unresolvedTypes.set(node, { node, constants, aliases });
     }
     return result;
   };
@@ -12724,7 +12716,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         };
         const calleeName = calleeRef?.TypeName?.IdentifierReference?.name ?? calleeRef?.name;
         const builderNode = typeof calleeName === 'string'
-          ? (functionNodes.get(calleeName) ?? ImportedBuilderNode(calleeName))
+          ? declarationAt(computed.Callee, calleeName, functionNodes.get(calleeName) ?? ImportedBuilderNode(calleeName))
           : undefined;
         if (!builderNode) {
           return null as unknown as Known;
@@ -14949,7 +14941,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const literal = staticType(initializer);
     if (literal?.Kind === 'literal') frame.constLiteralTypes.set(name, literal);
     const exact = foldConstant(initializer);
-    if (exact !== null) frame.constLiteralValues.set(name, exact);
+    if (exact !== null) {
+      frame.constLiteralValues.set(name, exact);
+      const binding = ResolveBindingDeclaration(initializer, name);
+      if (binding?.kind === 'const' && exact <= BigInt(Number.MAX_SAFE_INTEGER) && exact >= BigInt(Number.MIN_SAFE_INTEGER)) {
+        deferredConstants.set(binding.node, Value(Number(exact)));
+      }
+    }
     const decimal = foldDecimal(initializer);
     if (decimal !== null) frame.constDecimalValues.set(name, decimal);
     // The initializer, CLOSED where it is declared: each name inside it that
@@ -32942,7 +32940,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const recordTrialObligation = (call: ParseNode.CallExpression): void => {
     const callee = patternExpression(call.CallExpression) as { type?: string, name?: string } | null;
     if (callee?.type !== 'IdentifierReference' || !callee.name) return;
-    const declaration = functionNodes.get(callee.name) as (ParseNode & {
+    const declaration = declarationAt(callee as ParseNode, callee.name, functionNodes.get(callee.name)) as (ParseNode & {
       TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } | null, FormalParameters?: readonly ParseNode[],
     }) | undefined;
     const list = declaration?.TypeParameters?.TypeParameterList;
@@ -33006,25 +33004,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     if (!annotation) return;
-    const constants = new Map<string, Value>();
+    const constants = new Map(deferredConstants);
     const aliases = new Map<string, TypeRecord>();
     for (const frame of frames) {
       for (const name of frame.declaredNames) {
-        constants.delete(name);
         aliases.delete(name);
-      }
-      for (const [name, value] of frame.constLiteralValues) {
-        if (value <= BigInt(Number.MAX_SAFE_INTEGER) && value >= BigInt(Number.MIN_SAFE_INTEGER)) {
-          constants.set(name, Value(Number(value)));
-        }
       }
       for (const [name, type] of frame.aliases) {
         aliases.set(name, type);
       }
     }
     unresolvedTypes.set(call, {
-      node: annotation, constants, aliases, functions: new Map(functionNodes),
-      runtimeNames: new Set([...enumNodes.keys(), ...classNodes.keys()]),
+      node: annotation, constants, aliases,
       trial: { declaration, argumentTypes: argumentTypes as TypeRecord[] },
     });
   };

@@ -1,0 +1,961 @@
+{
+  "cases": [
+    {
+      "name": "computed local declaration differs from published global",
+      "steps": [
+        {
+          "source": "function global(){return type string;}type Known=global();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function scope(){function build(){return type uint8;}type Known=build();function f(x:Known):Known{return 1;}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed local wrong return is checked against its declaration",
+      "steps": [
+        {
+          "source": "function global(){return type string;}type Known=global();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function scope(){function build(){return type uint8;}type Known=build();function f(x:Known):Known{return \"wrong\";}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "deferred helper captures declaration alias",
+      "steps": [
+        {
+          "source": "type Target=string;function build(){return type Target;}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return \"ok\";}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "deferred helper does not borrow sibling alias",
+      "steps": [
+        {
+          "source": "function a(){type Target=string;}function build(){return type Target;}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return 1;}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "alias uses declaration generic identity",
+      "steps": [
+        {
+          "source": "function outer<T:type>(){type Known=T;function inner<T:type>(){function f(x:Known):Known{return x;}}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct helper valid",
+      "steps": [
+        {
+          "source": "type Target=string;function build(){return type Target;}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return \"ok\";}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct helper invalid",
+      "steps": [
+        {
+          "source": "type Target=string;function build(){return type Target;}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return 1;}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "transitive helper valid",
+      "steps": [
+        {
+          "source": "type Target=string;function leaf(){return type Target;}function build(){return leaf();}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return \"ok\";}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "transitive helper invalid",
+      "steps": [
+        {
+          "source": "type Target=string;function leaf(){return type Target;}function build(){return leaf();}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return 1;}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed capture valid",
+      "steps": [
+        {
+          "source": "function leaf(){return type string;}type Target=leaf();function build(){return type Target;}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return \"ok\";}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed capture invalid",
+      "steps": [
+        {
+          "source": "function leaf(){return type string;}type Target=leaf();function build(){return type Target;}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return 1;}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "helper alias chain valid",
+      "steps": [
+        {
+          "source": "type Root=string;type Target=Root;function build(){return type Target;}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return \"ok\";}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "helper alias chain invalid",
+      "steps": [
+        {
+          "source": "type Root=string;type Target=Root;function build(){return type Target;}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return 1;}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "own local alias valid",
+      "steps": [
+        {
+          "source": "function build(){type Target=string;return type Target;}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return \"ok\";}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "own local alias invalid",
+      "steps": [
+        {
+          "source": "function build(){type Target=string;return type Target;}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return 1;}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "helper local shadow valid",
+      "steps": [
+        {
+          "source": "type Target=string;function build(){if(false){type Target=uint8;}return type Target;}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return \"ok\";}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "helper local shadow invalid",
+      "steps": [
+        {
+          "source": "type Target=string;function build(){if(false){type Target=uint8;}return type Target;}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return 1;}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "mutual helpers valid",
+      "steps": [
+        {
+          "source": "type Target=string;function build(n=0){if(n)return type Target;return leaf(1);}function leaf(n){return build(n);}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return \"ok\";}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mutual helpers invalid",
+      "steps": [
+        {
+          "source": "type Target=string;function build(n=0){if(n)return type Target;return leaf(1);}function leaf(n){return build(n);}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return 1;}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "callee shadow valid",
+      "steps": [
+        {
+          "source": "function build(){return type string;}function outer(){function build(){return type uint8;}type Known=build();function f(x:Known):Known{return 1;}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "callee shadow invalid",
+      "steps": [
+        {
+          "source": "function build(){return type string;}function outer(){function build(){return type uint8;}type Known=build();function f(x:Known):Known{return \"bad\";}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "sibling helper shadow valid",
+      "steps": [
+        {
+          "source": "function build(){return type string;}function a(){function build(){return type uint8;}}function outer(){type Known=build();function f(x:Known):Known{return \"ok\";}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "sibling helper shadow invalid",
+      "steps": [
+        {
+          "source": "function build(){return type string;}function a(){function build(){return type uint8;}}function outer(){type Known=build();function f(x:Known):Known{return 1;}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "sibling alias shadow valid",
+      "steps": [
+        {
+          "source": "type Target=string;function a(){type Target=uint8;}function build(){return type Target;}function outer(){type Known=build();function f(x:Known):Known{return \"ok\";}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "sibling alias shadow invalid",
+      "steps": [
+        {
+          "source": "type Target=string;function a(){type Target=uint8;}function build(){return type Target;}function outer(){type Known=build();function f(x:Known):Known{return 1;}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "helper missing type",
+      "steps": [
+        {
+          "source": "function build(){return type Missing;}function outer(){type Missing=uint8;type Known=build();function f(x:Known):Known{return 1;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "unused runtime capture",
+      "steps": [
+        {
+          "source": "function outer(T:type){function build(){return T;}type Known=build();function f(x:Known):Known{return 1;}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outer parameter has global shadow",
+      "steps": [
+        {
+          "source": "type T=string;function outer(T:type){function build(){return T;}type Known=build();function f(x:Known):Known{return 1;}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "called runtime capture valid",
+      "steps": [
+        {
+          "source": "function outer(T:type){function build(){return T;}type Known=build();function f(x:Known):Known{return \"ok\";}return f(\"ok\");}outer(type string);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "called runtime String conversion",
+      "steps": [
+        {
+          "source": "function outer(T:type){function build(){return T;}type Known=build();function f(x:Known):Known{return 1;}return f(\"ok\");}outer(type string);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "recursive alias capture",
+      "steps": [
+        {
+          "source": "type Target={next:Target|null};function build(){return type Target;}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return null;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "helper catches unavailable input",
+      "steps": [
+        {
+          "source": "type Target=string;function outer(Target:type){function build(){try{return Target;}catch(e){return type uint8;}}type Known=build();function f(x:Known):Known{return 256;}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constant capture valid",
+      "steps": [
+        {
+          "source": "const N=8;function build(){if(N===8)return type string;return type uint8;}function outer(){const N=16;type Known=build();function f(x:Known):Known{return \"ok\";}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constant capture invalid",
+      "steps": [
+        {
+          "source": "const N=8;function build(){if(N===8)return type string;return type uint8;}function outer(){const N=16;type Known=build();function f(x:Known):Known{return 1;}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "transitive constant capture valid",
+      "steps": [
+        {
+          "source": "const N=8;function leaf(){return N;}function build(){if(leaf()===8)return type string;return type uint8;}function outer(){const N=16;type Known=build();function f(x:Known):Known{return \"ok\";}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "transitive constant capture invalid",
+      "steps": [
+        {
+          "source": "const N=8;function leaf(){return N;}function build(){if(leaf()===8)return type string;return type uint8;}function outer(){const N=16;type Known=build();function f(x:Known):Known{return 1;}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "runtime capture conversion",
+      "steps": [
+        {
+          "source": "function outer(T:type){function build(){return T;}type Known=build();function f(x:Known):Known{return 1;}return typeof f(\"ok\");}outer(type string);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "runtime numeric capture invalid",
+      "steps": [
+        {
+          "source": "function outer(T:type){function build(){return T;}type Known=build();function f(x:Known):Known{return \"bad\";}return f(1);}outer(type uint8);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "runtime numeric capture valid",
+      "steps": [
+        {
+          "source": "function outer(T:type){function build(){return T;}type Known=build();function f(x:Known):Known{return 1;}return String(f(1));}outer(type uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic helper lexical scope",
+      "steps": [
+        {
+          "source": "Function('type Target=string;function build(){return type Target;}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return \"ok\";}}return \"ok\";')();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic helper lexical scope invalid",
+      "steps": [
+        {
+          "source": "Function('type Target=string;function build(){return type Target;}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return 1;}}return \"bad\";')();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "transitive unavailable input",
+      "steps": [
+        {
+          "source": "type T=string;function outer(T:type){function leaf(){return T;}function build(){return leaf();}type Known=build();function f(x:Known):Known{return 256;}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "runtime distinct activations",
+      "steps": [
+        {
+          "source": "function outer(T:type){function build(){return T;}type Known=build();return function f(x:Known):Known{return x;};}const a=outer(type uint8);const b=outer(type string);String(a(1))+\":\"+b(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1:ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "runtime distinct activations invalid",
+      "steps": [
+        {
+          "source": "function outer(T:type){function build(){return T;}type Known=build();return function f(x:Known):Known{return x;};}const a=outer(type uint8);const b=outer(type string);a(\"bad\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "helper catches own TDZ",
+      "steps": [
+        {
+          "source": "function build(){try{return Missing;}catch(e){return type uint8;}const Missing=type string;}function outer(){type Known=build();function f(x:Known):Known{return 1;}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "helper throws",
+      "steps": [
+        {
+          "source": "function build(){throw \"failed\";}function outer(){type Known=build();function f(x:Known):Known{return 1;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested recursive alias",
+      "steps": [
+        {
+          "source": "function outer(){type Target={next:Target|null};function build(){return type Target;}function shadow(){type Target=uint8;type Known=build();function f(x:Known):Known{return null;}}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "same name transitive helpers",
+      "steps": [
+        {
+          "source": "type Target=string;function leaf(){return type Target;}function build(){return leaf();}function outer(){function leaf(){return type uint8;}type Known=build();function f(x:Known):Known{return \"ok\";}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic function computed alias stays local",
+      "steps": [
+        {
+          "source": "Function(\"function build(){return type string;}type Hidden=build();\")();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function use(){function f<[].<Hidden>>(x:string):string{return x;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "failure then independent closed scope",
+      "steps": [
+        {
+          "source": "function build(){throw \"failed\";}function scope(){type Known=build();}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "function buildAgain(){return type uint8;}function scopeAgain(){type Known=buildAgain();function f(x:Known):Known{return 1;}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior global type keeps captured declaration valid",
+      "steps": [
+        {
+          "source": "type Target=string;\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function build(){return type Target;}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return \"ok\";}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior global type keeps captured declaration invalid",
+      "steps": [
+        {
+          "source": "type Target=string;\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function build(){return type Target;}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return 1;}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior global computed type keeps captured declaration valid",
+      "steps": [
+        {
+          "source": "function make(){return type string;}type Target=make();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function build(){return type Target;}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return \"ok\";}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior global computed type keeps captured declaration invalid",
+      "steps": [
+        {
+          "source": "function make(){return type string;}type Target=make();\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function build(){return type Target;}function outer(){type Target=uint8;type Known=build();function f(x:Known):Known{return 1;}}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "called local capture checks runtime value",
+      "steps": [
+        {
+          "source": "function f(){const K=uint8;let x:K=\"bad\";}f();\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "called local capture with replaced name",
+      "steps": [
+        {
+          "source": "globalThis.uint8=type string;\"seeded\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seeded"
+          }
+        },
+        {
+          "source": "function f(){const K=uint8;let x:K=\"ok\";return x;}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    }
+  ]
+}
