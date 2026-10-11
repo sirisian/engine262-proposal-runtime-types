@@ -1,0 +1,891 @@
+{
+  "cases": [
+    {
+      "name": "fail() positional inferred outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type=bypass(),W:type=fail()>(y:U):U{return y;}return inner.<T>(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "omitted W"
+        }
+      ]
+    },
+    {
+      "name": "fail() positional annotated outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=fail()>(y:U):U{return y;}return inner.<T>(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "omitted W"
+        }
+      ]
+    },
+    {
+      "name": "fail() named inferred outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type=bypass(),W:type=fail()>(y:U):U{return y;}return inner.<U:T>(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "omitted W"
+        }
+      ]
+    },
+    {
+      "name": "fail() named annotated outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=fail()>(y:U):U{return y;}return inner.<U:T>(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "omitted W"
+        }
+      ]
+    },
+    {
+      "name": "fail() inferred inferred outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type=bypass(),W:type=fail()>(y:U):U{return y;}return inner(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "omitted W"
+        }
+      ]
+    },
+    {
+      "name": "fail() inferred annotated outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=fail()>(y:U):U{return y;}return inner(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "omitted W"
+        }
+      ]
+    },
+    {
+      "name": "fail() stored inferred outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type=bypass(),W:type=fail()>(y:U):U{return y;}return inner.<T>;}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "omitted W"
+        }
+      ]
+    },
+    {
+      "name": "failInput(U) positional inferred outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type=bypass(),W:type=failInput(U)>(y:U):U{return y;}return inner.<T>(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        }
+      ]
+    },
+    {
+      "name": "failInput(U) positional annotated outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=failInput(U)>(y:U):U{return y;}return inner.<T>(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        }
+      ]
+    },
+    {
+      "name": "failInput(U) named inferred outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type=bypass(),W:type=failInput(U)>(y:U):U{return y;}return inner.<U:T>(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        }
+      ]
+    },
+    {
+      "name": "failInput(U) named annotated outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=failInput(U)>(y:U):U{return y;}return inner.<U:T>(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        }
+      ]
+    },
+    {
+      "name": "failInput(U) inferred inferred outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type=bypass(),W:type=failInput(U)>(y:U):U{return y;}return inner(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        }
+      ]
+    },
+    {
+      "name": "failInput(U) inferred annotated outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=failInput(U)>(y:U):U{return y;}return inner(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        }
+      ]
+    },
+    {
+      "name": "failInput(U) stored inferred outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type=bypass(),W:type=failInput(U)>(y:U):U{return y;}return inner.<T>;}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        }
+      ]
+    },
+    {
+      "name": "failInput(T) positional inferred outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type=bypass(),W:type=failInput(T)>(y:U):U{return y;}return inner.<T>(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        }
+      ]
+    },
+    {
+      "name": "failInput(T) positional annotated outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=failInput(T)>(y:U):U{return y;}return inner.<T>(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        }
+      ]
+    },
+    {
+      "name": "failInput(T) named inferred outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type=bypass(),W:type=failInput(T)>(y:U):U{return y;}return inner.<U:T>(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        }
+      ]
+    },
+    {
+      "name": "failInput(T) named annotated outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=failInput(T)>(y:U):U{return y;}return inner.<U:T>(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        }
+      ]
+    },
+    {
+      "name": "failInput(T) inferred inferred outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type=bypass(),W:type=failInput(T)>(y:U):U{return y;}return inner(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        }
+      ]
+    },
+    {
+      "name": "failInput(T) inferred annotated outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=failInput(T)>(y:U):U{return y;}return inner(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        }
+      ]
+    },
+    {
+      "name": "failInput(T) stored inferred outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type=bypass(),W:type=failInput(T)>(y:U):U{return y;}return inner.<T>;}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        }
+      ]
+    },
+    {
+      "name": "identity(U) positional inferred outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type=bypass(),W:type=identity(U)>(y:U):U{return y;}return inner.<T>(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity(U) positional annotated outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=identity(U)>(y:U):U{return y;}return inner.<T>(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity(U) named inferred outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type=bypass(),W:type=identity(U)>(y:U):U{return y;}return inner.<U:T>(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity(U) named annotated outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=identity(U)>(y:U):U{return y;}return inner.<U:T>(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity(U) inferred inferred outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type=bypass(),W:type=identity(U)>(y:U):U{return y;}return inner(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity(U) inferred annotated outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=identity(U)>(y:U):U{return y;}return inner(x);}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity(U) stored inferred outer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type=bypass(),W:type=identity(U)>(y:U):U{return y;}return inner.<T>;}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "independent default in unused source 28",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=fail()>(y:U):U{return y;}return inner.<T>(x);}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "omitted W"
+        }
+      ]
+    },
+    {
+      "name": "independent default in unused source 29",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=fail()>(y:U):U{return y;}return inner.<T>(x);}function unused(){outer.<string>(\"ok\");}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "omitted W"
+        }
+      ]
+    },
+    {
+      "name": "all defaults bypassed inner.<T,T>(x)",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{type Pair=[T,T];function inner<U:type=bypass(),W:type=fail()>(y:U):U{return y;}return inner.<T,T>(x);}outer.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "all defaults bypassed inner.<U:T,W:T>(x)",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{type Pair=[T,T];function inner<U:type=bypass(),W:type=fail()>(y:U):U{return y;}return inner.<U:T,W:T>(x);}outer.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "all defaults bypassed inner.<...Pair>(x)",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{type Pair=[T,T];function inner<U:type=bypass(),W:type=fail()>(y:U):U{return y;}return inner.<...Pair>(x);}outer.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unused generic declaration selects no default",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=fail()>(y:U):U{return y;}return x;}outer.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unavailable dependent input stays pending",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=failInput(U)>(y:U):U{return y;}return inner.<T>(x);}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dependent default chain identity(U)",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=identity(U),V:type=identity(W)>(y:U):U{return y;}return inner.<T>(x);}outer.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dependent chain failure identity(U)",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=identity(U),V:type=failInput(W)>(y:U):U{return y;}return inner.<T>(x);}outer.<string>(\"ok\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        }
+      ]
+    },
+    {
+      "name": "dependent default chain identity(T)",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=identity(T),V:type=identity(W)>(y:U):U{return y;}return inner.<T>(x);}outer.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dependent chain failure identity(T)",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=identity(T),V:type=failInput(W)>(y:U):U{return y;}return inner.<T>(x);}outer.<string>(\"ok\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        }
+      ]
+    },
+    {
+      "name": "declaration order False",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=failInput(U)>(y:U):U{return y;}return inner.<T>(x);}outer.<string>(\"ok\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        },
+        {
+          "source": "function fresh<T:type=string>(x:T):T{return x;}fresh.<>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declaration order True",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=failInput(U)>(y:U):U{return y;}return inner.<T>(x);}function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}outer.<string>(\"ok\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        },
+        {
+          "source": "function fresh<T:type=string>(x:T):T{return x;}fresh.<>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary bodies are not preparation",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{throw new Error(\"outer body\");function inner<U:type=bypass(),W:type=failInput(U)>(y:U):U{throw new Error(\"inner body\");}return inner.<T>(x);}function unused(){outer.<string>(\"ok\");}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        }
+      ]
+    },
+    {
+      "name": "callable producer 42",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=failInput(U)>(y:U):U{return y;}return inner.<T>(x);}outer.<string>(\"ok\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        }
+      ]
+    },
+    {
+      "name": "callable producer 43",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{const inner=function<U:type=bypass(),W:type=failInput(U)>(y:U):U{return y;};return inner.<T>(x);}outer.<string>(\"ok\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        }
+      ]
+    },
+    {
+      "name": "member callable producer",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function outer<T:type>(x:T):T{const obj={inner<U:type=bypass(),W:type=failInput(U)>(y:U):U{return y;}};return obj.inner.<T>(x);}outer.<string>(\"ok\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "dependent W"
+        }
+      ]
+    },
+    {
+      "name": "own binder shadows outer False",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function select(t:type):type{if(t===type string)return type string;throw new Error(\"wrong capture\");}function outer<T:type>(x:T){function inner<T:type=bypass(),W:type=select(T)>(y:T):T{return y;}return inner.<string>(\"ok\");}outer.<string>(\"ok\");outer.<uint8>(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "own binder shadows outer True",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function select(t:type):type{if(t===type string)return type string;throw new Error(\"wrong capture\");}function outer<T:type>(x:T){function inner<T:type=bypass(),W:type=select(T)>(y:T):T{return y;}return inner.<string>(\"ok\");}outer.<uint8>(1);outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "application inputs isolate False",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function select(t:type):type{if(t===type string)return type string;throw new Error(\"wrong capture\");}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=select(U)>(y:U):U{return y;}return inner.<T>(x);}outer.<string>(\"ok\");outer.<uint8>(1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "wrong capture"
+        },
+        {
+          "source": "function fresh<T:type=string>(x:T):T{return x;}fresh.<>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "application inputs isolate True",
+      "steps": [
+        {
+          "source": "function bypass():type{throw new Error(\"bypassed U\");}function fail():type{throw new Error(\"omitted W\");}function failInput(t:type):type{throw new Error(\"dependent W\");}function identity(t:type):type{return t;}function select(t:type):type{if(t===type string)return type string;throw new Error(\"wrong capture\");}function outer<T:type>(x:T):T{function inner<U:type=bypass(),W:type=select(U)>(y:U):U{return y;}return inner.<T>(x);}outer.<uint8>(1);outer.<string>(\"ok\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "wrong capture"
+        },
+        {
+          "source": "function fresh<T:type=string>(x:T):T{return x;}fresh.<>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    }
+  ]
+}

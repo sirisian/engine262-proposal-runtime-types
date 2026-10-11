@@ -753,8 +753,8 @@ export interface GenericDefaultCheck {
   readonly captures?: TypeParameterRecord['Captures'];
   readonly constraint?: boolean;
 }
-interface AliasApplicationCheck {
-  readonly declaration: ParseNode.TypeAliasDeclaration;
+interface TypeArgumentApplicationCheck {
+  readonly declaration?: ParseNode.TypeAliasDeclaration;
   readonly parameters: readonly TypeParameterRecord[];
   readonly bindings: ReadonlyMap<string, TypeRecord>;
   readonly pendingArguments: ReadonlySet<string>;
@@ -762,7 +762,7 @@ interface AliasApplicationCheck {
 // A later Script or importing Module specializes the producer's source too.
 // Keep its descriptions with that source, separately from canonical types and
 // from any particular consumer's completed application or checking state.
-const sourceAliasApplicationChecks = new WeakMap<ParseNode, { owner: ParseNode, checks: readonly AliasApplicationCheck[] }>();
+const sourceTypeArgumentApplicationChecks = new WeakMap<ParseNode, { owner: ParseNode, checks: readonly TypeArgumentApplicationCheck[] }>();
 const genericDefaultChecks = new WeakMap<object, readonly GenericDefaultCheck[]>();
 const evaluatedGenericDefaults = new WeakMap<object, WeakMap<object, { inputs: readonly [object, TypeRecord][], constraint: boolean, type: TypeRecord }[]>>();
 export function GenericDefaultChecksOf(root: object): readonly GenericDefaultCheck[] {
@@ -3082,8 +3082,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const defaultConversions: DefaultConversionCheck[] = [];
   const specializedDefaultBindings: ReadonlyMap<string, TypeRecord>[] = [];
   const genericDefaults: GenericDefaultCheck[] = [];
-  const aliasApplicationChecks = new Map<ParseNode, AliasApplicationCheck[]>();
-  const activeAliasApplications = new Map<AliasApplicationCheck, ReadonlyMap<ParseNode.TypeParameter, TypeRecord>[]>();
+  const typeArgumentApplicationChecks = new Map<ParseNode, TypeArgumentApplicationCheck[]>();
+  const activeAliasApplications = new Map<TypeArgumentApplicationCheck, ReadonlyMap<ParseNode.TypeParameter, TypeRecord>[]>();
   const genericApplicationInputs = new WeakMap<ParseNode, PreparedBinding>();
   const whereChecks = new Map<object, GenericWhereCheck[]>();
   const recordWhereCheck = (application: object, declaration: GenericWhereCheck['declaration'], bindings: ReadonlyMap<string, TypeRecord>): void => {
@@ -4632,6 +4632,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     visit(owner);
   };
 
+  const recordTypeArgumentApplication = (application: GenericDefaultCheck['application'],
+    parameters: readonly TypeParameterRecord[], bindings: ReadonlyMap<string, TypeRecord>,
+    pendingArguments: ReadonlySet<string> = new Set(), declaration?: ParseNode.TypeAliasDeclaration): void => {
+    if (describingGenericDefaults.size) return;
+    const checks = typeArgumentApplicationChecks.get(application) ?? [];
+    const captures = parameters.flatMap((parameter) => parameter.Captures ?? []);
+    if (checks.some((check) => {
+      const previous = check.parameters.flatMap((parameter) => parameter.Captures ?? []);
+      return check.declaration === declaration && check.parameters.length === parameters.length
+        && check.parameters.every((parameter, i) => parameter.Declaration === parameters[i].Declaration)
+        && check.bindings.size === bindings.size
+        && [...bindings].every(([name, bound]) => check.bindings.has(name) && SameType(bound, check.bindings.get(name)!))
+        && check.pendingArguments.size === pendingArguments.size && [...pendingArguments].every((name) => check.pendingArguments.has(name))
+        && previous.length === captures.length && previous.every((capture, i) =>
+          capture.Declaration === captures[i].Declaration && SameType(capture.Type, captures[i].Type));
+    })) return;
+    checks.push({ declaration, parameters, bindings: new Map(bindings), pendingArguments });
+    typeArgumentApplicationChecks.set(application, checks);
+  };
+
   /** #sec-generic-specialization: close obligations when an outer parameter binds. */
   const checkSpecializedDeclaration = (declaration: ParseNode, bindings: ReadonlyMap<string, TypeRecord>,
     enclosingInputs?: ReadonlyMap<ParseNode.TypeParameter, TypeRecord>): void => {
@@ -4651,11 +4671,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const visit = (node: ParseNode, available: ReadonlyMap<string, TypeRecord>): void => {
       const scoped = new Map(available);
       if (node !== declaration) for (const name of typeParameterNamesOf(node) ?? []) scoped.delete(name);
-      // Expansion can erase an alias's argument without discharging its bound.
-      // Keep that application's inputs independent of the resulting type, and
-      // close them under the enclosing specialization before any consumer runs.
-      const sourceChecks = sourceAliasApplicationChecks.get(node);
-      for (const check of [...(aliasApplicationChecks.get(node) ?? (sourceChecks?.owner !== root ? sourceChecks?.checks : undefined) ?? [])]) {
+      // Expansion can erase alias bounds, and a callable signature can hide an
+      // omitted default. Retain each application after its inference rungs and
+      // close its inputs under the enclosing specialization before consumers run.
+      const sourceChecks = sourceTypeArgumentApplicationChecks.get(node);
+      for (const check of [...(typeArgumentApplicationChecks.get(node) ?? (sourceChecks?.owner !== root ? sourceChecks?.checks : undefined) ?? [])]) {
         const closed = new Map<string, TypeRecord>();
         for (const [name, bound] of check.bindings) {
           const resolved = substituteFreeTypeParameters(bound, scoped);
@@ -4666,8 +4686,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }] }, scoped, undefined, inputs);
         if (signature?.Kind !== 'function') continue;
         finishTypeArgumentBindings(signature.Signatures[0].TypeParameters!, closed, {
-          complete: false, application: node as ParseNode.TypeReference, pendingArguments: check.pendingArguments,
+          complete: false, application: node as GenericDefaultCheck['application'], pendingArguments: check.pendingArguments,
         });
+        if (!check.declaration) continue;
         // An alias body can apply another alias whose result also erases its
         // arguments. Follow the retained application, not the expanded result.
         // Re-entry into the same active inputs adds no new obligation; it is
@@ -12190,20 +12211,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const parameters = typeParameterRecordsOf(genericParameters);
             const bindings = new Map<string, TypeRecord>();
             const pendingArguments = bindExplicitTypeArguments(parameters, rawArgList, bindings, { complete: true, application: node });
-            if (genericDeclaration.type === 'TypeAliasDeclaration' && !describingGenericDefaults.size) {
-              const checks = aliasApplicationChecks.get(node) ?? [];
-              const captures = parameters.flatMap((parameter) => parameter.Captures ?? []);
-              if (!checks.some((check) => {
-                const previous = check.parameters.flatMap((parameter) => parameter.Captures ?? []);
-                return check.declaration === genericDeclaration && check.bindings.size === bindings.size
-                  && [...bindings].every(([name, bound]) => check.bindings.has(name) && SameType(bound, check.bindings.get(name)!))
-                  && check.pendingArguments.size === pendingArguments.size && [...pendingArguments].every((name) => check.pendingArguments.has(name))
-                  && previous.length === captures.length && previous.every((capture, i) =>
-                    capture.Declaration === captures[i].Declaration && SameType(capture.Type, captures[i].Type));
-              })) {
-                checks.push({ declaration: genericDeclaration, parameters, bindings: new Map(bindings), pendingArguments });
-                aliasApplicationChecks.set(node, checks);
-              }
+            if (genericDeclaration.type === 'TypeAliasDeclaration') {
+              recordTypeArgumentApplication(node, parameters, bindings, pendingArguments, genericDeclaration);
             }
             if (bindings.size !== parameters.length) return null;
             // #sec-generic-where: retain the resolved declaration and bound
@@ -13594,7 +13603,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const resolved = pending ? null : EvaluatedGenericType(check) ?? tp.Default ?? resolveType(tp.DefaultNode);
           const supplied = resolved && substituteFreeTypeParameters(resolved, into, typeParams.map((parameter) => parameter.Declaration));
           if (supplied) into.set(tp.Name, supplied);
-          else if (!describingGenericDefaults.size && [...into.values()].every((type) => !mentionsTypeParameter(type))) {
+          else if (!describingGenericDefaults.size) {
+            // Availability follows this default's lexical dependencies. An
+            // unrelated open supplied slot must not suppress a closed default.
             genericDefaults.push(check);
           }
         }
@@ -18297,13 +18308,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!parameters?.length) return [];
           const bindings = new Map<string, TypeRecord>();
           const before = errors.length;
-          bindExplicitTypeArguments(parameters, specialization.TypeArguments.TypeArgumentList, bindings, { complete: !asCallee, application: specialization });
+          const pendingArguments = bindExplicitTypeArguments(parameters, specialization.TypeArguments.TypeArgumentList, bindings, { complete: !asCallee, application: specialization });
           // BindTypeArguments failure makes this overload non-viable. It is an
           // application error only when no declared candidate accepts the list.
           if (errors.length > before) {
             rejected.push(...errors.splice(before));
             return [];
           }
+          if (!asCallee) recordTypeArgumentApplication(specialization, parameters, bindings, pendingArguments);
           if (bindings.size !== parameters.length) {
             // #sec-generic-specialization: a stored application publishes only
             // after its defaults are complete. Its original signature would
@@ -32280,6 +32292,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           mayInfer: (name) => !formals || referenced.has(name),
           application: n as GenericDefaultCheck['application'],
         });
+        // Keep omitted defaults after the inference rungs. An enclosing input
+        // can be pending even when a different omitted default is closed.
+        recordTypeArgumentApplication(n as GenericDefaultCheck['application'], generic, bindings, pendingExplicitArguments);
         // AN INFERRED BINDING IS CHECKED AGAINST ITS CONSTRAINT, before the
         // parameter is substituted away. Substitution replaces `K: keyof T`
         // WHOLESALE with K's binding, so the argument `"zz"` was checked
@@ -37852,12 +37867,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   defaultRequirements.set(root, defaultsNeeded);
   defaultConversionChecks.set(root, defaultConversions);
   genericDefaultChecks.set(root, genericDefaults);
-  for (const [application, checks] of aliasApplicationChecks) {
+  for (const [application, checks] of typeArgumentApplicationChecks) {
     let owner: ParseNode | undefined = application;
     while (owner && owner !== root) owner = owner.parent;
-    // A consumer may inspect a foreign alias while resolving another type;
+    // A consumer may inspect a foreign application while resolving another type;
     // it must not replace the producer's descriptions with that consumer's.
-    if (owner === root) sourceAliasApplicationChecks.set(application, { owner: root, checks: [...checks] });
+    if (owner === root) sourceTypeArgumentApplicationChecks.set(application, { owner: root, checks: [...checks] });
   }
   genericWhereChecks.set(root, [...whereChecks.values()].flat()
     .filter((check) => [...check.bindings.values()].every((bound) => !mentionsTypeParameter(bound))));
