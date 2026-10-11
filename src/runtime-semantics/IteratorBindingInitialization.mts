@@ -321,6 +321,7 @@ function* IteratorBindingInitialization_BindingRestElement(restNode: ParseNode.B
   // their locations, which the reference operations read and write through.
   if (BindingIdentifier && lhs && (restNode as { Ref?: boolean }).Ref === true) {
     const locations: ReferenceRecord[] = [];
+    const borrowed: ReferenceValue[] = [];
     while (true) {
       const next = Q(yield* IteratorStepValue(iteratorRecord));
       if (next === 'done') {
@@ -330,7 +331,14 @@ function* IteratorBindingInitialization_BindingRestElement(restNode: ParseNode.B
         return Throw.TypeError('parameter $1 requires a ref argument', StringValue(BindingIdentifier));
       }
       locations.push(next.Location);
+      borrowed.push(next);
     }
+    // A trailing ref rest reaches this boundary without prior distribution.
+    // Check its complete sequence before publishing the run, and read again
+    // here even if an earlier partition succeeded: defaults can invalidate it.
+    const type = TypeAnnotation ? Q(yield* TypeNodeToTypeRecord(TypeAnnotation.Type)) : { Kind: 'any' } as const;
+    const counts = Q(yield* AssignRuntimeArguments([{ Name: '', Type: type, Ref: true, Rest: true, Optional: false }], borrowed));
+    if (counts === null) return Throw.TypeError('the arguments bound by ref to $1 do not satisfy its collected type annotation', StringValue(BindingIdentifier));
     const run = new ReferenceRunValue(locations);
     // The rest's OWN binding is the one place the run is stored.
     const initialized = yield* withReferenceRunInitializationEvaluator(function* () {

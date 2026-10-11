@@ -78,6 +78,7 @@ import { NarrowTo, NarrowFrom, nullishType, empty, isClassNominal, libraryClassN
 import { MetadataObjectFromType, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord, SubstituteTypeArguments, spreadElementsOf, packElementAdmits, packConstraintRefuses } from './runtime.mts';
 import { isWideIntegerType, wrapToType } from './arithmetic.mts';
 import { resolveOverloadByTypes, assignArguments, parameterReceiving, operatorTableKey, IsNumericIndexType, type OverloadSignature as OperatorSignature } from './overloads.mts';
+import { PlanReferenceArguments } from './reference-rest.mts';
 import { BindNamedArguments, type ArgumentItem } from './named-arguments.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { invalidTupleRest } from './tuple-rests.mts';
@@ -32164,9 +32165,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // subtype would be admitted by assignability and is still
           // wrong here - the callee may write the parameter's type into
           // a location that holds the narrower one.
-          if (pr.Ref === true && (arg as { type?: string }).type === 'RefExpression') {
+          if (pr.Ref === true && !pr.Rest && (arg as { type?: string }).type === 'RefExpression') {
             const borrowed = locationType((arg as unknown as { Expression?: ParseNode }).Expression ?? arg);
-            const wantedRef = pr.Rest ? restElementType(pr.Type) : pr.Type as Known;
+            const wantedRef = pr.Type as Known;
             if (borrowed && wantedRef && borrowed.Kind !== 'any' && wantedRef.Kind !== 'any'
               && !mentionsTypeParameter(wantedRef)
               && !SameType(borrowed as TypeRecord, wantedRef as TypeRecord)) {
@@ -32731,6 +32732,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ? (substituteTypeParameters({ Kind: 'function', Signatures: [chosen] }, effectiveBindings) as Extract<TypeRecord, { Kind: 'function' }>).Signatures[0]
         : chosen;
       checkedCallSignatures.set(c, effective);
+      // A ref rest is one sequence contract, not repeated comparisons against
+      // a tuple's element union. Resolve the actual generic bindings first;
+      // unknown spread counts retain their runtime admission boundary.
+      if (!mapped.spread) {
+        chosen.Parameters.forEach((parameter, slot) => {
+          if (!parameter.Rest || !parameter.Ref) return;
+          const type = bindings.size ? substituteTypeParameters(parameter.Type, bindings) : parameter.Type;
+          if (mentionsTypeParameter(type)) return;
+          const entries = mapped.entries.filter((entry) => entry.slot === slot);
+          const counts = PlanReferenceArguments([{ ...parameter, Type: type }]).assign(entries.length, (i, wanted) => {
+            const arg = entries[i].node;
+            if (arg.type !== 'RefExpression') return false;
+            const borrowed = locationType(arg.Expression);
+            const target = wanted.Kind === 'reference' ? wanted.Target : wanted;
+            return !borrowed || borrowed.Kind === 'any' || target.Kind === 'any' || mentionsTypeParameter(borrowed) || SameType(borrowed, target);
+          });
+          if (counts === null) reportType('rt-reference-argument', n, 'the arguments bound by ref to $1 do not satisfy its collected type annotation', Value(parameter.Name));
+        });
+      }
       checkCallPatterns(c, chosen, mapped, n, effectiveBindings ?? bindings);
       // #sec-this-adoption: an explicit receiver contract is independent of
       // the self marker used by ordinary method syntax.

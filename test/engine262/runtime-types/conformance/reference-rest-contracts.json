@@ -1,0 +1,1165 @@
+{
+  "cases": [
+    {
+      "name": "direct [uint8,string] tail=False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string]){return String(xs.length); }let a:uint8=1;let b:string=\"b\";f(ref a,ref b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct [uint8,string] tail=True",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string],label:string){return String(xs.length); }let a:uint8=1;let b:string=\"b\";f(ref a,ref b,label:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct [2].<uint8> tail=False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[2].<uint8>){return String(xs.length); }let a:uint8=1;let b:uint8=2;f(ref a,ref b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct [2].<uint8> tail=True",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[2].<uint8>,label:string){return String(xs.length); }let a:uint8=1;let b:uint8=2;f(ref a,ref b,label:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct [uint8,...[].<string>,boolean] tail=False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,...[].<string>,boolean]){return String(xs.length); }let a:uint8=1;let b:string=\"b\";let c:boolean=true;f(ref a,ref b,ref c);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct [uint8,...[].<string>,boolean] tail=True",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,...[].<string>,boolean],label:string){return String(xs.length); }let a:uint8=1;let b:string=\"b\";let c:boolean=true;f(ref a,ref b,ref c,label:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct [uint8,string=\"d\"] tail=False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string=\"d\"]){return String(xs.length); }let a:uint8=1;f(ref a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct [uint8,string=\"d\"] tail=True",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string=\"d\"],label:string){return String(xs.length); }let a:uint8=1;f(ref a,label:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct [] tail=False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[]){return String(xs.length); }f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct [] tail=True",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[],label:string){return String(xs.length); }f(label:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased [uint8,string] tail=False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string]){return String(xs.length); }let a:uint8=1;let b:string=\"b\";const fn:any=f;fn(ref a,ref b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased [uint8,string] tail=True",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string],label:string){return String(xs.length); }let a:uint8=1;let b:string=\"b\";const fn:any=f;fn(ref a,ref b,label:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased [2].<uint8> tail=False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[2].<uint8>){return String(xs.length); }let a:uint8=1;let b:uint8=2;const fn:any=f;fn(ref a,ref b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased [2].<uint8> tail=True",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[2].<uint8>,label:string){return String(xs.length); }let a:uint8=1;let b:uint8=2;const fn:any=f;fn(ref a,ref b,label:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased [uint8,...[].<string>,boolean] tail=False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,...[].<string>,boolean]){return String(xs.length); }let a:uint8=1;let b:string=\"b\";let c:boolean=true;const fn:any=f;fn(ref a,ref b,ref c);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased [uint8,...[].<string>,boolean] tail=True",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,...[].<string>,boolean],label:string){return String(xs.length); }let a:uint8=1;let b:string=\"b\";let c:boolean=true;const fn:any=f;fn(ref a,ref b,ref c,label:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased [uint8,string=\"d\"] tail=False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string=\"d\"]){return String(xs.length); }let a:uint8=1;const fn:any=f;fn(ref a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased [uint8,string=\"d\"] tail=True",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string=\"d\"],label:string){return String(xs.length); }let a:uint8=1;const fn:any=f;fn(ref a,label:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased [] tail=False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[]){return String(xs.length); }const fn:any=f;fn();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased [] tail=True",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[],label:string){return String(xs.length); }const fn:any=f;fn(label:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid [uint8,string] ref b,ref a",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[uint8,string]){entered++;}let a:uint8=1;let b:string=\"b\";const fn:any=f;let result=\"missed\";try{fn(ref b,ref a);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid [].<uint8> ref a",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[].<uint8>){entered++;}let a:string=\"bad\";const fn:any=f;let result=\"missed\";try{fn(ref a);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid [2].<uint8> ref a",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[2].<uint8>){entered++;}let a:uint8=1;const fn:any=f;let result=\"missed\";try{fn(ref a);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid [2].<uint8> ref a,ref a,ref a",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[2].<uint8>){entered++;}let a:uint8=1;const fn:any=f;let result=\"missed\";try{fn(ref a,ref a,ref a);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid [uint8,string] ref a",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[uint8,string]){entered++;}let a:uint8=1;const fn:any=f;let result=\"missed\";try{fn(ref a);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "heterogeneous writes",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string],label:string){xs[0]=2;xs[1]=label;}let a:uint8=1;let b:string=\"b\";const fn:any=f;fn(ref a,ref b,label:\"ok\");String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two ref rests greedy extents",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[2].<uint8>,ref ...ys:[].<uint8>,label:string){return String(xs.length)+\"/\"+String(ys.length);}let a:uint8=1;f(ref a,ref a,ref a,label:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested fixed rest",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,...[2].<string>,boolean],label:string){return String(xs.length);}let a:uint8=1;let b:string=\"b\";let c:boolean=true;const fn:any=f;fn(ref a,ref b,ref b,ref c,label:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic pack direct",
+      "steps": [
+        {
+          "source": "function f<...Ts:[].<type>>(ref ...xs:Ts,label:string){return label+String(xs.length);}let a:uint8=1;let b:string=\"b\";f.<uint8,string>(ref a,ref b,label:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic pack stored",
+      "steps": [
+        {
+          "source": "function f<...Ts:[].<type>>(ref ...xs:Ts,label:string){return label+String(xs.length);}let a:uint8=1;let b:string=\"b\";const fn=f.<uint8,string>;fn(ref a,ref b,label:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic extent",
+      "steps": [
+        {
+          "source": "function f<N:uint32>(ref ...xs:[N].<uint8>){return String(xs.length);}let a:uint8=1;f.<2>(ref a,ref a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid dynamic [uint8,string] named=False",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[uint8,string]){entered++;}let a:string=\"bad\";let b:uint8=1;const fn:any=f;let result=\"missed\";try{fn(ref a,ref b);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid dynamic [uint8,string] named=True",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[uint8,string],label:string){entered++;}let a:string=\"bad\";let b:uint8=1;const fn:any=f;let result=\"missed\";try{fn(ref a,ref b,label:\"ok\");}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid dynamic [2].<uint8> named=False",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[2].<uint8>){entered++;}let a:string=\"bad\";const fn:any=f;let result=\"missed\";try{fn(ref a);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid dynamic [2].<uint8> named=True",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[2].<uint8>,label:string){entered++;}let a:string=\"bad\";const fn:any=f;let result=\"missed\";try{fn(ref a,label:\"ok\");}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid dynamic [].<uint8> named=False",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[].<uint8>){entered++;}let a:string=\"bad\";const fn:any=f;let result=\"missed\";try{fn(ref a);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid dynamic [].<uint8> named=True",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[].<uint8>,label:string){entered++;}let a:string=\"bad\";const fn:any=f;let result=\"missed\";try{fn(ref a,label:\"ok\");}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid dynamic [uint8,...[].<string>,boolean] named=False",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[uint8,...[].<string>,boolean]){entered++;}let a:uint8=1;let b:boolean=true;const fn:any=f;let result=\"missed\";try{fn(ref a,ref b,ref a);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid dynamic [uint8,...[].<string>,boolean] named=True",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[uint8,...[].<string>,boolean],label:string){entered++;}let a:uint8=1;let b:boolean=true;const fn:any=f;let result=\"missed\";try{fn(ref a,ref b,ref a,label:\"ok\");}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invariant [].<uint8> ref a let a:uint8|string=(1:=uint8);",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[].<uint8>){entered++;}let a:uint8|string=(1:=uint8);const fn:any=f;let result=\"missed\";try{fn(ref a);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invariant [uint8] ref a let a:uint8|string=(1:=uint8);",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[uint8]){entered++;}let a:uint8|string=(1:=uint8);const fn:any=f;let result=\"missed\";try{fn(ref a);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invariant [].<uint8> ref a[0] let a:[].<uint8|string>=[(1:=uint8)];",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[].<uint8>){entered++;}let a:[].<uint8|string>=[(1:=uint8)];const fn:any=f;let result=\"missed\";try{fn(ref a[0]);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invariant [uint8] ref a[0] let a:[].<uint8|string>=[(1:=uint8)];",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[uint8]){entered++;}let a:[].<uint8|string>=[(1:=uint8)];const fn:any=f;let result=\"missed\";try{fn(ref a[0]);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invariant [].<uint8> ref a[0] let a:[uint8|string]=[(1:=uint8)];",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[].<uint8>){entered++;}let a:[uint8|string]=[(1:=uint8)];const fn:any=f;let result=\"missed\";try{fn(ref a[0]);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invariant [uint8] ref a[0] let a:[uint8|string]=[(1:=uint8)];",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[uint8]){entered++;}let a:[uint8|string]=[(1:=uint8)];const fn:any=f;let result=\"missed\";try{fn(ref a[0]);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invariant [].<uint8> ref alias let a:uint8|string=(1:=uint8);let ref alias=a;",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[].<uint8>){entered++;}let a:uint8|string=(1:=uint8);let ref alias=a;const fn:any=f;let result=\"missed\";try{fn(ref alias);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invariant [uint8] ref alias let a:uint8|string=(1:=uint8);let ref alias=a;",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[uint8]){entered++;}let a:uint8|string=(1:=uint8);let ref alias=a;const fn:any=f;let result=\"missed\";try{fn(ref alias);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "write correct location let a:uint8=1;",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]){xs[0]=2;}let a:uint8=1;const fn:any=f;fn(ref a);String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "write correct location let a:[].<uint8>=[1];",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]){xs[0]=2;}let a:[].<uint8>=[1];const fn:any=f;fn(ref a[0]);String(a[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "write correct location let a:[uint8,string]=[1,\"x\"];",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]){xs[0]=2;}let a:[uint8,string]=[1,\"x\"];const fn:any=f;fn(ref a[0]);String(a[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "write correct location let a:{x:uint8}={x:1};",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]){xs[0]=2;}let a:{x:uint8}={x:1};const fn:any=f;fn(ref a.x);String(a.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "write correct location let a:uint8=1;let ref alias=a;",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]){xs[0]=2;}let a:uint8=1;let ref alias=a;const fn:any=f;fn(ref alias);String(alias);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "write correct location let a:any=(1:=uint8);",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]){xs[0]=2;}let a:any=(1:=uint8);const fn:any=f;fn(ref a);String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed zero ref rest",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[0].<uint8>){return String(xs.length);}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "huge fixed extent bounded by supplied run",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[1000000000].<uint8>){}const fn:any=f;let a:uint8=1;let result=\"missed\";try{fn(ref a);}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default omission creates no borrowed location",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string=\"d\"]){let result=\"missed\";try{String(xs[1]);}catch(e){result=e.name;}return String(xs.length)+\"/\"+result;}let a:uint8=1;f(ref a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default supplied location retains alias",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string=\"d\"]){xs[1]=\"ok\";}let a:uint8=1;let b:string=\"b\";f(ref a,ref b);b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type greedy extent giveback",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[2].<uint8>,ref ...ys:[uint8],ref last:uint8){xs[0]=2;ys[0]=3;last=4;}let a:uint8=1;let b:uint8=1;let c:uint8=1;let d:uint8=1;f(ref a,ref b,ref c,ref d);String(a)+\"/\"+String(b)+\"/\"+String(c)+\"/\"+String(d);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/1/3/4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two heterogeneous rests",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string],ref ...ys:[boolean,uint8],label:string){return String(xs.length)+\"/\"+String(ys.length)+label;}let a:uint8=1;let b:string=\"b\";let c:boolean=true;f(ref a,ref b,ref c,ref a,label:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/2ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple rest suffix giveback",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,...[].<string>,string],label:string){return String(xs.length);}let a:uint8=1;let b:string=\"b\";f(ref a,ref b,ref b,label:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple alias rest",
+      "steps": [
+        {
+          "source": "type Run=[uint8,string];function f(ref ...xs:Run,label:string){return label+String(xs.length);}let a:uint8=1;let b:string=\"b\";f(ref a,ref b,label:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inferred heterogeneous pack",
+      "steps": [
+        {
+          "source": "function f<...Ts:[].<type>>(ref ...xs:Ts){return String(xs.length);}let a:uint8=1;let b:string=\"b\";f(ref a,ref b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored invalid generic extent",
+      "steps": [
+        {
+          "source": "function f<N:uint32>(ref ...xs:[N].<uint8>){return \"entered\";}let a:uint8=1;const fn:any=f.<2>;let result=\"missed\";try{fn(ref a);}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward heterogeneous run",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[uint8,string],label:string){ys[0]=2;ys[1]=label;}function f(ref ...xs:[uint8,string]){g(...xs,label:\"ok\");}let a:uint8=1;let b:string=\"b\";f(ref a,ref b);String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward empty allowed run",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[0].<uint8>,label:string){return label+String(ys.length);}function f(ref ...xs:[0].<uint8>){return g(...xs,label:\"ok\");}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "argument invalidation a.pop(); named=False",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];let entered=0;function change():string{a.pop();return \"ok\";}function f(ref ...xs:[uint8],label:string){entered++;xs[0]=3;return label;}const fn:any=f;let result=\"missed\";try{result=fn(ref a[0],change());}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "argument invalidation a.pop(); named=True",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];let entered=0;function change():string{a.pop();return \"ok\";}function f(ref ...xs:[uint8],label:string){entered++;xs[0]=3;return label;}const fn:any=f;let result=\"missed\";try{result=fn(ref a[0],label:change());}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "argument invalidation a.reserve(64); named=False",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];let entered=0;function change():string{a.reserve(64);return \"ok\";}function f(ref ...xs:[uint8],label:string){entered++;xs[0]=3;return label;}const fn:any=f;let result=\"missed\";try{result=fn(ref a[0],change());}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "argument invalidation a.reserve(64); named=True",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];let entered=0;function change():string{a.reserve(64);return \"ok\";}function f(ref ...xs:[uint8],label:string){entered++;xs[0]=3;return label;}const fn:any=f;let result=\"missed\";try{result=fn(ref a[0],label:change());}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "argument invalidation a.push(2); named=False",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];a.reserve(64);let entered=0;function change():string{a.push(2);return \"ok\";}function f(ref ...xs:[uint8],label:string){entered++;xs[0]=3;return label;}const fn:any=f;let result=\"missed\";try{result=fn(ref a[0],change());}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "argument invalidation a.push(2); named=True",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];a.reserve(64);let entered=0;function change():string{a.push(2);return \"ok\";}function f(ref ...xs:[uint8],label:string){entered++;xs[0]=3;return label;}const fn:any=f;let result=\"missed\";try{result=fn(ref a[0],label:change());}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier default invalidates trailing run False",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];let entered=0;function change():string{a.reserve(32);return \"prefix\";}function f(prefix:string=change(),ref ...xs:[uint8],label:string){entered++;return label;}const fn:any=f;let result=\"missed\";try{result=fn(ref a[0],label:\"ok\");}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier default invalidates trailing run True",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];a.reserve(64);let entered=0;function change():string{a.reserve(32);return \"prefix\";}function f(prefix:string=change(),ref ...xs:[uint8],label:string){entered++;return label;}const fn:any=f;let result=\"missed\";try{result=fn(ref a[0],label:\"ok\");}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "body preserves later liveness",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];function f(ref ...xs:[uint8]){a.reserve(64);return String(xs[0]);}const fn:any=f;let result=\"missed\";try{fn(ref a[0]);}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const run cannot write",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]){xs[0]=2;}const a:uint8=1;const fn:any=f;let result=\"missed\";try{fn(ref a);}catch(e){result=e.name;}result+\"/\"+String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed admission then valid call",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string]){xs[0]=2;return xs[1];}let a:uint8=1;let b:string=\"ok\";const fn:any=f;let result=\"missed\";try{fn(ref b,ref a);}catch(e){result=e.name;}result+\"/\"+fn(ref a,ref b)+\"/\"+String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/ok/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed admission before fresh script",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string]){return \"entered\";}let a:uint8=1;const fn:any=f;fn(ref a);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "function fresh(ref ...xs:[string]){xs[0]=\"ok\";}let b:string=\"b\";fresh(ref b);b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata invariant ref rest",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}type Scalar=float32.<{m:0}>;function f(ref ...xs:[Scalar]){return \"entered\";}let a:float32=2;const fn:any=f;let result=\"missed\";try{fn(ref a);}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "known wrong tuple location before body",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string]){}let a:uint8=1;let b:string=\"b\";f(ref b,ref a);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_REFERENCE_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit undefined default with ref rest",
+      "steps": [
+        {
+          "source": "let calls=0;function f(prefix:string=(calls++,\"p\"),ref ...xs:[uint8],label:string){return prefix+label+String(xs.length);}let a:uint8=1;f(undefined,ref a,label:\"ok\")+\"/\"+String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "pok1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit view tuple rest",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string],label:string){xs[1]=label;}const fn:(ref ...items:[uint8,string],text:string)=>void=f;let a:uint8=1;let b:string=\"b\";fn(ref a,ref b,text:\"ok\");b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "callable interface tuple rest",
+      "steps": [
+        {
+          "source": "interface I{(ref ...items:[uint8,string],text:string):void;}function f(ref ...xs:[uint8,string],label:string){xs[1]=label;}const fn:I=f;let a:uint8=1;let b:string=\"b\";fn(ref a,ref b,text:\"ok\");b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    }
+  ]
+}

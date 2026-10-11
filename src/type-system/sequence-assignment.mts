@@ -48,7 +48,10 @@ export type Admits = (itemIndex: number, slotIndex: number) => boolean;
  * writes, so nothing stops it having several. Keyed on (slot index, item
  * index), the search visits each state once, which is O(slots x items) states.
  */
-export function SequenceAssignment(slots: readonly Slot[], n: number, admits: Admits): number[] | 'unmatched' {
+export function SequenceAssignment(
+  slots: readonly Slot[], n: number, admits: Admits,
+  admitsRun?: (start: number, count: number, slotIndex: number) => boolean,
+): number[] | 'unmatched' {
   // A state is (k, i): the slots from k onward against the items from i to n.
   // The result depends on nothing else, since `slots`, `n`, and `admits` are
   // fixed for the call, which is what makes the memo sound.
@@ -74,6 +77,9 @@ export function SequenceAssignment(slots: readonly Slot[], n: number, admits: Ad
     const least = (slot.Rest || slot.Optional) ? 0 : 1;
     let result: number[] | null = null;
     for (let m = limit; m >= least; m -= 1) {
+      // A collected contract can constrain a whole run (tuple positions or
+      // extent); rejecting one length must still allow the greedy giveback.
+      if (admitsRun && !admitsRun(i, m, k)) continue;
       const tail = solve(k + 1, i + m);
       if (tail !== null) {
         result = [m, ...tail];

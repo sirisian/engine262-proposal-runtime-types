@@ -12,7 +12,8 @@ import type { Value } from '../value.mts';
 import { isTemplateArgumentType, templateArgumentTypeOf } from './template-argument.mts';
 import type { ParameterRecord, TypeRecord, NarrowingRecord } from './records.mts';
 import { anyType, restElementType, mentionsTypeParameter } from './records.mts';
-import { SequenceAssignment, slotReceiving } from './sequence-assignment.mts';
+import { slotReceiving } from './sequence-assignment.mts';
+import { PlanReferenceArguments } from './reference-rest.mts';
 import { ClassImplements, IsAssignable, IsSubtype, SameType } from './relations.mts';
 import { RuntimeTypeOf, ConstraintAdmits } from './runtime.mts';
 import { Q } from '../completion.mts';
@@ -157,7 +158,7 @@ export function minimumArity(params: readonly OverloadParameter[]): number {
  */
 export function assignArguments(params: readonly OverloadParameter[], argTypes: readonly TypeRecord[]): number[] | null {
   const restCount = params.filter((p) => p.Rest).length;
-  if (restCount <= 1) {
+  if (restCount <= 1 && !params.some((p) => p.Rest && p.Ref)) {
     // The familiar rule, stated as an assignment so that both callers read the
     // same shape: fixed parameters take one each, the rest takes what is left
     // after the parameters that follow it are satisfied.
@@ -186,12 +187,10 @@ export function assignArguments(params: readonly OverloadParameter[], argTypes: 
       return 1;
     });
   }
-  const slots = params.map((p) => ({ Rest: p.Rest, Optional: p.Optional }));
-  const counts = SequenceAssignment(slots, argTypes.length, (i, k) => {
-    const p = params[k];
+  return PlanReferenceArguments(params).assign(argTypes.length, (i, target, byReference, optional) => {
     const source = argTypes[i];
-    const target = p.Rest ? restElementType(p.Type) : p.Type;
-    if (p.Ref || target.Kind === 'reference') {
+    if (optional && !byReference && target.Kind !== 'reference' && source.Kind === 'primitive' && source.Name === 'undefined') return true;
+    if (byReference || target.Kind === 'reference') {
       if (source.Kind === 'any') return true;
       if (source.Kind !== 'reference') return false;
       const wanted = target.Kind === 'reference' ? target.Target : target;
@@ -203,7 +202,6 @@ export function assignArguments(params: readonly OverloadParameter[], argTypes: 
     }
     return argumentTier(source.Kind === 'reference' ? source.Target : source, target) !== null;
   });
-  return counts === 'unmatched' ? null : counts;
 }
 
 /** The match tier of one argument against one parameter, or null if it does not fit. */

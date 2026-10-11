@@ -5,8 +5,8 @@ import { Q, EnsureCompletion } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { IsOfType, RuntimeTypeOf } from '../type-system/runtime.mts';
 import { SameType } from '../type-system/relations.mts';
-import { restElementType, type ParameterRecord, type TypeRecord } from '../type-system/records.mts';
-import { SequenceAssignment } from '../type-system/sequence-assignment.mts';
+import type { ParameterRecord, TypeRecord } from '../type-system/records.mts';
+import { PlanReferenceArguments } from '../type-system/reference-rest.mts';
 import { GetValue } from './reference-operations.mts';
 import { CheckedConvertValue } from './runtime-types.mts';
 
@@ -26,10 +26,13 @@ function declaredLocationType(location: ReferenceRecord): TypeRecord | undefined
     if (location.Base instanceof ObjectValue && location.ReferencedName instanceof JSStringValue) {
       const key = location.ReferencedName.stringValue();
       const base = location.Base as ObjectValue & {
-        TypedProperties?: Map<string, { TypeRecord: TypeRecord }>, TypedElement?: { TypeRecord: TypeRecord },
+        TypedProperties?: Map<string, { TypeRecord: TypeRecord }>, TypedElement?: TypeRecord,
+        TypedTuple?: { Positions: readonly TypeRecord[], Rest?: TypeRecord },
       };
+      const index = Number(key);
+      const indexed = String(index) === key && Number.isInteger(index) && index >= 0 && index < 0xFFFFFFFF;
       return base.TypedProperties?.get(key)?.TypeRecord
-        ?? (String(Number(key)) === key ? base.TypedElement?.TypeRecord : undefined);
+        ?? (indexed ? base.TypedTuple?.Positions[index] ?? base.TypedTuple?.Rest ?? base.TypedElement : undefined);
     }
     break;
   }
@@ -43,18 +46,23 @@ function declaredLocationType(location: ReferenceRecord): TypeRecord | undefined
  * replaces the original reference or the callee's later checks.
  */
 export function* AssignRuntimeArguments(parameters: readonly ParameterRecord[], args: readonly Value[]): PlainEvaluator<number[] | null> {
-  const admitted: boolean[][] = [];
+  const plan = PlanReferenceArguments(parameters);
+  const admitted: Map<TypeRecord, boolean[]>[] = [];
+  const values: Value[] = [];
   for (const arg of args) {
     const borrowed = arg instanceof ReferenceValue;
     const value = borrowed ? Q(yield* GetValue(arg.Location)) : arg;
+    values.push(value);
     const locationType = borrowed ? (declaredLocationType(arg.Location) ?? RuntimeTypeOf(value)) : undefined;
-    const row: boolean[] = [];
-    for (const p of parameters) {
-      const type = p.Rest ? restElementType(p.Type) : p.Type;
-      const byReference = p.Ref === true || type.Kind === 'reference';
+    const row = new Map<TypeRecord, boolean[]>();
+    for (const { type, byReference } of plan.contracts) {
+      const modes = row.get(type) ?? [];
+      row.set(type, modes);
+      const mode = byReference ? 1 : 0;
+      if (modes[mode] !== undefined) continue;
       const wanted = type.Kind === 'reference' ? type.Target : type;
       if (byReference && (!borrowed || (locationType!.Kind !== 'any' && wanted.Kind !== 'any' && !SameType(locationType!, wanted)))) {
-        row.push(false);
+        modes[mode] = false;
         continue;
       }
       let ok = Q(yield* IsOfType(value, wanted));
@@ -64,10 +72,15 @@ export function* AssignRuntimeArguments(parameters: readonly ParameterRecord[], 
         const converted = EnsureCompletion(yield* CheckedConvertValue(value, wanted));
         ok = converted.Type === 'normal';
       }
-      row.push(ok);
+      modes[mode] = ok;
     }
     admitted.push(row);
   }
-  const counts = SequenceAssignment(parameters, args.length, (i, k) => admitted[i][k]);
-  return counts === 'unmatched' ? null : counts;
+  return plan.assign(args.length, (i, type, byReference, optional) => {
+    const ref = byReference || type.Kind === 'reference';
+    // Named placement emits undefined for an omitted fixed slot. It must
+    // still reach that slot's initializer when the callee partitions rests.
+    if (optional && !ref && values[i] === Value.undefined) return true;
+    return admitted[i].get(type)![ref ? 1 : 0];
+  });
 }
