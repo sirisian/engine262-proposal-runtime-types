@@ -1,0 +1,953 @@
+{
+  "cases": [
+    {
+      "name": "ref tuple direct reverse=False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8],label:string):string{xs[0]=2;return \"uint8\";}function f(ref ...xs:[string],label:string):string{xs[0]=\"ok\";return \"string\";}let a:string=\"a\";f(ref a,label:\"l\")+\"/\"+a;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed value direct reverse=False",
+      "steps": [
+        {
+          "source": "function f(x:uint8,label:string):string{return \"uint8\";}function f(x:string,label:string):string{return x+label;}f(x:\"a\",label:\"b\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "heterogeneous refs direct reverse=False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[boolean,uint8],label:string):string{return \"wrong\";}function f(ref ...xs:[uint8,string],label:string):string{xs[0]=2;xs[1]=label;return \"chosen\";}let a:uint8=1;let b:string=\"b\";f(ref a,ref b,label:\"ok\")+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reordered names direct reverse=False",
+      "steps": [
+        {
+          "source": "function f(x:uint8,y:string):string{return \"numeric\";}function f(y:boolean,x:string):string{return x+String(y);}f(x:\"ok\",y:true);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "oktrue"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default candidate direct reverse=False",
+      "steps": [
+        {
+          "source": "function f(prefix:string=\"p\",x:uint8):string{return \"wrong\";}function f(prefix:string=\"p\",x:string):string{return prefix+x;}f(x:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "pok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ref tuple stored reverse=False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8],label:string):string{xs[0]=2;return \"uint8\";}function f(ref ...xs:[string],label:string):string{xs[0]=\"ok\";return \"string\";}let a:string=\"a\";const fn=f;fn(ref a,label:\"l\")+\"/\"+a;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed value stored reverse=False",
+      "steps": [
+        {
+          "source": "function f(x:uint8,label:string):string{return \"uint8\";}function f(x:string,label:string):string{return x+label;}const fn=f;fn(x:\"a\",label:\"b\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "heterogeneous refs stored reverse=False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[boolean,uint8],label:string):string{return \"wrong\";}function f(ref ...xs:[uint8,string],label:string):string{xs[0]=2;xs[1]=label;return \"chosen\";}let a:uint8=1;let b:string=\"b\";const fn=f;fn(ref a,ref b,label:\"ok\")+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reordered names stored reverse=False",
+      "steps": [
+        {
+          "source": "function f(x:uint8,y:string):string{return \"numeric\";}function f(y:boolean,x:string):string{return x+String(y);}const fn=f;fn(x:\"ok\",y:true);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "oktrue"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default candidate stored reverse=False",
+      "steps": [
+        {
+          "source": "function f(prefix:string=\"p\",x:uint8):string{return \"wrong\";}function f(prefix:string=\"p\",x:string):string{return prefix+x;}const fn=f;fn(x:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "pok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ref tuple erased reverse=False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8],label:string):string{xs[0]=2;return \"uint8\";}function f(ref ...xs:[string],label:string):string{xs[0]=\"ok\";return \"string\";}let a:string=\"a\";const fn:any=f;fn(ref a,label:\"l\")+\"/\"+a;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed value erased reverse=False",
+      "steps": [
+        {
+          "source": "function f(x:uint8,label:string):string{return \"uint8\";}function f(x:string,label:string):string{return x+label;}const fn:any=f;fn(x:\"a\",label:\"b\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "heterogeneous refs erased reverse=False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[boolean,uint8],label:string):string{return \"wrong\";}function f(ref ...xs:[uint8,string],label:string):string{xs[0]=2;xs[1]=label;return \"chosen\";}let a:uint8=1;let b:string=\"b\";const fn:any=f;fn(ref a,ref b,label:\"ok\")+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reordered names erased reverse=False",
+      "steps": [
+        {
+          "source": "function f(x:uint8,y:string):string{return \"numeric\";}function f(y:boolean,x:string):string{return x+String(y);}const fn:any=f;fn(x:\"ok\",y:true);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "oktrue"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default candidate erased reverse=False",
+      "steps": [
+        {
+          "source": "function f(prefix:string=\"p\",x:uint8):string{return \"wrong\";}function f(prefix:string=\"p\",x:string):string{return prefix+x;}const fn:any=f;fn(x:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "pok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal ranks reorder reverse=False",
+      "steps": [
+        {
+          "source": "function f(x:uint8,y:uint16):string{return \"a\";}function f(y:uint32,x:uint64):string{return \"b\";}f(x:1,y:2);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown ref type defers reverse=False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8],label:string):string{xs[0]=2;return \"chosen\";}function f(ref ...xs:[string],label:string):string{return \"wrong\";}let a:any=(1:=uint8);f(ref a,label:\"ok\")+\"/\"+String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class receiver reverse=False",
+      "steps": [
+        {
+          "source": "class C{prefix:string=\"p\";f(x:uint8,label:string):string{return \"wrong\";}f(x:string,label:string):string{return this.prefix+x+label;}}const c=new C();c.f(x:\"a\",label:\"b\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "pab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object receiver reverse=False",
+      "steps": [
+        {
+          "source": "const c={prefix:\"p\",f(x:uint8,label:string):string{return \"wrong\";},f(x:string,label:string):string{return this.prefix+x+label;}};c.f(x:\"a\",label:\"b\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "pab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor reverse=False",
+      "steps": [
+        {
+          "source": "class C{value:string=\"\";constructor(x:uint8,label:string){this.value=\"wrong\";}constructor(x:string,label:string){this.value=x+label;}}new C(x:\"a\",label:\"b\").value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ref tuple direct reverse=True",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[string],label:string):string{xs[0]=\"ok\";return \"string\";}function f(ref ...xs:[uint8],label:string):string{xs[0]=2;return \"uint8\";}let a:string=\"a\";f(ref a,label:\"l\")+\"/\"+a;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed value direct reverse=True",
+      "steps": [
+        {
+          "source": "function f(x:string,label:string):string{return x+label;}function f(x:uint8,label:string):string{return \"uint8\";}f(x:\"a\",label:\"b\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "heterogeneous refs direct reverse=True",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string],label:string):string{xs[0]=2;xs[1]=label;return \"chosen\";}function f(ref ...xs:[boolean,uint8],label:string):string{return \"wrong\";}let a:uint8=1;let b:string=\"b\";f(ref a,ref b,label:\"ok\")+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reordered names direct reverse=True",
+      "steps": [
+        {
+          "source": "function f(y:boolean,x:string):string{return x+String(y);}function f(x:uint8,y:string):string{return \"numeric\";}f(x:\"ok\",y:true);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "oktrue"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default candidate direct reverse=True",
+      "steps": [
+        {
+          "source": "function f(prefix:string=\"p\",x:string):string{return prefix+x;}function f(prefix:string=\"p\",x:uint8):string{return \"wrong\";}f(x:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "pok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ref tuple stored reverse=True",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[string],label:string):string{xs[0]=\"ok\";return \"string\";}function f(ref ...xs:[uint8],label:string):string{xs[0]=2;return \"uint8\";}let a:string=\"a\";const fn=f;fn(ref a,label:\"l\")+\"/\"+a;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed value stored reverse=True",
+      "steps": [
+        {
+          "source": "function f(x:string,label:string):string{return x+label;}function f(x:uint8,label:string):string{return \"uint8\";}const fn=f;fn(x:\"a\",label:\"b\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "heterogeneous refs stored reverse=True",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string],label:string):string{xs[0]=2;xs[1]=label;return \"chosen\";}function f(ref ...xs:[boolean,uint8],label:string):string{return \"wrong\";}let a:uint8=1;let b:string=\"b\";const fn=f;fn(ref a,ref b,label:\"ok\")+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reordered names stored reverse=True",
+      "steps": [
+        {
+          "source": "function f(y:boolean,x:string):string{return x+String(y);}function f(x:uint8,y:string):string{return \"numeric\";}const fn=f;fn(x:\"ok\",y:true);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "oktrue"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default candidate stored reverse=True",
+      "steps": [
+        {
+          "source": "function f(prefix:string=\"p\",x:string):string{return prefix+x;}function f(prefix:string=\"p\",x:uint8):string{return \"wrong\";}const fn=f;fn(x:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "pok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ref tuple erased reverse=True",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[string],label:string):string{xs[0]=\"ok\";return \"string\";}function f(ref ...xs:[uint8],label:string):string{xs[0]=2;return \"uint8\";}let a:string=\"a\";const fn:any=f;fn(ref a,label:\"l\")+\"/\"+a;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed value erased reverse=True",
+      "steps": [
+        {
+          "source": "function f(x:string,label:string):string{return x+label;}function f(x:uint8,label:string):string{return \"uint8\";}const fn:any=f;fn(x:\"a\",label:\"b\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "heterogeneous refs erased reverse=True",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string],label:string):string{xs[0]=2;xs[1]=label;return \"chosen\";}function f(ref ...xs:[boolean,uint8],label:string):string{return \"wrong\";}let a:uint8=1;let b:string=\"b\";const fn:any=f;fn(ref a,ref b,label:\"ok\")+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reordered names erased reverse=True",
+      "steps": [
+        {
+          "source": "function f(y:boolean,x:string):string{return x+String(y);}function f(x:uint8,y:string):string{return \"numeric\";}const fn:any=f;fn(x:\"ok\",y:true);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "oktrue"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default candidate erased reverse=True",
+      "steps": [
+        {
+          "source": "function f(prefix:string=\"p\",x:string):string{return prefix+x;}function f(prefix:string=\"p\",x:uint8):string{return \"wrong\";}const fn:any=f;fn(x:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "pok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal ranks reorder reverse=True",
+      "steps": [
+        {
+          "source": "function f(y:uint32,x:uint64):string{return \"b\";}function f(x:uint8,y:uint16):string{return \"a\";}f(x:1,y:2);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown ref type defers reverse=True",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[string],label:string):string{return \"wrong\";}function f(ref ...xs:[uint8],label:string):string{xs[0]=2;return \"chosen\";}let a:any=(1:=uint8);f(ref a,label:\"ok\")+\"/\"+String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class receiver reverse=True",
+      "steps": [
+        {
+          "source": "class C{prefix:string=\"p\";f(x:string,label:string):string{return this.prefix+x+label;}f(x:uint8,label:string):string{return \"wrong\";}}const c=new C();c.f(x:\"a\",label:\"b\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "pab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object receiver reverse=True",
+      "steps": [
+        {
+          "source": "const c={prefix:\"p\",f(x:string,label:string):string{return this.prefix+x+label;},f(x:uint8,label:string):string{return \"wrong\";}};c.f(x:\"a\",label:\"b\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "pab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor reverse=True",
+      "steps": [
+        {
+          "source": "class C{value:string=\"\";constructor(x:string,label:string){this.value=x+label;}constructor(x:uint8,label:string){this.value=\"wrong\";}}new C(x:\"a\",label:\"b\").value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "single function named partition stays pinned",
+      "steps": [
+        {
+          "source": "function f(...first:[].<string>,...second:[].<string>):string{return String(first.length)+\"/\"+String(second.length)+\"/\"+second[0];}f(second:\"b\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/1/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overloaded named partition stays pinned",
+      "steps": [
+        {
+          "source": "function f(...first:[].<string>,...second:[].<string>):string{return String(first.length)+\"/\"+String(second.length)+\"/\"+second[0];}function f(x:uint8):string{return \"wrong\";}f(second:\"b\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/1/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "defaults of losing candidate do not run",
+      "steps": [
+        {
+          "source": "let calls=\"\";function d(s:string):string{calls+=s;return s;}function f(prefix:string=d(\"A\"),x:uint8):string{return \"wrong\";}function f(prefix:string=d(\"B\"),x:string):string{return prefix+x;}f(x:\"ok\")+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "Bok/B"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source expressions and getter run once",
+      "steps": [
+        {
+          "source": "let log=\"\";function v(s:string):string{log+=s;return s;}function f(x:uint8,y:string):string{return \"wrong\";}function f(y:string,x:string):string{return x+y;}const obj={get x(){log+=\"X\";return \"a\";}};f(...obj,y:v(\"Y\"))+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "aY/XY"
+          }
+        }
+      ]
+    },
+    {
+      "name": "duplicate named value last wins with both effects",
+      "steps": [
+        {
+          "source": "let n=0;function g(s:string):string{n++;return s;}function f(x:uint8):string{return \"wrong\";}function f(x:string):string{return x;}f(x:g(\"a\"),x:g(\"b\"))+\"/\"+String(n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased no candidate before bodies",
+      "steps": [
+        {
+          "source": "let entered=0;function f(x:uint8):string{entered++;return \"a\";}function f(x:string):string{entered++;return \"b\";}const fn:any=f;let result=\"missed\";try{fn(x:true);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown name before bodies",
+      "steps": [
+        {
+          "source": "let entered=0;function f(x:uint8):string{entered++;return \"a\";}function f(x:string):string{entered++;return \"b\";}const fn:any=f;let result=\"missed\";try{fn(y:\"bad\");}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed no candidate before Script",
+      "steps": [
+        {
+          "source": "function f(x:uint8):string{return \"a\";}function f(x:string):string{return \"b\";}f(x:true);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_CALL_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "equal named candidates reject statically False",
+      "steps": [
+        {
+          "source": "function f(x:uint8,y:string):string{return \"a\";}function f(y:string,x:uint8):string{return \"b\";}let n:uint8=1;f(x:n,y:\"s\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_AMBIGUOUS_CALL",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "equal named candidates reject dynamically False",
+      "steps": [
+        {
+          "source": "let entered=0;function f(x:uint8,y:string):string{entered++;return \"a\";}function f(y:string,x:uint8):string{entered++;return \"b\";}const fn:any=f;let n:uint8=1;let result=\"missed\";try{fn(x:n,y:\"s\");}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contextual return filters named candidates False",
+      "steps": [
+        {
+          "source": "function f(x:uint8):string{return \"a\";}function f(x:uint8):uint8{return x;}let n:uint8=1;const result:string=f(x:n);result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "equal named candidates reject statically True",
+      "steps": [
+        {
+          "source": "function f(y:string,x:uint8):string{return \"b\";}function f(x:uint8,y:string):string{return \"a\";}let n:uint8=1;f(x:n,y:\"s\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_AMBIGUOUS_CALL",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "equal named candidates reject dynamically True",
+      "steps": [
+        {
+          "source": "let entered=0;function f(y:string,x:uint8):string{entered++;return \"b\";}function f(x:uint8,y:string):string{entered++;return \"a\";}const fn:any=f;let n:uint8=1;let result=\"missed\";try{fn(x:n,y:\"s\");}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contextual return filters named candidates True",
+      "steps": [
+        {
+          "source": "function f(x:uint8):uint8{return x;}function f(x:uint8):string{return \"a\";}let n:uint8=1;const result:string=f(x:n);result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "final liveness after selected default False",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];let entered=0;let effects=0;function d():string{effects++;a.reserve(32);return \"prefix\";}function f(prefix:string=d(),ref ...xs:[uint8],label:string):string{entered++;xs[0]=2;return label;}function f(prefix:string=d(),ref ...xs:[string],label:string):string{entered++;return \"wrong\";}const fn:any=f;let result=\"missed\";try{result=fn(ref a[0],label:\"ok\");}catch(e){result=e.name;}result+\"/\"+String(entered)+\"/\"+String(effects)+\"/\"+String(a[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "final liveness after selected default True",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];a.reserve(64);let entered=0;let effects=0;function d():string{effects++;a.reserve(32);return \"prefix\";}function f(prefix:string=d(),ref ...xs:[uint8],label:string):string{entered++;xs[0]=2;return label;}function f(prefix:string=d(),ref ...xs:[string],label:string):string{entered++;return \"wrong\";}const fn:any=f;let result=\"missed\";try{result=fn(ref a[0],label:\"ok\");}catch(e){result=e.name;}result+\"/\"+String(entered)+\"/\"+String(effects)+\"/\"+String(a[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/1/1/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "argument invalidates before candidate bodies",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];let entered=0;function change():string{a.reserve(32);return \"label\";}function f(ref ...xs:[uint8],label:string):string{entered++;return \"wrong\";}function f(ref ...xs:[string],label:string):string{entered++;return \"wrong\";}const fn:any=f;let result=\"missed\";try{fn(ref a[0],label:change());}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested named calls keep outer selection",
+      "steps": [
+        {
+          "source": "function f(x:uint8,label:string):string{return \"wrong\";}function f(label:string,x:string):string{return x+label;}function g():string{return f(x:\"a\",label:\"b\");}f(label:g(),x:\"c\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "cab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "throwing argument does not enter candidate",
+      "steps": [
+        {
+          "source": "let entered=0;function fail():string{throw new Error(\"stop\");}function f(x:uint8):string{entered++;return \"wrong\";}function f(x:string):string{entered++;return x;}const fn:any=f;let result=\"missed\";try{fn(x:fail());}catch(e){result=e.message;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "stop/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object literal named candidates",
+      "steps": [
+        {
+          "source": "function f(x:uint8,y:string):string{return \"wrong\";}function f(y:boolean,x:string):string{return x+String(y);}f(...{x:\"ok\",y:true});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "oktrue"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named rest gives back to trailing fixed slot",
+      "steps": [
+        {
+          "source": "function f(...xs:[].<uint8>,tail:boolean):string{return \"wrong\";}function f(...xs:[].<string>,tail:string):string{return String(xs.length)+\"/\"+xs[0]+\"/\"+tail;}f(xs:\"a\",\"b\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/a/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward references to named overloaded tail",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string],label:string):string{xs[0]=2;xs[1]=label;return \"chosen\";}function f(ref ...xs:[boolean,uint8],label:string):string{return \"wrong\";}function g(ref ...ys:[uint8,string]):string{return f(...ys,label:\"ok\");}let a:uint8=1;let b:string=\"b\";g(ref a,ref b)+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic fallback named candidate",
+      "steps": [
+        {
+          "source": "function f<T:type>(x:T,label:string):string{return \"generic\";}function f(x:string,label:string):string{return \"concrete\";}f(x:\"a\",label:\"b\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "concrete"
+          }
+        }
+      ]
+    },
+    {
+      "name": "interface view candidate defaults False",
+      "steps": [
+        {
+          "source": "interface I{(prefix:string=\"U\",x:uint8):string;(prefix:string=\"S\",x:string):string;}const fn:I=(a,b)=>a+String(b);fn(x:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "Sok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "interface view candidate defaults True",
+      "steps": [
+        {
+          "source": "interface I{(prefix:string=\"S\",x:string):string;(prefix:string=\"U\",x:uint8):string;}const fn:I=(a,b)=>a+String(b);fn(x:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "Sok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh Script after rejected named call",
+      "steps": [
+        {
+          "source": "function f(x:uint8):string{return \"wrong\";}function f(x:string):string{return x;}f(x:true);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_CALL_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "function good(x:uint8):string{return \"wrong\";}function good(x:string):string{return x;}good(x:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    }
+  ]
+}

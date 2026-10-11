@@ -9,7 +9,7 @@ import { isTypeObject } from '../type-system/intern.mts';
 import { substituteTypeParameters, type TypeRecord } from '../type-system/records.mts';
 import { TakeStaticCallResolution, CallReceiverTypeOf, SelfThisTypeRecord } from '../type-system/check.mts';
 import { ArgumentListEvaluation, ArgumentListEvaluationNamed, hasNamedArguments } from './all.mts';
-import { signatureInView, overloadInView } from './ArgumentListEvaluation.mts';
+import { signaturesInView } from './ArgumentListEvaluation.mts';
 import {
   Assert,
   IsPropertyReference,
@@ -70,13 +70,12 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     const holder = ref.Base as unknown as { bindings?: { get(n: unknown): { declaredType?: unknown } | undefined }, DeclarativeRecord?: { bindings?: { get(n: unknown): { declaredType?: unknown } | undefined } } };
     const binding = holder.bindings?.get(ref.ReferencedName) ?? holder.DeclarativeRecord?.bindings?.get(ref.ReferencedName);
     if (binding?.declaredType !== undefined) {
-      const named = (args as ParseNode.Arguments).filter((a) => a.type === 'NamedArgument').map((a) => (a as ParseNode.NamedArgument).Name);
-      signature = signatureInView(binding.declaredType, named);
+      signature = signaturesInView(binding.declaredType);
     }
   }
   const argsIsNamed = surroundingAgent.feature('runtime-types')
     && Array.isArray(args) && (hasNamedArguments(args as ParseNode.Arguments)
-      || signature?.Parameters.some((p) => p.Initial !== undefined) === true);
+      || (signature?.length === 1 && signature[0].Parameters.some((p) => p.Initial !== undefined)));
   // proposal-runtime-types #sec-conversions: a call whose callee is a TYPE OBJECT
   // is a conversion, and its argument is evaluated IN that type's context.
   //
@@ -153,33 +152,9 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     return Throw.TypeError('$1 is not a function', func);
   }
   if (argsIsNamed && !evaluatedArguments) {
-    // #sec-named-arguments: a named call binds against the SIGNATURE IN
-    // VIEW. Where the callee was reached through a reference to a binding whose
-    // declared type is a function type or a callable interface, that type's
-    // signature is the declaration the call reads - `a(named: 10)` for
-    // `a: IExample` maps `named` by the interface's names and fills the skipped
-    // position with the interface's default, so `(a, b) => b` receives
-    // `('5', 10)`. Without a declared type in view, the callee's own parameter
-    // list is read, as before.
-    // An overload set with no declared type in view binds names against the
-    // member whose parameters include them (#sec-bindarguments); the dispatcher
-    // then resolves the call from the positions that binding produced.
-    const names: string[] = [];
-    for (const a of args as ParseNode.Arguments) {
-      if (a.type === 'NamedArgument') names.push((a as ParseNode.NamedArgument).Name);
-      const spread = a.type === 'AssignmentRestElement' ? (a as ParseNode.AssignmentRestElement).AssignmentExpression : undefined;
-      // The keys an object-literal spread supplies are written in it.
-      if (spread?.type === 'ObjectLiteral') {
-        for (const member of (spread as ParseNode.ObjectLiteral).PropertyDefinitionList) {
-          if (member.type === 'IdentifierReference') names.push(member.name);
-          const key = member.type === 'PropertyDefinition' ? member.PropertyName as { type?: string, name?: string, value?: string } | null : null;
-          if (key?.type === 'IdentifierName' && key.name) names.push(key.name);
-          else if (key?.type === 'StringLiteral' && typeof key.value === 'string') names.push(key.value);
-        }
-      }
-    }
-    const bindingTarget = signature === undefined ? overloadInView(func, names) : func;
-    argList = Q(yield* ArgumentListEvaluationNamed(args as ParseNode.Arguments, bindingTarget, signature));
+    // Each callable view or actual overload binds the once-evaluated source
+    // items against its own names. The dispatcher retains the winning map.
+    argList = Q(yield* ArgumentListEvaluationNamed(args as ParseNode.Arguments, func, signature, callContext));
   }
   // #sec-this-adoption: enforce a typed call's receiver view even when the
   // function value reached that view through an erased boundary.

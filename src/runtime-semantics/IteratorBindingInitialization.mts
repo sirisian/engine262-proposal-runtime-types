@@ -46,7 +46,7 @@ import {
 // FormalParameters :
 //   [empty]
 //   FormalParameterList `,` FunctionRestParameter
-export function* IteratorBindingInitialization_FormalParameters(FormalParameters: ParseNode.FormalParameters, iteratorRecord: IteratorRecord, environment: EnvironmentRecord | UndefinedValue) {
+export function* IteratorBindingInitialization_FormalParameters(FormalParameters: ParseNode.FormalParameters, iteratorRecord: IteratorRecord, environment: EnvironmentRecord | UndefinedValue, namedCounts?: readonly number[]) {
   if (FormalParameters.length === 0) {
     // 1. Return NormalCompletion(empty).
     return NormalCompletion(undefined);
@@ -65,8 +65,8 @@ export function* IteratorBindingInitialization_FormalParameters(FormalParameters
   // mistake MISBINDS a program rather than rejecting it.
   const restCount = FormalParameters.filter((p) => p.type === 'BindingRestElement').length;
   const restIsLast = FormalParameters[FormalParameters.length - 1].type === 'BindingRestElement';
-  if (restCount > 1 || (restCount === 1 && !restIsLast)) {
-    return yield* IteratorBindingInitialization_AssignedParameters(FormalParameters, iteratorRecord, environment);
+  if (namedCounts || restCount > 1 || (restCount === 1 && !restIsLast)) {
+    return yield* IteratorBindingInitialization_AssignedParameters(FormalParameters, iteratorRecord, environment, namedCounts);
   }
 
   for (const FormalParameter of FormalParameters.slice(0, -1)) {
@@ -93,7 +93,7 @@ export function* IteratorBindingInitialization_FormalParameters(FormalParameters
  * which is what a call arriving through `any`, `apply`, or a spread of unknown
  * length needs; for a call the checker has already accepted, the two agree.
  */
-function* IteratorBindingInitialization_AssignedParameters(FormalParameters: ParseNode.FormalParameters, iteratorRecord: IteratorRecord, environment: EnvironmentRecord | UndefinedValue) {
+function* IteratorBindingInitialization_AssignedParameters(FormalParameters: ParseNode.FormalParameters, iteratorRecord: IteratorRecord, environment: EnvironmentRecord | UndefinedValue, namedCounts?: readonly number[]) {
   const args: Value[] = [];
   while (iteratorRecord.Done === Value.false) {
     const next = Q(yield* IteratorStepValue(iteratorRecord));
@@ -105,7 +105,7 @@ function* IteratorBindingInitialization_AssignedParameters(FormalParameters: Par
   // Resolve parameter contracts once, then distribute without replacing a
   // borrow by its value. Binding below still enforces the selected contract.
   const parameters = [];
-  for (const p of FormalParameters) {
+  for (const p of namedCounts ? [] : FormalParameters) {
     const declaration = p as { TypeAnnotation?: ParseNode.TypeAnnotation | null, Ref?: boolean, Optional?: boolean };
     let type: TypeRecord = { Kind: 'any' };
     if (declaration.TypeAnnotation) {
@@ -118,7 +118,9 @@ function* IteratorBindingInitialization_AssignedParameters(FormalParameters: Par
       Rest: p.type === 'BindingRestElement',
       Optional: declaration.Optional === true || HasInitializer(p as ParseNode.FormalParameter) });
   }
-  const counts = Q(yield* AssignRuntimeArguments(parameters, args));
+  // A named selection already fixed the groups. Repartitioning would unpin
+  // its names; ordinary per-parameter binding below still checks live storage.
+  const counts = namedCounts ? namedCounts : Q(yield* AssignRuntimeArguments(parameters, args));
   if (counts === null) {
     return Throw.TypeError('no assignment of the arguments satisfies the parameter list');
   }

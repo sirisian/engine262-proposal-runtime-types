@@ -1,3 +1,4 @@
+import { NamedParameterCountsOf } from '../abstract-ops/named-call.mts';
 import { Value, type Arguments } from '../value.mts';
 import {
   BoundNames,
@@ -190,7 +191,7 @@ export function* FunctionDeclarationInstantiation(func: ECMAScriptFunctionObject
   }
   // 1. NOTE: The following step cannot return a ReturnCompletion because the only way such a completion can arise in expression position is by use of |YieldExpression|, which is forbidden in parameter lists by Early Error rules in <emu-xref href="#sec-generator-function-definitions-static-semantics-early-errors"></emu-xref> and <emu-xref href="#sec-async-generator-function-definitions-static-semantics-early-errors"></emu-xref>.
   // Perform ? IteratorBindingInitialization of _formals_ with arguments _iteratorRecord_ and _usedEnv_.
-  Q(yield* IteratorBindingInitialization_FormalParameters(formals, iteratorRecord, usedEnv));
+  Q(yield* IteratorBindingInitialization_FormalParameters(formals, iteratorRecord, usedEnv, NamedParameterCountsOf(argumentsList, func as unknown as Value)));
   let varEnv;
   // 27. If hasParameterExpressions is false, then
   if (hasParameterExpressions === false) {

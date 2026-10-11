@@ -16,6 +16,7 @@ import type { ParameterRecord, TypeRecord, NarrowingRecord } from './records.mts
 import { anyType, restElementType, mentionsTypeParameter } from './records.mts';
 import { slotReceiving } from './sequence-assignment.mts';
 import { PlanReferenceArguments } from './reference-rest.mts';
+import { BindNamedArguments, type ArgumentItem } from './named-arguments.mts';
 import { ClassImplements, IsAssignable, IsSubtype, SameType } from './relations.mts';
 import { RuntimeTypeOf, ConstraintAdmits, IsOfType } from './runtime.mts';
 import { Q } from '../completion.mts';
@@ -412,7 +413,8 @@ function argumentTier(argType: TypeRecord, paramType: TypeRecord): Tier | null {
  * positions and the owning declared parameter.
  */
 type Receiver = NonNullable<ReturnType<ReturnType<typeof PlanReferenceArguments>['match']>>['receivers'];
-type RankedSignature = { sig: OverloadSignature, tiers: Tier[], receivers: Receiver };
+type RankedSignature = { sig: OverloadSignature, tiers: Tier[], receivers: Receiver, indices: readonly number[], groups?: readonly number[][] };
+type ArgumentNames = readonly Pick<ArgumentItem<unknown>, 'name' | 'referenceRun'>[];
 
 /** A borrow is invariant at a ref position and decays only at a value position. */
 function receivingTier(source: TypeRecord, valueType: TypeRecord, target: TypeRecord, ref: boolean, optional = false): Tier | null {
@@ -428,8 +430,37 @@ function receivingTier(source: TypeRecord, valueType: TypeRecord, target: TypeRe
   return argumentTier(valueType, target);
 }
 
-function signatureTiers(sig: OverloadSignature, argTypes: readonly TypeRecord[], valueTypes: readonly TypeRecord[], referenceAdmits?: (index: number, target: TypeRecord) => boolean): RankedSignature | null {
-  if (sig.Untyped) return { sig, tiers: argTypes.map(() => Tier.CatchAll), receivers: [] };
+function signatureTiers(sig: OverloadSignature, argTypes: readonly TypeRecord[], valueTypes: readonly TypeRecord[], referenceAdmits?: (index: number, target: TypeRecord) => boolean, items?: ArgumentNames): RankedSignature | null {
+  const admits = (i: number, target: TypeRecord, ref: boolean, optional?: boolean) => {
+    if ((ref || target.Kind === 'reference') && referenceAdmits && !referenceAdmits(i, target)) return false;
+    return receivingTier(argTypes[i], valueTypes[i], target, ref, optional) !== null;
+  };
+  if (items) {
+    const parameters = sig.Parameters.map((p) => ({ ...p, Optional: p.Optional || p.Initial !== undefined }));
+    const placed = BindNamedArguments(parameters, items.map((item, i) => ({ ...item, value: i })),
+      (remaining, indices) => PlanReferenceArguments(remaining).assign(indices.length,
+        (i, target, ref, optional) => admits(indices[i], target, ref, optional)));
+    if (placed.error) return null;
+    const positions: { index: number, tier: Tier, receiver: Receiver[number] }[] = [];
+    for (let k = 0; k < parameters.length; k += 1) {
+      const indices = placed.groups[k];
+      const matched = PlanReferenceArguments([parameters[k]]).match(indices.length,
+        (i, target, ref, optional) => admits(indices[i], target, ref, optional));
+      if (!matched) return null;
+      for (let i = 0; i < indices.length; i += 1) {
+        const index = indices[i], receiver = matched.receivers[i];
+        if (items[index].referenceRun && !(receiver.parameter.Rest && receiver.byReference)) return null;
+        positions.push({ index, receiver, tier: sig.Untyped ? Tier.CatchAll
+          : receivingTier(argTypes[index], valueTypes[index], receiver.type, receiver.byReference, !receiver.parameter.Rest && receiver.parameter.Optional)! });
+      }
+    }
+    // Compare the same source contribution across candidates even when names
+    // route it to different parameter positions. Overwritten names do not rank.
+    positions.sort((a, b) => a.index - b.index);
+    return { sig, tiers: positions.map((p) => p.tier), receivers: positions.map((p) => p.receiver),
+      indices: positions.map((p) => p.index), groups: placed.groups };
+  }
+  if (sig.Untyped) return { sig, tiers: argTypes.map(() => Tier.CatchAll), receivers: [], indices: argTypes.map((_, i) => i) };
   const plan = PlanReferenceArguments(sig.Parameters);
   const matched = plan.match(argTypes.length, (i, target, ref, optional) => {
     if ((ref || target.Kind === 'reference') && referenceAdmits && !referenceAdmits(i, target)) return false;
@@ -438,7 +469,7 @@ function signatureTiers(sig: OverloadSignature, argTypes: readonly TypeRecord[],
   if (matched === null) return null;
   const tiers = matched.receivers.map(({ type, byReference, parameter }, i) =>
     receivingTier(argTypes[i], valueTypes[i], type, byReference, !parameter.Rest && parameter.Optional)!);
-  return { sig, tiers, receivers: matched.receivers };
+  return { sig, tiers, receivers: matched.receivers, indices: argTypes.map((_, i) => i) };
 }
 
 /**
@@ -629,7 +660,7 @@ function compareFixedPositions(a: RankedSignature, b: RankedSignature): number {
 
 /** The outcome of resolving a call against a set of signatures. */
 export type OverloadResolution =
-  | { readonly Kind: 'resolved', readonly Signature: OverloadSignature }
+  | { readonly Kind: 'resolved', readonly Signature: OverloadSignature, readonly Groups?: readonly number[][] }
   | { readonly Kind: 'none' }
   | { readonly Kind: 'ambiguous' };
 
@@ -655,13 +686,17 @@ export function resolveOverloadByTypes(
   signatures: readonly OverloadSignature[], argTypes: readonly TypeRecord[], contextualType?: TypeRecord,
   valueTypes: readonly TypeRecord[] = argTypes.map((type) => type.Kind === 'reference' ? type.Target : type),
   referenceAdmits?: (index: number, target: TypeRecord) => boolean,
+  items?: ArgumentNames,
 ): OverloadResolution {
+  const ranked = signatures.map((sig) => signatureTiers(sig, argTypes, valueTypes, referenceAdmits, items))
+    .filter((candidate): candidate is RankedSignature => candidate !== null);
+  return selectRankedOverloads(ranked, contextualType);
+}
+
+function selectRankedOverloads(candidates: readonly RankedSignature[], contextualType?: TypeRecord): OverloadResolution {
   const viable: RankedSignature[] = [];
-  for (const sig of signatures) {
-    const ranked = signatureTiers(sig, argTypes, valueTypes, referenceAdmits);
-    if (ranked === null) {
-      continue;
-    }
+  for (const ranked of candidates) {
+    const { sig } = ranked;
     // #sec-overloading-on-return-type: "The return type does not participate in
     // ranking; it PARTICIPATES IN VIABILITY, through the contextual type of the
     // call", and #sec-overload-resolution places the test inside the viability
@@ -711,12 +746,12 @@ export function resolveOverloadByTypes(
           && IsAssignable(candidate.sig.ReturnType, contextualType),
       );
       if (surviving.length === 1) {
-        return { Kind: 'resolved', Signature: surviving[0]!.sig };
+        return { Kind: 'resolved', Signature: surviving[0]!.sig, Groups: surviving[0]!.groups };
       }
     }
     return { Kind: 'ambiguous' };
   }
-  return { Kind: 'resolved', Signature: best[0]!.sig };
+  return { Kind: 'resolved', Signature: best[0]!.sig, Groups: best[0]!.groups };
 }
 
 export function operatorTableKey(e: ParseNode.OperatorDefinition): string {
@@ -739,7 +774,7 @@ export function operatorTableKey(e: ParseNode.OperatorDefinition): string {
 
 
 /** Runtime viability evaluates defaults before ranking, preserving abrupt failures. */
-export function* resolveOverloadChecked(signatures: readonly OverloadSignature[], values: readonly Value[], contextualType?: TypeRecord): PlainEvaluator<OverloadResolution> {
+export function* resolveOverloadChecked(signatures: readonly OverloadSignature[], values: readonly Value[], contextualType?: TypeRecord, items?: ArgumentNames): PlainEvaluator<OverloadResolution> {
   const args: TypeRecord[] = [];
   const valueTypes: TypeRecord[] = [];
   const referents: Value[] = [];
@@ -769,11 +804,14 @@ export function* resolveOverloadChecked(signatures: readonly OverloadSignature[]
       }
     }
   }
-  const viable: OverloadSignature[] = [];
+  const viable: RankedSignature[] = [];
   for (const signature of signatures) {
     let admits = true;
-    for (let i = 0; i < args.length; i += 1) {
-      const parameter = parameterReceiving(signature.Parameters, args, i)?.Type;
+    const ranked = signatureTiers(signature, args, valueTypes, (i, type) => admitted[i].get(type) === true, items);
+    if (!ranked) continue;
+    for (let at = 0; at < ranked.receivers.length; at += 1) {
+      const i = ranked.indices[at];
+      const parameter = ranked.receivers[at].type;
       if (parameter?.Kind === 'parameter' && parameter.Constraint?.Kind === 'family-pattern') {
         const yes = Q(yield* ConstraintAdmits(args[i].Kind === 'reference' ? args[i].Target : args[i], parameter.Constraint));
         if (!yes) {
@@ -781,7 +819,7 @@ export function* resolveOverloadChecked(signatures: readonly OverloadSignature[]
         }
       }
     }
-    if (admits) viable.push(signature);
+    if (admits) viable.push(ranked);
   }
-  return resolveOverloadByTypes(viable, args, contextualType, valueTypes, (i, type) => admitted[i].get(type) === true);
+  return selectRankedOverloads(viable, contextualType);
 }

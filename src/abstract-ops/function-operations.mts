@@ -74,6 +74,7 @@ import {
   InitializePrivateMethods,
   getActiveScriptId,
 } from './all.mts';
+import { NamedCallItemsOf, SelectedNamedArguments } from './named-call.mts';
 import {
   GetActiveScriptOrModule,
   Realm,
@@ -649,10 +650,11 @@ function* FunctionConstructSlot(this: FunctionObject, argumentsList: Arguments, 
   // own annotations. The checker asks `resolveOverloadByTypes` - its type-based
   // sibling - of the same table, so both sides answer one question with one rule.
   let bodyFunction = F;
+  let bodyArguments = argumentsList;
   const ctorOverloads = (F as { OverloadFunctions?: readonly Value[] }).OverloadFunctions;
   if (surroundingAgent.feature('runtime-types') && ctorOverloads && ctorOverloads.length > 1) {
     const signatures = Q(yield* SignaturesOf(F as unknown as Value));
-    const resolution = Q(yield* resolveOverloadChecked(signatures, argumentsList as readonly Value[], undefined));
+    const resolution = Q(yield* resolveOverloadChecked(signatures, argumentsList as readonly Value[], undefined, NamedCallItemsOf(argumentsList)));
     if (resolution.Kind === 'none') {
       surroundingAgent.executionContextStack.pop(calleeContext);
       return Throw.TypeError('no overload of $1 matches these arguments', F);
@@ -662,8 +664,9 @@ function* FunctionConstructSlot(this: FunctionObject, argumentsList: Arguments, 
       return Throw.TypeError('the call to $1 is ambiguous between overloads', F);
     }
     bodyFunction = resolution.Signature.Function as typeof F;
+    if (resolution.Groups) bodyArguments = SelectedNamedArguments(bodyFunction as unknown as Value, resolution.Signature.Parameters, argumentsList, resolution.Groups);
   }
-  const result = yield* OrdinaryCallEvaluateBody(bodyFunction, argumentsList);
+  const result = yield* OrdinaryCallEvaluateBody(bodyFunction, bodyArguments);
   // 11. Remove calleeContext from the execution context stack and restore callerContext as the running execution context.
   surroundingAgent.executionContextStack.pop(calleeContext);
   // 12. If result.[[Type]] is return, then

@@ -31725,12 +31725,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       ...supplied.filter((a): a is ParseNode.NamedArgument => a.type === 'NamedArgument').map((a) => a.Name),
       ...supplied.flatMap((a) => objectSpreadItems(a)?.map((item) => item.name!) ?? []),
     ];
-    if (namedNames.length > 0) {
-      // The signature in view is selected by names, as at the runtime named
-      // binding site. Argument values are checked against that signature.
-      sig = callee.Signatures.find((candidate) => namedNames.every((name) => candidate.Parameters.some((pr) => pr.Name === name)))
-        ?? callee.Signatures[0] ?? null;
-    }
     if (!sig && callee.Signatures.length > 1) {
       // Ordinary ranking against an unknown context would manufacture ties
       // between distinct reflection hosts. The application judgment below
@@ -31748,11 +31742,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // against the chosen parameter is then the ordinary assignability
       // check below. Without this every literal argument resolved to
       // ~none~.
-      const argTypes = supplied.map((a) => {
-        if (a.type === 'AssignmentRestElement') {
-          return null;
-        }
+      const namedItems = namedNames.length > 0 ? supplied.flatMap<ArgumentItem<ParseNode>>((a) =>
+        objectSpreadItems(a) ?? [a.type === 'NamedArgument' ? { name: a.Name, value: a.AssignmentExpression as ParseNode } : { value: a }]) : undefined;
+      const argTypes = (namedItems?.map((item) => item.value) ?? supplied).map((a) => {
+        if (a.type === 'AssignmentRestElement') return null;
         const t = a.type === 'RefExpression' ? staticType(a) : argumentStaticType(a);
+        if (namedItems && (!t || t.Kind === 'any' || mentionsTypeParameter(t))) return null;
         return t && t.Kind === 'literal' ? t.Base : t;
       });
       if (decoratorCalls.has(c as unknown as object)) {
@@ -31783,6 +31778,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // in ranking - it filters what ranking left tied - so this is
           // read only by that tie-break.
           contextualCallTypes.get(n) ?? (n as unknown as { ContextualType?: TypeRecord }).ContextualType,
+          undefined, undefined, namedItems,
         );
         if (diagnose && resolution.Kind === 'none') {
           // "It is a type error if ResolveOverload returns ~none~."

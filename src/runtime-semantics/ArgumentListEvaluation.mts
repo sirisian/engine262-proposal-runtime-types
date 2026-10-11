@@ -10,7 +10,8 @@ import { registerTemplateArgument } from '../type-system/template-argument.mts';
 import { TemplateStrings } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { PrepareNamedArguments, CompleteNamedArguments, type ArgumentItem } from '../type-system/named-arguments.mts';
-import { assignArguments } from '../type-system/overloads.mts';
+import { NamedCallArguments, SetNamedParameterCounts } from '../abstract-ops/named-call.mts';
+import { assignArguments, resolveOverloadChecked } from '../type-system/overloads.mts';
 import { AssignRuntimeArguments } from '../abstract-ops/argument-distribution.mts';
 import { RuntimeTypeOf, SpecializedFunctionSignatureOf } from '../type-system/runtime.mts';
 import { anyType, type TypeRecord } from '../type-system/records.mts';
@@ -279,10 +280,10 @@ function parameterInfo(func: Value): { names: string[], omittable: boolean[], re
  * not in view and need not agree (README, "Function Interfaces": "if an interface
  * is used then the name can be changed in the passed in function"). Its defaults
  * are what fill a skipped position, so the callee receives a full positional
- * list and its own defaults never engage. With several signatures, the first
- * whose names cover every named argument is selected.
+ * list and its own defaults never engage. Several signatures are judged
+ * against the same evaluated argument items before one mapping is selected.
  */
-type SignatureInView = { Parameters: readonly { Name: string, Type?: unknown, Optional: boolean, Rest: boolean, Ref?: boolean, Initial?: Value }[] };
+type SignatureInView = { Return?: TypeRecord | null, Parameters: readonly { Name: string, Type?: unknown, Optional: boolean, Rest: boolean, Ref?: boolean, Initial?: Value }[] };
 
 function parameterInfoOfSignature(sig: SignatureInView): { names: string[], omittable: boolean[], rests: boolean[], refs: boolean[], restIndex: number, initials: (Value | undefined)[], types: unknown[] } {
   const names: string[] = [];
@@ -306,32 +307,11 @@ function parameterInfoOfSignature(sig: SignatureInView): { names: string[], omit
   return { names, omittable, rests, refs, restIndex, initials, types };
 }
 
-/** The signature in view for a callee reference, or undefined where its binding declares no callable type. */
-/**
- * The member of an overload set whose parameter names a named call reads:
- * #sec-named-arguments selects "the first whose parameters include every named
- * argument's name, or the first where there is none such", and
- * #sec-bindarguments binds by "the parameter names ... of the selected
- * signature". A function that is not an overload set is its own answer.
- */
-export function overloadInView(func: Value, namedArguments: readonly string[]): Value {
-  const overloads = (func as { OverloadFunctions?: readonly Value[] }).OverloadFunctions;
-  if (!overloads || overloads.length < 2 || namedArguments.length === 0) return func;
-  return overloads.find((member) => {
-    const { names } = parameterInfo(member);
-    return namedArguments.every((name) => names.includes(name));
-  }) ?? overloads[0];
-}
-
-export function signatureInView(declaredType: unknown, namedArguments: readonly string[]): SignatureInView | undefined {
+/** Callable views supply candidate names/defaults, never a replacement callee. */
+export function signaturesInView(declaredType: unknown): readonly SignatureInView[] | undefined {
   let t = declaredType as { Kind?: string, Structure?: unknown, Signatures?: readonly SignatureInView[] } | undefined;
-  if (t && t.Kind === 'nominal') {
-    t = t.Structure as typeof t;
-  }
-  if (!t || t.Kind !== 'function' || !t.Signatures || t.Signatures.length === 0) {
-    return undefined;
-  }
-  return t.Signatures.find((s) => namedArguments.every((n) => s.Parameters.some((p) => p.Name === n))) ?? t.Signatures[0];
+  if (t?.Kind === 'nominal') t = t.Structure as typeof t;
+  return t?.Kind === 'function' && t.Signatures?.length ? t.Signatures : undefined;
 }
 
 /** Evaluate source-order argument items once, before an overload binds their names. */
@@ -404,18 +384,34 @@ export function* ArgumentListEvaluationItems(args: ParseNode.Arguments): PlainEv
  * is left absent for the callee's own default to fill; a named argument that
  * matches no parameter is a TypeError.
  */
-export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Value, signature?: SignatureInView): PlainEvaluator<Arguments> {
+export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Value, signatureOrViews?: SignatureInView | readonly SignatureInView[], contextualType?: TypeRecord): PlainEvaluator<Arguments> {
+  const items = Q(yield* ArgumentListEvaluationItems(args));
+  let signature: SignatureInView | undefined;
+  let selectedGroups: readonly number[][] | undefined;
+  if (Array.isArray(signatureOrViews)) {
+    if (signatureOrViews.length === 1) signature = signatureOrViews[0];
+    else {
+      const candidates = signatureOrViews.map((s) => ({ Parameters: s.Parameters, ReturnType: s.Return ?? undefined, Function: Value.undefined }));
+      const resolution = Q(yield* resolveOverloadChecked(candidates as never, items.map((item) => item.value), contextualType, items));
+      if (resolution.Kind === 'none') return Throw.TypeError('no overload of $1 matches these arguments', func);
+      if (resolution.Kind === 'ambiguous') return Throw.TypeError('the call to $1 is ambiguous between overloads', func);
+      signature = signatureOrViews[candidates.indexOf(resolution.Signature as never)];
+      selectedGroups = resolution.Groups;
+    }
+  } else signature = signatureOrViews as SignatureInView | undefined;
+  if (!signature && (func as { OverloadFunctions?: readonly Value[] }).OverloadFunctions?.length) {
+    return NamedCallArguments(items);
+  }
   const info = signature ? parameterInfoOfSignature(signature) : { ...parameterInfo(func), initials: [] as (Value | undefined)[], types: [] as unknown[] };
   const { names, omittable, rests, refs, initials } = info;
   const types = signature ? info.types : (Q(yield* soleSignatureParameterTypes(func)) ?? []);
-  const items = Q(yield* ArgumentListEvaluationItems(args));
 
   const parameters = names.map((Name, i) => ({
     Name, Rest: rests[i], Ref: refs[i], Optional: omittable[i], Type: (types[i] ?? anyType) as TypeRecord,
   }));
   const plan = PrepareNamedArguments(parameters, items);
   let counts: readonly number[] | null = null;
-  if (!plan.error) {
+  if (!plan.error && !selectedGroups) {
     const slots = plan.remaining.map(({ p }) => p);
     if (plan.positional.some((value) => value instanceof ReferenceValue) || slots.some((p) => p.Ref || p.Type.Kind === 'reference')) {
       counts = Q(yield* AssignRuntimeArguments(slots, plan.positional));
@@ -427,7 +423,7 @@ export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Va
       counts = assignArguments(slots, argumentTypes);
     }
   }
-  const placed = CompleteNamedArguments(plan, counts);
+  const placed = selectedGroups ? { groups: selectedGroups.map((group) => group.map((i) => items[i].value)), error: undefined } : CompleteNamedArguments(plan, counts);
   if (placed.error === 'unknown-name') {
     return Throw.TypeError('no parameter named $1 for this call', Value(placed.name!));
   }
@@ -456,5 +452,6 @@ export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Va
       result.push(value);
     }
   }
+  if (!signature) SetNamedParameterCounts(result, func, placed.groups.map((group) => group.length));
   return result as Arguments;
 }

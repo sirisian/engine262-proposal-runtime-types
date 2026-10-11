@@ -5620,14 +5620,16 @@ export function* MakeOverloadedFunction(name: JSStringValue, functions: readonly
     // string` selected by `string`.
     const callContext = TakeBodyContext();
     const signatures = Q(yield* SignaturesOf(overloaded));
-    const resolution = Q(yield* resolveOverloadChecked(signatures, args, callContext));
+    const resolution = Q(yield* resolveOverloadChecked(signatures, args, callContext, NamedCallItemsOf(args)));
     if (resolution.Kind === 'none') {
       return Throw.TypeError('no overload of $1 matches these arguments', name);
     }
     if (resolution.Kind === 'ambiguous') {
           return Throw.TypeError('the call to $1 is ambiguous between overloads', name);
     }
-    return EnsureCompletion(Q(yield* Call(resolution.Signature.Function, context.thisValue, args as Value[])));
+    const selectedArgs = resolution.Groups
+      ? SelectedNamedArguments(resolution.Signature.Function, resolution.Signature.Parameters, args, resolution.Groups) : args;
+    return EnsureCompletion(Q(yield* Call(resolution.Signature.Function, context.thisValue, selectedArgs as Value[])));
   };
   const overloaded = CreateBuiltinFunction(behaviour as never, length, name, []);
   // The signatures are readable from the dispatcher, because a DECORATION binds
@@ -6136,3 +6138,4 @@ import { rationalPartsFitWidth } from '../intrinsics/Rational.mts';
 
 import { FillGenericConstraintFrame } from '../type-system/runtime.mts';
 import { IsCheckedCode } from '../type-system/checked-code.mts';
+import { NamedCallItemsOf, SelectedNamedArguments } from './named-call.mts';

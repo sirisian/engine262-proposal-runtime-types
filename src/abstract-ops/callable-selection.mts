@@ -30,6 +30,7 @@ import { assignTypeArguments } from '../type-system/type-argument-order.mts';
 import { GenericWhereVerified, MarkGenericWhereVerified } from '../type-system/generic-where.mts';
 import { Evaluate } from '../evaluator.mts';
 import { SignaturesOf, InferGenericCallBindings, functionWhereClauses, classFrameOfObject, CheckedConvertValue } from './runtime-types.mts';
+import { NamedCallItemsOf, SelectedNamedArguments } from './named-call.mts';
 import {
   Throw, Value, Q, Call, CreateBuiltinFunction, EnsureCompletion, GetValue, ExecutionContext, surroundingAgent, type PlainEvaluator, type ValueEvaluator,
 } from '#self';
@@ -255,7 +256,7 @@ export function* DispatchCaseGroup(
   // replacement is chosen (`const c: 'u' = f(x)` with `f<uint8>(x: uint8): 'u'`).
   // The chosen declaration's return is checked where the result is bound.
   const routes = analysis.Owners.some((o) => analysis.Attached.some((a) => a.Owner === o && replacements.has(a.Case.Node as object)));
-  const resolution = Q(yield* resolveOverloadChecked(signatures, args, routes ? undefined : callContext));
+  const resolution = Q(yield* resolveOverloadChecked(signatures, args, routes ? undefined : callContext, NamedCallItemsOf(args)));
   if (resolution.Kind === 'none') {
     return Throw.TypeError('no overload of $1 matches these arguments', Value(name));
   }
@@ -263,6 +264,7 @@ export function* DispatchCaseGroup(
     return Throw.TypeError('the call to $1 is ambiguous between overloads', Value(name));
   }
   const chosen = resolution.Signature.Function;
+  if (resolution.Groups) args = SelectedNamedArguments(chosen, resolution.Signature.Parameters, args, resolution.Groups);
   const chosenDeclaration = declarationOf(chosen);
   const owner = analysis.Owners.find((o) => o.Node === chosenDeclaration);
   if (owner) {
