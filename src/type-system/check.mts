@@ -753,11 +753,22 @@ export interface GenericDefaultCheck {
   readonly captures?: TypeParameterRecord['Captures'];
   readonly constraint?: boolean;
 }
+interface ArgumentSource {
+  readonly node: ParseNode;
+  readonly type: Known;
+  readonly children?: readonly { key: string, index?: number, source: ArgumentSource }[];
+}
+interface ArgumentAdmissionCheck {
+  readonly source: ArgumentSource;
+  readonly parameter: ParameterRecord;
+  readonly offset: number;
+}
 interface TypeArgumentApplicationCheck {
   readonly declaration?: ParseNode.TypeAliasDeclaration;
   readonly parameters: readonly TypeParameterRecord[];
   readonly bindings: ReadonlyMap<string, TypeRecord>;
   readonly pendingArguments: ReadonlySet<string>;
+  readonly consumers?: readonly ArgumentAdmissionCheck[];
 }
 // A later Script or importing Module specializes the producer's source too.
 // Keep its descriptions with that source, separately from canonical types and
@@ -4632,15 +4643,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     visit(owner);
   };
 
+  const sameArgumentSource = (a: ArgumentSource, b: ArgumentSource): boolean => a.node === b.node
+    && (a.type === b.type || !!a.type && !!b.type && SameType(a.type, b.type))
+    && (a.children?.length ?? 0) === (b.children?.length ?? 0)
+    && (a.children ?? []).every((child, i) => sameArgumentSource(child.source, b.children![i].source));
+
   const recordTypeArgumentApplication = (application: GenericDefaultCheck['application'],
     parameters: readonly TypeParameterRecord[], bindings: ReadonlyMap<string, TypeRecord>,
-    pendingArguments: ReadonlySet<string> = new Set(), declaration?: ParseNode.TypeAliasDeclaration): void => {
+    pendingArguments: ReadonlySet<string> = new Set(), declaration?: ParseNode.TypeAliasDeclaration,
+    consumers: readonly ArgumentAdmissionCheck[] = []): void => {
     if (describingGenericDefaults.size) return;
     const checks = typeArgumentApplicationChecks.get(application) ?? [];
     const captures = parameters.flatMap((parameter) => parameter.Captures ?? []);
     if (checks.some((check) => {
       const previous = check.parameters.flatMap((parameter) => parameter.Captures ?? []);
-      return check.declaration === declaration && check.parameters.length === parameters.length
+      return check.declaration === declaration && (check.consumers?.length ?? 0) === consumers.length
+        && consumers.every((consumer, i) => {
+          const previous = check.consumers![i];
+          return consumer.parameter === previous.parameter && consumer.offset === previous.offset && sameArgumentSource(consumer.source, previous.source);
+        })
+        && check.parameters.length === parameters.length
         && check.parameters.every((parameter, i) => parameter.Declaration === parameters[i].Declaration)
         && check.bindings.size === bindings.size
         && [...bindings].every(([name, bound]) => check.bindings.has(name) && SameType(bound, check.bindings.get(name)!))
@@ -4648,7 +4670,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         && previous.length === captures.length && previous.every((capture, i) =>
           capture.Declaration === captures[i].Declaration && SameType(capture.Type, captures[i].Type));
     })) return;
-    checks.push({ declaration, parameters, bindings: new Map(bindings), pendingArguments });
+    checks.push({ declaration, parameters, bindings: new Map(bindings), pendingArguments, consumers });
     typeArgumentApplicationChecks.set(application, checks);
   };
 
@@ -4688,6 +4710,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         finishTypeArgumentBindings(signature.Signatures[0].TypeParameters!, closed, {
           complete: false, application: node as GenericDefaultCheck['application'], pendingArguments: check.pendingArguments,
         });
+        // Default completion closes the argument contract too. Keep the
+        // source in its caller context and the formal in the applied context;
+        // equal parameter spellings do not merge these two substitutions.
+        for (const consumer of check.consumers ?? []) {
+          let target = substituteFreeTypeParameters(consumer.parameter.Type, closed);
+          target = substituteFreeTypeParameters(target, scoped);
+          if (consumer.parameter.Rest && target) target = target.Kind === 'tuple'
+            ? target.Elements[consumer.offset]?.Type ?? restElementType(target) : restElementType(target);
+          if (!target || mentionsTypeParameter(target)) continue;
+          const view = argumentSourceView(consumer.source, scoped);
+          const source = staticTypeIn(view, target);
+          if (!source || mentionsTypeParameter(source)) continue;
+          if (consumer.parameter.Optional && source.Kind === 'primitive' && source.Name === 'undefined') continue;
+          requireAssignable(source, target, node);
+        }
         if (!check.declaration) continue;
         // An alias body can apply another alias whose result also erases its
         // arguments. Follow the retained application, not the expanded result.
@@ -16694,6 +16731,56 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const typedExpressionView = (original: ParseNode, type: Known): ParseNode => {
     const view = { type: 'ParenthesizedExpression', Expression: original } as ParseNode;
     expressionViewTypes.set(view, type);
+    return view;
+  };
+
+  // Retain creation syntax and typed leaves from the producing position.
+  // Replaying contextual literal checks must not look names up in a consumer
+  // scope or stamp one specialization's contextual types onto shared syntax.
+  const argumentSource = (input: ParseNode): ArgumentSource | undefined => {
+    const node = input.type === 'NamedArgument' ? input.AssignmentExpression : input;
+    const children: { key: string, index?: number, source: ArgumentSource }[] = [];
+    const add = (key: string, child: ParseNode, index?: number): boolean => {
+      const source = argumentSource(child);
+      if (!source) return false;
+      children.push({ key, index, source });
+      return true;
+    };
+    if (node.type === 'ParenthesizedExpression') {
+      if (!add('Expression', node.Expression)) return undefined;
+    } else if (node.type === 'ArrayLiteral') {
+      if (!node.ElementList.every((child, index) => add('ElementList', child, index))) return undefined;
+    } else if (node.type === 'SpreadElement') {
+      if (!add('AssignmentExpression', node.AssignmentExpression)) return undefined;
+    } else if (node.type === 'ObjectLiteral') {
+      // A method body, computed key or written member annotation needs its own
+      // retained declaration context, beyond a fresh data-literal description.
+      if (!node.PropertyDefinitionList.every((child, index) => child.type === 'PropertyDefinition'
+        && !child.TypeAnnotation && child.PropertyName?.type !== 'PropertyName'
+        && add('PropertyDefinitionList', child, index))) return undefined;
+    } else if (node.type === 'PropertyDefinition') {
+      if (!node.AssignmentExpression || !add('AssignmentExpression', node.AssignmentExpression)) return undefined;
+    }
+    return { node, type: children.length || node.type === 'ArrayLiteral' || node.type === 'ObjectLiteral'
+      || node.type === 'Elision' ? null : argumentStaticType(node),
+    children: children.length || ['ArrayLiteral', 'ObjectLiteral', 'Elision'].includes(node.type) ? children : undefined };
+  };
+  const argumentSourceView = (source: ArgumentSource, bindings: ReadonlyMap<string, TypeRecord>): ParseNode => {
+    if (!source.children) {
+      if (['NumericLiteral', 'StringLiteral', 'BooleanLiteral', 'NullLiteral'].includes(source.node.type)) return { ...source.node };
+      return typedExpressionView(source.node, substituteFreeTypeParameters(source.type, bindings));
+    }
+    const view = { ...source.node } as ParseNode & Record<string, unknown>;
+    for (const child of source.children) {
+      const value = argumentSourceView(child.source, bindings);
+      if (child.index === undefined) view[child.key] = value;
+      else {
+        if (view[child.key] === (source.node as unknown as Record<string, unknown>)[child.key]) {
+          view[child.key] = [...view[child.key] as readonly ParseNode[]];
+        }
+        (view[child.key] as ParseNode[])[child.index] = value;
+      }
+    }
     return view;
   };
 
@@ -32148,6 +32235,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       const generic = (chosen as { TypeParameters?: readonly TypeParameterRecord[] }).TypeParameters;
       const bindings = new Map<string, TypeRecord>();
+      let pendingExplicitArguments: ReadonlySet<string> | undefined;
+      const argumentAdmissions: ArgumentAdmissionCheck[] = [];
       if (generic && generic.length > 0) {
         // #sec-vector-masks: an unresolved lane parameter does not hide the
         // enclosing vector requirement from a known scalar argument.
@@ -32161,7 +32250,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           type?: string, TypeArguments?: { TypeArgumentList?: readonly ParseNode[] },
         } | undefined;
         const argNodes = spec?.type === 'TypeArgumentsExpression' ? spec.TypeArguments?.TypeArgumentList : undefined;
-        let pendingExplicitArguments: ReadonlySet<string> | undefined;
         if (argNodes && argNodes.length > 0) {
           // bindExplicitTypeArguments orders named arguments before binding
           // them, using the shared ordering for type application sites.
@@ -32292,9 +32380,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           mayInfer: (name) => !formals || referenced.has(name),
           application: n as GenericDefaultCheck['application'],
         });
-        // Keep omitted defaults after the inference rungs. An enclosing input
-        // can be pending even when a different omitted default is closed.
-        recordTypeArgumentApplication(n as GenericDefaultCheck['application'], generic, bindings, pendingExplicitArguments);
+        // Consumers below are retained together with these completed inference
+        // rungs and any genuinely omitted defaults.
         // AN INFERRED BINDING IS CHECKED AGAINST ITS CONSTRAINT, before the
         // parameter is substituted away. Substitution replaces `K: keyof T`
         // WHOLESALE with K's binding, so the argument `"zz"` was checked
@@ -32508,6 +32595,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // Continue to requireAssignable after recording contextual types:
           // staticTypeIn uses them to build the callback's own type.
         }
+        if (generic?.length && slot && !slot.Ref && mentionsTypeParameter(param)) {
+          const source = argumentSource(arg);
+          if (source) argumentAdmissions.push({ source, parameter: slot, offset });
+        }
         if (mentionsTypeParameter(param)) {
           // #sec-generics: only parameters owned by this callee are inferable.
           // An enclosing parameter is fixed throughout the generic body.
@@ -32553,6 +32644,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           requireAssignable(argType, checkedParam, n as ParseNode);
         }
       });
+      if (generic?.length) recordTypeArgumentApplication(n as GenericDefaultCheck['application'], generic, bindings,
+        pendingExplicitArguments, undefined, argumentAdmissions);
       const effective = effectiveBindings
         ? (substituteTypeParameters({ Kind: 'function', Signatures: [chosen] }, effectiveBindings) as Extract<TypeRecord, { Kind: 'function' }>).Signatures[0]
         : chosen;

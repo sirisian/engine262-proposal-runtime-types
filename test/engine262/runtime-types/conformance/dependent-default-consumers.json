@@ -1,0 +1,1097 @@
+{
+  "cases": [
+    {
+      "name": "original False 0",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type,W:type=identity(U)>(y:W):W{return y;}return inner.<T>(\"ok\");}outer.<uint8>(1);\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "original False 1",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type,W:type=identity(U)>(y:W):W{return y;}return inner.<T>(\"ok\");}function unused(){outer.<uint8>(1);}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "original True 2",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type,W:type=identity(U)>(y:W):W{return y;}return inner.<T>(\"ok\");}outer.<string>(\"ok\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "original True 3",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type,W:type=identity(U)>(y:W):W{return y;}return inner.<T>(\"ok\");}function unused(){outer.<string>(\"ok\");}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "positional uint8 \"bad\"",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "named uint8 \"bad\"",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<U:T>(y:\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest uint8 \"bad\"",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(...y:[W,W]){return \"ok\";}return inner.<T>(\"bad\",\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional uint8 \"bad\"",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y?:W){return \"ok\";}return inner.<T>(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "positional uint8 1",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>(1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named uint8 1",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<U:T>(y:1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest uint8 1",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(...y:[W,W]){return \"ok\";}return inner.<T>(1,1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional uint8 1",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y?:W){return \"ok\";}return inner.<T>(1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "positional string \"ok\"",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>(\"ok\");}outer.<string>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named string \"ok\"",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<U:T>(y:\"ok\");}outer.<string>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest string \"ok\"",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(...y:[W,W]){return \"ok\";}return inner.<T>(\"ok\",\"ok\");}outer.<string>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional string \"ok\"",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y?:W){return \"ok\";}return inner.<T>(\"ok\");}outer.<string>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "positional uint8 300",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>(300);}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "named uint8 300",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<U:T>(y:300);}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest uint8 300",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(...y:[W,W]){return \"ok\";}return inner.<T>(300,300);}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional uint8 300",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y?:W){return \"ok\";}return inner.<T>(300);}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "positional uint8 undefined",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>(undefined);}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "named uint8 undefined",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<U:T>(y:undefined);}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest uint8 undefined",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(...y:[W,W]){return \"ok\";}return inner.<T>(undefined,undefined);}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional uint8 undefined",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y?:W){return \"ok\";}return inner.<T>(undefined);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh {x:uint8} {x:1}",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>({x:1});}outer.<{x:uint8}>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh {x:uint8} {x:\"bad\"}",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>({x:\"bad\"});}outer.<{x:uint8}>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh [uint8,uint8] [1,2]",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>([1,2]);}outer.<[uint8,uint8]>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh [uint8,uint8] [1,\"bad\"]",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>([1,\"bad\"]);}outer.<[uint8,uint8]>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh [].<uint8> [1,2]",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>([1,2]);}outer.<[].<uint8>>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh [].<uint8> [1,\"bad\"]",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>([1,\"bad\"]);}outer.<[].<uint8>>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh {x:[uint8,uint8]} ({x:[1,2]})",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>(({x:[1,2]}));}outer.<{x:[uint8,uint8]}>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh {x:[uint8,uint8]} ({x:[1,\"bad\"]})",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>(({x:[1,\"bad\"]}));}outer.<{x:[uint8,uint8]}>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh uint8 []",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>([]);}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh [].<uint8> []",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>([]);}outer.<[].<uint8>>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured typed leaf x False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:uint8){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>(x);}outer.<string>(1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured typed leaf {x:x} False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:uint8){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>({x:x});}outer.<{x:string}>(1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured typed leaf [x,x] False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:uint8){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>([x,x]);}outer.<[string,string]>(1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "same-name caller and callee False False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:uint8){function inner<T:type,W:type=identity(T)>(y:W){return \"ok\";}return inner.<T>(x);}outer.<uint8>(1);outer.<string>(1);\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "function fresh<T:type=string>(x:T):T{return x;}fresh.<>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same-name caller and callee False True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:uint8){function inner<T:type,W:type=identity(T)>(y:W){return \"ok\";}return inner.<T>(x);}outer.<string>(1);outer.<uint8>(1);\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "function fresh<T:type=string>(x:T):T{return x;}fresh.<>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured typed leaf x True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:uint8){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>(x);}outer.<uint8>(1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured typed leaf {x:x} True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:uint8){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>({x:x});}outer.<{x:uint8}>(1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured typed leaf [x,x] True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:uint8){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>([x,x]);}outer.<[uint8,uint8]>(1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same-name caller and callee True False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:uint8){function inner<T:type,W:type=identity(T)>(y:W){return \"ok\";}return inner.<T>(x);}outer.<uint8>(1);outer.<uint8>(2);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same-name caller and callee True True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:uint8){function inner<T:type,W:type=identity(T)>(y:W){return \"ok\";}return inner.<T>(x);}outer.<uint8>(2);outer.<uint8>(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default source identity(U) False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default source identity(U) True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>(1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default source identity(T) False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(T)>(y:W){return \"ok\";}return inner.<T>(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default source identity(T) True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(T)>(y:W){return \"ok\";}return inner.<T>(1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default source identity(V) False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,V:type=identity(U),W:type=identity(V)>(y:W){return \"ok\";}return inner.<T>(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default source identity(V) True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,V:type=identity(U),W:type=identity(V)>(y:W){return \"ok\";}return inner.<T>(1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function expression False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){const inner=function<U:type,W:type=identity(U)>(y:W){return \"ok\";};return inner.<T>(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "method producer False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){const obj={inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}};return obj.inner.<T>(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "function expression True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){const inner=function<U:type,W:type=identity(U)>(y:W){return \"ok\";};return inner.<T>(1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "method producer True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){const obj={inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}};return obj.inner.<T>(1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unused outer input stays pending",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>(\"bad\");}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit any retains runtime admission",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:any){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>(x);}outer.<uint8>(1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inference precedes unused default",
+      "steps": [
+        {
+          "source": "function fail(t:type):type{throw new Error(\"unused\");}function outer<T:type>(x:T){function inner<U:type,W:type=fail(U)>(a:U,y:W){return \"ok\";}return inner(x,\"ok\");}outer.<uint8>(1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "supplied W bypasses default",
+      "steps": [
+        {
+          "source": "function fail(t:type):type{throw new Error(\"unused\");}function outer<T:type>(){function inner<U:type,W:type=fail(U)>(y:W){return \"ok\";}return inner.<T,string>(\"ok\");}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "follow-up after failure",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "function fresh<T:type=string>(x:T):T{return x;}fresh.<>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "consumer is checked before ordinary effects",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){throw new Error(\"ordinary body\");function inner<U:type,W:type=identity(U)>(y:W){throw new Error(\"applied body\");}return inner.<T>(\"bad\");}throw new Error(\"Script body\");outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "source and target close together uint8",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>(x);}outer.<uint8>(1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source and target close together string",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>(x);}outer.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed String admission control",
+      "steps": [
+        {
+          "source": "function direct(y:string){return \"ok\";}direct(1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "dependent String admission uses same rule",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>(1);}outer.<string>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed valid literal",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>({[\"x\"]:1});}outer.<{x:uint8}>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed valid local",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){const key=\"x\";function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>({[key]:1});}outer.<{x:uint8}>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed valid shadowed",
+      "steps": [
+        {
+          "source": "const key=\"elsewhere\";function identity(t:type):type{return t;}function outer<T:type>(){const key=\"x\";function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}return inner.<T>({[key]:1});}outer.<{x:uint8}>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    }
+  ]
+}
