@@ -32,8 +32,8 @@ import { CompositeFromShape } from '../intrinsics/Composite.mts';
 import { GetTypeObject } from '../type-system/intern.mts';
 import { IsCheckedCode } from '../type-system/checked-code.mts';
 import { MetadataObjectFor, MemberDeclarationOf, AllMemberDeclarationsOf } from './ClassDefinitionEvaluation.mts';
-import { EvaluateCall, ArgumentListEvaluation } from './all.mts';
-import { ArgumentListEvaluationItems } from './ArgumentListEvaluation.mts';
+import { EvaluateCall } from './all.mts';
+import { ArgumentListEvaluationItems, PositionalArgumentListEvaluation } from './ArgumentListEvaluation.mts';
 import { OrdinaryObjectCreate, CreateDataProperty, ArrayCreate } from '#self';
 import { Throw as ThrowError } from '#self';
 import {
@@ -155,7 +155,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
     const receiverRef = Q(yield* Evaluate(specializedVector.receiver));
     const receiver = Q(yield* DereferenceReferenceValue(Q(yield* GetValue(receiverRef))));
     if (receiver.type === 'Vector') {
-      const argList = Q(yield* ArgumentListEvaluation(args));
+      const argList = Q(yield* PositionalArgumentListEvaluation(args));
       return Q(yield* vectorConstantLane(receiver as VectorValue, specializedVector.method,
         specializedVector.arguments, argList as readonly Value[]));
     }
@@ -197,7 +197,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         ? node.value as number
         : undefined;
       if (count !== undefined && Number.isInteger(count) && count >= 0) {
-        const argList = Q(yield* ArgumentListEvaluation(args));
+        const argList = Q(yield* PositionalArgumentListEvaluation(args));
         const start = argList.length > 0 ? Number(Q(yield* ToIndex(argList[0] as Value))) : 0;
         // The README's Bounds Checks section: `window.<N>(start)` "checks once
         // that start + N fits and returns a window whose own accesses are then
@@ -231,7 +231,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       && (memberExpr as unknown as { Expression: { name?: string } }).Expression.name === 'Span'
       && memberExpr.TypeArguments.TypeArgumentList.length === 1) {
     const element = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]!));
-    const argList = Q(yield* ArgumentListEvaluation(args));
+    const argList = Q(yield* PositionalArgumentListEvaluation(args));
     if (argList.length > 0) {
       return Q(yield* CreateArrayView(element, 'dynamic', argList as unknown as readonly Value[]));
     }
@@ -287,7 +287,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
     const typeArgs = memberExpr.TypeArguments.TypeArgumentList;
     if (typeArgs.length === 1) {
       const typeRecord = Q(yield* TypeNodeToTypeRecord(typeArgs[0]));
-      const argList = Q(yield* ArgumentListEvaluation(args));
+      const argList = Q(yield* PositionalArgumentListEvaluation(args));
       const text = argList.length > 0 ? argList[0]! : Value.undefined;
       return Q(yield* TypedJSONParse(text, typeRecord));
     }
@@ -304,7 +304,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         && inner.MemberExpression?.name === 'SoA'
         && inner.IdentifierName?.name === 'withCapacity') {
       const element = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[0]));
-      const argList = Q(yield* ArgumentListEvaluation(args));
+      const argList = Q(yield* PositionalArgumentListEvaluation(args));
       const n = argList.length > 0 ? Number(Q(yield* ToIndex(argList[0]!))) : 0;
       return Q(yield* SoAWithCapacity(element, n));
     }
@@ -325,7 +325,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         extent = Number((second.Value as unknown as { value: number }).value);
       }
     }
-    const argList = Q(yield* ArgumentListEvaluation(args));
+    const argList = Q(yield* PositionalArgumentListEvaluation(args));
     return Q(yield* CreateSoAView(element, extent, argList as unknown as readonly Value[]));
   }
   // proposal-runtime-types (README, "Views"): `[].<T>(buffer, byteOffset,
@@ -353,7 +353,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       extent = -1;
     }
     if (extent !== -1) {
-      const argList = Q(yield* ArgumentListEvaluation(args));
+      const argList = Q(yield* PositionalArgumentListEvaluation(args));
       if (argList.length > 0) {
         // #sec-array-views: `[].<T>(buffer, …)` and `[N].<T>(buffer, …)` are
         // RETIRED in favour of `Span.<T>(buffer, …)`.
@@ -397,7 +397,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       // the same data, and `Reflect.typeOf` on it reported the member `any`.
       const composite = builtinTypeRecord('Composite', [written]) as (TypeRecord & { Arguments?: readonly (TypeRecord | number)[] }) | null;
       const shape = composite?.Arguments && composite.Arguments.length > 0 ? composite.Arguments[0] as TypeRecord : written;
-      const argList = Q(yield* ArgumentListEvaluation(args));
+      const argList = Q(yield* PositionalArgumentListEvaluation(args));
       return Q(yield* CompositeFromShape(shape, argList.length > 0 ? argList[0]! : Value.undefined));
     }
   }
@@ -422,7 +422,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         'Reflect.ObjectSetter', 'Reflect.ObjectMethod', 'Reflect.ObjectGetterReturn',
         'Reflect.ObjectMethodParameter', 'Reflect.ObjectSetterParameter', 'Reflect.ObjectMethodReturn'];
       if (ctx.Kind === 'nominal' && typeof ctxName === 'string' && objectContexts.includes(ctxName)) {
-        const argList = Q(yield* ArgumentListEvaluation(args));
+        const argList = Q(yield* PositionalArgumentListEvaluation(args));
         const instance = argList.length > 0 ? argList[0]! : Value.undefined;
         if (!(instance instanceof ObjectValueClass)) {
           return ThrowError.TypeError('$1 is not an object', instance);
@@ -588,7 +588,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
             Value('the target of Reflect.getReflection'));
         }
         const realm = surroundingAgent.currentRealmRecord;
-        const argList = Q(yield* ArgumentListEvaluation(args));
+        const argList = Q(yield* PositionalArgumentListEvaluation(args));
         const memberNode = (name: JSStringValue, type: unknown, index: number) => {
           const node = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
           X(CreateDataProperty(node, Value('kind'), Value(wantTuple ? 'Tuple' : 'Record')));
@@ -634,7 +634,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
           X(CreateDataProperty(node, Value('index'), Value(i)));
           return node;
         };
-        const argList = Q(yield* ArgumentListEvaluation(args));
+        const argList = Q(yield* PositionalArgumentListEvaluation(args));
         if (argList.length === 0) {
           // The keyed form: every enumerator, by name.
           const all = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
@@ -731,7 +731,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
           return reflection;
         }
         if (contextRecord.LibraryName === 'Reflect.FunctionParameter') {
-          const argList = Q(yield* ArgumentListEvaluation(args));
+          const argList = Q(yield* PositionalArgumentListEvaluation(args));
           const wanted = argList.length > 0 ? Q(yield* ToString(argList[0]!)).stringValue() : undefined;
           const params = signature.Parameters ?? [];
           const index = params.findIndex((prm) => prm.Name === wanted);
@@ -767,7 +767,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         if (constructor === undefined) {
           return ThrowError.TypeError('$1 is not a class type', Value('the target of Reflect.getReflection'));
         }
-        const argList = Q(yield* ArgumentListEvaluation(args));
+        const argList = Q(yield* PositionalArgumentListEvaluation(args));
         const nameValue = argList.length > 0 ? argList[0]! : Value.undefined;
         // A PARAMETER or RETURN context reads the parts of a member, so its
         // first argument is the member's name. decorators.md gives a parameter
@@ -948,7 +948,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       // reflection, the same one its decorator context carries.
       if (contextRecord.Kind === 'nominal' && contextRecord.LibraryName === 'Reflect.ClassFieldLayout') {
         const classRecord = Q(yield* TypeNodeToTypeRecord(memberExpr.TypeArguments.TypeArgumentList[1]));
-        const argList = Q(yield* ArgumentListEvaluation(args));
+        const argList = Q(yield* PositionalArgumentListEvaluation(args));
         const nameValue = argList.length > 0 ? argList[0]! : Value.undefined;
         const name = Q(yield* ToString(nameValue));
         return Q(ClassFieldReflection(classRecord, name.stringValue(), surroundingAgent.currentRealmRecord));
@@ -971,7 +971,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
       if (constructor === undefined) {
         return ThrowError.TypeError('$1 is not a class type', Value('the target of Reflect.getReflectionByIndex'));
       }
-      const argList = Q(yield* ArgumentListEvaluation(args));
+      const argList = Q(yield* PositionalArgumentListEvaluation(args));
       const memberValue = argList.length > 0 ? argList[0]! : Value.undefined;
       const memberName = Q(yield* ToString(memberValue));
       const declaration = MemberDeclarationOf(constructor, memberName.stringValue());
@@ -1027,7 +1027,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         && contextRecord.LibraryName.startsWith('Reflect.Class')
         && contextRecord.LibraryName !== 'Reflect.Class';
       if (memberContext) {
-        const argList = Q(yield* ArgumentListEvaluation(args));
+        const argList = Q(yield* PositionalArgumentListEvaluation(args));
         const nameValue = argList.length > 0 ? argList[0]! : Value.undefined;
         const name = Q(yield* ToString(nameValue));
         return MetadataObjectFor(constructor, base, name.stringValue());
@@ -1058,7 +1058,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         // single argument fell through to the ordinary `Math.random()`, which
         // takes none - so a written bound was DROPPED and the call answered
         // with a draw from [0, 1) that the caller never asked for.
-        const argList = Q(yield* ArgumentListEvaluation(args));
+        const argList = Q(yield* PositionalArgumentListEvaluation(args));
         const only = argList[0];
         if (argList.length === 1 && only !== undefined && isRangeObject(only)) {
           const produced = TypedRandomInRange(typeRecord, only, surroundingAgent.currentRealmRecord);
@@ -1077,7 +1077,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
     // a. If SameValue(func, %eval%) is true, then
     if (SameValue(func, surroundingAgent.intrinsic('%eval%'))) {
       // i. Let argList be ? ArgumentListEvaluation of arguments.
-      const argList = Q(yield* ArgumentListEvaluation(args));
+      const argList = Q(yield* PositionalArgumentListEvaluation(args));
       // ii. If argList has no elements, return undefined.
       if (argList.length === 0) {
         return Value.undefined;

@@ -9,7 +9,7 @@ import { OutOfRange, isArray } from '../utils/language.mts';
 import { registerTemplateArgument } from '../type-system/template-argument.mts';
 import { TemplateStrings } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { PrepareNamedArguments, CompleteNamedArguments, PositionalReferenceRuns, ReferenceRunsAdmitted, SetEmptyReferenceRuns, type ArgumentItem } from '../type-system/named-arguments.mts';
+import { PrepareNamedArguments, CompleteNamedArguments, PositionalReferenceRuns, ReferenceRunsAdmitted, SetEmptyReferenceRuns, EmptyReferenceRunsOf, type ArgumentItem } from '../type-system/named-arguments.mts';
 import { NamedCallArguments, NamedCallItemsOf, SetNamedParameterCounts } from '../abstract-ops/named-call.mts';
 import { assignArguments, resolveOverloadChecked } from '../type-system/overloads.mts';
 import { AssignRuntimeArguments } from '../abstract-ops/argument-distribution.mts';
@@ -22,10 +22,12 @@ import {
   SetIntegrityLevel,
   ToString,
   GetIterator,
+  GetIteratorFromMethod,
+  IsComposite,
+  IsArray,
   GetValue,
   Get,
   GetMethod,
-  EnumerableOwnProperties,
   Throw,
   F,
   IteratorStepValue,
@@ -145,6 +147,16 @@ function* ArgumentListEvaluation_TemplateLiteral(TemplateLiteral: ParseNode.Temp
 //     `(` ArgumentList `)`
 //     `(` ArgumentList `,` `)`
 function* ArgumentListEvaluation_Arguments(Arguments: ParseNode.Arguments): PlainEvaluator<Arguments> {
+  // Runtime spread mode depends on the evaluated value, including variables,
+  // calls and properties. Keep the base-language/no-spread path allocation-light.
+  if (surroundingAgent.feature('runtime-types')
+      && Arguments.some((element) => element.type === 'AssignmentRestElement' || element.type === 'NamedArgument')) {
+    const items = Q(yield* ArgumentListEvaluationItems(Arguments));
+    if (items.some((item) => item.name !== undefined || item.referenceRun) || EmptyReferenceRunsOf(items).length) {
+      return NamedCallArguments(items);
+    }
+    return items.map((item) => item.value) as Arguments;
+  }
   const precedingArgs: Value[] = [];
   let forwardedIndices: Set<number> | undefined;
   const emptyRuns: number[] = [];
@@ -216,25 +228,14 @@ export function ArgumentListEvaluation(ArgumentsOrTemplateLiteral: ParseNode.Tem
 }
 
 /**
- * Whether an argument list uses a by-name argument form: a named argument
- * `name: expr`, or a spread of an object literal `...{ a: 1 }`. A named argument
- * always binds by name. A spread of an object literal binds each property by
- * parameter name (the README's object-spread argument), and is recognized by its
- * syntax so that an ordinary iterable spread, `...arr` or `...[1, 2]`, is left to
- * the positional path unchanged. A list with neither is evaluated positionally.
+ * Intrinsic interceptions without a named binding contract must not erase names
+ * or forwarding provenance by reading the raw value array as positional input.
+ * Their ordinary positional behavior remains unchanged.
  */
-export function hasNamedArguments(args: ParseNode.Arguments): boolean {
-  return args.some((element) => {
-    const type = (element as { type?: string }).type;
-    if (type === 'NamedArgument') {
-      return true;
-    }
-    if (type === 'AssignmentRestElement') {
-      const inner = (element as ParseNode.AssignmentRestElement).AssignmentExpression;
-      return (inner as { type?: string }).type === 'ObjectLiteral';
-    }
-    return false;
-  });
+export function* PositionalArgumentListEvaluation(args: ParseNode.Arguments): PlainEvaluator<Arguments> {
+  const values = Q(yield* ArgumentListEvaluation_Arguments(args));
+  if (NamedCallItemsOf(values)) return Throw.TypeError('this call requires positional arguments');
+  return values;
 }
 
 /**
@@ -327,10 +328,6 @@ export function signaturesInView(declaredType: unknown): readonly SignatureInVie
 
 /** Evaluate source-order argument items once, before an overload binds their names. */
 export function* ArgumentListEvaluationItems(args: ParseNode.Arguments): PlainEvaluator<ArgumentItem<Value>[]> {
-  if (!hasNamedArguments(args)) {
-    const values = Q(yield* ArgumentListEvaluation_Arguments(args));
-    return (NamedCallItemsOf(values) ?? values.map((value) => ({ value }))) as ArgumentItem<Value>[];
-  }
   const items: ArgumentItem<Value>[] = [];
   const emptyRuns: number[] = [];
   const placePositional = (value: Value): void => {
@@ -355,20 +352,26 @@ export function* ArgumentListEvaluationItems(args: ParseNode.Arguments): PlainEv
         for (const location of spreadObj.Locations) items.push({ value: new ReferenceValue(location), referenceRun: true });
         continue;
       }
-      // A plain object spread binds by parameter name; an iterable spread fills
-      // positions in order. Distinguish by whether the value has an iterator.
-      const method = spreadObj instanceof ObjectValue
+      // Tuple composites iterate by kind without an observable method lookup.
+      // Other objects select exactly once; a nullish hook chooses named keys,
+      // and a present non-callable hook throws rather than changing protocols.
+      const tupleComposite = IsComposite(spreadObj) && IsArray(spreadObj) === Value.true;
+      const method = spreadObj instanceof ObjectValue && !tupleComposite
         ? Q(yield* GetMethod(spreadObj, wellKnownSymbols.iterator))
         : Value.undefined;
-      if (spreadObj instanceof ObjectValue && method === Value.undefined) {
-        // Object spread: bind each own enumerable string-keyed property by name.
-        const keys = Q(yield* EnumerableOwnProperties(spreadObj, 'key'));
+      if (spreadObj instanceof ObjectValue && !tupleComposite && method === Value.undefined) {
+        const keys = Q(yield* spreadObj.OwnPropertyKeys());
         for (const key of keys) {
-          const value = Q(yield* Get(spreadObj, key as JSStringValue));
-          placeNamed((key as JSStringValue).stringValue(), value);
+          if (!(key instanceof JSStringValue)) continue;
+          const desc = Q(yield* spreadObj.GetOwnProperty(key));
+          if (desc === Value.undefined || desc.Enumerable !== Value.true) continue;
+          const value = Q(yield* Get(spreadObj, key));
+          placeNamed(key.stringValue(), value);
         }
       } else {
-        const iteratorRecord = Q(yield* GetIterator(spreadObj, 'sync'));
+        let iteratorRecord;
+        if (method === Value.undefined) iteratorRecord = Q(yield* GetIterator(spreadObj, 'sync'));
+        else iteratorRecord = Q(yield* GetIteratorFromMethod(spreadObj, method));
         while (true) {
           const next = Q(yield* IteratorStepValue(iteratorRecord));
           if (next === 'done') {
@@ -388,22 +391,7 @@ export function* ArgumentListEvaluationItems(args: ParseNode.Arguments): PlainEv
   return items;
 }
 
-/**
- * Evaluates an argument list that uses by-name forms and returns the positional
- * argument list to pass to the call, using the called function's parameter names.
- * A positional argument fills the next position. A named argument `name: expr`
- * fills the position of the parameter with that name, or the rest position onward
- * where the name is the rest parameter's. A spread of a plain object binds each
- * own enumerable property by parameter name; a spread of an iterable fills the
- * next positions in order, as an ordinary spread does. A position with no argument
- * is left absent for the callee's own default to fill; a named argument that
- * matches no parameter is a TypeError.
- */
-export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Value, signatureOrViews?: SignatureInView | readonly SignatureInView[], contextualType?: TypeRecord): PlainEvaluator<Arguments> {
-  return Q(yield* BindCallArgumentItems(Q(yield* ArgumentListEvaluationItems(args)), func, signatureOrViews, contextualType));
-}
-
-/** The same binding for already-evaluated positional forwarding occurrences. */
+/** Bind once-evaluated named contributions or reference forwarding occurrences. */
 export function* BindCallArgumentItems(items: readonly ArgumentItem<Value>[], func: Value, signatureOrViews?: SignatureInView | readonly SignatureInView[], contextualType?: TypeRecord): PlainEvaluator<Arguments> {
   let signature: SignatureInView | undefined;
   let selectedGroups: readonly number[][] | undefined;

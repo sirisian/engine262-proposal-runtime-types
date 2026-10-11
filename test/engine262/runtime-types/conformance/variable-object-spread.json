@@ -1,0 +1,965 @@
+{
+  "cases": [
+    {
+      "name": "variable object spread",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args={b:\"B\",a:\"A\"};f(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal object spread",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args={b:\"B\",a:\"A\"};f(...{b:\"B\",a:\"A\"});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "property object spread",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args={b:\"B\",a:\"A\"};f(...({args}).args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "returned object spread",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args={b:\"B\",a:\"A\"};f(...(()=>args)());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "parenthesized object spread",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args={b:\"B\",a:\"A\"};f(...(args));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "conditional object spread",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args={b:\"B\",a:\"A\"};f(...true?args:{});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty extra literal parity",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args={b:\"B\",a:\"A\"};f(...args,...{});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "member receiver",
+      "steps": [
+        {
+          "source": "const obj={prefix:\"P\",f(a:string,b:string){return this.prefix+a+b;}};const args={b:\"B\",a:\"A\"};obj.f(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "PAB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional call",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const g:any=f;const args={b:\"B\"};g?.(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "d/B/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional short circuit",
+      "steps": [
+        {
+          "source": "let n=0;const g:any=null;g?.(...(()=>{n++;return {};})());String(n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "new constructor",
+      "steps": [
+        {
+          "source": "class C{a:string;constructor(a:string,b:string){this.a=a+b;}}const args={b:\"B\",a:\"A\"};new C(...args).a;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "target typed new",
+      "steps": [
+        {
+          "source": "class C{a:string;constructor(a:string,b:string){this.a=a+b;}}const args={b:\"B\",a:\"A\"};const x:C=new.(...args);x.a;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "super constructor",
+      "steps": [
+        {
+          "source": "class C{a:string;constructor(a:string,b:string){this.a=a+b;}}class D extends C{constructor(args:any){super(...args);}}new D({b:\"B\",a:\"A\"}).a;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "super explicit names",
+      "steps": [
+        {
+          "source": "class C{a:string;constructor(a:string,b:string){this.a=a+b;}}class D extends C{constructor(){super(b:\"B\",a:\"A\");}}new D().a;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "callable view lexical",
+      "steps": [
+        {
+          "source": "function f(x:string,y:string){return x+y;}const g:(a:string=\"d\",b:string)=>string=f;const args={b:\"B\"};g(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "dB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "callable view property",
+      "steps": [
+        {
+          "source": "function f(x:string,y:string){return x+y;}const obj:{g:(a:string=\"d\",b:string)=>string}={g:f};const args={b:\"B\"};obj.g(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "dB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic explicit",
+      "steps": [
+        {
+          "source": "function f<T:type>(a:T,b:string):string{return String(a)+b;}const args={b:\"B\",a:\"A\"};f.<string>(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic inferred",
+      "steps": [
+        {
+          "source": "function f<T:type>(a:T,b:string):string{return String(a)+b;}const args={b:\"B\",a:\"A\"};f(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored specialization",
+      "steps": [
+        {
+          "source": "function f<T:type>(a:T,b:string):string{return String(a)+b;}const g=f.<string>;const args={b:\"B\",a:\"A\"};g(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overload reordered names",
+      "steps": [
+        {
+          "source": "function f(a:uint8,b:string):string{return \"wrong\";}function f(b:boolean,a:string):string{return a+String(b);}const args={b:true,a:\"A\"};f(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "Atrue"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor overload",
+      "steps": [
+        {
+          "source": "class C{v:string;constructor(a:uint8,b:string){this.v=\"wrong\";}constructor(b:boolean,a:string){this.v=a+String(b);}}const args={b:true,a:\"A\"};new C(...args).v;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "Atrue"
+          }
+        }
+      ]
+    },
+    {
+      "name": "repeated names last wins",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}let log=\"\";const a={get a(){log+=\"1\";return \"X\";}};const b={get a(){log+=\"2\";return \"A\";},b:\"B\"};const g:any=f;g(...a,...b)+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2/12"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named rest continues positional",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",...xs:[].<string>){return a+\"/\"+xs.join(\",\");}const args={xs:\"A\"};f(...args,\"B\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "d/A,B"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named rest suffix giveback",
+      "steps": [
+        {
+          "source": "function f(...xs:[].<string>,last:string){return xs.join(\",\")+\"/\"+last;}const args={xs:\"A\"};f(...args,\"B\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty object preserves omission",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args={};f(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "d/e/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty iterator preserves omission",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args=[];f(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "d/e/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "positional array",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args=[\"A\",\"B\"];f(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "positional string",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args=\"AB\";f(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple composite",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args=Composite([\"A\",\"B\"]);f(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "record composite",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args=Composite({b:\"B\",a:\"A\"});f(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nonenumerable and inherited excluded",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args=Object.create({bad:\"x\"});Object.defineProperty(args,\"hidden\",{value:\"x\"});args.a=\"A\";args.b=\"B\";args[Symbol(\"bad\")]=\"x\";f(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nullish iterator undefined",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args:any={a:\"A\",b:\"B\",[Symbol.iterator]:undefined};f(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nullish iterator null",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args:any={a:\"A\",b:\"B\",[Symbol.iterator]:null};f(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator getter once False",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}let log=\"\";const args={get a(){throw new Error(\"named\");},get [Symbol.iterator](){log+=\"G\";return function*(){log+=\"I\";yield \"A\";yield \"B\";};}};const g:any=f;g(...args)+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2/GI"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator getter once True",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}let log=\"\";const args={get a(){throw new Error(\"named\");},get [Symbol.iterator](){log+=\"G\";return function*(){log+=\"I\";yield \"A\";yield \"B\";};}};const g:any=f;g(...args,...{})+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2/GI"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator self replacement",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}let n=0;const args={get [Symbol.iterator](){n++;return n===1?function*(){yield \"A\";yield \"B\";}:undefined;}};const g:any=f;g(...args)+\"/\"+String(n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterable literal precedence",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}f(...{a:\"ignored\",*[Symbol.iterator](){yield \"A\";yield \"B\";}});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inherited iterator precedence",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args:any=Object.create({*[Symbol.iterator](){yield \"A\";yield \"B\";}});args.a=\"ignored\";f(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "getter source order",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}let log=\"\";function arg(){log+=\"S\";return {get [Symbol.iterator](){log+=\"I\";return undefined;},get b(){log+=\"B\";return \"B\";},get a(){log+=\"A\";return \"A\";}};}const g:any=f;const result=g(...arg());result+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2/SIBA"
+          }
+        }
+      ]
+    },
+    {
+      "name": "descriptor order observes deletion",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args:any={get a(){delete args.b;return \"A\";},b:\"B\"};const g:any=f;g(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/e/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "descriptor order observes nonenumerability",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args:any={get a(){Object.defineProperty(args,\"b\",{enumerable:false});return \"A\";},b:\"B\"};const g:any=f;g(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/e/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "new keys not visited",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args:any={get a(){args.bad=\"x\";return \"A\";},b:\"B\"};const g:any=f;g(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later value mutation observed",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}const args:any={get a(){args.b=\"Z\";return \"A\";},b:\"B\"};const g:any=f;g(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/Z/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "abrupt getter",
+      "steps": [
+        {
+          "source": "let log=\"\";function f(a,b){log+=\"F\";}const g:any=f;const args:any={get a(){log+=\"A\";throw new Error(\"boom\");}};let out=\"\";try{g(...args,(()=>{log+=\"L\";return \"x\";})());}catch(e){out=e.name;}out+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "Error/A"
+          }
+        }
+      ]
+    },
+    {
+      "name": "abrupt iterator getter",
+      "steps": [
+        {
+          "source": "let log=\"\";function f(a,b){log+=\"F\";}const g:any=f;const args:any={get [Symbol.iterator](){log+=\"I\";throw new Error(\"boom\");}};let out=\"\";try{g(...args,(()=>{log+=\"L\";return \"x\";})());}catch(e){out=e.name;}out+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "Error/I"
+          }
+        }
+      ]
+    },
+    {
+      "name": "abrupt noncallable iterator",
+      "steps": [
+        {
+          "source": "let log=\"\";function f(a,b){log+=\"F\";}const g:any=f;const args:any={[Symbol.iterator]:1,get a(){log+=\"A\";return \"A\";}};let out=\"\";try{g(...args,(()=>{log+=\"L\";return \"x\";})());}catch(e){out=e.name;}out+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator next abrupt no invented close",
+      "steps": [
+        {
+          "source": "let log=\"\";const g:any=function f(...xs){log+=\"F\";};const args={ [Symbol.iterator](){log+=\"I\";return {next(){log+=\"N\";throw new Error(\"boom\");},return(){log+=\"R\";return {};}};}};let out=\"\";try{g(...args);}catch(e){out=e.name;}out+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "Error/IN"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid iterator result",
+      "steps": [
+        {
+          "source": "let log=\"\";const g:any=function f(...xs){log+=\"F\";};const args={ [Symbol.iterator](){log+=\"I\";return 1;}};let out=\"\";try{g(...args);}catch(e){out=e.name;}out+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/I"
+          }
+        }
+      ]
+    },
+    {
+      "name": "noncallable evaluates ...args",
+      "steps": [
+        {
+          "source": "let log=\"\";const g:any=0;const args={get a(){log+=\"A\";return \"A\";}};let out=\"\";try{g(...args);}catch(e){out=e.name;}out+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/A"
+          }
+        }
+      ]
+    },
+    {
+      "name": "noncallable evaluates ...{get a(){log+=\"A\";return \"A\";}}",
+      "steps": [
+        {
+          "source": "let log=\"\";const g:any=0;const args={get a(){log+=\"A\";return \"A\";}};let out=\"\";try{g(...{get a(){log+=\"A\";return \"A\";}});}catch(e){out=e.name;}out+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/A"
+          }
+        }
+      ]
+    },
+    {
+      "name": "noncallable evaluates a:(log+=\"A\")",
+      "steps": [
+        {
+          "source": "let log=\"\";const g:any=0;const args={get a(){log+=\"A\";return \"A\";}};let out=\"\";try{g(a:(log+=\"A\"));}catch(e){out=e.name;}out+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/A"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown name after all argument effects",
+      "steps": [
+        {
+          "source": "let log=\"\";const g:any=function f(a){log+=\"F\";};const args={get bad(){log+=\"B\";return 1;}};let out=\"\";try{g(...args,a:(log+=\"A\"));}catch(e){out=e.name;}out+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/BA"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reference run preserved False",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>,label:string){if(ys.length)ys[0]=2;return label+\"/\"+String(ys.length);}function f(ref ...xs:[].<uint8>){const args={label:\"L\"};return g(...xs,...args);}let a:uint8=1;f()+\"/\"+String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "L/0/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty variable before reference run False",
+      "steps": [
+        {
+          "source": "function g(first:string=\"d\",ref ...ys:[].<uint8>,last:string=\"t\"){return first+\"/\"+last+\"/\"+String(ys.length)+\"/\"+String(arguments.length);}function f(ref ...xs:[].<uint8>){const args={};return g(...args,...xs,\"L\");}let a:uint8=1;f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "d/L/0/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reference run preserved True",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>,label:string){if(ys.length)ys[0]=2;return label+\"/\"+String(ys.length);}function f(ref ...xs:[].<uint8>){const args={label:\"L\"};return g(...xs,...args);}let a:uint8=1;f(ref a)+\"/\"+String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "L/1/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty variable before reference run True",
+      "steps": [
+        {
+          "source": "function g(first:string=\"d\",ref ...ys:[].<uint8>,last:string=\"t\"){return first+\"/\"+last+\"/\"+String(ys.length)+\"/\"+String(arguments.length);}function f(ref ...xs:[].<uint8>){const args={};return g(...args,...xs,\"L\");}let a:uint8=1;f(ref a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "d/L/1/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty ref rejected through dynamic named fixed",
+      "steps": [
+        {
+          "source": "function g(label:string,ref ...ys:[].<uint8>){return \"wrong\";}function f(ref ...xs:[].<uint8>){const h:any=g;const args={label:\"L\"};try{return h(...args,...xs);}catch(e){return e.name;}}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reentrant getter owns contributions",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}let log=\"\";const args={get a(){log+=f(...{a:\"X\",b:\"Y\"});return \"A\";},b:\"B\"};const g:any=f;g(...args)+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2/X/Y/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WeakRef library signature",
+      "steps": [
+        {
+          "source": "const target={};const args={target};const w=new WeakRef(...args);String(w.deref()===target);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit specialized case",
+      "steps": [
+        {
+          "source": "function f<T:type>(a:T,b:string):string{return \"owner\";}function f<string>(a:string,b:string):string{return a+b;}const args={b:\"B\",a:\"A\"};f.<string>(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inferred specialized case",
+      "steps": [
+        {
+          "source": "function f<T:type>(a:T,b:string):string{return \"owner\";}function f<string>(a:string,b:string):string{return a+b;}const args={b:\"B\",a:\"A\"};f(...args);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reference liveness after object getter",
+      "steps": [
+        {
+          "source": "let xs:[].<uint8>=[1];let entered=0;let trace=\"\";function f(ref ...ys:[].<uint8>,label:string){entered++;return label;}const g:any=f;const args={get label(){trace+=\"G\";xs.length=0;return \"L\";}};let out=\"\";try{g(ref xs[0],...args);}catch(e){out=e.name;}out+\"/\"+String(entered)+\"/\"+trace;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/G"
+          }
+        }
+      ]
+    },
+    {
+      "name": "proxy descriptor and get order",
+      "steps": [
+        {
+          "source": "function f(a:string=\"d\",b:string=\"e\"){return a+\"/\"+b+\"/\"+String(arguments.length);}let log=\"\";const target={a:\"A\",b:\"B\"};const args=new Proxy(target,{ownKeys(t){log+=\"K\";return [\"a\",\"b\"];},getOwnPropertyDescriptor(t,k){log+=\"D\"+k;return Object.getOwnPropertyDescriptor(t,k);},get(t,k){if(k===Symbol.iterator){log+=\"I\";return undefined;}log+=\"G\"+k;return t[k];}});const g:any=f;g(...args)+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/B/2/IKDaGaDbGb"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct eval does not erase names",
+      "steps": [
+        {
+          "source": "const args:any={unknown:\"throw new Error()\"};let out=\"\";try{eval(...args);}catch(e){out=e.name;}out;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed JSON interception does not erase names",
+      "steps": [
+        {
+          "source": "const args:any={unknown:\"1\"};let out=\"\";try{JSON.parse.<uint8>(...args);}catch(e){out=e.name;}out;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct eval positional preserved",
+      "steps": [
+        {
+          "source": "const args=[\"1+2\"];String(eval(...args));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 2,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed JSON positional preserved",
+      "steps": [
+        {
+          "source": "const args=[\"1\"];String(JSON.parse.<uint8>(...args));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 2,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed spread leaves later invocation usable",
+      "steps": [
+        {
+          "source": "let log=\"\";function f(a:string){log+=\"F\";return a;}const g:any=f;const bad={get a(){log+=\"G\";throw new Error(\"stop\");}};g(...bad);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "Error"
+          }
+        },
+        {
+          "source": "g(...{a:\"A\"})+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/GF"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -10,7 +10,7 @@ import { substituteTypeParameters, type TypeRecord } from '../type-system/record
 import { TakeStaticCallResolution, CallReceiverTypeOf, SelfThisTypeRecord } from '../type-system/check.mts';
 import { DeclaredReferenceLocationType } from '../abstract-ops/argument-distribution.mts';
 import { NamedCallArguments, NamedCallItemsOf } from '../abstract-ops/named-call.mts';
-import { ArgumentListEvaluation, ArgumentListEvaluationNamed, hasNamedArguments } from './all.mts';
+import { ArgumentListEvaluation } from './all.mts';
 import { signaturesInView, BindCallArgumentItems } from './ArgumentListEvaluation.mts';
 import {
   Assert,
@@ -61,20 +61,16 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     thisValue = Value.undefined;
   }
   // 3. Let argList be ? ArgumentListEvaluation of arguments.
-  // proposal-runtime-types: an argument list with named arguments is resolved
-  // against the called function's parameter names, so where the syntax is present
-  // and the callee is an ordinary function the callability check is taken first
-  // and the arguments are mapped to positions. Defaults in the declared
-  // function type use the same binder even for a positional call.
+  // The declared view supplies names/defaults after argument evaluation. Spread
+  // mode is selected from each value, never from its expression's syntax.
   let signature;
   if (surroundingAgent.feature('runtime-types') && Array.isArray(args) && ref instanceof ReferenceRecord) {
     // A typed property can carry the same callable view as a lexical binding.
     // Read its declared storage contract without another property Get.
     signature = signaturesInView(DeclaredReferenceLocationType(ref));
   }
-  const argsIsNamed = surroundingAgent.feature('runtime-types')
-    && Array.isArray(args) && (hasNamedArguments(args as ParseNode.Arguments)
-      || (signature?.length === 1 && signature[0].Parameters.some((p) => p.Initial !== undefined)));
+  const needsViewDefaults = signature?.length === 1
+    && signature[0].Parameters.some((p) => p.Initial !== undefined);
   // proposal-runtime-types #sec-conversions: a call whose callee is a TYPE OBJECT
   // is a conversion, and its argument is evaluated IN that type's context.
   //
@@ -103,7 +99,7 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     } finally {
       popContextualType();
     }
-  } else if (!argsIsNamed) {
+  } else {
     // proposal-runtime-types #sec-overloading-on-return-type: "the contextual
     // type of a call is the type its position requires", and an argument
     // position requires the callee's parameter type - "`g(f())` selects the
@@ -151,14 +147,11 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     }
     return Throw.TypeError('$1 is not a function', func);
   }
-  if (argsIsNamed && !evaluatedArguments) {
-    // Each callable view or actual overload binds the once-evaluated source
-    // items against its own names. The dispatcher retains the winning map.
-    argList = Q(yield* ArgumentListEvaluationNamed(args as ParseNode.Arguments, func, signature, callContext));
-  }
-  if (!argsIsNamed && signature && argList) {
+  if (signature && argList) {
     const items = NamedCallItemsOf(argList);
-    if (items) argList = Q(yield* BindCallArgumentItems(items, func, signature, callContext));
+    if (items || needsViewDefaults) {
+      argList = Q(yield* BindCallArgumentItems(items ?? argList.map((value) => ({ value })), func, signature, callContext));
+    }
   }
   // #sec-this-adoption: enforce a typed call's receiver view even when the
   // function value reached that view through an erased boundary.

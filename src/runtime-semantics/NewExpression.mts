@@ -17,7 +17,9 @@ import { StampTypedCollection, soleSignatureParameterTypes, RequireType } from '
 import { NumberValue, ObjectValue, Value } from '../value.mts';
 import { bindLibraryTypeArguments, TakeLibraryApplication } from '../type-system/library-type-arguments.mts';
 import { typeArgumentNameOf } from '../type-system/type-argument-order.mts';
-import { ArgumentListEvaluation, ArgumentListEvaluationNamed, hasNamedArguments } from './all.mts';
+import { NamedCallItemsOf } from '../abstract-ops/named-call.mts';
+import { ArgumentListEvaluation } from './all.mts';
+import { BindCallArgumentItems } from './ArgumentListEvaluation.mts';
 import { ResolveBinding } from '../execution-context/ExecutionContext.mts';
 import { isOrdinaryObject, surroundingAgent } from '#self';
 import {
@@ -102,8 +104,6 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
   // 5. If arguments is empty, let argList be a new empty List.
   if (args === undefined) {
     argList = [];
-  } else if (surroundingAgent.feature('runtime-types') && hasNamedArguments(args)) {
-    argList = Q(yield* ArgumentListEvaluationNamed(args, constructor, libraryParameters ? { Parameters: libraryParameters } : undefined));
   } else { // 6. Else,
     // a. Let argList be ? ArgumentListEvaluation of arguments.
     //
@@ -133,6 +133,8 @@ function* EvaluateNew(constructExpr: ParseNode.LeftHandSideExpression, args: und
     }
   }
   if (libraryParameters) {
+    const items = NamedCallItemsOf(argList);
+    if (items) argList = Q(yield* BindCallArgumentItems(items, constructor, { Parameters: libraryParameters }));
     const checked = [...argList];
     for (const [index, parameter] of libraryParameters.entries()) {
       checked[index] = Q(yield* RequireType(checked[index] ?? Value.undefined, parameter.Type));
@@ -395,12 +397,7 @@ export function* Evaluate_TargetTypedNew(node: ParseNode.TargetTypedNew): ValueE
   if (!ctor || !IsConstructor(ctor)) {
     return Throw.TypeError('$1 is not a constructor', Value(displayType(t)));
   }
-  let argList;
-  if (hasNamedArguments(node.Arguments)) {
-    argList = Q(yield* ArgumentListEvaluationNamed(node.Arguments, ctor));
-  } else {
-    argList = Q(yield* ArgumentListEvaluation(node.Arguments));
-  }
+  const argList = Q(yield* ArgumentListEvaluation(node.Arguments));
   // The target type IS the construction's context: a generic declaration's
   // [[Construct]] binds its parameters from it (#sec-constructing-a-generic-class).
   SetPendingCalleeContext(t);
