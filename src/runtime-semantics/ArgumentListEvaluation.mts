@@ -9,8 +9,8 @@ import { OutOfRange, isArray } from '../utils/language.mts';
 import { registerTemplateArgument } from '../type-system/template-argument.mts';
 import { TemplateStrings } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { PrepareNamedArguments, CompleteNamedArguments, type ArgumentItem } from '../type-system/named-arguments.mts';
-import { NamedCallArguments, SetNamedParameterCounts } from '../abstract-ops/named-call.mts';
+import { PrepareNamedArguments, CompleteNamedArguments, PositionalReferenceRuns, ReferenceRunsAdmitted, SetEmptyReferenceRuns, type ArgumentItem } from '../type-system/named-arguments.mts';
+import { NamedCallArguments, NamedCallItemsOf, SetNamedParameterCounts } from '../abstract-ops/named-call.mts';
 import { assignArguments, resolveOverloadChecked } from '../type-system/overloads.mts';
 import { AssignRuntimeArguments } from '../abstract-ops/argument-distribution.mts';
 import { RuntimeTypeOf, SpecializedFunctionSignatureOf } from '../type-system/runtime.mts';
@@ -145,7 +145,9 @@ function* ArgumentListEvaluation_TemplateLiteral(TemplateLiteral: ParseNode.Temp
 //     `(` ArgumentList `)`
 //     `(` ArgumentList `,` `)`
 function* ArgumentListEvaluation_Arguments(Arguments: ParseNode.Arguments): PlainEvaluator<Arguments> {
-  const precedingArgs = [];
+  const precedingArgs: Value[] = [];
+  let forwardedIndices: Set<number> | undefined;
+  const emptyRuns: number[] = [];
   for (const element of Arguments) {
     if (element.type === 'AssignmentRestElement') {
       const { AssignmentExpression } = element;
@@ -156,8 +158,12 @@ function* ArgumentListEvaluation_Arguments(Arguments: ParseNode.Arguments): Plai
       // `...refs` FORWARDS a ref run - each location becomes a ref argument
       // of this call, the one way a run moves without any reference escaping.
       if (spreadObj instanceof ReferenceRunValue) {
+        forwardedIndices ??= new Set();
+        if (spreadObj.Locations.length === 0) emptyRuns.push(precedingArgs.length);
         for (const location of spreadObj.Locations) {
-          precedingArgs.push(new ReferenceValue(location));
+          const value = new ReferenceValue(location);
+          precedingArgs.push(value);
+          forwardedIndices.add(precedingArgs.length - 1);
         }
         continue;
       }
@@ -189,6 +195,11 @@ function* ArgumentListEvaluation_Arguments(Arguments: ParseNode.Arguments): Plai
       precedingArgs.push(arg);
       // 5. Return precedingArgs.
     }
+  }
+  if (forwardedIndices) {
+    const items = precedingArgs.map((value, i) => ({ value, referenceRun: forwardedIndices.has(i) }));
+    SetEmptyReferenceRuns(items, emptyRuns);
+    return NamedCallArguments(items);
   }
   return precedingArgs as Arguments;
 }
@@ -317,9 +328,11 @@ export function signaturesInView(declaredType: unknown): readonly SignatureInVie
 /** Evaluate source-order argument items once, before an overload binds their names. */
 export function* ArgumentListEvaluationItems(args: ParseNode.Arguments): PlainEvaluator<ArgumentItem<Value>[]> {
   if (!hasNamedArguments(args)) {
-    return Q(yield* ArgumentListEvaluation_Arguments(args)).map((value) => ({ value }));
+    const values = Q(yield* ArgumentListEvaluation_Arguments(args));
+    return (NamedCallItemsOf(values) ?? values.map((value) => ({ value }))) as ArgumentItem<Value>[];
   }
   const items: ArgumentItem<Value>[] = [];
+  const emptyRuns: number[] = [];
   const placePositional = (value: Value): void => {
     items.push({ value });
   };
@@ -338,6 +351,7 @@ export function* ArgumentListEvaluationItems(args: ParseNode.Arguments): PlainEv
       const spreadRef = Q(yield* Evaluate(AssignmentExpression));
       const spreadObj = Q(yield* GetValue(spreadRef));
       if (spreadObj instanceof ReferenceRunValue) {
+        if (spreadObj.Locations.length === 0) emptyRuns.push(items.length);
         for (const location of spreadObj.Locations) items.push({ value: new ReferenceValue(location), referenceRun: true });
         continue;
       }
@@ -370,6 +384,7 @@ export function* ArgumentListEvaluationItems(args: ParseNode.Arguments): PlainEv
     }
   }
 
+  SetEmptyReferenceRuns(items, emptyRuns);
   return items;
 }
 
@@ -385,7 +400,11 @@ export function* ArgumentListEvaluationItems(args: ParseNode.Arguments): PlainEv
  * matches no parameter is a TypeError.
  */
 export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Value, signatureOrViews?: SignatureInView | readonly SignatureInView[], contextualType?: TypeRecord): PlainEvaluator<Arguments> {
-  const items = Q(yield* ArgumentListEvaluationItems(args));
+  return Q(yield* BindCallArgumentItems(Q(yield* ArgumentListEvaluationItems(args)), func, signatureOrViews, contextualType));
+}
+
+/** The same binding for already-evaluated positional forwarding occurrences. */
+export function* BindCallArgumentItems(items: readonly ArgumentItem<Value>[], func: Value, signatureOrViews?: SignatureInView | readonly SignatureInView[], contextualType?: TypeRecord): PlainEvaluator<Arguments> {
   let signature: SignatureInView | undefined;
   let selectedGroups: readonly number[][] | undefined;
   if (Array.isArray(signatureOrViews)) {
@@ -414,7 +433,7 @@ export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Va
   if (!plan.error && !selectedGroups) {
     const slots = plan.remaining.map(({ p }) => p);
     if (plan.positional.some((value) => value instanceof ReferenceValue) || slots.some((p) => p.Ref || p.Type.Kind === 'reference')) {
-      counts = Q(yield* AssignRuntimeArguments(slots, plan.positional));
+      counts = Q(yield* AssignRuntimeArguments(slots, plan.positional, PositionalReferenceRuns(items)));
     } else {
       const argumentTypes = plan.positional.map((value): TypeRecord => {
         const type = RuntimeTypeOf(value);
@@ -430,7 +449,11 @@ export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Va
   if (placed.error) {
     return Throw.TypeError('the named arguments do not satisfy the signature in view');
   }
-  const forwarded = new Set(items.filter((item) => item.referenceRun).map((item) => item.value));
+  const indexPlan = PrepareNamedArguments(parameters, items.map((item, i) => ({ ...item, value: i })));
+  const indexGroups = selectedGroups ?? CompleteNamedArguments(indexPlan, counts).groups;
+  if (!ReferenceRunsAdmitted(parameters, items, indexGroups)) {
+    return Throw.TypeError('$1', Value('a ref rest binds no array: forward it into a ref rest parameter'));
+  }
   const result: Value[] = [];
   for (let i = 0; i < names.length; i += 1) {
     const values = placed.groups[i];
@@ -438,12 +461,11 @@ export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Va
       if (!omittable[i]) {
         return Throw.TypeError('no argument for the required parameter $1', Value(names[i]));
       }
-      values.push(initials[i] ?? Value.undefined);
+      // Positional forwarding supplies no placeholder for an omitted default.
+      // Its zero count reaches ordinary final binding without changing arity.
+      if (signature || items.some((item) => item.name !== undefined)) values.push(initials[i] ?? Value.undefined);
     }
     for (let value of values) {
-      if (forwarded.has(value) && !(rests[i] && refs[i])) {
-        return Throw.TypeError('$1', Value('a ref rest binds no array: forward it into a ref rest parameter'));
-      }
       const type = types[i] as TypeRecord | undefined;
       if (signature && !rests[i] && type && type.Kind !== 'any'
           && !(value instanceof ObjectValue) && !(value instanceof ReferenceValue) && value !== Value.undefined) {

@@ -45,22 +45,28 @@ function checkReferenceRun(type: TypeRecord, start: number, count: number, admit
   return Array.from({ length: count }, () => element);
 }
 
+export interface ReferenceForwarding {
+  readonly entries: ReadonlySet<number>;
+  readonly empty: readonly number[];
+}
+
 /** Same parameter-level greediness, with complete contracts for ref rests. */
 export function PlanReferenceArguments(parameters: readonly ParameterRecord[]) {
   const types = parameters.map((p) => p.Rest ? restElementType(p.Type) : p.Type);
   const contracts = parameters.flatMap((p, k) => (p.Rest && p.Ref ? referenceRestTypes(p.Type) : [types[k]])
     .map((type) => ({ type, byReference: p.Ref === true || type.Kind === 'reference' })));
-  const match = (length: number, admits: (index: number, type: TypeRecord, byReference: boolean, optional?: boolean) => boolean) => {
+  const match = (length: number, admits: (index: number, type: TypeRecord, byReference: boolean, optional?: boolean) => boolean, forwarding?: ReferenceForwarding) => {
     // Each cache belongs to one immutable admission matrix and argument list.
     const memo = new Map<TypeRecord, Map<string, readonly TypeRecord[] | null>>();
     const counts = SequenceAssignment(parameters, length, (i, k) => {
       const p = parameters[k];
+      if (forwarding?.entries.has(i) && !(p.Rest && p.Ref)) return false;
       if (p.Rest && p.Ref) return true;
       return admits(i, types[k], p.Ref === true, !p.Rest && p.Optional);
     }, (start, count, k) => {
       const p = parameters[k];
       return !p.Rest || !p.Ref || admitsReferenceRun(p.Type, start, count, (i, type) => admits(i, type, true), memo) !== null;
-    });
+    }, forwarding ? { boundaries: forwarding.empty, admits: (k) => parameters[k].Rest && parameters[k].Ref === true } : undefined);
     if (counts === 'unmatched') return null;
     const receivers: { type: TypeRecord, byReference: boolean, parameter: ParameterRecord }[] = [];
     let at = 0;
@@ -74,6 +80,6 @@ export function PlanReferenceArguments(parameters: readonly ParameterRecord[]) {
     });
     return { counts, receivers };
   };
-  const assign = (length: number, admits: Parameters<typeof match>[1]): number[] | null => match(length, admits)?.counts ?? null;
+  const assign = (length: number, admits: Parameters<typeof match>[1], forwarding?: ReferenceForwarding): number[] | null => match(length, admits, forwarding)?.counts ?? null;
   return { contracts, assign, match };
 }

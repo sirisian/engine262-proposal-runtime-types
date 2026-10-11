@@ -51,18 +51,22 @@ export type Admits = (itemIndex: number, slotIndex: number) => boolean;
 export function SequenceAssignment(
   slots: readonly Slot[], n: number, admits: Admits,
   admitsRun?: (start: number, count: number, slotIndex: number) => boolean,
+  emptyOccurrences?: { boundaries: readonly number[], admits: (slotIndex: number) => boolean },
 ): number[] | 'unmatched' {
   // A state is (k, i): the slots from k onward against the items from i to n.
   // The result depends on nothing else, since `slots`, `n`, and `admits` are
   // fixed for the call, which is what makes the memo sound.
-  const memo = new Map<number, number[] | null>();
-  const solve = (k: number, i: number): number[] | null => {
+  const boundaries = emptyOccurrences?.boundaries ?? [];
+  const memo = new Map<number | string, number[] | null>();
+  const solve = (k: number, i: number, nextBoundary = 0): number[] | null => {
     if (k === slots.length) {
       // Every slot has taken its share; the match holds only if the items ran
       // out at the same moment.
-      return i === n ? [] : null;
+      return i === n && nextBoundary === boundaries.length ? [] : null;
     }
-    const key = k * (n + 1) + i;
+    // A zero-width occurrence at i may already have been accepted by the
+    // preceding rest. Retain that state; equal (k, i) alone is insufficient.
+    const key = boundaries.length ? `${k}:${i}:${nextBoundary}` : k * (n + 1) + i;
     const seen = memo.get(key);
     if (seen !== undefined) {
       return seen;
@@ -80,7 +84,12 @@ export function SequenceAssignment(
       // A collected contract can constrain a whole run (tuple positions or
       // extent); rejecting one length must still allow the greedy giveback.
       if (admitsRun && !admitsRun(i, m, k)) continue;
-      const tail = solve(k + 1, i + m);
+      let next = nextBoundary;
+      while (next < boundaries.length && boundaries[next] <= i + m && emptyOccurrences!.admits(k)) next += 1;
+      // An unaccepted occurrence may wait at the right endpoint for a later
+      // zero-width or nonempty rest, but cannot be crossed by a value slot.
+      if (next < boundaries.length && boundaries[next] < i + m) continue;
+      const tail = solve(k + 1, i + m, next);
       if (tail !== null) {
         result = [m, ...tail];
         break;

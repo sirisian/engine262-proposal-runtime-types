@@ -113,3 +113,64 @@ export function BindNamedArguments<T, P extends NamedSlot>(
   if (plan.error) return plan;
   return CompleteNamedArguments(plan, assign(plan.remaining.map(({ p }) => p), plan.positional));
 }
+
+// Argument-list metadata is owned by one evaluation, not by a user value or
+// function. A zero-length expansion still records a forwarding occurrence.
+const emptyReferenceRuns = new WeakMap<object, readonly number[]>();
+
+export function SetEmptyReferenceRuns(items: object, offsets: readonly number[]): void {
+  if (offsets.length) emptyReferenceRuns.set(items, offsets);
+}
+
+export function EmptyReferenceRunsOf(items: object): readonly number[] {
+  return emptyReferenceRuns.get(items) ?? [];
+}
+
+/** Judge forwarding against the selected binding, without inventing arguments. */
+export function ReferenceRunsAdmitted(
+  parameters: readonly (NamedSlot & { Ref?: boolean })[],
+  items: readonly Pick<ArgumentItem<unknown>, 'name' | 'referenceRun'>[],
+  groups: readonly (readonly number[])[],
+): boolean {
+  const accepts = (k: number) => parameters[k].Rest && parameters[k].Ref === true;
+  for (let k = 0; k < groups.length; k += 1) {
+    if (!accepts(k) && groups[k].some((i) => items[i].referenceRun)) return false;
+  }
+  for (const offset of EmptyReferenceRunsOf(items)) {
+    let sawName = false;
+    let openRest = -1;
+    for (let i = 0; i < offset; i += 1) {
+      if (items[i].name !== undefined) {
+        sawName = true;
+        const k = parameters.findIndex((p) => p.Name === items[i].name);
+        openRest = k >= 0 && parameters[k].Rest ? k : -1;
+      }
+    }
+    if (sawName) {
+      if (openRest < 0 || !accepts(openRest)) return false;
+      continue;
+    }
+    // Before any name, the marker lies in the positional subsequence. Named
+    // groups (including their given-back suffix) do not consume this cursor.
+    const firstName = items.findIndex((item) => item.name !== undefined);
+    const end = firstName < 0 ? items.length : firstName;
+    let cursor = 0;
+    let admitted = false;
+    for (let k = 0; k < groups.length; k += 1) {
+      if (groups[k].some((i) => i >= end)) continue;
+      const next = cursor + groups[k].length;
+      if (accepts(k) && cursor <= offset && offset <= next) admitted = true;
+      cursor = next;
+    }
+    if (!admitted) return false;
+  }
+  return true;
+}
+
+/** Positional occurrences are distributed among the unpinned parameters. */
+export function PositionalReferenceRuns(items: readonly Pick<ArgumentItem<unknown>, 'name' | 'referenceRun'>[]) {
+  const firstName = items.findIndex((item) => item.name !== undefined);
+  const end = firstName < 0 ? items.length : firstName;
+  return { entries: new Set(items.slice(0, end).flatMap((item, i) => item.referenceRun ? [i] : [])),
+    empty: EmptyReferenceRunsOf(items).filter((offset) => offset <= end) };
+}

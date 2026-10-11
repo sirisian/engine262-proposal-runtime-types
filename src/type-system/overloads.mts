@@ -16,7 +16,7 @@ import type { ParameterRecord, TypeRecord, NarrowingRecord } from './records.mts
 import { anyType, restElementType, mentionsTypeParameter } from './records.mts';
 import { slotReceiving } from './sequence-assignment.mts';
 import { PlanReferenceArguments } from './reference-rest.mts';
-import { BindNamedArguments, type ArgumentItem } from './named-arguments.mts';
+import { BindNamedArguments, PositionalReferenceRuns, ReferenceRunsAdmitted, type ArgumentItem } from './named-arguments.mts';
 import { ClassImplements, IsAssignable, IsSubtype, SameType } from './relations.mts';
 import { RuntimeTypeOf, ConstraintAdmits, IsOfType } from './runtime.mts';
 import { Q } from '../completion.mts';
@@ -439,8 +439,8 @@ function signatureTiers(sig: OverloadSignature, argTypes: readonly TypeRecord[],
     const parameters = sig.Parameters.map((p) => ({ ...p, Optional: p.Optional || p.Initial !== undefined }));
     const placed = BindNamedArguments(parameters, items.map((item, i) => ({ ...item, value: i })),
       (remaining, indices) => PlanReferenceArguments(remaining).assign(indices.length,
-        (i, target, ref, optional) => admits(indices[i], target, ref, optional)));
-    if (placed.error) return null;
+        (i, target, ref, optional) => admits(indices[i], target, ref, optional), PositionalReferenceRuns(items)));
+    if (placed.error || !ReferenceRunsAdmitted(parameters, items, placed.groups)) return null;
     const positions: { index: number, tier: Tier, receiver: Receiver[number] }[] = [];
     for (let k = 0; k < parameters.length; k += 1) {
       const indices = placed.groups[k];
@@ -449,7 +449,6 @@ function signatureTiers(sig: OverloadSignature, argTypes: readonly TypeRecord[],
       if (!matched) return null;
       for (let i = 0; i < indices.length; i += 1) {
         const index = indices[i], receiver = matched.receivers[i];
-        if (items[index].referenceRun && !(receiver.parameter.Rest && receiver.byReference)) return null;
         positions.push({ index, receiver, tier: sig.Untyped ? Tier.CatchAll
           : receivingTier(argTypes[index], valueTypes[index], receiver.type, receiver.byReference, !receiver.parameter.Rest && receiver.parameter.Optional)! });
       }

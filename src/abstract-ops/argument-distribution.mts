@@ -6,7 +6,7 @@ import type { PlainEvaluator } from '../evaluator.mts';
 import { IsOfType, RuntimeTypeOf } from '../type-system/runtime.mts';
 import { SameType } from '../type-system/relations.mts';
 import type { ParameterRecord, TypeRecord } from '../type-system/records.mts';
-import { PlanReferenceArguments } from '../type-system/reference-rest.mts';
+import { PlanReferenceArguments, type ReferenceForwarding } from '../type-system/reference-rest.mts';
 import { GetValue } from './reference-operations.mts';
 import { CheckedConvertValue } from './runtime-types.mts';
 
@@ -45,7 +45,7 @@ export function DeclaredReferenceLocationType(location: ReferenceRecord): TypeRe
  * position. Reading it checks liveness; neither that read nor this partition
  * replaces the original reference or the callee's later checks.
  */
-export function* AssignRuntimeArguments(parameters: readonly ParameterRecord[], args: readonly Value[]): PlainEvaluator<number[] | null> {
+export function* AssignRuntimeArguments(parameters: readonly ParameterRecord[], args: readonly Value[], forwarding?: ReferenceForwarding): PlainEvaluator<number[] | null> {
   const plan = PlanReferenceArguments(parameters);
   const admitted: Map<TypeRecord, boolean[]>[] = [];
   const values: Value[] = [];
@@ -82,5 +82,5 @@ export function* AssignRuntimeArguments(parameters: readonly ParameterRecord[], 
     // still reach that slot's initializer when the callee partitions rests.
     if (optional && !ref && values[i] === Value.undefined) return true;
     return admitted[i].get(type)![ref ? 1 : 0];
-  });
+  }, forwarding);
 }

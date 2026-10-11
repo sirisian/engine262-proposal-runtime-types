@@ -1,0 +1,1096 @@
+{
+  "cases": [
+    {
+      "name": "direct positional value rest, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;function g(...ys:[].<uint8>){entered++;return String(ys.length);}function f(ref ...xs:[].<uint8>){return g(...xs);}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct positional value rest, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;function g(...ys:[].<uint8>){entered++;return String(ys.length);}function f(ref ...xs:[].<uint8>){return g(...xs);}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct positional ref rest, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;function g(ref ...ys:[].<uint8>){entered++;return String(ys.length);}function f(ref ...xs:[].<uint8>){return g(...xs);}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct positional ref rest, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;function g(ref ...ys:[].<uint8>){entered++;return String(ys.length);}function f(ref ...xs:[].<uint8>){return g(...xs);}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct named value rest, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;function g(...ys:[].<uint8>,label:string){entered++;return String(ys.length);}function f(ref ...xs:[].<uint8>){return g(...xs,label:\"ok\");}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct named value rest, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;function g(...ys:[].<uint8>,label:string){entered++;return String(ys.length);}function f(ref ...xs:[].<uint8>){return g(...xs,label:\"ok\");}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct named ref rest, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;function g(ref ...ys:[].<uint8>,label:string){entered++;return String(ys.length);}function f(ref ...xs:[].<uint8>){return g(...xs,label:\"ok\");}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct named ref rest, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;function g(ref ...ys:[].<uint8>,label:string){entered++;return String(ys.length);}function f(ref ...xs:[].<uint8>){return g(...xs,label:\"ok\");}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any positional value rest, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;function g(...ys:[].<uint8>){entered++;return String(ys.length);}const h:any=g;function f(ref ...xs:[].<uint8>){return h(...xs);}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any positional value rest, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;function g(...ys:[].<uint8>){entered++;return String(ys.length);}const h:any=g;function f(ref ...xs:[].<uint8>){return h(...xs);}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any positional ref rest, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;function g(ref ...ys:[].<uint8>){entered++;return String(ys.length);}const h:any=g;function f(ref ...xs:[].<uint8>){return h(...xs);}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any positional ref rest, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;function g(ref ...ys:[].<uint8>){entered++;return String(ys.length);}const h:any=g;function f(ref ...xs:[].<uint8>){return h(...xs);}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any named value rest, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;function g(...ys:[].<uint8>,label:string){entered++;return String(ys.length);}const h:any=g;function f(ref ...xs:[].<uint8>){return h(...xs,label:\"ok\");}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any named value rest, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;function g(...ys:[].<uint8>,label:string){entered++;return String(ys.length);}const h:any=g;function f(ref ...xs:[].<uint8>){return h(...xs,label:\"ok\");}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any named ref rest, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;function g(ref ...ys:[].<uint8>,label:string){entered++;return String(ys.length);}const h:any=g;function f(ref ...xs:[].<uint8>){return h(...xs,label:\"ok\");}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any named ref rest, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;function g(ref ...ys:[].<uint8>,label:string){entered++;return String(ys.length);}const h:any=g;function f(ref ...xs:[].<uint8>){return h(...xs,label:\"ok\");}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional positional value rest, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;function g(...ys:[].<uint8>){entered++;return String(ys.length);}const h:any=g;function f(ref ...xs:[].<uint8>){return h?.(...xs);}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional positional value rest, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;function g(...ys:[].<uint8>){entered++;return String(ys.length);}const h:any=g;function f(ref ...xs:[].<uint8>){return h?.(...xs);}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional positional ref rest, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;function g(ref ...ys:[].<uint8>){entered++;return String(ys.length);}const h:any=g;function f(ref ...xs:[].<uint8>){return h?.(...xs);}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional positional ref rest, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;function g(ref ...ys:[].<uint8>){entered++;return String(ys.length);}const h:any=g;function f(ref ...xs:[].<uint8>){return h?.(...xs);}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional named value rest, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;function g(...ys:[].<uint8>,label:string){entered++;return String(ys.length);}const h:any=g;function f(ref ...xs:[].<uint8>){return h?.(...xs,label:\"ok\");}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional named value rest, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;function g(...ys:[].<uint8>,label:string){entered++;return String(ys.length);}const h:any=g;function f(ref ...xs:[].<uint8>){return h?.(...xs,label:\"ok\");}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional named ref rest, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;function g(ref ...ys:[].<uint8>,label:string){entered++;return String(ys.length);}const h:any=g;function f(ref ...xs:[].<uint8>){return h?.(...xs,label:\"ok\");}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional named ref rest, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;function g(ref ...ys:[].<uint8>,label:string){entered++;return String(ys.length);}const h:any=g;function f(ref ...xs:[].<uint8>){return h?.(...xs,label:\"ok\");}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "member positional value rest, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;function g(...ys:[].<uint8>){entered++;return String(ys.length);}const obj={g};function f(ref ...xs:[].<uint8>){return obj.g(...xs);}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "member positional value rest, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;function g(...ys:[].<uint8>){entered++;return String(ys.length);}const obj={g};function f(ref ...xs:[].<uint8>){return obj.g(...xs);}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "member positional ref rest, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;function g(ref ...ys:[].<uint8>){entered++;return String(ys.length);}const obj={g};function f(ref ...xs:[].<uint8>){return obj.g(...xs);}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "member positional ref rest, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;function g(ref ...ys:[].<uint8>){entered++;return String(ys.length);}const obj={g};function f(ref ...xs:[].<uint8>){return obj.g(...xs);}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "member named value rest, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;function g(...ys:[].<uint8>,label:string){entered++;return String(ys.length);}const obj={g};function f(ref ...xs:[].<uint8>){return obj.g(...xs,label:\"ok\");}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "member named value rest, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;function g(...ys:[].<uint8>,label:string){entered++;return String(ys.length);}const obj={g};function f(ref ...xs:[].<uint8>){return obj.g(...xs,label:\"ok\");}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "member named ref rest, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;function g(ref ...ys:[].<uint8>,label:string){entered++;return String(ys.length);}const obj={g};function f(ref ...xs:[].<uint8>){return obj.g(...xs,label:\"ok\");}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "member named ref rest, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;function g(ref ...ys:[].<uint8>,label:string){entered++;return String(ys.length);}const obj={g};function f(ref ...xs:[].<uint8>){return obj.g(...xs,label:\"ok\");}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor positional ref=False, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;class C {constructor(...ys:[].<uint8>){entered++;}}function f(ref ...xs:[].<uint8>){new C(...xs);return \"ok\";}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor positional ref=False, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;class C {constructor(...ys:[].<uint8>){entered++;}}function f(ref ...xs:[].<uint8>){new C(...xs);return \"ok\";}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor named ref=False, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;class C {constructor(...ys:[].<uint8>,label:string){entered++;}}function f(ref ...xs:[].<uint8>){new C(...xs,label:\"ok\");return \"ok\";}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor named ref=False, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;class C {constructor(...ys:[].<uint8>,label:string){entered++;}}function f(ref ...xs:[].<uint8>){new C(...xs,label:\"ok\");return \"ok\";}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor positional ref=True, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;class C {constructor(ref ...ys:[].<uint8>){entered++;}}function f(ref ...xs:[].<uint8>){new C(...xs);return \"ok\";}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor positional ref=True, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;class C {constructor(ref ...ys:[].<uint8>){entered++;}}function f(ref ...xs:[].<uint8>){new C(...xs);return \"ok\";}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor named ref=True, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;class C {constructor(ref ...ys:[].<uint8>,label:string){entered++;}}function f(ref ...xs:[].<uint8>){new C(...xs,label:\"ok\");return \"ok\";}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor named ref=True, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;class C {constructor(ref ...ys:[].<uint8>,label:string){entered++;}}function f(ref ...xs:[].<uint8>){new C(...xs,label:\"ok\");return \"ok\";}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty boundary before",
+      "steps": [
+        {
+          "source": "let entered=0;function g(head:string,ref ...ys:[].<uint8>,label:string=\"L\"){entered++;return \"ok\";}function f(ref ...xs:[].<uint8>){let a:uint8=1;return g(...xs,\"s\",ref a);}let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty boundary at rest start",
+      "steps": [
+        {
+          "source": "let entered=0;function g(head:string,ref ...ys:[].<uint8>,label:string=\"L\"){entered++;return \"ok\";}function f(ref ...xs:[].<uint8>){let a:uint8=1;return g(\"s\",...xs,ref a);}let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty boundary at rest end",
+      "steps": [
+        {
+          "source": "let entered=0;function g(head:string,ref ...ys:[].<uint8>,label:string=\"L\"){entered++;return \"ok\";}function f(ref ...xs:[].<uint8>){let a:uint8=1;return g(\"s\",ref a,...xs);}let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty boundary after fixed name",
+      "steps": [
+        {
+          "source": "let entered=0;function g(head:string,ref ...ys:[].<uint8>,label:string=\"L\"){entered++;return \"ok\";}function f(ref ...xs:[].<uint8>){let a:uint8=1;return g(\"s\",ref a,label:\"L\",...xs);}let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty at named rest ref=False",
+      "steps": [
+        {
+          "source": "let entered=0;function g(...ys:[].<uint8>){entered++;return String(ys.length);}function f(ref ...xs:[].<uint8>){let a:uint8=1;return g(ys:a,...xs);}let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary empty iterable into value rest",
+      "steps": [
+        {
+          "source": "let entered=0;function g(...ys:[].<uint8>){entered++;return String(ys.length);}function f(){return g(...[]);}let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary explicit borrow decays at value rest",
+      "steps": [
+        {
+          "source": "let entered=0;function g(...ys:[].<uint8>){entered++;return String(ys.length);}function f(){let a:uint8=1;return g(ref a);}let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty run does not synthesize undefined for a ref tuple",
+      "steps": [
+        {
+          "source": "let entered=0;function g(ref ...ys:[uint8]){entered++;return \"bad\";}const h:any=g;function f(ref ...xs:[].<uint8>){return h(...xs);}let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two empty occurrences preserve zero length",
+      "steps": [
+        {
+          "source": "let entered=0;function g(ref ...ys:[].<uint8>){entered++;return String(ys.length);}function f(ref ...xs:[].<uint8>){return g(...xs,...xs);}let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty forwarded to zero-parameter function",
+      "steps": [
+        {
+          "source": "let entered=0;function g(){entered++;return \"bad\";}function f(ref ...xs:[].<uint8>){return g(...xs);}let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflective builtin is not a ref rest",
+      "steps": [
+        {
+          "source": "let entered=0;function g(ref ...ys:[].<uint8>){entered++;return \"bad\";}function f(ref ...xs:[].<uint8>){return g.call(null,...xs);}let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty occurrence preserves all argument effects",
+      "steps": [
+        {
+          "source": "let effects=\"\";let entered=0;function g(...ys:[].<uint8>,label:string){entered++;return \"bad\";}function f(ref ...xs:[].<uint8>){return g(...(effects+=\"A\",[]),...xs,label:(effects+=\"B\",\"L\"));}let out=\"ok\";try{f();}catch(e){out=e.name;}out+\"/\"+effects+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/AB/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "argument throw precedes forwarding failure",
+      "steps": [
+        {
+          "source": "let entered=0;function g(...ys:[].<uint8>,label:string){entered++;}function fail(){throw new Error(\"argument\");}function f(ref ...xs:[].<uint8>){g(...xs,label:fail());}let out=\"missed\";try{f();}catch(e){out=e.message;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "argument/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty failure precedes parameter initializer",
+      "steps": [
+        {
+          "source": "let effects=0;function g(...ys:[].<uint8>,label:string=(effects++,\"L\")){}function f(ref ...xs:[].<uint8>){g(...xs);}let out=\"missed\";try{f();}catch(e){out=e.name;}out+\"/\"+effects;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty valid forwarding preserves initializer and arguments count",
+      "steps": [
+        {
+          "source": "let effects=0;function g(ref ...ys:[].<uint8>,label:string=(effects++,\"L\")){return String(ys.length)+\"/\"+label;}function f(ref ...xs:[].<uint8>){return g(...xs);}f()+\"/\"+effects;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/L/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nonempty run preserves write through",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>){ys[0]=9;}function f(ref ...xs:[].<uint8>){g(...xs);}let a:uint8=1;f(ref a);String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "view permits individual ref implementation",
+      "steps": [
+        {
+          "source": "function apply2<...Cs: [].<type>>(cb: (ref ...xs: Cs) => void, ref ...xs: Cs): void { cb(...xs); } let a: uint32 = 1; apply2((ref x: uint32) => { x = 5; }, ref a); String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty view permits zero-parameter implementation",
+      "steps": [
+        {
+          "source": "function apply2<...Cs: [].<type>>(cb: (ref ...xs: Cs) => string, ref ...xs: Cs): string { return cb(...xs); } apply2(()=>\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named view permits individual ref implementation",
+      "steps": [
+        {
+          "source": "function apply2(cb: (ref ...xs: [uint8], label:string) => string, ref ...xs: [uint8]): string { return cb(...xs,label:\"ok\"); } let a:uint8=1;apply2((ref x:uint8,label:string)=>{x=2;return label;},ref a)+\"/\"+a;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty overload selects forwarding-compatible candidate",
+      "steps": [
+        {
+          "source": "function g(...xs:[].<uint8>):number{return 1;}function g(ref ...xs:[].<uint8>):string{return \"ref\";}const h:any=g;function f(ref ...xs:[].<uint8>){return h(...xs);}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ref"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty named overload selects forwarding-compatible candidate",
+      "steps": [
+        {
+          "source": "function g(...xs:[].<uint8>,label:string):number{return 1;}function g(ref ...xs:[].<uint8>,label:string):string{return \"ref\";}const h:any=g;function f(ref ...xs:[].<uint8>){return h(...xs,label:\"L\");}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ref"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed forwarding does not contaminate later call",
+      "steps": [
+        {
+          "source": "function g(...ys:[].<uint8>){return \"ok\";}function f(ref ...xs:[].<uint8>){try{g(...xs);}catch(e){}return g();}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested call cannot steal forwarding occurrence",
+      "steps": [
+        {
+          "source": "function g(...ys:[].<uint8>,label:string){return \"bad\";}function h(ref ...ys:[].<uint8>){return \"ok\";}function f(ref ...xs:[].<uint8>){let out=\"missed\";try{g(...xs,label:h(...xs));}catch(e){out=e.name;}return out+\"/\"+h(...xs);}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "positional forwarding preserves actual arguments length",
+      "steps": [
+        {
+          "source": "function g(ref ...xs:[].<uint8>,label:string=\"L\"){return String(arguments.length)+\"/\"+label;}function f(ref ...xs:[].<uint8>){return g(...xs);}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/L"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overload positional forwarding preserves actual arguments length",
+      "steps": [
+        {
+          "source": "function g(ref ...xs:[].<uint8>,label:string=\"L\"):string{return String(arguments.length)+\"/\"+label;}function g(...xs:[].<uint8>,label:string=\"L\"):number{return 1;}const h:any=g;function f(ref ...xs:[].<uint8>){return h(...xs);}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/L"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forwarded location after initializer, reserved=False",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];let entered=0;function change():string{a.reserve(32);return \"p\";}function g(prefix:string=change(),ref ...ys:[].<uint8>){entered++;return String(ys[0]);}function f(ref ...xs:[].<uint8>){return g(...xs);}let out=\"missed\";try{out=f(ref a[0]);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forwarded location after initializer, reserved=True",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];a.reserve(64);let entered=0;function change():string{a.reserve(32);return \"p\";}function g(prefix:string=change(),ref ...ys:[].<uint8>){entered++;return String(ys[0]);}function f(ref ...xs:[].<uint8>){return g(...xs);}let out=\"missed\";try{out=f(ref a[0]);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct fixed ref is not a forwarding view",
+      "steps": [
+        {
+          "source": "let entered=0;function g(ref y:uint8){entered++;return \"bad\";}const h:any=g;function f(ref ...xs:[].<uint8>){return h(...xs);}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty ordinary rest view rejects forwarding",
+      "steps": [
+        {
+          "source": "let entered=0;const view:(...ys:[])=>string=()=>{entered++;return \"bad\";};function f(ref ...xs:[]){return view(...xs);}let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored generic reference-rest specialization",
+      "steps": [
+        {
+          "source": "function g<T:type>(ref ...ys:[].<T>):string{return String(ys.length);}const h=g.<uint8>;function f(ref ...xs:[].<uint8>){return h(...xs);}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored generic value-rest specialization",
+      "steps": [
+        {
+          "source": "let entered=0;function g<T:type>(...ys:[].<T>):string{entered++;return \"bad\";}const h=g.<uint8>;function f(ref ...xs:[].<uint8>){return h(...xs);}let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nullish optional call skips forwarding",
+      "steps": [
+        {
+          "source": "const h:any=null;function f(ref ...xs:[].<uint8>){return h?.(...xs);}String(f());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reversed overload order preserves forwarding choice",
+      "steps": [
+        {
+          "source": "function g(ref ...xs:[].<uint8>):string{return \"ref\";}function g(...xs:[].<uint8>):number{return 1;}const h:any=g;function f(ref ...xs:[].<uint8>){return h(...xs);}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ref"
+          }
+        }
+      ]
+    },
+    {
+      "name": "property callable view length 0",
+      "steps": [
+        {
+          "source": "const obj:{cb:(ref ...xs:[])=>string}={cb:()=>\"ok\"};function f(ref ...xs:[].<uint8>){return obj.cb(...xs);}let a:uint8=1;f()+\"/\"+a;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "property callable view length 1",
+      "steps": [
+        {
+          "source": "const obj:{cb:(ref ...xs:[uint8])=>string}={cb:(ref x:uint8)=>{x=2;return \"ok\";}};function f(ref ...xs:[].<uint8>){return obj.cb(...xs);}let a:uint8=1;f(ref a)+\"/\"+a;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty occurrence constrains optional prefix distribution",
+      "steps": [
+        {
+          "source": "function g(first:string=\"d\",ref ...ys:[].<uint8>,last:string=\"t\"){return first+\"/\"+last+\"/\"+ys.length+\"/\"+arguments.length;}function f(ref ...xs:[].<uint8>){return g(...xs,\"L\");}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "d/L/0/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary empty iterable does not constrain prefix distribution",
+      "steps": [
+        {
+          "source": "function g(first:string=\"d\",ref ...ys:[].<uint8>,last:string=\"t\"){return first+\"/\"+last+\"/\"+ys.length;}g(...[],\"L\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "L/t/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "separate empty boundaries reach separate rests",
+      "steps": [
+        {
+          "source": "function g(ref ...a:[].<uint8>,middle:string,ref ...b:[].<uint8>){return a.length+\"/\"+middle+\"/\"+b.length;}function f(ref ...xs:[].<uint8>){return g(...xs,\"m\",...xs);}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/m/0"
+          }
+        }
+      ]
+    }
+  ]
+}

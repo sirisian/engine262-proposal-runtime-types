@@ -1,3 +1,4 @@
+import { BindCallArgumentItems } from '../runtime-semantics/ArgumentListEvaluation.mts';
 import {
   Descriptor,
   JSStringValue, BooleanValue,
@@ -20,6 +21,7 @@ import {
 import { __ts_cast__, isArray } from '../utils/language.mts';
 import { isBoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
+import { NamedCallItemsOf } from './named-call.mts';
 import {
   surroundingAgent,
 } from '#self';
@@ -234,6 +236,10 @@ export function* Call(F: Value, V: Value, argumentsList: Arguments = []): ValueE
     Assert(resumption.resume === 'debugger');
   }
 
+  const items = NamedCallItemsOf(argumentsList);
+  if (items && !(F as { OverloadFunctions?: readonly Value[] }).OverloadFunctions?.length) {
+    argumentsList = Q(yield* BindCallArgumentItems(items, F));
+  }
   return EnsureCompletion(Q(yield* F.Call(V, argumentsList)));
 }
 
@@ -244,6 +250,10 @@ export function* Construct(F: FunctionObject, argumentsList: Arguments = [], new
   }
   Assert(IsConstructor(F));
   Assert(IsConstructor(newTarget));
+  const items = NamedCallItemsOf(argumentsList);
+  if (items && !(F as { OverloadFunctions?: readonly Value[] }).OverloadFunctions?.length) {
+    argumentsList = Q(yield* BindCallArgumentItems(items, F));
+  }
   return Q(yield* F.Construct(argumentsList, newTarget));
 }
 

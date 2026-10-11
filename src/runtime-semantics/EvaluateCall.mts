@@ -8,8 +8,10 @@ import { wrapToType } from '../type-system/arithmetic.mts';
 import { isTypeObject } from '../type-system/intern.mts';
 import { substituteTypeParameters, type TypeRecord } from '../type-system/records.mts';
 import { TakeStaticCallResolution, CallReceiverTypeOf, SelfThisTypeRecord } from '../type-system/check.mts';
+import { DeclaredReferenceLocationType } from '../abstract-ops/argument-distribution.mts';
+import { NamedCallArguments, NamedCallItemsOf } from '../abstract-ops/named-call.mts';
 import { ArgumentListEvaluation, ArgumentListEvaluationNamed, hasNamedArguments } from './all.mts';
-import { signaturesInView } from './ArgumentListEvaluation.mts';
+import { signaturesInView, BindCallArgumentItems } from './ArgumentListEvaluation.mts';
 import {
   Assert,
   IsPropertyReference,
@@ -65,13 +67,10 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
   // and the arguments are mapped to positions. Defaults in the declared
   // function type use the same binder even for a positional call.
   let signature;
-  if (surroundingAgent.feature('runtime-types') && Array.isArray(args)
-      && ref instanceof ReferenceRecord && ref.Base instanceof EnvironmentRecord) {
-    const holder = ref.Base as unknown as { bindings?: { get(n: unknown): { declaredType?: unknown } | undefined }, DeclarativeRecord?: { bindings?: { get(n: unknown): { declaredType?: unknown } | undefined } } };
-    const binding = holder.bindings?.get(ref.ReferencedName) ?? holder.DeclarativeRecord?.bindings?.get(ref.ReferencedName);
-    if (binding?.declaredType !== undefined) {
-      signature = signaturesInView(binding.declaredType);
-    }
+  if (surroundingAgent.feature('runtime-types') && Array.isArray(args) && ref instanceof ReferenceRecord) {
+    // A typed property can carry the same callable view as a lexical binding.
+    // Read its declared storage contract without another property Get.
+    signature = signaturesInView(DeclaredReferenceLocationType(ref));
   }
   const argsIsNamed = surroundingAgent.feature('runtime-types')
     && Array.isArray(args) && (hasNamedArguments(args as ParseNode.Arguments)
@@ -91,7 +90,8 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     : undefined;
   let argList;
   if (evaluatedArguments) {
-    argList = [...evaluatedArguments];
+    const items = NamedCallItemsOf(evaluatedArguments);
+    argList = items ? NamedCallArguments(items) : [...evaluatedArguments];
   } else if (conversionContext !== undefined && Array.isArray(args)) {
     // Keyed on the ARGUMENT EXPRESSION, because `contextualTypeFor` is asked for
     // a call node: the inner `f()` in `uint32(f())` looks itself up, not the
@@ -155,6 +155,10 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
     // Each callable view or actual overload binds the once-evaluated source
     // items against its own names. The dispatcher retains the winning map.
     argList = Q(yield* ArgumentListEvaluationNamed(args as ParseNode.Arguments, func, signature, callContext));
+  }
+  if (!argsIsNamed && signature && argList) {
+    const items = NamedCallItemsOf(argList);
+    if (items) argList = Q(yield* BindCallArgumentItems(items, func, signature, callContext));
   }
   // #sec-this-adoption: enforce a typed call's receiver view even when the
   // function value reached that view through an erased boundary.

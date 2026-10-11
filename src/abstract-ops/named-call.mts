@@ -28,7 +28,8 @@ export function NamedParameterCountsOf(args: readonly Value[], target: Value): r
 
 /** Materialize only the selected candidate's groups, preserving original values. */
 export function SelectedNamedArguments(target: Value, parameters: readonly ParameterRecord[], args: readonly Value[], groups: readonly number[][]): Arguments {
-  const values = groups.map((group, i) => group.length === 0 && !parameters[i].Rest
+  const positionalForwarding = argumentItems.has(args) && !argumentItems.get(args)!.some((item) => item.name !== undefined);
+  const values = groups.map((group, i) => group.length === 0 && !parameters[i].Rest && !positionalForwarding
     ? [Value.undefined] : group.map((index) => args[index]));
   const result = values.flat() as Arguments;
   SetNamedParameterCounts(result, target, values.map((group) => group.length));
