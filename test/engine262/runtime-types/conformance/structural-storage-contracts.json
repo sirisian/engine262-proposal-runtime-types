@@ -1,0 +1,951 @@
+{
+  "cases": [
+    {
+      "name": "object union backing borrow (1:=uint8)",
+      "steps": [
+        {
+          "source": "type S={x:uint8|string};let entered=0;function borrow(ref ...xs:[uint8]):string{entered++;xs[0]=2;return \"entered\";}const call:any=borrow;let a:S={x:(1:=uint8)};let result=\"missed\";try{result=call(ref a.x);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object union backing borrow \"s\"",
+      "steps": [
+        {
+          "source": "type S={x:uint8|string};let entered=0;function borrow(ref ...xs:[uint8]):string{entered++;xs[0]=2;return \"entered\";}const call:any=borrow;let a:S={x:\"s\"};let result=\"missed\";try{result=call(ref a.x);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "interface union backing borrow (1:=uint8)",
+      "steps": [
+        {
+          "source": "interface S{x:uint8|string;}let entered=0;function borrow(ref ...xs:[uint8]):string{entered++;xs[0]=2;return \"entered\";}const call:any=borrow;let a:S={x:(1:=uint8)};let result=\"missed\";try{result=call(ref a.x);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "interface union backing borrow \"s\"",
+      "steps": [
+        {
+          "source": "interface S{x:uint8|string;}let entered=0;function borrow(ref ...xs:[uint8]):string{entered++;xs[0]=2;return \"entered\";}const call:any=borrow;let a:S={x:\"s\"};let result=\"missed\";try{result=call(ref a.x);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binding stored contract initial=(1:=uint8)",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8),y:\"y\"};let a:{x:uint8}=raw;let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binding stored contract initial=1",
+      "steps": [
+        {
+          "source": "let raw:any={x:1,y:\"y\"};let a:{x:uint8}=raw;let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "parameter stored contract initial=(1:=uint8)",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8),y:\"y\"};function accept(a:{x:uint8}):void{}accept(raw);let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "parameter stored contract initial=1",
+      "steps": [
+        {
+          "source": "let raw:any={x:1,y:\"y\"};function accept(a:{x:uint8}):void{}accept(raw);let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "return stored contract initial=(1:=uint8)",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8),y:\"y\"};function produce():{x:uint8}{return raw;}let a=produce();let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "return stored contract initial=1",
+      "steps": [
+        {
+          "source": "let raw:any={x:1,y:\"y\"};function produce():{x:uint8}{return raw;}let a=produce();let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "field stored contract initial=(1:=uint8)",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8),y:\"y\"};class C{a:{x:uint8}=raw;}new C();let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "field stored contract initial=1",
+      "steps": [
+        {
+          "source": "let raw:any={x:1,y:\"y\"};class C{a:{x:uint8}=raw;}new C();let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "assignment stored contract initial=(1:=uint8)",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8),y:\"y\"};let a:{x:uint8}={x:0};a=raw;let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "assignment stored contract initial=1",
+      "steps": [
+        {
+          "source": "let raw:any={x:1,y:\"y\"};let a:{x:uint8}={x:0};a=raw;let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested stored contract initial=(1:=uint8)",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8),y:\"y\"};let a:{inner:{x:uint8}}={inner:raw};let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested stored contract initial=1",
+      "steps": [
+        {
+          "source": "let raw:any={x:1,y:\"y\"};let a:{inner:{x:uint8}}={inner:raw};let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "array stored contract initial=(1:=uint8)",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8),y:\"y\"};let a:[].<{x:uint8}>=[raw];let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "array stored contract initial=1",
+      "steps": [
+        {
+          "source": "let raw:any={x:1,y:\"y\"};let a:[].<{x:uint8}>=[raw];let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple stored contract initial=(1:=uint8)",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8),y:\"y\"};let a:[{x:uint8}]=[raw];let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple stored contract initial=1",
+      "steps": [
+        {
+          "source": "let raw:any={x:1,y:\"y\"};let a:[{x:uint8}]=[raw];let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple rest stored contract initial=(1:=uint8)",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8),y:\"y\"};let a:[...[].<{x:uint8}>]=[raw];let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple rest stored contract initial=1",
+      "steps": [
+        {
+          "source": "let raw:any={x:1,y:\"y\"};let a:[...[].<{x:uint8}>]=[raw];let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union stored contract initial=(1:=uint8)",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8),y:\"y\"};let a:{x:uint8}|string=raw;let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union stored contract initial=1",
+      "steps": [
+        {
+          "source": "let raw:any={x:1,y:\"y\"};let a:{x:uint8}|string=raw;let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersection stored contract initial=(1:=uint8)",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8),y:\"y\"};let a:{x:uint8}&{y:string}=raw;let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersection stored contract initial=1",
+      "steps": [
+        {
+          "source": "let raw:any={x:1,y:\"y\"};let a:{x:uint8}&{y:string}=raw;let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic interface stored contract initial=(1:=uint8)",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8),y:\"y\"};interface I<T:type>{x:T;}let a:I.<uint8>=raw;let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic interface stored contract initial=1",
+      "steps": [
+        {
+          "source": "let raw:any={x:1,y:\"y\"};interface I<T:type>{x:T;}let a:I.<uint8>=raw;let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "enforced raw.x=bad",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8)};let a:{x:uint8}=raw;let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "enforced Reflect.set(raw,\"x\",bad)",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8)};let a:{x:uint8}=raw;let bad:any=\"bad\";let result=\"missed\";try{Reflect.set(raw,\"x\",bad);}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "enforced Object.defineProperty(raw,\"x\",{value:bad})",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8)};let a:{x:uint8}=raw;let bad:any=\"bad\";let result=\"missed\";try{Object.defineProperty(raw,\"x\",{value:bad});}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "enforced Reflect.defineProperty(raw,\"x\",{value:bad})",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8)};let a:{x:uint8}=raw;let bad:any=\"bad\";let result=\"missed\";try{Reflect.defineProperty(raw,\"x\",{value:bad});}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "enforced delete raw.x",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8)};let a:{x:uint8}=raw;let bad:any=\"bad\";let result=\"missed\";try{delete raw.x;}catch(e){result=e.name;}result+\"/\"+String(raw.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "narrow backing survives readonly wider view",
+      "steps": [
+        {
+          "source": "let entered=0;function borrow(ref ...xs:[uint8]):string{entered++;xs[0]=2;return \"entered\";}const call:any=borrow;let a:{x:uint8}={x:(1:=uint8)};let w:{readonly x:uint8|string}=a;let erased:any=w;call(ref erased.x)+\"/\"+String(a.x)+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "entered/2/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide backing survives readonly narrow view",
+      "steps": [
+        {
+          "source": "let entered=0;function borrow(ref ...xs:[uint8]):string{entered++;xs[0]=2;return \"entered\";}const call:any=borrow;let a:{x:uint8|string}={x:(1:=uint8)};let raw:any=a;let n:{readonly x:uint8}=raw;let result=\"missed\";try{result=call(ref raw.x);}catch(e){result=e.name;}let s:any=\"s\";raw.x=s;result+\"/\"+String(entered)+\"/\"+raw.x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "readonly is a view not frozen backing",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8)};let a:{readonly x:uint8}=raw;let v:any=2;raw.x=v;String(a.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "is does not acquire storage",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8)};let answer=raw is {x:uint8};raw.x=\"changed\";String(answer)+\"/\"+raw.x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/changed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "instanceof does not acquire storage",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8)};let answer=raw instanceof (type {x:uint8});raw.x=\"changed\";String(answer)+\"/\"+raw.x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/changed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "getter is not reread for metadata",
+      "steps": [
+        {
+          "source": "let reads=0;let raw:any={get x(){reads++;return (1:=uint8);}};let a:{x:uint8}=raw;String(reads);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested getter is not reread",
+      "steps": [
+        {
+          "source": "let reads=0;let child:any={x:(1:=uint8)};let raw:any={get inner(){reads++;return child;}};let a:{inner:{x:uint8}}=raw;let bad:any=\"bad\";let result=\"missed\";try{child.x=bad;}catch(e){result=e.name;}String(reads)+\"/\"+result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed membership does not publish partial nested evidence",
+      "steps": [
+        {
+          "source": "let child:any={x:(1:=uint8)};let raw:any={inner:child,get fail(){throw new Error(\"stop\");}};try{let a:{inner:{x:uint8},fail:string}=raw;}catch(e){}child.x=\"changed\";child.x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "changed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed union alternative leaves no contract",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8),tag:\"yes\"};let a:{x:uint8,tag:boolean}|{x:uint8|string,tag:string}=raw;raw.x=\"changed\";raw.x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "changed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "absent optional does not materialize",
+      "steps": [
+        {
+          "source": "let raw:any={};let a:{x?:uint8}=raw;String(Object.keys(raw).length);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity prototype extras retained",
+      "steps": [
+        {
+          "source": "let proto={};let raw:any=Object.create(proto);raw.x=(1:=uint8);raw.extra=\"ok\";let a:{x:uint8}=raw;String(a===raw)+\"/\"+String(Object.getPrototypeOf(a)===proto)+\"/\"+a.extra;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "index member contract acquired",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8)};let a:{[k:string]:uint8}=raw;let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named member takes precedence over index signature",
+      "steps": [
+        {
+          "source": "let raw:any={x:\"ok\",other:(1:=uint8)};let a:{x:string,[k:string]:uint8}=raw;raw.x=\"yes\";let bad:any=\"bad\";let result=\"missed\";try{raw.other=bad;}catch(e){result=e.name;}raw.x+\"/\"+result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "yes/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "symbol property reference uses backing contract",
+      "steps": [
+        {
+          "source": "const key=Symbol(\"x\");let raw:any={};Object.defineProperty(raw,key,{type:type uint8|string,value:(1:=uint8),writable:true});let entered=0;function borrow(ref ...xs:[uint8]):string{entered++;xs[0]=2;return \"entered\";}const call:any=borrow;let result=\"missed\";try{result=call(ref raw[key]);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "positive typed writes (1:=uint8)",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8)};let a:{x:uint8}=raw;let next:any=2;Reflect.set(raw,\"x\",next);String(a.x)+\"/\"+String(a===raw);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "positive typed writes 1",
+      "steps": [
+        {
+          "source": "let raw:any={x:1};let a:{x:uint8}=raw;let next:any=2;Reflect.set(raw,\"x\",next);String(a.x)+\"/\"+String(a===raw);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "exact backing positive 49",
+      "steps": [
+        {
+          "source": "let entered=0;function borrow(ref ...xs:[uint8]):string{entered++;xs[0]=2;return \"entered\";}const call:any=borrow;let raw:any={x:(1:=uint8)};let a:{x:uint8}=raw;call(ref raw.x)+\"/\"+String(raw.x)+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "entered/2/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "exact backing positive 50",
+      "steps": [
+        {
+          "source": "let entered=0;function borrow(ref ...xs:[uint8]):string{entered++;xs[0]=2;return \"entered\";}const call:any=borrow;let raw:any={x:1};let a:{x:uint8}=raw;call(ref raw.x)+\"/\"+String(raw.x)+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "entered/2/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "exact backing positive 51",
+      "steps": [
+        {
+          "source": "let entered=0;function borrow(ref ...xs:[uint8]):string{entered++;xs[0]=2;return \"entered\";}const call:any=borrow;let raw:any={(x:uint8):1};let a:{readonly x:uint8|string}=raw;call(ref raw.x)+\"/\"+String(raw.x)+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "entered/2/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "exact backing positive 52",
+      "steps": [
+        {
+          "source": "let entered=0;function borrow(ref ...xs:[uint8]):string{entered++;xs[0]=2;return \"entered\";}const call:any=borrow;let raw:any={};Object.defineProperty(raw,\"x\",{type:uint8,value:(1:=uint8),writable:true});let a:{readonly x:uint8|string}=raw;call(ref raw.x)+\"/\"+String(raw.x)+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "entered/2/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overload union backing positional reverse=False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]):string{return \"narrow\";}function f(ref ...xs:[uint8|string]):string{xs[0]=\"ok\";return \"wide\";}let raw:any={x:(1:=uint8)};let a:{x:uint8|string}=raw;const call:any=f;call(ref raw.x)+\"/\"+raw.x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "wide/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overload union backing named reverse=False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8],label:string):string{return \"narrow\";}function f(ref ...xs:[uint8|string],label:string):string{xs[0]=\"ok\";return \"wide\";}let raw:any={x:(1:=uint8)};let a:{x:uint8|string}=raw;const call:any=f;call(ref raw.x,label:\"l\")+\"/\"+raw.x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "wide/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overload union backing positional reverse=True",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8|string]):string{xs[0]=\"ok\";return \"wide\";}function f(ref ...xs:[uint8]):string{return \"narrow\";}let raw:any={x:(1:=uint8)};let a:{x:uint8|string}=raw;const call:any=f;call(ref raw.x)+\"/\"+raw.x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "wide/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overload union backing named reverse=True",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8|string],label:string):string{xs[0]=\"ok\";return \"wide\";}function f(ref ...xs:[uint8],label:string):string{return \"narrow\";}let raw:any={x:(1:=uint8)};let a:{x:uint8|string}=raw;const call:any=f;call(ref raw.x,label:\"l\")+\"/\"+raw.x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "wide/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "an ordinary untyped property stays dynamic",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8)};raw.x=\"changed\";raw.x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "changed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "frozen compatible object crosses without a write",
+      "steps": [
+        {
+          "source": "let raw:any=Object.freeze({x:(1:=uint8)});let a:{x:uint8}=raw;String(a===raw)+\"/\"+String(a.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "accessor replacement is refused after acquisition",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8)};let a:{x:uint8}=raw;let result=\"missed\";try{Object.defineProperty(raw,\"x\",{get(){return \"bad\";}});}catch(e){result=e.name;}result+\"/\"+String(a.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested pure membership does not acquire",
+      "steps": [
+        {
+          "source": "let child:any={x:(1:=uint8)};let raw:any={inner:child};let result=raw is {inner:{x:uint8}};child.x=\"changed\";String(result)+\"/\"+child.x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/changed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union choice does not reread getter",
+      "steps": [
+        {
+          "source": "let reads=0;let raw:any={get x(){reads++;return (1:=uint8);}};let a:{x:uint8}|string=raw;String(reads);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested acquired branch of tuple rest",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8)};let list:any=[\"s\",raw];let a:[...[].<string>,{x:uint8}]=list;let bad:any=\"bad\";let result=\"missed\";try{raw.x=bad;}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed nested value and fresh script cleanup",
+      "steps": [
+        {
+          "source": "let child:any={x:(1:=uint8)};let raw:any={inner:child,get fail(){throw new Error(\"stop\");}};try{let a:{inner:{x:uint8},fail:string}=raw;}catch(e){}child.x=\"changed\";child.x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "changed"
+          }
+        },
+        {
+          "source": "let clean:any={x:(1:=uint8)};let typed:{x:uint8}=clean;let rejected=\"missed\";let bad:any=\"bad\";try{clean.x=bad;}catch(e){rejected=e.name;}rejected;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit structural acquisition operator",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8)};let typed=raw := {x:uint8};let result=\"missed\";let bad:any=\"bad\";try{raw.x=bad;}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit structural acquisition Type Object",
+      "steps": [
+        {
+          "source": "let raw:any={x:(1:=uint8)};let typed=(type {x:uint8})(raw);let result=\"missed\";let bad:any=\"bad\";try{raw.x=bad;}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "parameter return preserves getter elision",
+      "steps": [
+        {
+          "source": "let reads=0;const raw={get x(){reads++;return (1:=uint8);}};function f(value:{readonly x:uint8}):{readonly x:uint8}{reads=0;return value;}f(raw);String(reads);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    }
+  ]
+}

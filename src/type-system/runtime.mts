@@ -3780,7 +3780,24 @@ function* CompleteCallableConstraints(type: TypeRecord, runtimeEnvironment = fal
   }
 }
 
-export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> {
+/** Successful structural membership can supply boundary-owned storage evidence.
+ * Pure membership callers omit the collector and never acquire contracts. */
+export type StructuralStorageAdmission = { object: ObjectValue, key: string | SymbolValue, type: TypeRecord };
+
+export function* IsOfType(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[]): PlainEvaluator<boolean> {
+  if (!storage) return yield* IsOfTypeWithStorage(value, t);
+  const checkpoint = storage.length;
+  let admitted = false;
+  try {
+    admitted = Q(yield* IsOfTypeWithStorage(value, t, storage));
+    return admitted;
+  } finally {
+    // Failed alternatives and abrupt checks publish no speculative contracts.
+    if (!admitted) storage.length = checkpoint;
+  }
+}
+
+function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[]): PlainEvaluator<boolean> {
   // proposal-runtime-types #sec-references-and-borrowing: a Reference Value is
   // of a `ref T` when the storage it borrows currently holds a T. The check
   // reads through to the referent rather than testing the reference itself,
@@ -3809,7 +3826,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
   // membership is membership in the target, in BOTH directions: it is how a value
   // is published into shared storage, and how one read out of it is still a T.
   if (t.Kind === 'shared') {
-    return Q(yield* IsOfType(value, t.Target));
+    return Q(yield* IsOfType(value, t.Target, storage));
   }
   // proposal-runtime-types `sec-composite-types`: the top composite type "is the
   // type of every composite", and a composite type over a shape is satisfied by
@@ -3928,7 +3945,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       return false;
     case 'union': {
       for (const m of t.Members) {
-        if (Q(yield* IsOfType(value, m))) {
+        if (Q(yield* IsOfType(value, m, storage))) {
           return true;
         }
       }
@@ -3936,7 +3953,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
     }
     case 'intersection': {
       for (const m of t.Members) {
-        if (!Q(yield* IsOfType(value, m))) {
+        if (!Q(yield* IsOfType(value, m, storage))) {
           return false;
         }
       }
@@ -3966,7 +3983,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
       // #sec-isoftype: a value belongs to a parameterized type when it belongs
       // to the base and the meta type's validate judgment holds of the
       // metadata. The base's Type Object carries the hook.
-      if (!Q(yield* IsOfType(value, t.Base))) {
+      if (!Q(yield* IsOfType(value, t.Base, storage))) {
         return false;
       }
       // #sec-primitive-metadata: the metadata's own keys select the meta types
@@ -4078,8 +4095,8 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         }
         // #sec-intrinsic-array-contracts: a growable typed copy is not fixed
         // storage merely because its current length equals the target extent.
-        const storage = value as { TypedElement?: TypeRecord, TypedExtent?: number };
-        if (extent !== 'dynamic' && storage.TypedElement !== undefined && storage.TypedExtent !== extent) return false;
+        const arrayStorage = value as { TypedElement?: TypeRecord, TypedExtent?: number };
+        if (extent !== 'dynamic' && arrayStorage.TypedElement !== undefined && arrayStorage.TypedExtent !== extent) return false;
 
         // The run-time half of #sec-array-and-tuple-types' extent rule. A FIXED
         // array is not a member of a dynamic array type: it cannot be grown and
@@ -4102,7 +4119,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         }
         for (let i = 0; i < len; i += 1) {
           const el = Q(yield* Get(value, Value(String(i))));
-          if (!Q(yield* IsOfType(el, t.Element))) {
+          if (!Q(yield* IsOfType(el, t.Element, storage))) {
             return false;
           }
         }
@@ -4132,7 +4149,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         }
         for (let i = 0; i < len; i += 1) {
           const el = Q(yield* Get(value, Value(String(i))));
-          if (!Q(yield* IsOfType(el, t.Elements[i].Type))) {
+          if (!Q(yield* IsOfType(el, t.Elements[i].Type, storage))) {
             return false;
           }
         }
@@ -4147,15 +4164,30 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         items.push(Q(yield* Get(value, Value(String(i)))));
       }
       const admitted: boolean[][] = [];
+      const evidence: StructuralStorageAdmission[][][] = [];
       for (let i = 0; i < len; i += 1) {
         const row: boolean[] = [];
+        const records: StructuralStorageAdmission[][] = [];
         for (const e of t.Elements) {
-          row.push(Q(yield* IsOfType(items[i], e.Rest ? restElementType(e.Type) : e.Type)));
+          const candidate = storage ? [] : undefined;
+          row.push(Q(yield* IsOfType(items[i], e.Rest ? restElementType(e.Type) : e.Type, candidate)));
+          records.push(candidate ?? []);
         }
         admitted.push(row);
+        evidence.push(records);
       }
       const slots = t.Elements.map((e) => ({ Rest: e.Rest, Optional: e.Initial !== 'none' }));
-      return SequenceAssignment(slots, len, (i, k) => admitted[i][k]) !== 'unmatched';
+      const counts = SequenceAssignment(slots, len, (i, k) => admitted[i][k]);
+      if (counts === 'unmatched') return false;
+      if (storage) {
+        let at = 0;
+        for (let k = 0; k < counts.length; k += 1) {
+          for (let n = 0; n < counts[k]; n += 1) {
+            for (const record of evidence[at++][k]) storage.push(record);
+          }
+        }
+      }
+      return true;
     }
     case 'nominal': {
       if (t.EnumMembers) {
@@ -4211,7 +4243,7 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
         // says why that matters: "Subtyping and membership are different
         // questions of the same record."
         const substituted = SubstituteTypeArguments(t.Structure, t.Declaration, t.Arguments);
-        const structurallyMatches = Q(yield* IsOfType(value, substituted));
+        const structurallyMatches = Q(yield* IsOfType(value, substituted, storage));
         if (!structurallyMatches) {
           return false;
         }
@@ -4459,9 +4491,10 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
           continue;
         }
         const pv = Q(yield* Get(value, key));
-        if (!Q(yield* IsOfType(pv, p.type))) {
+        if (!Q(yield* IsOfType(pv, p.type, storage))) {
           return false;
         }
+        storage?.push({ object: value, key: p.key, type: p.type });
       }
       // Index signatures constrain every own enumerable key not already named.
       if (t.IndexSignatures.length > 0) {
@@ -4478,9 +4511,10 @@ export function* IsOfType(value: Value, t: TypeRecord): PlainEvaluator<boolean> 
           for (const ix of t.IndexSignatures) {
             if (Q(yield* IsOfType(k, ix.Key))) {
               const kv = Q(yield* Get(value, k));
-              if (!Q(yield* IsOfType(kv, ix.Value))) {
+              if (!Q(yield* IsOfType(kv, ix.Value, storage))) {
                 return false;
               }
+              storage?.push({ object: value, key: k.stringValue(), type: ix.Value });
             }
           }
         }

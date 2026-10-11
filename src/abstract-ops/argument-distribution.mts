@@ -1,4 +1,4 @@
-import { Value, ReferenceValue, ObjectValue, JSStringValue } from '../value.mts';
+import { Value, ReferenceValue, ObjectValue, JSStringValue, SymbolValue } from '../value.mts';
 import type { ReferenceRecord } from '../value.mts';
 import { EnvironmentRecord, RefBindingHolder } from '../execution-context/Environment.mts';
 import { Q, EnsureCompletion } from '../completion.mts';
@@ -23,13 +23,13 @@ export function DeclaredReferenceLocationType(location: ReferenceRecord): TypeRe
       }
       return binding?.declaredType as TypeRecord | undefined;
     }
-    if (location.Base instanceof ObjectValue && location.ReferencedName instanceof JSStringValue) {
-      const key = location.ReferencedName.stringValue();
+    if (location.Base instanceof ObjectValue && (location.ReferencedName instanceof JSStringValue || location.ReferencedName instanceof SymbolValue)) {
+      const key = location.ReferencedName instanceof JSStringValue ? location.ReferencedName.stringValue() : location.ReferencedName;
       const base = location.Base as ObjectValue & {
-        TypedProperties?: Map<string, { TypeRecord: TypeRecord }>, TypedElement?: TypeRecord,
+        TypedProperties?: Map<string | SymbolValue, { TypeRecord: TypeRecord }>, TypedElement?: TypeRecord,
         TypedTuple?: { Positions: readonly TypeRecord[], Rest?: TypeRecord },
       };
-      const index = Number(key);
+      const index = typeof key === 'string' ? Number(key) : NaN;
       const indexed = String(index) === key && Number.isInteger(index) && index >= 0 && index < 0xFFFFFFFF;
       return base.TypedProperties?.get(key)?.TypeRecord
         ?? (indexed ? base.TypedTuple?.Positions[index] ?? base.TypedTuple?.Rest ?? base.TypedElement : undefined);

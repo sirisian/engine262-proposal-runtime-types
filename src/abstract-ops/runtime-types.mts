@@ -1,4 +1,4 @@
-import { publishedReturnTypeOfFunction, instantiateGenericCapture } from '../type-system/runtime.mts';
+import { publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, type StructuralStorageAdmission } from '../type-system/runtime.mts';
 import { primitiveMembership } from '../type-system/runtime.mts';
 import { currentTypeParameterFrame, SpecializedFunctionSignatureOf } from '../type-system/runtime.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
@@ -158,12 +158,62 @@ function carryStringType(value: Value, t: TypeRecord): Value {
   return value;
 }
 
+/** Install only contracts admitted by this boundary; a view never replaces
+ * the backing storage type. Evidence carries keys/objects, so this performs no
+ * second property read, getter call, conversion or user-visible definition. */
+function InstallStructuralStorage(storage: readonly StructuralStorageAdmission[]): void {
+  for (const { object, key, type } of storage) {
+    const target = object as ObjectValue & { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> };
+    const typed = (target.TypedProperties ??= new Map());
+    if (!typed.has(key)) typed.set(key, { TypeRecord: type });
+  }
+}
+
+/** Elision can retain its no-evaluation behavior when storage already carries
+ * every required contract. This inspects internal descriptors, never getters. */
+function StructuralStorageEstablished(value: Value, type: TypeRecord): boolean {
+  if (!(value instanceof ObjectValue)) return true;
+  if (type.Kind === 'reference' || type.Kind === 'any') return true;
+  if (type.Kind === 'shared') return StructuralStorageEstablished(value, type.Target);
+  if (type.Kind === 'intersection') return type.Members.every((member) => StructuralStorageEstablished(value, member));
+  if (type.Kind === 'union') {
+    const current = RuntimeTypeOf(value);
+    return type.Members.some((member) => IsSubtype(current, member, []) && StructuralStorageEstablished(value, member));
+  }
+  if (type.Kind === 'nominal' && type.Structure) {
+    return StructuralStorageEstablished(value, SubstituteTypeArguments(type.Structure, type.Declaration, type.Arguments));
+  }
+  if (type.Kind === 'array' || type.Kind === 'tuple') {
+    const storage = value as { TypedElement?: TypeRecord, TypedTuple?: { Positions: readonly TypeRecord[], Rest?: TypeRecord } };
+    if (type.Kind === 'array') return storage.TypedElement !== undefined && IsSubtype(storage.TypedElement, type.Element, []);
+    return storage.TypedTuple !== undefined && type.Elements.every((element, i) => !element.Rest
+      && storage.TypedTuple!.Positions[i] !== undefined && IsSubtype(storage.TypedTuple!.Positions[i], element.Type, []));
+  }
+  if (type.Kind !== 'object') return true;
+  const carried = (value as { RuntimeType?: TypeRecord }).RuntimeType;
+  if (carried && IsSubtype(carried, type, [])) return true;
+  const typed = (value as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> }).TypedProperties;
+  for (const property of type.Properties) {
+    const own = value.properties.get(propertyKeyValue(property.key));
+    const backing = typed?.get(property.key)?.TypeRecord;
+    if (!backing) {
+      if (property.optional && !own && value.Prototype === Value.null) continue;
+      return false;
+    }
+    if (!IsSubtype(backing, property.type, [])) return false;
+  }
+  // An unrecorded index-domain property needs the ordinary membership walk;
+  // no key-domain matcher or property getter runs just to decide elision.
+  if (type.IndexSignatures.length > 0) return false;
+  return true;
+}
+
 /** #sec-requiretype */
 /** The specification's last step of #sec-requiretype, and the last step of the
  * checked conversion: a value already of the type passes, anything else is a
  * TypeError. Kept private so that RequireType has exactly one meaning. */
-function* requireMembership(value: Value, t: TypeRecord): ValueEvaluator {
-  const ok = Q(yield* IsOfType(value, t));
+function* requireMembership(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[]): ValueEvaluator {
+  const ok = Q(yield* IsOfType(value, t, storage));
   if (!ok) {
     // proposal-runtime-types #sec-vector-lanes: the broadcast. A value of the
     // lane type is not a MEMBER of the vector type - it converts to one - so
@@ -1109,8 +1159,10 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
       Q(yield* StampTypedCollection(value, t.Arguments));
     }
   }
-  const already = Q(yield* IsOfType(value, t));
+  const storage: StructuralStorageAdmission[] = [];
+  const already = Q(yield* IsOfType(value, t, storage));
   if (already) {
+    InstallStructuralStorage(storage);
     // An array that is ALREADY of the type still has to carry its element type,
     // or the store check has nothing to read. This matters most for the EMPTY
     // array, which satisfies any element type vacuously and so always took this
@@ -1560,6 +1612,7 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
     // let `b[0] = 300` through - the store check reads the type the VALUE
     // carries, which is the whole of why the covariance is sound.
     const elided = Q(yield* TypeNodeToTypeRecord(annotation.Type));
+    if (!StructuralStorageEstablished(value, elided)) return Q(yield* RequireType(value, elided));
     // "HAS THIS VALUE BEEN THROUGH THE CONVERSION", which is the question this
     // branch means to ask. It used to ask "does it have an element type", and
     // the two came apart: `StampTypedArray` gives an array its element type AND
@@ -2054,8 +2107,10 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
       Q(yield* StampTypedCollection(value, t.Arguments));
     }
   }
-  const already = !shortOfADefault && Q(yield* IsOfType(value, t));
+  const storage: StructuralStorageAdmission[] = [];
+  const already = shortOfADefault ? false : Q(yield* IsOfType(value, t, storage));
   if (already) {
+    InstallStructuralStorage(storage);
     // An array that is ALREADY of the type still has to carry its element type,
     // or the store check has nothing to read. This matters most for the EMPTY
     // array, which satisfies any element type vacuously and so always took this
@@ -2442,9 +2497,9 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   // this an interface-annotated binding failed where the equivalent object type
   // succeeded, which is a distinction neither the design nor the specification
   // draws.
-  const objectShape = t.Kind === 'object'
-    ? t
-    : (t.Kind === 'nominal' && t.Structure !== undefined && t.Structure.Kind === 'object' ? t.Structure : null);
+  const resolvedShape = t.Kind === 'nominal' && t.Structure
+    ? SubstituteTypeArguments(t.Structure, t.Declaration, t.Arguments) : t;
+  const objectShape = resolvedShape.Kind === 'object' ? resolvedShape : null;
   if (objectShape !== null && value instanceof ObjectValue && Q(IsArray(value)) === Value.false) {
     // proposal-runtime-types #table-check-sites: "a boundary is where a value
     // acquires a type it did not have". An object type's boundary TESTED
@@ -2561,26 +2616,11 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         }
       }
     }
-    // #table-check-sites, row "a value stored to a property or field of
-    // declared type t": the store check reads the type off the object, so the
-    // object must carry it. Without this the members were converted once at the
-    // boundary and every later store went unchecked - the same defect the array
-    // element type once had.
-    const typed = (value as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> }).TypedProperties
-      ?? new Map<unknown, { TypeRecord: TypeRecord }>();
-    for (const prop of objectShape.Properties) {
-      if (!typed.has(prop.key)) {
-        typed.set(prop.key, { TypeRecord: prop.type });
-      }
-    }
-    (value as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> }).TypedProperties = typed;
-    // FALL THROUGH to the membership check rather than returning here. The
-    // members are now of their declared types, which is what this arm exists to
-    // do, but a type may have more to say than its members: a dependent record
-    // has a `where` predicate, a nominal has index signatures, and an interface
-    // has both. Returning the value directly skipped every one of them - six
-    // tests across five files caught it, which is what those tests are for.
-    return Q(yield* requireMembership(value, t));
+    // Membership can still reject a dependent predicate after member
+    // conversion. Publish this object's contracts only after that succeeds.
+    const checked = Q(yield* requireMembership(value, t, storage));
+    InstallStructuralStorage(storage);
+    return checked;
   }
   // proposal-runtime-types #sec-array-and-tuple-types: a plain array in a TUPLE
   // position converts POSITION-WISE, as one in an array position converts
