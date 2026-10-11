@@ -2406,33 +2406,40 @@ function isUndecidable(t: TypeRecord): boolean {
 }
 
 export function AreDisjoint(s: TypeRecord, t: TypeRecord): boolean {
+  return areDisjoint(s, t, []);
+}
+
+/** Revisited pairs supply no negative proof; no values or user code are read. */
+function areDisjoint(s: TypeRecord, t: TypeRecord, active: readonly Assumption[]): boolean {
+  if (active.some((pair) => pair.First === s && pair.Second === t)) return false;
+  const next = [...active, { First: s, Second: t }];
   if (isUndecidable(s) || isUndecidable(t)) {
     return false;
   }
   // A ~shared~ marker is not observable in the value (#sec-threading-shared-modifier),
   // so it neither creates nor removes an overlap.
   if (s.Kind === 'shared') {
-    return AreDisjoint(s.Target, t);
+    return areDisjoint(s.Target, t, next);
   }
   if (t.Kind === 'shared') {
-    return AreDisjoint(s, t.Target);
+    return areDisjoint(s, t.Target, next);
   }
   // An intersection is disjoint from _t_ when ANY member is: a value of the
   // intersection is a value of every member.
   if (s.Kind === 'intersection') {
-    return s.Members.some((m) => AreDisjoint(m, t));
+    return s.Members.some((m) => areDisjoint(m, t, next));
   }
   if (t.Kind === 'intersection') {
-    return t.Members.some((m) => AreDisjoint(s, m));
+    return t.Members.some((m) => areDisjoint(s, m, next));
   }
   // A union is disjoint from _t_ only when EVERY arm is. The empty union is
   // `never`, and the quantification over no arms holds, which is the
   // annihilation fact stated as disjointness.
   if (s.Kind === 'union') {
-    return s.Members.every((m) => AreDisjoint(m, t));
+    return s.Members.every((m) => areDisjoint(m, t, next));
   }
   if (t.Kind === 'union') {
-    return t.Members.every((m) => AreDisjoint(s, m));
+    return t.Members.every((m) => areDisjoint(s, m, next));
   }
   // ~void~ is the return type "no binding may hold" (#sec-void-type),
   // so it shares values with nothing but itself.
@@ -2450,6 +2457,21 @@ export function AreDisjoint(s: TypeRecord, t: TypeRecord): boolean {
   }
   const sPrim = sb.Kind === 'literal' ? sb.Base : sb;
   const tPrim = tb.Kind === 'literal' ? tb.Base : tb;
+  // Composite uses a primitive Type Record but denotes frozen Objects, not
+  // mutually exclusive scalar types. Its top contains every shaped Composite.
+  const sComposite = sPrim.Kind === 'primitive' && sPrim.Name === 'Composite';
+  const tComposite = tPrim.Kind === 'primitive' && tPrim.Name === 'Composite';
+  if (sComposite && tComposite) {
+    if (sPrim.Arguments.length === 0 || tPrim.Arguments.length === 0) return false;
+    return compositeShapesDisjoint(sPrim.Arguments[0] as TypeRecord, tPrim.Arguments[0] as TypeRecord, next);
+  }
+  if (sComposite || tComposite) {
+    const other = sComposite ? tPrim : sPrim;
+    // A mutable array contract excludes composites. Structural objects and
+    // interfaces can be satisfied by one; mere Type Record kind is no proof.
+    return other.Kind === 'primitive' || other.Kind === 'array' || other.Kind === 'function'
+      || enumUnderlying(other) !== null;
+  }
   if (sPrim.Kind === 'primitive' && tPrim.Kind === 'primitive') {
     return !SameType(sPrim, tPrim);
   }
@@ -2460,10 +2482,10 @@ export function AreDisjoint(s: TypeRecord, t: TypeRecord): boolean {
   const sUnder = enumUnderlying(sPrim);
   const tUnder = enumUnderlying(tPrim);
   if (sUnder && tPrim.Kind === 'primitive') {
-    return AreDisjoint(sUnder, tPrim);
+    return areDisjoint(sUnder, tPrim, next);
   }
   if (tUnder && sPrim.Kind === 'primitive') {
-    return AreDisjoint(sPrim, tUnder);
+    return areDisjoint(sPrim, tUnder, next);
   }
   if (sPrim.Kind === 'primitive' && isObjectLike(tPrim)) {
     return true;
@@ -2476,5 +2498,40 @@ export function AreDisjoint(s: TypeRecord, t: TypeRecord): boolean {
   // value, which is the case intersections exist for; whether two unrelated
   // nominal CLASSES are disjoint is a separate question this operation
   // deliberately does not answer.
+  return false;
+}
+
+/** Sound shape contradictions, without converting membership into construction. */
+function compositeShapesDisjoint(s: TypeRecord, t: TypeRecord, active: readonly Assumption[]): boolean {
+  const sequence = (shape: TypeRecord) => shape.Kind === 'tuple' || shape.Kind === 'array';
+  if ((s.Kind === 'object' && sequence(t)) || (t.Kind === 'object' && sequence(s))) return true;
+  if (s.Kind === 'object' && t.Kind === 'object') {
+    // Width subtyping permits extra keys. A shared key can conflict only if
+    // at least one shape requires it; two optional keys may both be absent.
+    const targets = new Map(t.Properties.map((p) => [p.key, p]));
+    return s.Properties.some((p) => {
+      const q = targets.get(p.key);
+      return q !== undefined && (!p.optional || !q.optional) && areDisjoint(p.type, q.type, active);
+    });
+  }
+  // An array shape admits the empty tuple, even when element types conflict.
+  // Rest-containing tuple shapes retain an unresolved sequence judgment here.
+  const fixedTuple = (shape: TypeRecord): Extract<TypeRecord, { Kind: 'tuple' }> | undefined =>
+    shape.Kind === 'tuple' && !shape.Elements.some((e) => e.Rest) ? shape : undefined;
+  const a = fixedTuple(s);
+  const b = fixedTuple(t);
+  const minimum = (shape: NonNullable<typeof a>): number => shape.Elements.reduce((n, e, i) =>
+    e.Initial === 'none' && !e.DeclaredDefault ? i + 1 : n, 0);
+  if (a && b) {
+    const required = Math.max(minimum(a), minimum(b));
+    if (required > Math.min(a.Elements.length, b.Elements.length)) return true;
+    for (let i = 0; i < required; i += 1) {
+      if (areDisjoint(a.Elements[i].Type, b.Elements[i].Type, active)) return true;
+    }
+  } else if (a && t.Kind === 'array') {
+    return a.Elements.slice(0, minimum(a)).some((e) => areDisjoint(e.Type, t.Element, active));
+  } else if (b && s.Kind === 'array') {
+    return b.Elements.slice(0, minimum(b)).some((e) => areDisjoint(s.Element, e.Type, active));
+  }
   return false;
 }

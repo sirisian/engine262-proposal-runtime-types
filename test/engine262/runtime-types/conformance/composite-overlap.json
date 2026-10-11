@@ -1,0 +1,1024 @@
+{
+  "cases": [
+    {
+      "name": "tuple top typed === reverse=False",
+      "steps": [
+        {
+          "source": "String(Composite.<[uint8,uint8]>([1,2])===Composite([uint8(1),uint8(2)]));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple top typed === reverse=True",
+      "steps": [
+        {
+          "source": "String(Composite([uint8(1),uint8(2)])===Composite.<[uint8,uint8]>([1,2]));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple top typed !== reverse=False",
+      "steps": [
+        {
+          "source": "String(Composite.<[uint8,uint8]>([1,2])!==Composite([uint8(1),uint8(2)]));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple top typed !== reverse=True",
+      "steps": [
+        {
+          "source": "String(Composite([uint8(1),uint8(2)])!==Composite.<[uint8,uint8]>([1,2]));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple top unequal runtime contents",
+      "steps": [
+        {
+          "source": "String(Composite.<[uint8,uint8]>([1,2])=== Composite([1,2]));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple Object.is top typed",
+      "steps": [
+        {
+          "source": "String(Object.is(Composite.<[uint8,uint8]>([1,2]),Composite([uint8(1),uint8(2)])));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple is membership from top",
+      "steps": [
+        {
+          "source": "const x:Composite=Composite([uint8(1),uint8(2)]);String(x is Composite.<[uint8,uint8]>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "record top typed === reverse=False",
+      "steps": [
+        {
+          "source": "String(Composite.<{x:uint8}>({x:1})===Composite({x:uint8(1)}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "record top typed === reverse=True",
+      "steps": [
+        {
+          "source": "String(Composite({x:uint8(1)})===Composite.<{x:uint8}>({x:1}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "record top typed !== reverse=False",
+      "steps": [
+        {
+          "source": "String(Composite.<{x:uint8}>({x:1})!==Composite({x:uint8(1)}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "record top typed !== reverse=True",
+      "steps": [
+        {
+          "source": "String(Composite({x:uint8(1)})!==Composite.<{x:uint8}>({x:1}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "record top unequal runtime contents",
+      "steps": [
+        {
+          "source": "String(Composite.<{x:uint8}>({x:1})=== Composite({x:1}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "record Object.is top typed",
+      "steps": [
+        {
+          "source": "String(Object.is(Composite.<{x:uint8}>({x:1}),Composite({x:uint8(1)})));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "record is membership from top",
+      "steps": [
+        {
+          "source": "const x:Composite=Composite({x:uint8(1)});String(x is Composite.<{x:uint8}>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "width membership and comparison",
+      "steps": [
+        {
+          "source": "const wide=Composite.<{x:uint8,y:string}>({x:1,y:\"a\"});const narrow:Composite.<{x:uint8}>=wide;String(wide===narrow);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "width shapes same pointer through params",
+      "steps": [
+        {
+          "source": "function eq(a:Composite.<{x:uint8}>,b:Composite.<{x:uint8,y:string}>):boolean{return a===b;}const wide=Composite.<{x:uint8,y:string}>({x:1,y:\"a\"});String(eq(wide,wide));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct shapes need not equal",
+      "steps": [
+        {
+          "source": "String(Composite.<{x:uint8}>({x:1})===Composite.<{y:string}>({y:\"a\"}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "both optional conflicts can be absent",
+      "steps": [
+        {
+          "source": "function eq(a:Composite.<{x?:uint8}>,b:Composite.<{x?:string}>):boolean{return a===b;}String(eq(Composite.<{x?:uint8}>({}),Composite.<{x?:string}>({})));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "array shapes share empty sequence",
+      "steps": [
+        {
+          "source": "function eq(a:Composite.<[].<uint8>>,b:Composite.<[].<string>>):boolean{return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple array shape common value",
+      "steps": [
+        {
+          "source": "function eq(a:Composite.<[uint8]>,b:Composite.<[].<uint8>>):boolean{return a===b;}const x=Composite.<[uint8]>([1]);String(eq(x,x));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "defaulted tuple positions may be omitted in contracts",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<[uint8=1]>,b:Composite.<[]>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional tuple leaf conflicts can be absent",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<[uint8=1]>,b:Composite.<[string=\"a\"]>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "structural object view",
+      "steps": [
+        {
+          "source": "type I={readonly x:uint8};const x=Composite.<I>({x:1});const y:I=x;String(x===y);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "interface object view",
+      "steps": [
+        {
+          "source": "interface I{readonly x:uint8}function unused(x:Composite.<I>,y:I){return x===y;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain tuple view",
+      "steps": [
+        {
+          "source": "const x=Composite.<[uint8]>([1]);const y:[uint8]=x;String(x===y);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "top structural intersection",
+      "steps": [
+        {
+          "source": "type I=Composite & {readonly x:uint8};\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "top shaped intersection",
+      "steps": [
+        {
+          "source": "type I=Composite & Composite.<{x:uint8}>;\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overlapping shaped intersection",
+      "steps": [
+        {
+          "source": "type I=Composite.<{x:uint8}> & Composite.<{x:uint8,y:string}>;\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic unresolved element",
+      "steps": [
+        {
+          "source": "function unused<T:type>(a:Composite.<{x:T}>,b:Composite.<{x:string}>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic unresolved whole shape",
+      "steps": [
+        {
+          "source": "function unused<T:type extends object>(a:Composite.<T>,b:Composite.<{x:string}>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union retains overlapping arm",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<{x:uint8}>|string,b:Composite){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested top contains shaped member",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<{x:Composite}>,b:Composite.<{x:{a:uint8}}>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested width contracts",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<{x:{a:uint8}}>,b:Composite.<{x:{a:uint8,b:string}}>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scalar reverse=False",
+      "steps": [
+        {
+          "source": "function unused(a:Composite,b:string){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "scalar reverse=True",
+      "steps": [
+        {
+          "source": "function unused(a:string,b:Composite){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "number scalar reverse=False",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<{x:uint8}>,b:number){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "number scalar reverse=True",
+      "steps": [
+        {
+          "source": "function unused(a:number,b:Composite.<{x:uint8}>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "mutable array reverse=False",
+      "steps": [
+        {
+          "source": "function unused(a:Composite,b:[].<uint8>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "mutable array reverse=True",
+      "steps": [
+        {
+          "source": "function unused(a:[].<uint8>,b:Composite){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "callable reverse=False",
+      "steps": [
+        {
+          "source": "function unused(a:Composite,b:()=>void){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "callable reverse=True",
+      "steps": [
+        {
+          "source": "function unused(a:()=>void,b:Composite){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "record tuple kind reverse=False",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<{x:uint8}>,b:Composite.<[uint8]>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "record tuple kind reverse=True",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<[uint8]>,b:Composite.<{x:uint8}>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "record array kind reverse=False",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<{}>,b:Composite.<[].<uint8>>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "record array kind reverse=True",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<[].<uint8>>,b:Composite.<{}>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "required field conflict reverse=False",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<{x:uint8}>,b:Composite.<{x:string}>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "required field conflict reverse=True",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<{x:string}>,b:Composite.<{x:uint8}>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "required optional conflict reverse=False",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<{x:uint8}>,b:Composite.<{x?:string}>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "required optional conflict reverse=True",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<{x?:string}>,b:Composite.<{x:uint8}>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple required leaf conflict reverse=False",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<[uint8]>,b:Composite.<[string]>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple required leaf conflict reverse=True",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<[string]>,b:Composite.<[uint8]>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple incompatible lengths reverse=False",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<[uint8]>,b:Composite.<[uint8,uint8]>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple incompatible lengths reverse=True",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<[uint8,uint8]>,b:Composite.<[uint8]>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple optional forced leaf reverse=False",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<[uint8=1]>,b:Composite.<[string]>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple optional forced leaf reverse=True",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<[string]>,b:Composite.<[uint8=1]>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple array leaf conflict reverse=False",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<[uint8]>,b:Composite.<[].<string>>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple array leaf conflict reverse=True",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<[].<string>>,b:Composite.<[uint8]>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested required leaf reverse=False",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<{x:{a:uint8}}>,b:Composite.<{x:{a:string}}>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested required leaf reverse=True",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<{x:{a:string}}>,b:Composite.<{x:{a:uint8}}>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "union all impossible reverse=False",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<[uint8]>|string,b:Composite.<{x:uint8}>){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "union all impossible reverse=True",
+      "steps": [
+        {
+          "source": "function unused(a:Composite.<{x:uint8}>,b:Composite.<[uint8]>|string){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested impossible intersection",
+      "steps": [
+        {
+          "source": "type I=Composite.<{x:{a:uint8}}> & Composite.<{x:{a:string}}>;\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-empty-intersection",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "required shape intersection",
+      "steps": [
+        {
+          "source": "type I=Composite.<{x:uint8}> & Composite.<{x:string}>;\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-empty-intersection",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary scalar comparison unchanged",
+      "steps": [
+        {
+          "source": "function unused(a:uint8,b:string){return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
