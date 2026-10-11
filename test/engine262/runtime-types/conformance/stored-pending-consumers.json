@@ -1,0 +1,1293 @@
+{
+  "cases": [
+    {
+      "name": "stored (False, False, 'const fn=inner.<T>;')",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored (False, False, 'const saved=inner.<T>;const fn=saved;')",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const saved=inner.<T>;const fn=saved;return fn(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored (False, False, 'let fn=inner.<T>;')",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}let fn=inner.<T>;return fn(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored (False, False, 'const fn := inner.<T>;')",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn := inner.<T>;return fn(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored (False, False, 'let fn := inner.<T>;')",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}let fn := inner.<T>;return fn(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored (False, True, 'const fn=inner.<T>;')",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(\"bad\");}function unused(){outer.<uint8>();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored (False, True, 'const saved=inner.<T>;const fn=saved;')",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const saved=inner.<T>;const fn=saved;return fn(\"bad\");}function unused(){outer.<uint8>();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored (False, True, 'let fn=inner.<T>;')",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}let fn=inner.<T>;return fn(\"bad\");}function unused(){outer.<uint8>();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored (False, True, 'const fn := inner.<T>;')",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn := inner.<T>;return fn(\"bad\");}function unused(){outer.<uint8>();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored (False, True, 'let fn := inner.<T>;')",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}let fn := inner.<T>;return fn(\"bad\");}function unused(){outer.<uint8>();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored (True, False, 'const fn=inner.<T>;')",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(\"bad\");}outer.<string>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored (True, False, 'const saved=inner.<T>;const fn=saved;')",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const saved=inner.<T>;const fn=saved;return fn(\"bad\");}outer.<string>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored (True, False, 'let fn=inner.<T>;')",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}let fn=inner.<T>;return fn(\"bad\");}outer.<string>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored (True, False, 'const fn := inner.<T>;')",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn := inner.<T>;return fn(\"bad\");}outer.<string>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored (True, False, 'let fn := inner.<T>;')",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}let fn := inner.<T>;return fn(\"bad\");}outer.<string>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored (True, True, 'const fn=inner.<T>;')",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(\"bad\");}function unused(){outer.<string>();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored (True, True, 'const saved=inner.<T>;const fn=saved;')",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const saved=inner.<T>;const fn=saved;return fn(\"bad\");}function unused(){outer.<string>();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored (True, True, 'let fn=inner.<T>;')",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}let fn=inner.<T>;return fn(\"bad\");}function unused(){outer.<string>();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored (True, True, 'const fn := inner.<T>;')",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn := inner.<T>;return fn(\"bad\");}function unused(){outer.<string>();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored (True, True, 'let fn := inner.<T>;')",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}let fn := inner.<T>;return fn(\"bad\");}function unused(){outer.<string>();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "positional \"bad\"",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "named \"bad\"",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<U:T>;return fn(y:\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest \"bad\"",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(...y:[W,W]){return \"ok\";}const fn=inner.<T>;return fn(\"bad\",\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional \"bad\"",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y?:W){return \"ok\";}const fn=inner.<T>;return fn(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "positional 1",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest 1",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(...y:[W,W]){return \"ok\";}const fn=inner.<T>;return fn(1,1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional 1",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y?:W){return \"ok\";}const fn=inner.<T>;return fn(1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "positional 300",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(300);}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "named 300",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<U:T>;return fn(y:300);}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest 300",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(...y:[W,W]){return \"ok\";}const fn=inner.<T>;return fn(300,300);}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional 300",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y?:W){return \"ok\";}const fn=inner.<T>;return fn(300);}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "positional undefined",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(undefined);}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "named undefined",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<U:T>;return fn(y:undefined);}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest undefined",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(...y:[W,W]){return \"ok\";}const fn=inner.<T>;return fn(undefined,undefined);}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional undefined",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y?:W){return \"ok\";}const fn=inner.<T>;return fn(undefined);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh {x:1} {x:uint8}",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn({x:1});}outer.<{x:uint8}>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh {x:\"bad\"} {x:uint8}",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn({x:\"bad\"});}outer.<{x:uint8}>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh [1,2] [uint8,uint8]",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn([1,2]);}outer.<[uint8,uint8]>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh [1,\"bad\"] [uint8,uint8]",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn([1,\"bad\"]);}outer.<[uint8,uint8]>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh [1,2] [].<uint8>",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn([1,2]);}outer.<[].<uint8>>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh [1,\"bad\"] [].<uint8>",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn([1,\"bad\"]);}outer.<[].<uint8>>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh ({x:[1,2]}) {x:[uint8,uint8]}",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(({x:[1,2]}));}outer.<{x:[uint8,uint8]}>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh ({x:[1,\"bad\"]}) {x:[uint8,uint8]}",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(({x:[1,\"bad\"]}));}outer.<{x:[uint8,uint8]}>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh [] [].<uint8>",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn([]);}outer.<[].<uint8>>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same-spelled applied parameter (False, False)",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:uint8){function inner<T:type,W:type=identity(T)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(x);}outer.<uint8>(1);outer.<string>(1);\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "function fresh<T:type=string>(x:T):T{return x;}fresh.<>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same-spelled applied parameter (False, True)",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:uint8){function inner<T:type,W:type=identity(T)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(x);}outer.<string>(1);outer.<uint8>(1);\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "function fresh<T:type=string>(x:T):T{return x;}fresh.<>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed leaf x False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:uint8){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(x);}outer.<string>(1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed leaf {x:x} False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:uint8){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn({x:x});}outer.<{x:string}>(1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed leaf [x,x] False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:uint8){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn([x,x]);}outer.<[string,string]>(1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "same-spelled applied parameter (True, False)",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:uint8){function inner<T:type,W:type=identity(T)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(x);}outer.<uint8>(1);outer.<uint8>(2);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same-spelled applied parameter (True, True)",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:uint8){function inner<T:type,W:type=identity(T)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(x);}outer.<uint8>(2);outer.<uint8>(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed leaf x True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:uint8){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(x);}outer.<uint8>(1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed leaf {x:x} True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:uint8){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn({x:x});}outer.<{x:uint8}>(1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed leaf [x,x] True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:uint8){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn([x,x]);}outer.<[uint8,uint8]>(1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default reads identity(U) False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default reads identity(U) True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default reads identity(T) False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(T)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default reads identity(T) True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(T)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default reads identity(V) False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,V:type=identity(U),W:type=identity(V)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default reads identity(V) True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,V:type=identity(U),W:type=identity(V)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "consumer binder shadow string",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;function consumer<T:type>(){return fn(\"bad\");}return consumer.<uint8>();}outer.<string>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "consumer binder shadow uint8",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;function consumer<T:type>(){return fn(\"bad\");}return consumer.<uint8>();}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "expression False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){const inner=function<U:type,W:type=identity(U)>(y:W){return \"ok\";};const fn=inner.<T>;return fn(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "method False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){const obj={inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}};const fn=obj.inner.<T>;return fn(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "expression True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){const inner=function<U:type,W:type=identity(U)>(y:W){return \"ok\";};const fn=inner.<T>;return fn(1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "method True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){const obj={inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}};const fn=obj.inner.<T>;return fn(1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown outer remains pending",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(\"bad\");}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit any source keeps runtime admission",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:any){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(x);}outer.<uint8>(1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit W bypasses default",
+      "steps": [
+        {
+          "source": "function fail(t:type):type{throw new Error(\"unused\");}function outer<T:type>(){function inner<U:type,W:type=fail(U)>(y:W){return \"ok\";}const fn=inner.<T,string>;return fn(\"ok\");}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default failure precedes consumer admission",
+      "steps": [
+        {
+          "source": "function fail(t:type):type{throw new Error(\"default\");}function outer<T:type>(){function inner<U:type,W:type=fail(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_EVALUATION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary bodies do not run for checking",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){throw new Error(\"outer ran\");function inner<U:type,W:type=identity(U)>(y:W){throw new Error(\"inner ran\");}const fn=inner.<T>;return fn(\"bad\");}throw new Error(\"Script ran\");outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "function fresh<T:type=string>(x:T):T{return x;}fresh.<>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reassigned mutable origin is not reused",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}let fn=inner.<T>;fn=function(y:string){return \"ok\";};return fn(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "parameter shadows stored callee",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;function consumer(fn){return fn(\"bad\");}return consumer(function(y:string){return \"ok\";});}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "alias lookup keeps initializer scope",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;const alias=fn;function consumer(fn){return alias(\"bad\");}return consumer(function(y:string){return \"ok\";});}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "factory input is not returned callable provenance",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function pick(fn){return function(y:string){return \"ok\";};}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=pick(inner.<T>);return fn(\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source and target close together uint8",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(x);}outer.<uint8>(1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source and target close together string",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(x);}outer.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending plus completed overload False unused caller",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}function inner<U:type>(y:string){return \"ok\";}const fn=inner.<T>;return fn(\"bad\");}function unused(){outer.<uint8>();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending plus completed overload True unused caller",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type>(y:string){return \"ok\";}function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(\"bad\");}function unused(){outer.<uint8>();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    }
+  ]
+}

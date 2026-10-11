@@ -769,6 +769,11 @@ interface TypeArgumentApplicationCheck {
   readonly bindings: ReadonlyMap<string, TypeRecord>;
   readonly pendingArguments: ReadonlySet<string>;
   readonly consumers?: readonly ArgumentAdmissionCheck[];
+  readonly stored?: {
+    readonly application: ParseNode.TypeArgumentsExpression;
+    readonly signature: SignatureRecord;
+    readonly context: NonNullable<TypeParameterRecord['Captures']>;
+  };
 }
 // A later Script or importing Module specializes the producer's source too.
 // Keep its descriptions with that source, separately from canonical types and
@@ -3094,6 +3099,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const specializedDefaultBindings: ReadonlyMap<string, TypeRecord>[] = [];
   const genericDefaults: GenericDefaultCheck[] = [];
   const typeArgumentApplicationChecks = new Map<ParseNode, TypeArgumentApplicationCheck[]>();
+  const pendingStoredApplications = new WeakMap<ParseNode, readonly TypeArgumentApplicationCheck[]>();
   const activeAliasApplications = new Map<TypeArgumentApplicationCheck, ReadonlyMap<ParseNode.TypeParameter, TypeRecord>[]>();
   const genericApplicationInputs = new WeakMap<ParseNode, PreparedBinding>();
   const whereChecks = new Map<object, GenericWhereCheck[]>();
@@ -4651,13 +4657,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const recordTypeArgumentApplication = (application: GenericDefaultCheck['application'],
     parameters: readonly TypeParameterRecord[], bindings: ReadonlyMap<string, TypeRecord>,
     pendingArguments: ReadonlySet<string> = new Set(), declaration?: ParseNode.TypeAliasDeclaration,
-    consumers: readonly ArgumentAdmissionCheck[] = []): void => {
+    consumers: readonly ArgumentAdmissionCheck[] = [], stored?: TypeArgumentApplicationCheck['stored']): TypeArgumentApplicationCheck | undefined => {
     if (describingGenericDefaults.size) return;
     const checks = typeArgumentApplicationChecks.get(application) ?? [];
     const captures = parameters.flatMap((parameter) => parameter.Captures ?? []);
-    if (checks.some((check) => {
+    const previousCheck = checks.find((check) => {
       const previous = check.parameters.flatMap((parameter) => parameter.Captures ?? []);
-      return check.declaration === declaration && (check.consumers?.length ?? 0) === consumers.length
+      return check.declaration === declaration && check.stored?.application === stored?.application
+        && check.stored?.signature === stored?.signature
+        && (check.stored?.context.length ?? 0) === (stored?.context.length ?? 0)
+        && (stored?.context ?? []).every((capture, i) => capture.Declaration === check.stored!.context[i].Declaration
+          && SameType(capture.Type, check.stored!.context[i].Type))
+        && (check.consumers?.length ?? 0) === consumers.length
         && consumers.every((consumer, i) => {
           const previous = check.consumers![i];
           return consumer.parameter === previous.parameter && consumer.offset === previous.offset && sameArgumentSource(consumer.source, previous.source);
@@ -4669,9 +4680,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         && check.pendingArguments.size === pendingArguments.size && [...pendingArguments].every((name) => check.pendingArguments.has(name))
         && previous.length === captures.length && previous.every((capture, i) =>
           capture.Declaration === captures[i].Declaration && SameType(capture.Type, captures[i].Type));
-    })) return;
-    checks.push({ declaration, parameters, bindings: new Map(bindings), pendingArguments, consumers });
+    });
+    if (previousCheck) return previousCheck;
+    const check = { declaration, parameters, bindings: new Map(bindings), pendingArguments, consumers, stored };
+    checks.push(check);
     typeArgumentApplicationChecks.set(application, checks);
+    return check;
   };
 
   /** #sec-generic-specialization: close obligations when an outer parameter binds. */
@@ -4698,24 +4712,32 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // close its inputs under the enclosing specialization before consumers run.
       const sourceChecks = sourceTypeArgumentApplicationChecks.get(node);
       for (const check of [...(typeArgumentApplicationChecks.get(node) ?? (sourceChecks?.owner !== root ? sourceChecks?.checks : undefined) ?? [])]) {
+        // A stored value keeps the producing application's binders even when
+        // its consumer declares an unrelated parameter with the same name.
+        const applicationScope = check.stored ? new Map(check.stored.context.map((capture) =>
+          [capture.Declaration.BindingIdentifier.name, inputs.get(capture.Declaration) ?? capture.Type])) : scoped;
         const closed = new Map<string, TypeRecord>();
         for (const [name, bound] of check.bindings) {
-          const resolved = substituteFreeTypeParameters(bound, scoped);
+          const resolved = substituteFreeTypeParameters(bound, applicationScope);
           if (resolved) closed.set(name, resolved);
         }
         const signature = substituteFreeTypeParameters({ Kind: 'function', Signatures: [{
           Parameters: [], Return: null, TypeParameters: check.parameters,
-        }] }, scoped, undefined, inputs);
+        }] }, applicationScope, undefined, inputs);
         if (signature?.Kind !== 'function') continue;
         finishTypeArgumentBindings(signature.Signatures[0].TypeParameters!, closed, {
-          complete: false, application: node as GenericDefaultCheck['application'], pendingArguments: check.pendingArguments,
+          complete: false, application: check.stored?.application ?? node as GenericDefaultCheck['application'], pendingArguments: check.pendingArguments,
         });
+        const freeApplicationScope = new Map(applicationScope);
+        for (const parameter of check.parameters) freeApplicationScope.delete(parameter.Name);
         // Default completion closes the argument contract too. Keep the
         // source in its caller context and the formal in the applied context;
         // equal parameter spellings do not merge these two substitutions.
         for (const consumer of check.consumers ?? []) {
           let target = substituteFreeTypeParameters(consumer.parameter.Type, closed);
-          target = substituteFreeTypeParameters(target, scoped);
+          // An uncompleted callee default is not the consumer's same-named
+          // parameter. Only genuinely free inputs use the enclosing scope.
+          target = substituteFreeTypeParameters(target, freeApplicationScope);
           if (consumer.parameter.Rest && target) target = target.Kind === 'tuple'
             ? target.Elements[consumer.offset]?.Type ?? restElementType(target) : restElementType(target);
           if (!target || mentionsTypeParameter(target)) continue;
@@ -18389,6 +18411,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const asCallee = parent?.type === 'CallExpression';
         const rejected: ObjectValue[] = [];
         let pending = false;
+        const pendingApplications: TypeArgumentApplicationCheck[] = [];
         const Signatures = base.Signatures.flatMap((signature) => {
           observeInferenceInputs(signature);
           const parameters = signature.TypeParameters;
@@ -18402,7 +18425,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             rejected.push(...errors.splice(before));
             return [];
           }
-          if (!asCallee) recordTypeArgumentApplication(specialization, parameters, bindings, pendingArguments);
+          if (!asCallee) {
+            const context: NonNullable<TypeParameterRecord['Captures']>[number][] = [];
+            for (let owner = specialization.parent; owner; owner = owner.parent) {
+              const list = (owner as { TypeParameters?: ParseNode.TypeParameters }).TypeParameters?.TypeParameterList ?? [];
+              context.unshift(...list.map((Declaration) => ({ Declaration, Type: parameterTypeRecord(Declaration.BindingIdentifier.name) })));
+            }
+            const check = recordTypeArgumentApplication(specialization, parameters, bindings, pendingArguments, undefined, [], {
+              application: specialization, signature, context,
+            });
+            if (check && bindings.size !== parameters.length) pendingApplications.push(check);
+          }
           if (bindings.size !== parameters.length) {
             // #sec-generic-specialization: a stored application publishes only
             // after its defaults are complete. Its original signature would
@@ -18454,6 +18487,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return [specialized];
         });
         if (Signatures.length === 0 && rejected.length) errors.push(rejected[0]);
+        // A completed alternative is still a possible callable. One pending
+        // candidate alone does not prove that it is the selected signature.
+        if (!asCallee) pendingStoredApplications.set(specialization, Signatures.length === 1 ? pendingApplications : []);
         return pending ? null : { ...base, Signatures };
       }
       case 'ObjectLiteral':
@@ -31930,7 +31966,52 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const constraintCheckedCalls = new WeakSet<object>();
+  // A pending stored specialization has no published callable type. Follow
+  // only an established value origin, not arbitrary initializer dependencies:
+  // an argument to a factory is not proof of what the factory returns.
+  const pendingStoredApplication = (expression: ParseNode): TypeArgumentApplicationCheck | undefined => {
+    let node = patternExpression(expression)!;
+    let scope = frames.length - 1;
+    const seen = new Set<InvocationOrigin>();
+    while (node.type === 'IdentifierReference') {
+      let found = false;
+      for (let i = scope; i >= 0; i -= 1) {
+        const frame = frames[i];
+        const origin = invocationOrigins.get(frame)?.get(node.name);
+        if (origin) {
+          const prepared = preparedBindings.get(frame)?.get(node.name);
+          const inferred = prepared?.node.type === 'LexicalBinding' && prepared.node.TypedInitializer
+            && prepared.expression === origin.node;
+          if (seen.has(origin) || origin.annotated && !inferred || frame.bindings.get(node.name)?.Kind === 'any'
+            || (!origin.immutable && (assignedNames.has(node.name) || assignedGlobalProperties.has(node.name) || hasDirectEval))) return undefined;
+          seen.add(origin);
+          node = patternExpression(origin.node)!;
+          scope = i;
+          found = true;
+          break;
+        }
+        if (frame.declaredNames.has(node.name) || frame.bindingKinds.has(node.name) || frame.dynamicBindings) return undefined;
+      }
+      if (!found) return undefined;
+    }
+    const pending = node.type === 'TypeArgumentsExpression' ? pendingStoredApplications.get(node) : undefined;
+    return pending?.length === 1 ? pending[0] : undefined;
+  };
+
   const checkCallArguments = (c: { CallExpression?: ParseNode, Arguments?: readonly ParseNode[] | null }, callee: Known, n: ParseNode): void => {
+    if (!callee && c.CallExpression && c.Arguments && n.type === 'CallExpression') {
+      const application = pendingStoredApplication(c.CallExpression);
+      if (application?.stored) {
+        const mapped = mapCallArguments(application.stored.signature.Parameters, expandValueSpreads(c.Arguments));
+        const consumers = mapped.certainEntries.flatMap(({ node, slot, offset }): ArgumentAdmissionCheck[] => {
+          const parameter = application.stored!.signature.Parameters[slot];
+          const source = parameter && !parameter.Ref ? argumentSource(node) : undefined;
+          return source ? [{ source, parameter, offset }] : [];
+        });
+        if (consumers.length) recordTypeArgumentApplication(n, application.parameters, application.bindings,
+          application.pendingArguments, undefined, consumers, application.stored);
+      }
+    }
     if (callee?.Kind === 'union') {
       for (const arm of callee.Members) {
         const type = callableForm(arm);
