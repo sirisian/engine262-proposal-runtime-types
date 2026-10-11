@@ -11,7 +11,7 @@ import { GetValue } from './reference-operations.mts';
 import { CheckedConvertValue } from './runtime-types.mts';
 
 /** A location's declared contract, following aliases without reading storage. */
-function declaredLocationType(location: ReferenceRecord): TypeRecord | undefined {
+export function DeclaredReferenceLocationType(location: ReferenceRecord): TypeRecord | undefined {
   const seen = new Set<ReferenceRecord>();
   while (!seen.has(location)) {
     seen.add(location);
@@ -53,7 +53,7 @@ export function* AssignRuntimeArguments(parameters: readonly ParameterRecord[], 
     const borrowed = arg instanceof ReferenceValue;
     const value = borrowed ? Q(yield* GetValue(arg.Location)) : arg;
     values.push(value);
-    const locationType = borrowed ? (declaredLocationType(arg.Location) ?? RuntimeTypeOf(value)) : undefined;
+    const locationType = borrowed ? (DeclaredReferenceLocationType(arg.Location) ?? RuntimeTypeOf(value)) : undefined;
     const row = new Map<TypeRecord, boolean[]>();
     for (const { type, byReference } of plan.contracts) {
       const modes = row.get(type) ?? [];

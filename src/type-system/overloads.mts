@@ -8,14 +8,16 @@
 // overload-resolution and literal-overload-ranking clauses.
 
 import type { ParseNode } from '../parser/ParseNode.mts';
-import type { Value } from '../value.mts';
+import { ReferenceValue, type Value } from '../value.mts';
+import { GetValue } from '../abstract-ops/reference-operations.mts';
+import { DeclaredReferenceLocationType } from '../abstract-ops/argument-distribution.mts';
 import { isTemplateArgumentType, templateArgumentTypeOf } from './template-argument.mts';
 import type { ParameterRecord, TypeRecord, NarrowingRecord } from './records.mts';
 import { anyType, restElementType, mentionsTypeParameter } from './records.mts';
 import { slotReceiving } from './sequence-assignment.mts';
 import { PlanReferenceArguments } from './reference-rest.mts';
 import { ClassImplements, IsAssignable, IsSubtype, SameType } from './relations.mts';
-import { RuntimeTypeOf, ConstraintAdmits } from './runtime.mts';
+import { RuntimeTypeOf, ConstraintAdmits, IsOfType } from './runtime.mts';
 import { Q } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 
@@ -405,33 +407,38 @@ function argumentTier(argType: TypeRecord, paramType: TypeRecord): Tier | null {
 /**
  * The per-argument tiers of a signature against a list of argument types, or null
  * if the signature is not viable for them: its arity must admit the count, and
- * every argument must be assignable to the parameter that receives it (a rest
- * parameter receives every argument from its position onward, at its element
- * position's tier, which is the catch-all `any` where no element type is read).
+ * every argument must satisfy its actual receiving contract. Retain that
+ * contract for ranking and specificity, including a reference tuple's leaf
+ * positions and the owning declared parameter.
  */
-function signatureTiers(sig: OverloadSignature, argTypes: readonly TypeRecord[]): Tier[] | null {
-  if (sig.Untyped) {
-    // A catch-all takes any argument list, at the tier that ranks last.
-    return argTypes.map(() => Tier.CatchAll);
+type Receiver = NonNullable<ReturnType<ReturnType<typeof PlanReferenceArguments>['match']>>['receivers'];
+type RankedSignature = { sig: OverloadSignature, tiers: Tier[], receivers: Receiver };
+
+/** A borrow is invariant at a ref position and decays only at a value position. */
+function receivingTier(source: TypeRecord, valueType: TypeRecord, target: TypeRecord, ref: boolean, optional = false): Tier | null {
+  const wanted = target.Kind === 'reference' ? target.Target : target;
+  if (ref || target.Kind === 'reference') {
+    if (source.Kind !== 'reference') return null;
+    const location = source.Target;
+    if (location.Kind !== 'any' && wanted.Kind !== 'any'
+        && !mentionsTypeParameter(location) && !mentionsTypeParameter(wanted) && !SameType(location, wanted)) return null;
+    return argumentTier(location.Kind === 'any' ? valueType : location, wanted);
   }
-  const counts = assignArguments(sig.Parameters, argTypes);
-  if (counts === null) {
-    return null;
-  }
-  const tiers: Tier[] = [];
-  for (let i = 0; i < argTypes.length; i += 1) {
-    const k = slotReceiving(counts, i);
-    const param = k === -1 ? undefined : sig.Parameters[k];
-    if (!param) {
-      return null;
-    }
-    const tier = argumentTier(argTypes[i], param.Rest ? restElementType(param.Type) : param.Type);
-    if (tier === null) {
-      return null;
-    }
-    tiers.push(tier);
-  }
-  return tiers;
+  if (optional && valueType.Kind === 'primitive' && valueType.Name === 'undefined') return Tier.Exact;
+  return argumentTier(valueType, target);
+}
+
+function signatureTiers(sig: OverloadSignature, argTypes: readonly TypeRecord[], valueTypes: readonly TypeRecord[], referenceAdmits?: (index: number, target: TypeRecord) => boolean): RankedSignature | null {
+  if (sig.Untyped) return { sig, tiers: argTypes.map(() => Tier.CatchAll), receivers: [] };
+  const plan = PlanReferenceArguments(sig.Parameters);
+  const matched = plan.match(argTypes.length, (i, target, ref, optional) => {
+    if ((ref || target.Kind === 'reference') && referenceAdmits && !referenceAdmits(i, target)) return false;
+    return receivingTier(argTypes[i], valueTypes[i], target, ref, optional) !== null;
+  });
+  if (matched === null) return null;
+  const tiers = matched.receivers.map(({ type, byReference, parameter }, i) =>
+    receivingTier(argTypes[i], valueTypes[i], type, byReference, !parameter.Rest && parameter.Optional)!);
+  return { sig, tiers, receivers: matched.receivers };
 }
 
 /**
@@ -536,9 +543,8 @@ function literalRank(t: TypeRecord): number | undefined {
  * type from silently losing.
  */
 function compareByLiteralRank(
-  a: { sig: OverloadSignature, tiers: readonly Tier[] },
-  b: { sig: OverloadSignature, tiers: readonly Tier[] },
-  argTypes: readonly TypeRecord[],
+  a: RankedSignature,
+  b: RankedSignature,
 ): number {
   let sign = 0;
   const positions = Math.min(a.tiers.length, b.tiers.length);
@@ -546,10 +552,8 @@ function compareByLiteralRank(
     if (a.tiers[i] !== Tier.Literal || b.tiers[i] !== Tier.Literal) {
       continue;
     }
-    const ap = parameterReceiving(a.sig.Parameters, argTypes, i);
-    const bp = parameterReceiving(b.sig.Parameters, argTypes, i);
-    const aType = ap?.Rest ? restElementType(ap.Type) : ap?.Type;
-    const bType = bp?.Rest ? restElementType(bp.Type) : bp?.Type;
+    const aType = a.receivers[i]?.type;
+    const bType = b.receivers[i]?.type;
     if (!aType || !bType) {
       continue;
     }
@@ -591,11 +595,11 @@ export function parameterReceiving(params: readonly ParameterRecord[], args: rea
 }
 
 /** #sec-overload-resolution: fixed-position specificity is pointwise. */
-function compareFamilyConstraints(a: OverloadSignature, b: OverloadSignature, args: readonly TypeRecord[]): number {
+function compareFamilyConstraints(a: RankedSignature, b: RankedSignature): number {
   let sign = 0;
-  for (let i = 0; i < args.length; i += 1) {
-    const ap = parameterReceiving(a.Parameters, args, i)?.Type;
-    const bp = parameterReceiving(b.Parameters, args, i)?.Type;
+  for (let i = 0; i < a.receivers.length; i += 1) {
+    const ap = a.receivers[i]?.type;
+    const bp = b.receivers[i]?.type;
     if (ap?.Kind !== 'parameter' || bp?.Kind !== 'parameter') continue;
     const ac = ap.Constraint ?? anyType;
     const bc = bp.Constraint ?? anyType;
@@ -610,11 +614,11 @@ function compareFamilyConstraints(a: OverloadSignature, b: OverloadSignature, ar
   return sign;
 }
 
-function compareFixedPositions(a: OverloadSignature, b: OverloadSignature, args: readonly TypeRecord[]): number {
+function compareFixedPositions(a: RankedSignature, b: RankedSignature): number {
   let sign = 0;
-  for (let i = 0; i < args.length; i += 1) {
-    const ap = parameterReceiving(a.Parameters, args, i);
-    const bp = parameterReceiving(b.Parameters, args, i);
+  for (let i = 0; i < a.receivers.length; i += 1) {
+    const ap = a.receivers[i]?.parameter;
+    const bp = b.receivers[i]?.parameter;
     if (!ap || !bp || ap.Rest === bp.Rest) continue;
     const here = ap.Rest ? 1 : -1;
     if (sign !== 0 && sign !== here) return 0;
@@ -647,11 +651,15 @@ export function resolveOverload(signatures: readonly OverloadSignature[], argVal
  * mirror because a rule this subtle drifts within a cycle or two of being
  * written twice.
  */
-export function resolveOverloadByTypes(signatures: readonly OverloadSignature[], argTypes: readonly TypeRecord[], contextualType?: TypeRecord): OverloadResolution {
-  const viable: { sig: OverloadSignature, tiers: Tier[] }[] = [];
+export function resolveOverloadByTypes(
+  signatures: readonly OverloadSignature[], argTypes: readonly TypeRecord[], contextualType?: TypeRecord,
+  valueTypes: readonly TypeRecord[] = argTypes.map((type) => type.Kind === 'reference' ? type.Target : type),
+  referenceAdmits?: (index: number, target: TypeRecord) => boolean,
+): OverloadResolution {
+  const viable: RankedSignature[] = [];
   for (const sig of signatures) {
-    const tiers = signatureTiers(sig, argTypes);
-    if (tiers === null) {
+    const ranked = signatureTiers(sig, argTypes, valueTypes, referenceAdmits);
+    if (ranked === null) {
       continue;
     }
     // #sec-overloading-on-return-type: "The return type does not participate in
@@ -677,16 +685,16 @@ export function resolveOverloadByTypes(signatures: readonly OverloadSignature[],
         && !IsAssignable(sig.ReturnType, contextualType)) {
       continue;
     }
-    viable.push({ sig, tiers });
+    viable.push(ranked);
   }
   if (viable.length === 0) {
     return { Kind: 'none' };
   }
   const compare = (a: typeof viable[number], b: typeof viable[number]) =>
     compareTiers(a.tiers, b.tiers)
-      || compareByLiteralRank(a, b, argTypes)
-      || compareFixedPositions(a.sig, b.sig, argTypes)
-      || compareFamilyConstraints(a.sig, b.sig, argTypes);
+      || compareByLiteralRank(a, b)
+      || compareFixedPositions(a, b)
+      || compareFamilyConstraints(a, b);
   // Specificity is a partial order: retain every undominated candidate so an
   // incomparable signature cannot disappear merely because it was declared first.
   const best = viable.filter((candidate) => !viable.some((other) => compare(other, candidate) < 0));
@@ -732,14 +740,42 @@ export function operatorTableKey(e: ParseNode.OperatorDefinition): string {
 
 /** Runtime viability evaluates defaults before ranking, preserving abrupt failures. */
 export function* resolveOverloadChecked(signatures: readonly OverloadSignature[], values: readonly Value[], contextualType?: TypeRecord): PlainEvaluator<OverloadResolution> {
-  const args = values.map((v) => templateArgumentTypeOf(v) ?? RuntimeTypeOf(v));
+  const args: TypeRecord[] = [];
+  const valueTypes: TypeRecord[] = [];
+  const referents: Value[] = [];
+  for (const value of values) {
+    const borrowed = value instanceof ReferenceValue;
+    const referent = borrowed ? Q(yield* GetValue(value.Location)) : value;
+    const type = templateArgumentTypeOf(referent) ?? RuntimeTypeOf(referent);
+    referents.push(referent);
+    valueTypes.push(type);
+    args.push(borrowed ? { Kind: 'reference', Target: DeclaredReferenceLocationType(value.Location) ?? type } : type);
+  }
+  // Current referent membership is distinct from invariant location metadata.
+  // Compute it once per leaf contract, without converting borrowed storage.
+  const admitted = args.map(() => new Map<TypeRecord, boolean>());
+  for (const signature of signatures) {
+    for (const { type, byReference } of PlanReferenceArguments(signature.Parameters).contracts) {
+      if (!byReference) continue;
+      const wanted = type.Kind === 'reference' ? type.Target : type;
+      for (let i = 0; i < args.length; i += 1) {
+        if (admitted[i].has(type)) continue;
+        let yes = false;
+        if (args[i].Kind === 'reference') {
+          if (mentionsTypeParameter(wanted)) yes = true;
+          else yes = Q(yield* IsOfType(referents[i], wanted));
+        }
+        admitted[i].set(type, yes);
+      }
+    }
+  }
   const viable: OverloadSignature[] = [];
   for (const signature of signatures) {
     let admits = true;
     for (let i = 0; i < args.length; i += 1) {
       const parameter = parameterReceiving(signature.Parameters, args, i)?.Type;
       if (parameter?.Kind === 'parameter' && parameter.Constraint?.Kind === 'family-pattern') {
-        const yes = Q(yield* ConstraintAdmits(args[i], parameter.Constraint));
+        const yes = Q(yield* ConstraintAdmits(args[i].Kind === 'reference' ? args[i].Target : args[i], parameter.Constraint));
         if (!yes) {
           admits = false; break;
         }
@@ -747,5 +783,5 @@ export function* resolveOverloadChecked(signatures: readonly OverloadSignature[]
     }
     if (admits) viable.push(signature);
   }
-  return resolveOverloadByTypes(viable, args, contextualType);
+  return resolveOverloadByTypes(viable, args, contextualType, valueTypes, (i, type) => admitted[i].get(type) === true);
 }

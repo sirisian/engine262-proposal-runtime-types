@@ -20,12 +20,11 @@ import { GetTypeObject } from '../type-system/intern.mts';
 import { TypeNodeToTypeRecord, markValueParameterBinding, pushTypeParameterFrame, popTypeParameterFrame, BindTypeParameterTyped, BindTypeArgumentRecordsInto, RuntimeTypeOf, valueArguments as argumentTypeOracle } from '../type-system/runtime.mts';
 import { resolveOverloadChecked, resolveOverloadByTypes, describeParameters, assignArguments, type OverloadSignature } from '../type-system/overloads.mts';
 import { displayType, builtinTypeRecord, makePrimitive, anyType, restElementType, type ParameterRecord, type TypeRecord } from '../type-system/records.mts';
-import { IsSubtype, SameType } from '../type-system/relations.mts';
+import { IsSubtype } from '../type-system/relations.mts';
 import { MatchSpecializationList, SpecializationPatternsOf } from '../type-system/specialization-patterns.mts';
 import { AnalyzeCallableGroup, SelectSpecialization } from '../type-system/specialization-selection.mts';
 import { CallableGroupHostFor, FixedTypeSubtrees, MatchStandaloneCase } from '../type-system/component-patterns.mts';
 import { BindNamedArguments, type ArgumentItem } from '../type-system/named-arguments.mts';
-import { slotReceiving } from '../type-system/sequence-assignment.mts';
 import { ReferenceValue } from '../value.mts';
 import { assignTypeArguments } from '../type-system/type-argument-order.mts';
 import { GenericWhereVerified, MarkGenericWhereVerified } from '../type-system/generic-where.mts';
@@ -382,21 +381,12 @@ export function PlaceCaseArguments<T>(parameters: readonly ParameterRecord[], it
 }
 
 export function CaseArgumentsAdmit(parameters: readonly ParameterRecord[], types: readonly TypeRecord[], refs: readonly boolean[]): boolean {
-  const counts = assignArguments(parameters, types);
-  if (!counts) return false;
-  for (let i = 0; i < types.length; i += 1) {
-    const p = parameters[slotReceiving(counts, i)];
-    if (!p || (p.Ref && !refs[i])) return false;
-    const target = p.Rest ? restElementType(p.Type) : p.Type;
-    // A borrowed location cannot be converted or widened. A ref argument to
-    // an ordinary parameter may still decay, as at every call boundary.
-    if (p.Ref && types[i]!.Kind !== 'any' && target.Kind !== 'any' && !SameType(types[i]!, target)) return false;
-  }
-  const admitted = types.map((t, i) => {
-    const p = parameters[slotReceiving(counts, i)]!;
-    // Supplying undefined triggers the initializer of an optional parameter.
-    return p.Optional && ((t.Kind === 'literal' && t.Value === Value.undefined) || (t.Kind === 'primitive' && t.Name === 'undefined'))
-      ? p.Type : t;
+  // This caller carries borrow mode separately from its referent types. Restore
+  // the contribution before the shared resolver judges receiving contracts.
+  const admitted: TypeRecord[] = types.map((type, i) => {
+    if (refs[i]) return { Kind: 'reference', Target: type };
+    // A written undefined and a named-placement gap trigger the same default.
+    return type.Kind === 'literal' && type.Value === Value.undefined ? type.Base : type;
   });
   return resolveOverloadByTypes([{ Parameters: parameters, Function: Value.undefined }], admitted).Kind === 'resolved';
 }

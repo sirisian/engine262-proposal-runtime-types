@@ -1,0 +1,1267 @@
+{
+  "cases": [
+    {
+      "name": "direct reverse=False ref ...xs:[uint8,string]",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string]):string{xs[0]=2;xs[1]=\"ok\";return \"chosen\";}function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}let a:uint8=1;let b:string=\"b\";const result=f(ref a,ref b);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct reverse=False ref ...xs:[2].<uint8>",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[2].<uint8>):string{xs[0]=2;return \"chosen\";}function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}let a:uint8=1;let b:string=\"b\";const result=f(ref a,ref a);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct reverse=False ref x:uint8,ref y:string",
+      "steps": [
+        {
+          "source": "function f(ref x:uint8,ref y:string):string{x=2;y=\"ok\";return \"chosen\";}function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}let a:uint8=1;let b:string=\"b\";const result=f(ref a,ref b);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct reverse=False ref ...xs:[uint8,...[].<string>,boolean]",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,...[].<string>,boolean]):string{xs[0]=2;xs[1]=\"ok\";return \"chosen\";}function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}let a:uint8=1;let b:string=\"b\";let c:boolean=true;const result=f(ref a,ref b,ref c);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct reverse=False ref ...xs:[uint8,string=\"d\"]",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string=\"d\"]):string{xs[0]=2;return \"chosen\";}function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}let a:uint8=1;let b:string=\"b\";const result=f(ref a);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored reverse=False ref ...xs:[uint8,string]",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string]):string{xs[0]=2;xs[1]=\"ok\";return \"chosen\";}function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}let a:uint8=1;let b:string=\"b\";const fn=f;const result=fn(ref a,ref b);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored reverse=False ref ...xs:[2].<uint8>",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[2].<uint8>):string{xs[0]=2;return \"chosen\";}function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}let a:uint8=1;let b:string=\"b\";const fn=f;const result=fn(ref a,ref a);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored reverse=False ref x:uint8,ref y:string",
+      "steps": [
+        {
+          "source": "function f(ref x:uint8,ref y:string):string{x=2;y=\"ok\";return \"chosen\";}function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}let a:uint8=1;let b:string=\"b\";const fn=f;const result=fn(ref a,ref b);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored reverse=False ref ...xs:[uint8,...[].<string>,boolean]",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,...[].<string>,boolean]):string{xs[0]=2;xs[1]=\"ok\";return \"chosen\";}function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}let a:uint8=1;let b:string=\"b\";let c:boolean=true;const fn=f;const result=fn(ref a,ref b,ref c);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored reverse=False ref ...xs:[uint8,string=\"d\"]",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string=\"d\"]):string{xs[0]=2;return \"chosen\";}function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}let a:uint8=1;let b:string=\"b\";const fn=f;const result=fn(ref a);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased reverse=False ref ...xs:[uint8,string]",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string]):string{xs[0]=2;xs[1]=\"ok\";return \"chosen\";}function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}let a:uint8=1;let b:string=\"b\";const fn:any=f;const result=fn(ref a,ref b);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased reverse=False ref ...xs:[2].<uint8>",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[2].<uint8>):string{xs[0]=2;return \"chosen\";}function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}let a:uint8=1;let b:string=\"b\";const fn:any=f;const result=fn(ref a,ref a);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased reverse=False ref x:uint8,ref y:string",
+      "steps": [
+        {
+          "source": "function f(ref x:uint8,ref y:string):string{x=2;y=\"ok\";return \"chosen\";}function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}let a:uint8=1;let b:string=\"b\";const fn:any=f;const result=fn(ref a,ref b);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased reverse=False ref ...xs:[uint8,...[].<string>,boolean]",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,...[].<string>,boolean]):string{xs[0]=2;xs[1]=\"ok\";return \"chosen\";}function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}let a:uint8=1;let b:string=\"b\";let c:boolean=true;const fn:any=f;const result=fn(ref a,ref b,ref c);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased reverse=False ref ...xs:[uint8,string=\"d\"]",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string=\"d\"]):string{xs[0]=2;return \"chosen\";}function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}let a:uint8=1;let b:string=\"b\";const fn:any=f;const result=fn(ref a);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unique named selection reverse=False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string],left:string):string{xs[0]=2;return \"ok\";}function f(ref ...xs:[boolean,uint8],right:string):string{return \"wrong\";}let a:uint8=1;let b:string=\"b\";f(ref a,ref b,left:\"label\")+\"/\"+String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed position wins False False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]):string{xs[0]=3;return \"rest\";}function f(ref x:uint8):string{x=2;return \"fixed\";}let a:uint8=1;const fn=f;fn(ref a)+\"/\"+String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "fixed/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed position wins False True",
+      "steps": [
+        {
+          "source": "function f(ref x:uint8):string{x=2;return \"fixed\";}function f(ref ...xs:[uint8]):string{xs[0]=3;return \"rest\";}let a:uint8=1;const fn=f;fn(ref a)+\"/\"+String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "fixed/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct reverse=True ref ...xs:[uint8,string]",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}function f(ref ...xs:[uint8,string]):string{xs[0]=2;xs[1]=\"ok\";return \"chosen\";}let a:uint8=1;let b:string=\"b\";const result=f(ref a,ref b);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct reverse=True ref ...xs:[2].<uint8>",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}function f(ref ...xs:[2].<uint8>):string{xs[0]=2;return \"chosen\";}let a:uint8=1;let b:string=\"b\";const result=f(ref a,ref a);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct reverse=True ref x:uint8,ref y:string",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}function f(ref x:uint8,ref y:string):string{x=2;y=\"ok\";return \"chosen\";}let a:uint8=1;let b:string=\"b\";const result=f(ref a,ref b);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct reverse=True ref ...xs:[uint8,...[].<string>,boolean]",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}function f(ref ...xs:[uint8,...[].<string>,boolean]):string{xs[0]=2;xs[1]=\"ok\";return \"chosen\";}let a:uint8=1;let b:string=\"b\";let c:boolean=true;const result=f(ref a,ref b,ref c);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct reverse=True ref ...xs:[uint8,string=\"d\"]",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}function f(ref ...xs:[uint8,string=\"d\"]):string{xs[0]=2;return \"chosen\";}let a:uint8=1;let b:string=\"b\";const result=f(ref a);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored reverse=True ref ...xs:[uint8,string]",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}function f(ref ...xs:[uint8,string]):string{xs[0]=2;xs[1]=\"ok\";return \"chosen\";}let a:uint8=1;let b:string=\"b\";const fn=f;const result=fn(ref a,ref b);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored reverse=True ref ...xs:[2].<uint8>",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}function f(ref ...xs:[2].<uint8>):string{xs[0]=2;return \"chosen\";}let a:uint8=1;let b:string=\"b\";const fn=f;const result=fn(ref a,ref a);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored reverse=True ref x:uint8,ref y:string",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}function f(ref x:uint8,ref y:string):string{x=2;y=\"ok\";return \"chosen\";}let a:uint8=1;let b:string=\"b\";const fn=f;const result=fn(ref a,ref b);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored reverse=True ref ...xs:[uint8,...[].<string>,boolean]",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}function f(ref ...xs:[uint8,...[].<string>,boolean]):string{xs[0]=2;xs[1]=\"ok\";return \"chosen\";}let a:uint8=1;let b:string=\"b\";let c:boolean=true;const fn=f;const result=fn(ref a,ref b,ref c);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored reverse=True ref ...xs:[uint8,string=\"d\"]",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}function f(ref ...xs:[uint8,string=\"d\"]):string{xs[0]=2;return \"chosen\";}let a:uint8=1;let b:string=\"b\";const fn=f;const result=fn(ref a);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased reverse=True ref ...xs:[uint8,string]",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}function f(ref ...xs:[uint8,string]):string{xs[0]=2;xs[1]=\"ok\";return \"chosen\";}let a:uint8=1;let b:string=\"b\";const fn:any=f;const result=fn(ref a,ref b);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased reverse=True ref ...xs:[2].<uint8>",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}function f(ref ...xs:[2].<uint8>):string{xs[0]=2;return \"chosen\";}let a:uint8=1;let b:string=\"b\";const fn:any=f;const result=fn(ref a,ref a);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased reverse=True ref x:uint8,ref y:string",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}function f(ref x:uint8,ref y:string):string{x=2;y=\"ok\";return \"chosen\";}let a:uint8=1;let b:string=\"b\";const fn:any=f;const result=fn(ref a,ref b);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased reverse=True ref ...xs:[uint8,...[].<string>,boolean]",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}function f(ref ...xs:[uint8,...[].<string>,boolean]):string{xs[0]=2;xs[1]=\"ok\";return \"chosen\";}let a:uint8=1;let b:string=\"b\";let c:boolean=true;const fn:any=f;const result=fn(ref a,ref b,ref c);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased reverse=True ref ...xs:[uint8,string=\"d\"]",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}function f(ref ...xs:[uint8,string=\"d\"]):string{xs[0]=2;return \"chosen\";}let a:uint8=1;let b:string=\"b\";const fn:any=f;const result=fn(ref a);result+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unique named selection reverse=True",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[boolean,uint8],right:string):string{return \"wrong\";}function f(ref ...xs:[uint8,string],left:string):string{xs[0]=2;return \"ok\";}let a:uint8=1;let b:string=\"b\";f(ref a,ref b,left:\"label\")+\"/\"+String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed position wins True False",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]):string{xs[0]=3;return \"rest\";}function f(ref x:uint8):string{x=2;return \"fixed\";}let a:uint8=1;const fn:any=f;fn(ref a)+\"/\"+String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "fixed/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed position wins True True",
+      "steps": [
+        {
+          "source": "function f(ref x:uint8):string{x=2;return \"fixed\";}function f(ref ...xs:[uint8]):string{xs[0]=3;return \"rest\";}let a:uint8=1;const fn:any=f;fn(ref a)+\"/\"+String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "fixed/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic fallback reference",
+      "steps": [
+        {
+          "source": "function f<T:type>(ref ...xs:[].<T>):string{return \"generic\";}function f(ref x:string):string{return \"wrong\";}let a:uint8=1;f(ref a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "generic"
+          }
+        }
+      ]
+    },
+    {
+      "name": "concrete before generic reference",
+      "steps": [
+        {
+          "source": "function f<T:type>(ref ...xs:[].<T>):string{return \"generic\";}function f(ref ...xs:[uint8,string]):string{xs[0]=2;return \"concrete\";}let a:uint8=1;let b:string=\"b\";f(ref a,ref b)+\"/\"+String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "concrete/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain value excludes reference overload",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]):string{return \"wrong\";}function f(x:uint8):string{return \"value\";}f(1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "value"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reference value tie remains ambiguous",
+      "steps": [
+        {
+          "source": "function f(ref x:uint8):string{return \"ref\";}function f(x:uint8):string{return \"value\";}let a:uint8=1;const fn:any=f;let result=\"missed\";try{fn(ref a);}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reference value tie rejects statically",
+      "steps": [
+        {
+          "source": "function f(ref x:uint8):string{return \"ref\";}function f(x:uint8):string{return \"value\";}let a:uint8=1;f(ref a);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_AMBIGUOUS_CALL",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "invariant union location excludes narrow ref candidate",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]):string{return \"wrong\";}function f(x:uint8):string{return \"value\";}let a:uint8|string=(1:=uint8);const fn:any=f;fn(ref a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "value"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit any location current membership",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]):string{return \"uint8\";}function f(ref ...xs:[string]):string{return \"string\";}let a:any=(1:=uint8);const fn:any=f;fn(ref a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "uint8"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown location no numeric conversion",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]):string{return \"wrong\";}function f(x:number):string{return \"value\";}let a:any=1;const fn:any=f;fn(ref a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "value"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflected call decays before overload",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]):string{return \"wrong\";}function f(x:uint8):string{return \"value\";}let a:uint8=1;const fn:any=f;fn.call(undefined,ref a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "value"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bound call retains value boundary",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]):string{return \"wrong\";}function f(x:uint8):string{return \"value\";}let a:uint8=1;const fn:any=f;const bound=fn.bind(undefined,ref a);bound();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "value"
+          }
+        }
+      ]
+    },
+    {
+      "name": "no candidate leaves bodies unentered",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[uint8,string]):string{entered++;return \"bad\";}function f(ref ...xs:[boolean,uint8]):string{entered++;return \"bad\";}let a:uint8=1;const fn:any=f;let result=\"missed\";try{fn(ref a);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "argument effect invalidates before dispatch",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];let entered=0;function change():string{a.reserve(64);return \"label\";}function f(ref ...xs:[uint8],label:string):string{entered++;return \"bad\";}function f(ref ...xs:[boolean],label:string):string{entered++;return \"bad\";}const fn:any=f;let result=\"missed\";try{fn(ref a[0],change());}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct any uses current referent",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]):string{xs[0]=2;return \"uint8\";}function f(ref ...xs:[string]):string{xs[0]=\"ok\";return \"string\";}let a:any=(1:=uint8);f(ref a)+\"/\"+String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "uint8/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct any excludes conversion",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]):string{xs[0]=2;return \"uint8\";}function f(ref ...xs:[string]):string{xs[0]=\"ok\";return \"string\";}let a:any=1;let result=\"missed\";try{f(ref a);}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class receiver reverse=False",
+      "steps": [
+        {
+          "source": "class C {label:string=\"label\";f(ref ...xs:[uint8,string]):string{xs[0]=2;xs[1]=this.label;return \"ok\";}f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}};const c=new C();let a:uint8=1;let b:string=\"b\";c.f(ref a,ref b)+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/2/label"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class receiver reverse=True",
+      "steps": [
+        {
+          "source": "class C {label:string=\"label\";f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}f(ref ...xs:[uint8,string]):string{xs[0]=2;xs[1]=this.label;return \"ok\";}};const c=new C();let a:uint8=1;let b:string=\"b\";c.f(ref a,ref b)+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/2/label"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object receiver reverse=False",
+      "steps": [
+        {
+          "source": "const c={label:\"label\",f(ref ...xs:[uint8,string]):string{xs[0]=2;xs[1]=this.label;return \"ok\";},f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}};let a:uint8=1;let b:string=\"b\";c.f(ref a,ref b)+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/2/label"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object receiver reverse=True",
+      "steps": [
+        {
+          "source": "const c={label:\"label\",f(ref ...xs:[boolean,uint8]):string{return \"wrong\";},f(ref ...xs:[uint8,string]):string{xs[0]=2;xs[1]=this.label;return \"ok\";}};let a:uint8=1;let b:string=\"b\";c.f(ref a,ref b)+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/2/label"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor reverse=False",
+      "steps": [
+        {
+          "source": "class C{label:string=\"initial\";constructor(ref ...xs:[uint8,string]){xs[0]=2;xs[1]=\"ok\";this.label=\"chosen\";}constructor(ref ...xs:[boolean,uint8]){this.label=\"wrong\";}}let a:uint8=1;let b:string=\"b\";const c=new C(ref a,ref b);c.label+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bad argument list reverse=False ref a",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[uint8,string]):string{entered++;return \"bad\";}function f(ref ...xs:[boolean,uint8]):string{entered++;return \"bad\";}let a:uint8=1;let b:string=\"b\";const fn:any=f;let result=\"missed\";try{fn(ref a);}catch(e){result=e.name;}result+\"/\"+String(entered)+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/1/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bad argument list reverse=False ref b,ref a",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[uint8,string]):string{entered++;return \"bad\";}function f(ref ...xs:[boolean,uint8]):string{entered++;return \"bad\";}let a:uint8=1;let b:string=\"b\";const fn:any=f;let result=\"missed\";try{fn(ref b,ref a);}catch(e){result=e.name;}result+\"/\"+String(entered)+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/1/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bad argument list reverse=False a,ref b",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[uint8,string]):string{entered++;return \"bad\";}function f(ref ...xs:[boolean,uint8]):string{entered++;return \"bad\";}let a:uint8=1;let b:string=\"b\";const fn:any=f;let result=\"missed\";try{fn(a,ref b);}catch(e){result=e.name;}result+\"/\"+String(entered)+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/1/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bad argument list reverse=False ref a,b",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[uint8,string]):string{entered++;return \"bad\";}function f(ref ...xs:[boolean,uint8]):string{entered++;return \"bad\";}let a:uint8=1;let b:string=\"b\";const fn:any=f;let result=\"missed\";try{fn(ref a,b);}catch(e){result=e.name;}result+\"/\"+String(entered)+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/1/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bad argument list reverse=False ref a,ref b,ref a",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[uint8,string]):string{entered++;return \"bad\";}function f(ref ...xs:[boolean,uint8]):string{entered++;return \"bad\";}let a:uint8=1;let b:string=\"b\";const fn:any=f;let result=\"missed\";try{fn(ref a,ref b,ref a);}catch(e){result=e.name;}result+\"/\"+String(entered)+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/1/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor reverse=True",
+      "steps": [
+        {
+          "source": "class C{label:string=\"initial\";constructor(ref ...xs:[boolean,uint8]){this.label=\"wrong\";}constructor(ref ...xs:[uint8,string]){xs[0]=2;xs[1]=\"ok\";this.label=\"chosen\";}}let a:uint8=1;let b:string=\"b\";const c=new C(ref a,ref b);c.label+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bad argument list reverse=True ref a",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[boolean,uint8]):string{entered++;return \"bad\";}function f(ref ...xs:[uint8,string]):string{entered++;return \"bad\";}let a:uint8=1;let b:string=\"b\";const fn:any=f;let result=\"missed\";try{fn(ref a);}catch(e){result=e.name;}result+\"/\"+String(entered)+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/1/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bad argument list reverse=True ref b,ref a",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[boolean,uint8]):string{entered++;return \"bad\";}function f(ref ...xs:[uint8,string]):string{entered++;return \"bad\";}let a:uint8=1;let b:string=\"b\";const fn:any=f;let result=\"missed\";try{fn(ref b,ref a);}catch(e){result=e.name;}result+\"/\"+String(entered)+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/1/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bad argument list reverse=True a,ref b",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[boolean,uint8]):string{entered++;return \"bad\";}function f(ref ...xs:[uint8,string]):string{entered++;return \"bad\";}let a:uint8=1;let b:string=\"b\";const fn:any=f;let result=\"missed\";try{fn(a,ref b);}catch(e){result=e.name;}result+\"/\"+String(entered)+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/1/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bad argument list reverse=True ref a,b",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[boolean,uint8]):string{entered++;return \"bad\";}function f(ref ...xs:[uint8,string]):string{entered++;return \"bad\";}let a:uint8=1;let b:string=\"b\";const fn:any=f;let result=\"missed\";try{fn(ref a,b);}catch(e){result=e.name;}result+\"/\"+String(entered)+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/1/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bad argument list reverse=True ref a,ref b,ref a",
+      "steps": [
+        {
+          "source": "let entered=0;function f(ref ...xs:[boolean,uint8]):string{entered++;return \"bad\";}function f(ref ...xs:[uint8,string]):string{entered++;return \"bad\";}let a:uint8=1;let b:string=\"b\";const fn:any=f;let result=\"missed\";try{fn(ref a,ref b,ref a);}catch(e){result=e.name;}result+\"/\"+String(entered)+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/1/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invariant storage let a:[].<uint8|string>=[(1:=uint8)];",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]):string{return \"wrong\";}function f(x:uint8):string{return \"value\";}let a:[].<uint8|string>=[(1:=uint8)];const fn:any=f;fn(ref a[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "value"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invariant storage let a:[uint8|string]=[(1:=uint8)];",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]):string{return \"wrong\";}function f(x:uint8):string{return \"value\";}let a:[uint8|string]=[(1:=uint8)];const fn:any=f;fn(ref a[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "value"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invariant storage let a:uint8|string=(1:=uint8);let ref alias=a;",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]):string{return \"wrong\";}function f(x:uint8):string{return \"value\";}let a:uint8|string=(1:=uint8);let ref alias=a;const fn:any=f;fn(ref alias);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "value"
+          }
+        }
+      ]
+    },
+    {
+      "name": "write original storage let a:[].<uint8>=[1];",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]):string{xs[0]=2;return \"uint8\";}function f(ref ...xs:[string]):string{xs[0]=\"ok\";return \"string\";}let a:[].<uint8>=[1];const fn:any=f;fn(ref a[0])+\"/\"+String(a[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "uint8/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "write original storage let a:[uint8]=[1];",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]):string{xs[0]=2;return \"uint8\";}function f(ref ...xs:[string]):string{xs[0]=\"ok\";return \"string\";}let a:[uint8]=[1];const fn:any=f;fn(ref a[0])+\"/\"+String(a[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "uint8/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "write original storage let a:uint8=1;let ref alias=a;",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]):string{xs[0]=2;return \"uint8\";}function f(ref ...xs:[string]):string{xs[0]=\"ok\";return \"string\";}let a:uint8=1;let ref alias=a;const fn:any=f;fn(ref alias)+\"/\"+String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "uint8/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier default final liveness False",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];let entered=0;let effects=0;function change():string{effects++;a.reserve(32);return \"prefix\";}function f(prefix:string=change(),ref ...xs:[uint8],label:string):string{entered++;xs[0]=3;return label;}function f(ref ...xs:[boolean],other:string):string{entered++;return \"wrong\";}const fn:any=f;let result=\"missed\";try{result=fn(ref a[0],label:\"ok\");}catch(e){result=e.name;}result+\"/\"+String(entered)+\"/\"+String(effects)+\"/\"+String(a[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier default final liveness True",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];a.reserve(64);let entered=0;let effects=0;function change():string{effects++;a.reserve(32);return \"prefix\";}function f(prefix:string=change(),ref ...xs:[uint8],label:string):string{entered++;xs[0]=3;return label;}function f(ref ...xs:[boolean],other:string):string{entered++;return \"wrong\";}const fn:any=f;let result=\"missed\";try{result=fn(ref a[0],label:\"ok\");}catch(e){result=e.name;}result+\"/\"+String(entered)+\"/\"+String(effects)+\"/\"+String(a[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/1/1/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "body rechecks later liveness",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];let entered=0;function f(ref ...xs:[uint8]):string{entered++;a.reserve(64);return String(xs[0]);}function f(ref ...xs:[string]):string{return \"wrong\";}const fn:any=f;let result=\"missed\";try{fn(ref a[0]);}catch(e){result=e.name;}result+\"/\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "once only source location",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];let calls=0;function get(){calls++;return a;}function f(ref ...xs:[uint8]):string{xs[0]=2;return \"uint8\";}function f(ref ...xs:[string]):string{xs[0]=\"ok\";return \"string\";}const fn:any=f;fn(ref get()[0])+\"/\"+String(a[0])+\"/\"+String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "uint8/2/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward heterogeneous to overloaded group",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[uint8,string]):string{ys[0]=2;ys[1]=\"ok\";return \"chosen\";}function g(ref ...ys:[boolean,uint8]):string{return \"wrong\";}function f(ref ...xs:[uint8,string]):string{return g(...xs);}let a:uint8=1;let b:string=\"b\";f(ref a,ref b)+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "alias tuple overload",
+      "steps": [
+        {
+          "source": "type Run=[uint8,string];function f(ref ...xs:Run):string{xs[0]=2;return \"ok\";}function f(ref ...xs:[boolean,uint8]):string{return \"wrong\";}let a:uint8=1;let b:string=\"b\";f(ref a,ref b)+\"/\"+String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflected apply uses values",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8]):string{return \"wrong\";}function f(x:uint8):string{return \"value\";}let a:uint8=1;const fn:any=f;fn.apply(undefined,[a]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "value"
+          }
+        }
+      ]
+    },
+    {
+      "name": "huge extent does not expand",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[1000000000].<uint8>):string{return \"wrong\";}function f(ref x:uint8):string{x=2;return \"fixed\";}let a:uint8=1;f(ref a)+\"/\"+String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "fixed/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default omission in selected run does not allocate",
+      "steps": [
+        {
+          "source": "function f(ref ...xs:[uint8,string=\"d\"]):string{let result=\"missed\";try{String(xs[1]);}catch(e){result=e.name;}return String(xs.length)+\"/\"+result;}function f(ref ...xs:[boolean]):string{return \"wrong\";}let a:uint8=1;f(ref a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata invariant reference candidate",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}type Scalar=float32.<{m:0}>;function f(ref ...xs:[Scalar]):string{return \"wrong\";}function f(x:float32):string{return \"value\";}let a:float32=2;const fn:any=f;fn(ref a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "value"
+          }
+        }
+      ]
+    },
+    {
+      "name": "recovery after failed overload check",
+      "steps": [
+        {
+          "source": "function bad(ref ...xs:[uint8]):string{return \"a\";}function bad(ref ...xs:[string]):string{return \"b\";}let n:boolean=true;bad(ref n);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_CALL_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "function f(ref ...xs:[uint8]):string{xs[0]=2;return \"uint8\";}function f(ref ...xs:[string]):string{xs[0]=\"ok\";return \"string\";}let a:uint8=1;f(ref a)+\"/\"+String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "uint8/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit case ref applicability direct uint8",
+      "steps": [
+        {
+          "source": "function f<T:type>(x:T):string{return \"owner\";}function f<uint8>(ref x:uint8):string{x+=1;return \"ref\";}let n:uint8=3;f.<uint8>(n)+\"/\"+f.<uint8>(ref n)+\"/\"+String(n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "owner/ref/4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit case ref applicability direct uint16",
+      "steps": [
+        {
+          "source": "function f<T:type>(x:T):string{return \"owner\";}function f<uint8>(ref x:uint16):string{x+=1;return \"ref\";}let n:uint8=3;f.<uint8>(n)+\"/\"+f.<uint8>(ref n)+\"/\"+String(n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "owner/owner/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit case reference tuple direct",
+      "steps": [
+        {
+          "source": "function f<T:type>(...xs:[].<T>):string{return \"owner\";}function f<uint8>(ref ...xs:[uint8,string]):string{xs[0]=2;xs[1]=\"ok\";return \"case\";}let a:uint8=1;let b:string=\"b\";f.<uint8>(ref a,ref b)+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "case/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit case ref applicability erased uint8",
+      "steps": [
+        {
+          "source": "function f<T:type>(x:T):string{return \"owner\";}function f<uint8>(ref x:uint8):string{x+=1;return \"ref\";}const g:any=f;let n:uint8=3;g.<uint8>(n)+\"/\"+g.<uint8>(ref n)+\"/\"+String(n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "owner/ref/4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit case ref applicability erased uint16",
+      "steps": [
+        {
+          "source": "function f<T:type>(x:T):string{return \"owner\";}function f<uint8>(ref x:uint16):string{x+=1;return \"ref\";}const g:any=f;let n:uint8=3;g.<uint8>(n)+\"/\"+g.<uint8>(ref n)+\"/\"+String(n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "owner/owner/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit case reference tuple erased",
+      "steps": [
+        {
+          "source": "function f<T:type>(...xs:[].<T>):string{return \"owner\";}function f<uint8>(ref ...xs:[uint8,string]):string{xs[0]=2;xs[1]=\"ok\";return \"case\";}const g:any=f;let a:uint8=1;let b:string=\"b\";g.<uint8>(ref a,ref b)+\"/\"+String(a)+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "case/2/ok"
+          }
+        }
+      ]
+    }
+  ]
+}

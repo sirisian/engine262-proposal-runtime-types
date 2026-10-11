@@ -31752,7 +31752,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (a.type === 'AssignmentRestElement') {
           return null;
         }
-        const t = argumentStaticType(a);
+        const t = a.type === 'RefExpression' ? staticType(a) : argumentStaticType(a);
         return t && t.Kind === 'literal' ? t.Base : t;
       });
       if (decoratorCalls.has(c as unknown as object)) {
