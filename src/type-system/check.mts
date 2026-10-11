@@ -13571,6 +13571,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return operationalType(t.Constraint, seen);
   };
 
+  // A normal String result is a category fact, not a primitive-record spelling
+  // or a property of the source syntax. Do not execute conversions to prove it.
+  const stringOnly = (type: Known, active: readonly TypeRecord[] = []): boolean => {
+    if (!type || active.includes(type)) return false;
+    const next = [...active, type];
+    switch (type.Kind) {
+      case 'literal': case 'parameterized': return stringOnly(type.Base, next);
+      case 'shared': case 'reference': return stringOnly(type.Target, next);
+      case 'parameter': return stringOnly(type.Constraint ?? null, next);
+      case 'nominal': return type.EnumMembers !== undefined && stringOnly(type.Underlying ?? null, next);
+      case 'union': return type.Members.length > 0 && type.Members.every((member) => stringOnly(member, next));
+      case 'intersection': return type.Members.some((member) => stringOnly(member, next));
+      case 'primitive': return type.Name === 'string';
+      default: return false;
+    }
+  };
+
   const structureOf = (t: Known): Known => {
     t = withPartialStructure(t);
     if (t && t.Kind === 'nominal') {
@@ -20331,8 +20348,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // comparison without a cast" - an operand of an enum type is read at its
         // UNDERLYING type, as the run time's TypedOperandType reads it, so a
         // literal's range, numeric mixing and brands are judged there.
-        const leftT = leftLit ? null : enumUnderlying(operationalType(staticType(leftNode)));
-        const rightT = rightLit ? null : enumUnderlying(operationalType(staticType(rightNode)));
+        const operandType = (operand: ParseNode): Known => {
+          const type = staticType(operand);
+          if (type || node.type !== 'AdditiveExpression' || node.operator !== '+') return type;
+          // Reuse the existing lexical constant proof; do not turn an
+          // unannotated mutable initializer into a permanent operand contract.
+          const constant = singleValueOperandType(operand);
+          return stringOnly(constant) ? constant : null;
+        };
+        const leftT = leftLit ? null : enumUnderlying(operationalType(operandType(leftNode)));
+        const rightT = rightLit ? null : enumUnderlying(operationalType(operandType(rightNode)));
         // A DEGENERATE LITERAL OPERAND, refused where the checker can see it.
         // #sec-integer-operations states two such rules, and neither was
         // enforced: "It is a type error if the divisor of `/` or `%` is a
@@ -20411,26 +20436,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (token && rightNode && checkUndeclaredClassOperator(node, token,
           leftLit ? makePrimitive('number') : leftT, rightLit ? makePrimitive('number') : rightT)) return neverType;
         if (token && checkBinaryConversion(node, token, leftNode, rightNode)) return neverType;
-        // A `+` WITH A STRING OPERAND IS A CONCATENATION, and its type is
-        // `string`. #sec-conversions gives a value of a numeric type a
-        // conversion to `string` - ToString - because "ToString of a number is
-        // total and lossless, while ToNumber of a string is partial and lossy,
-        // so the direction that cannot fail is admitted and the direction that
-        // can is written as a parse". So `s + n` is a `string` and always was;
-        // what was missing is that the checker SAID so. `literalOperand`
-        // recognises numeric literals only, so a string operand left the
-        // expression ~any~ and `let r: uint8 = n + s` was the run time's, as
-        // was `a = a + "s"` at a `uint8`.
-        //
-        // `+` only. For the other operators a string operand would have to
-        // convert TO a numeric type, which is the parse the same clause refuses
-        // to admit implicitly - a separate judgment, and not one this arm makes
-        // yet.
-        const isStringType = (t: Known): boolean => !!t && t.Kind === 'primitive' && (t as { Name?: string }).Name === 'string';
-        const stringLiteralOperand = (nd: ParseNode | undefined): boolean => (nd as { type?: string } | undefined)?.type === 'StringLiteral';
+        // The selected built-in concatenation has a normal String result.
+        // Literal/refined String contracts and their wrappers establish the
+        // same category as plain string, without running a conversion or
+        // changing the operand's identity, metadata or participation.
+        const leftString = stringOnly(leftT);
         if (node.type === 'AdditiveExpression' && (node as unknown as { operator?: string }).operator === '+'
-            && (isStringType(leftT) || isStringType(rightT)
-              || stringLiteralOperand(leftNode) || stringLiteralOperand(rightNode))) {
+            && (leftString || stringOnly(rightT))) {
+          // A primitive block can replace the operation just as a selected
+          // class operator above can. Keep its established result contract.
+          const blockLeft = erasedKeepingBrand(leftT);
+          const blockRight = erasedKeepingBrand(rightT);
+          if (blockLeft && blockRight) {
+            const contributed = bodylessResult('+', blockLeft, blockRight, true, node);
+            if (contributed !== undefined) return contributed;
+            // A block may accept only part of a compound operand contract.
+            // No match for the whole contract does not prove no dispatch.
+            const blockBase = blockLeft.Kind === 'parameterized' ? blockLeft.Base : blockLeft;
+            if ((leftString && blockBase.Kind !== 'primitive' && blockDefinitionsFor('string', '+').length > 0)
+                || (['union', 'intersection'].includes(blockRight.Kind) && primitiveBlockDeclares('+', blockLeft))) return null;
+          }
+          // An open left operand can carry a class operator. Its result need
+          // not be String merely because the right operand is one.
+          if (!leftString && !leftLit && !knownNonObject(leftT)) return null;
           const leftFailure = checkImplicitString(leftNode, 'default');
           const rightFailure = checkImplicitString(rightNode, 'default');
           return leftFailure || rightFailure ? neverType : makePrimitive('string');

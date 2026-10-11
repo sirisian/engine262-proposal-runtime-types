@@ -1,0 +1,1216 @@
+{
+  "cases": [
+    {
+      "name": "plain n+s rejects numeric return",
+      "steps": [
+        {
+          "source": "function f(s:string,n:uint8):uint8{return n+s;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain n+s accepts String return",
+      "steps": [
+        {
+          "source": "function f(s:string,n:uint8):string{return n+s;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain s+n rejects numeric return",
+      "steps": [
+        {
+          "source": "function f(s:string,n:uint8):uint8{return s+n;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain s+n accepts String return",
+      "steps": [
+        {
+          "source": "function f(s:string,n:uint8):string{return s+n;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal n+s rejects numeric return",
+      "steps": [
+        {
+          "source": "function f(s:\"a\",n:uint8):uint8{return n+s;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal n+s accepts String return",
+      "steps": [
+        {
+          "source": "function f(s:\"a\",n:uint8):string{return n+s;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal s+n rejects numeric return",
+      "steps": [
+        {
+          "source": "function f(s:\"a\",n:uint8):uint8{return s+n;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal s+n accepts String return",
+      "steps": [
+        {
+          "source": "function f(s:\"a\",n:uint8):string{return s+n;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal union n+s rejects numeric return",
+      "steps": [
+        {
+          "source": "function f(s:\"a\"|\"b\",n:uint8):uint8{return n+s;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal union n+s accepts String return",
+      "steps": [
+        {
+          "source": "function f(s:\"a\"|\"b\",n:uint8):string{return n+s;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal union s+n rejects numeric return",
+      "steps": [
+        {
+          "source": "function f(s:\"a\"|\"b\",n:uint8):uint8{return s+n;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal union s+n accepts String return",
+      "steps": [
+        {
+          "source": "function f(s:\"a\"|\"b\",n:uint8):string{return s+n;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "brand n+s rejects numeric return",
+      "steps": [
+        {
+          "source": "type S=string.<{brand:\"S\"}>;function f(s:S,n:uint8):uint8{return n+s;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "brand n+s accepts String return",
+      "steps": [
+        {
+          "source": "type S=string.<{brand:\"S\"}>;function f(s:S,n:uint8):string{return n+s;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "brand s+n rejects numeric return",
+      "steps": [
+        {
+          "source": "type S=string.<{brand:\"S\"}>;function f(s:S,n:uint8):uint8{return s+n;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "brand s+n accepts String return",
+      "steps": [
+        {
+          "source": "type S=string.<{brand:\"S\"}>;function f(s:S,n:uint8):string{return s+n;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersection n+s rejects numeric return",
+      "steps": [
+        {
+          "source": "type S=string.<{brand:\"S\"}> & string.<{brand:\"T\"}>;function f(s:S,n:uint8):uint8{return n+s;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersection n+s accepts String return",
+      "steps": [
+        {
+          "source": "type S=string.<{brand:\"S\"}> & string.<{brand:\"T\"}>;function f(s:S,n:uint8):string{return n+s;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersection s+n rejects numeric return",
+      "steps": [
+        {
+          "source": "type S=string.<{brand:\"S\"}> & string.<{brand:\"T\"}>;function f(s:S,n:uint8):uint8{return s+n;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersection s+n accepts String return",
+      "steps": [
+        {
+          "source": "type S=string.<{brand:\"S\"}> & string.<{brand:\"T\"}>;function f(s:S,n:uint8):string{return s+n;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "brand union n+s rejects numeric return",
+      "steps": [
+        {
+          "source": "type S=string.<{brand:\"S\"}> | string.<{brand:\"T\"}>;function f(s:S,n:uint8):uint8{return n+s;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "brand union n+s accepts String return",
+      "steps": [
+        {
+          "source": "type S=string.<{brand:\"S\"}> | string.<{brand:\"T\"}>;function f(s:S,n:uint8):string{return n+s;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "brand union s+n rejects numeric return",
+      "steps": [
+        {
+          "source": "type S=string.<{brand:\"S\"}> | string.<{brand:\"T\"}>;function f(s:S,n:uint8):uint8{return s+n;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "brand union s+n accepts String return",
+      "steps": [
+        {
+          "source": "type S=string.<{brand:\"S\"}> | string.<{brand:\"T\"}>;function f(s:S,n:uint8):string{return s+n;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "enum n+s rejects numeric return",
+      "steps": [
+        {
+          "source": "enum E:string{A=\"a\",B=\"b\"}function f(s:E,n:uint8):uint8{return n+s;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "enum n+s accepts String return",
+      "steps": [
+        {
+          "source": "enum E:string{A=\"a\",B=\"b\"}function f(s:E,n:uint8):string{return n+s;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "enum s+n rejects numeric return",
+      "steps": [
+        {
+          "source": "enum E:string{A=\"a\",B=\"b\"}function f(s:E,n:uint8):uint8{return s+n;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "enum s+n accepts String return",
+      "steps": [
+        {
+          "source": "enum E:string{A=\"a\",B=\"b\"}function f(s:E,n:uint8):string{return s+n;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reference n+s rejects numeric return",
+      "steps": [
+        {
+          "source": "function f(s:&string,n:uint8):uint8{return n+s;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "reference n+s accepts String return",
+      "steps": [
+        {
+          "source": "function f(s:&string,n:uint8):string{return n+s;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reference s+n rejects numeric return",
+      "steps": [
+        {
+          "source": "function f(s:&string,n:uint8):uint8{return s+n;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "reference s+n accepts String return",
+      "steps": [
+        {
+          "source": "function f(s:&string,n:uint8):string{return s+n;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "flow literal declaration n+s",
+      "steps": [
+        {
+          "source": "let s:string=\"a\";let n:uint8=1;let r:uint8=n+s;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "flow literal assignment n+s",
+      "steps": [
+        {
+          "source": "let s:string=\"a\";let n:uint8=1;n=n+s;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "lexical constant n+s",
+      "steps": [
+        {
+          "source": "const s=\"a\";let n:uint8=1;let r:uint8=n+s;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "String result value n+s",
+      "steps": [
+        {
+          "source": "let s:string=\"a\";let n:uint8=1;let r:string=n+s;r;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "flow literal declaration s+n",
+      "steps": [
+        {
+          "source": "let s:string=\"a\";let n:uint8=1;let r:uint8=s+n;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "flow literal assignment s+n",
+      "steps": [
+        {
+          "source": "let s:string=\"a\";let n:uint8=1;n=s+n;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "lexical constant s+n",
+      "steps": [
+        {
+          "source": "const s=\"a\";let n:uint8=1;let r:uint8=s+n;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "String result value s+n",
+      "steps": [
+        {
+          "source": "let s:string=\"a\";let n:uint8=1;let r:string=s+n;r;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "parenthesized literal",
+      "steps": [
+        {
+          "source": "function f(n:uint8):uint8{return n+((\"a\"));}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested result",
+      "steps": [
+        {
+          "source": "function f(s:\"a\",n:uint8):uint8{return (s+n)+n;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounded parameter",
+      "steps": [
+        {
+          "source": "function f<T:type extends \"a\"|\"b\">(s:T,n:uint8):uint8{return n+s;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple member",
+      "steps": [
+        {
+          "source": "function f(s:[\"a\"],n:uint8):uint8{return n+s[0];}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "record member",
+      "steps": [
+        {
+          "source": "function f(s:{value:\"a\"},n:uint8):uint8{return n+s.value;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "declared call result",
+      "steps": [
+        {
+          "source": "function text():\"a\"{return \"a\";}function f(n:uint8):uint8{return n+text();}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated arrow",
+      "steps": [
+        {
+          "source": "const f=(s:\"a\",n:uint8):uint8=>n+s;\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "deep brand",
+      "steps": [
+        {
+          "source": "type S=string.<{brand:\"B\"}>.<{brand:\"B\"}>.<{brand:\"B\"}>.<{brand:\"B\"}>.<{brand:\"B\"}>.<{brand:\"B\"}>.<{brand:\"B\"}>.<{brand:\"B\"}>.<{brand:\"B\"}>.<{brand:\"B\"}>.<{brand:\"B\"}>.<{brand:\"B\"}>;function f(s:S,n:uint8):uint8{return n+s;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed object member destination",
+      "steps": [
+        {
+          "source": "let s:string=\"a\";let n:uint8=1;let r:{x:uint8}={x:n+s};\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed tuple destination",
+      "steps": [
+        {
+          "source": "let s:string=\"a\";let n:uint8=1;let r:[uint8]=[n+s];\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "call argument destination",
+      "steps": [
+        {
+          "source": "function g(x:uint8){}let s:string=\"a\";let n:uint8=1;g(n+s);\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "mixed union numeric path",
+      "steps": [
+        {
+          "source": "function f(s:string|uint8,n:uint8){let r:uint8=n+s;return r;}String(f((2:=uint8),(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any right numeric path",
+      "steps": [
+        {
+          "source": "function f(s:any,n:uint8){let r:uint8=n+s;return r;}String(f((2:=uint8),(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unbounded generic defer",
+      "steps": [
+        {
+          "source": "function f<T:type>(s:T,n:uint8):uint8{return n+s;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain JS",
+      "steps": [
+        {
+          "source": "let s=\"a\";let n=1;String(n+s);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric literal adoption",
+      "steps": [
+        {
+          "source": "let n:uint8=1;let r:uint8=n+2;String(r);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mutable untyped source changes",
+      "steps": [
+        {
+          "source": "let s=\"a\";s=(2:=uint8);let n:uint8=1;let r:uint8=n+s;String(r);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constant name shadowed",
+      "steps": [
+        {
+          "source": "const s=\"a\";function f(s:uint8,n:uint8):uint8{return n+s;}String(f((2:=uint8),(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected class operator",
+      "steps": [
+        {
+          "source": "class C{operator +(s:string):uint8{return 7;}}const c=new C();let s:\"a\"=\"a\";let r:uint8=c+s;String(r);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected primitive block",
+      "steps": [
+        {
+          "source": "primitive uint8{operator +(s:string):uint8{return 7;}}let n:uint8=1;let s:\"a\"=\"a\";let r:uint8=n+s;String(r);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected primitive block literal",
+      "steps": [
+        {
+          "source": "primitive uint8{operator +(s:string):uint8{return 7;}}let n:uint8=1;let r:uint8=n+\"a\";String(r);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown left class operator",
+      "steps": [
+        {
+          "source": "class C{operator +(s:string):uint8{return 7;}}function f(x:any):uint8{return x+\"a\";}String(f(new C()));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown left refined String",
+      "steps": [
+        {
+          "source": "class C{operator +(s:string):uint8{return 7;}}function f(x:any,s:\"a\"):uint8{return x+s;}String(f(new C(),\"a\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "structural left class operator",
+      "steps": [
+        {
+          "source": "class C{a:uint8=1;operator +(s:string):uint8{return 7;}}function f(x:{a:uint8},s:\"a\"):uint8{return x+s;}String(f(new C(),\"a\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "getter once",
+      "steps": [
+        {
+          "source": "globalThis.count=0;const o={get x():\"a\"{globalThis.count++;return \"a\";}};let n:uint8=1;let r:string=n+o.x;String(globalThis.count)+\":\"+r;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1:1a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "left to right effects",
+      "steps": [
+        {
+          "source": "const events=[];function l():uint8{events.push(\"L\");return 1;}function r():\"a\"{events.push(\"R\");return \"a\";}const text=l()+r();events.join(\"\")+\":\"+text;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "LR:1a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "String concat numeric coercion",
+      "steps": [
+        {
+          "source": "function f(s:\"a\",n:bigint):string{return s+n;}f(\"a\",2n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown Symbol exception stays runtime",
+      "steps": [
+        {
+          "source": "let s=Symbol();try{const r=\"a\"+s;}catch(e){\"caught\";}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "caught"
+          }
+        }
+      ]
+    },
+    {
+      "name": "conversion hook normal effect",
+      "steps": [
+        {
+          "source": "globalThis.count=0;class C{valueOf():uint8{globalThis.count++;return 2;}}const o=new C();let s:\"a\"=\"a\";let r:string=o+s;String(globalThis.count)+\":\"+r;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1:2a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Symbol conversion precedence",
+      "steps": [
+        {
+          "source": "function f(n:symbol,s:\"a\"):uint8{return n+s;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-conversion-protocol",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit String Symbol conversion",
+      "steps": [
+        {
+          "source": "function f(n:symbol,s:\"a\"):string{return String(n)+s;}f(Symbol(\"x\"),\"a\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "Symbol(x)a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed unit has no effects or lexical publication",
+      "steps": [
+        {
+          "source": "globalThis.events=[];\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "globalThis.events.push(\"body\");let s:string=\"a\";let n:uint8=1;let bad:uint8=n+s;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "let s:string=\"b\";let n:uint8=2;globalThis.events.join(\"\")+\":\"+(n+s);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": ":2b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounded String on left",
+      "steps": [
+        {
+          "source": "function f<T:type extends \"a\"|\"b\">(s:T,n:uint8):uint8{return s+n;}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "partial primitive operand dispatch stays open",
+      "steps": [
+        {
+          "source": "primitive uint8{operator +(s:\"a\"):uint8{return 7;}}function f(s:\"a\"|\"b\",n:uint8):uint8{return n+s;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "String union receiver dispatch stays open",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}}function f(s:\"a\"|\"b\",n:uint8):uint8{return s+n;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    }
+  ]
+}
