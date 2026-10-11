@@ -1,0 +1,1223 @@
+{
+  "cases": [
+    {
+      "name": "valid=False default='' body='U' suffix='\"created\";'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string> =U;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);\"created\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "valid=False default='' body='U' suffix='function unused(){fn.<string>(\"ok\");}'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string> =U;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);function unused(){fn.<uint8>(1);}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "valid=False default='' body='U' suffix='fn.<string>(\"ok\");'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string> =U;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);fn.<uint8>(1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "valid=False default='' body='string' suffix='\"created\";'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string> =string;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);\"created\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "valid=False default='' body='string' suffix='function unused(){fn.<string>(\"ok\");}'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string> =string;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);function unused(){fn.<string>(\"ok\");}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "valid=False default='' body='string' suffix='fn.<string>(\"ok\");'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string> =string;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "valid=False default='' body='identity(U)' suffix='\"created\";'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string> =identity(U);return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);\"created\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "valid=False default='' body='identity(U)' suffix='function unused(){fn.<string>(\"ok\");}'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string> =identity(U);return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);function unused(){fn.<string>(\"ok\");}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "valid=False default='' body='identity(U)' suffix='fn.<string>(\"ok\");'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string> =identity(U);return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "valid=False default='=fail()' body='U' suffix='\"created\";'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string=fail()> =U;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);\"created\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "valid=False default='=fail()' body='U' suffix='function unused(){fn.<string>(\"ok\");}'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string=fail()> =U;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);function unused(){fn.<uint8>(1);}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "valid=False default='=fail()' body='U' suffix='fn.<string>(\"ok\");'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string=fail()> =U;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);fn.<uint8>(1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "valid=False default='=fail()' body='string' suffix='\"created\";'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string=fail()> =string;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);\"created\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "valid=False default='=fail()' body='string' suffix='function unused(){fn.<string>(\"ok\");}'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string=fail()> =string;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);function unused(){fn.<string>(\"ok\");}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "valid=False default='=fail()' body='string' suffix='fn.<string>(\"ok\");'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string=fail()> =string;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "valid=False default='=fail()' body='identity(U)' suffix='\"created\";'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string=fail()> =identity(U);return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);\"created\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "valid=False default='=fail()' body='identity(U)' suffix='function unused(){fn.<string>(\"ok\");}'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string=fail()> =identity(U);return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);function unused(){fn.<string>(\"ok\");}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "valid=False default='=fail()' body='identity(U)' suffix='fn.<string>(\"ok\");'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string=fail()> =identity(U);return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "valid=True default='' body='U' suffix='\"created\";'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string> =U;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");\"created\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "created"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid=True default='' body='U' suffix='function unused(){fn.<string>(\"ok\");}'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string> =U;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");function unused(){fn.<string>(\"ok\");}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid=True default='' body='U' suffix='fn.<string>(\"ok\");'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string> =U;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid=True default='' body='string' suffix='\"created\";'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string> =string;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");\"created\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "created"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid=True default='' body='string' suffix='function unused(){fn.<string>(\"ok\");}'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string> =string;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");function unused(){fn.<string>(\"ok\");}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid=True default='' body='string' suffix='fn.<string>(\"ok\");'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string> =string;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid=True default='' body='identity(U)' suffix='\"created\";'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string> =identity(U);return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");\"created\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "created"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid=True default='' body='identity(U)' suffix='function unused(){fn.<string>(\"ok\");}'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string> =identity(U);return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");function unused(){fn.<string>(\"ok\");}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid=True default='' body='identity(U)' suffix='fn.<string>(\"ok\");'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string> =identity(U);return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid=True default='=fail()' body='U' suffix='\"created\";'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string=fail()> =U;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");\"created\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "created"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid=True default='=fail()' body='U' suffix='function unused(){fn.<string>(\"ok\");}'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string=fail()> =U;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");function unused(){fn.<string>(\"ok\");}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid=True default='=fail()' body='U' suffix='fn.<string>(\"ok\");'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string=fail()> =U;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid=True default='=fail()' body='string' suffix='\"created\";'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string=fail()> =string;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");\"created\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "created"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid=True default='=fail()' body='string' suffix='function unused(){fn.<string>(\"ok\");}'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string=fail()> =string;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");function unused(){fn.<string>(\"ok\");}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid=True default='=fail()' body='string' suffix='fn.<string>(\"ok\");'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string=fail()> =string;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid=True default='=fail()' body='identity(U)' suffix='\"created\";'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string=fail()> =identity(U);return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");\"created\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "created"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid=True default='=fail()' body='identity(U)' suffix='function unused(){fn.<string>(\"ok\");}'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string=fail()> =identity(U);return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");function unused(){fn.<string>(\"ok\");}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid=True default='=fail()' body='identity(U)' suffix='fn.<string>(\"ok\");'",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string=fail()> =identity(U);return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named invalid",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){type R<U:type extends string> =U;return function f<V:type extends R.<U:T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);\"created\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "spread invalid",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){type R<U:type extends string> =U;return function f<V:type extends R.<...[T]> >(y:V):V{return y;};}const fn=outer.<uint8>(1);\"created\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "captured bound invalid",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){type R<U:type extends T> =string;return function f<V:type extends R.<uint8> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");\"created\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "captured bound valid",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){type R<U:type extends T> =string;return function f<V:type extends R.<uint8> >(y:V):V{return y;};}const fn=outer.<uint8>(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "own parameter pending",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){type R<U:type extends string> =U;return function f<V:type,W:type extends R.<V> >(y:W):W{return y;};}const fn=outer.<uint8>(1);\"created\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "created"
+          }
+        }
+      ]
+    },
+    {
+      "name": "own parameter invalid call",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){type R<U:type extends string> =U;return function f<V:type,W:type extends R.<V> >(y:W):W{return y;};}const fn=outer.<uint8>(1);function unused(){fn.<uint8,uint8>(1);}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "shadow pending",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){type R<U:type extends string> =U;return function f<T:type,V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);fn.<string,string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unused default bypass",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){type R<U:type extends string> =U;return function f<V:type=R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured computed bound invalid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type extends identity(T)> =string;return function f<V:type extends R.<uint8> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");\"created\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "captured computed bound valid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type extends identity(T)> =string;return function f<V:type extends R.<uint8> >(y:V):V{return y;};}const fn=outer.<uint8>(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "alias chain invalid",
+      "steps": [
+        {
+          "source": "type Bound<U:type extends string> =U;function outer<T:type>(x:T){type R<X:type> =Bound.<X>;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);\"created\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "alias chain erased invalid",
+      "steps": [
+        {
+          "source": "type Bound<U:type extends string> =string;function outer<T:type>(x:T){type R<X:type> =Bound.<X>;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);\"created\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "nested captured chain invalid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type Bound<U:type extends identity(T)> =string;type R<X:type> =Bound.<X>;return function f<V:type extends R.<uint8> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");\"created\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "nested captured chain valid",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type Bound<U:type extends identity(T)> =string;type R<X:type> =Bound.<X>;return function f<V:type extends R.<uint8> >(y:V):V{return y;};}const fn=outer.<uint8>(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same name captured helper valid",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}type R<T:type extends bound()> =string;return function f<V:type extends R.<uint8> >(y:V):V{return y;};}const fn=outer.<uint8>(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same name captured helper invalid",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){function bound():type{return T;}type R<T:type extends bound()> =string;return function f<V:type extends R.<uint8> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");\"created\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "unapplied producer remains pending",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){type R<U:type extends string> =U;return function f<V:type extends R.<T> >(y:V):V{return y;};}\"declared\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "declared"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two activations valid",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){type R<U:type extends T> =U;return function f<V:type extends R.<T> >(y:V):V{return y;};}const a=outer.<string>(\"x\");const b=outer.<uint8>(1);a.<string>(\"ok\");b.<uint8>(1);a.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier valid activation cannot hide invalid",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){type R<U:type extends string> =string;return function f<V:type extends R.<T> >(y:V):V{return y;};}const a=outer.<string>(\"x\");const b=outer.<uint8>(1);\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "unused computed default containing invalid alias stays unused",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){type R<U:type extends string> =U;return function f<V:type=[R.<T>] >(y:V):V{return y;};}const fn=outer.<uint8>(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "original uncalled consumer",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){type R<U:type extends string> =U;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);function unused(){fn.<uint8>(1);}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "spread valid",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){type R<U:type extends string> =U;return function f<V:type extends R.<...[T]> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dependent second alias parameter invalid",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){type R<A:type,B:type extends A> =string;return function f<V:type extends R.<T,uint8> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "dependent second alias parameter valid",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){type R<A:type,B:type extends A> =string;return function f<V:type extends R.<T,uint8> >(y:V):V{return y;};}const fn=outer.<uint8>(1);fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reordered named alias parameters invalid",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){type R<A:type,B:type extends A> =string;return function f<V:type extends R.<B:uint8,A:T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "composite result erased argument invalid",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){type R<U:type extends string> =string;return function f<V:type extends [R.<T>] >(y:V):V{return y;};}const fn=outer.<uint8>(1);\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "composite result erased argument valid",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){type R<U:type extends string> =string;return function f<V:type extends [R.<T>] >(y:V):V{return y;};}const fn=outer.<string>(\"x\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary producer body not executed during refusal",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){throw new Error(\"ordinary body ran\");type R<U:type extends string> =U;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "declared return dependent alias invalid",
+      "steps": [
+        {
+          "source": "type R<U:type extends string> =string;function outer<T:type>(x:T):R.<T>{return \"ok\";}outer.<uint8>(1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "declared return dependent alias valid",
+      "steps": [
+        {
+          "source": "type R<U:type extends string> =string;function outer<T:type>(x:T):R.<T>{return \"ok\";}outer.<string>(\"x\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "three alias layers invalid",
+      "steps": [
+        {
+          "source": "type Bound<U:type extends string> =string;type Layer<X:type> =Bound.<X>;function outer<T:type>(x:T){type R<Y:type> =Layer.<Y>;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);\"missed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "\"uint.<8>\" is not assignable to \"string\""
+        }
+      ]
+    },
+    {
+      "name": "three alias layers valid",
+      "steps": [
+        {
+          "source": "type Bound<U:type extends string> =string;type Layer<X:type> =Bound.<X>;function outer<T:type>(x:T){type R<Y:type> =Layer.<Y>;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static failure restoration",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function fail():type{throw new Error(\"default ran\");}function outer<T:type>(x:T){type R<U:type extends string> =U;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<uint8>(1);\"created\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "function clean<T:type extends string>(x:T):T{return x;}clean.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed-bound failure restoration",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(x:T){type R<U:type extends identity(T)> =string;return function f<V:type extends R.<uint8> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");\"created\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "function clean<T:type extends string>(x:T):T{return x;}clean.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "returned callable retains its alias context across scripts",
+      "steps": [
+        {
+          "source": "function outer<T:type>(x:T){type R<U:type extends T> =U;return function f<V:type extends R.<T> >(y:V):V{return y;};}const fn=outer.<string>(\"x\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        },
+        {
+          "source": "fn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "producer obligations cross Script boundaries (True)",
+      "steps": [
+        {
+          "source": "function importedOuter<T:type>(x:T){type R<U:type extends string> =string;return function f<V:type extends R.<T> >(y:V):V{return y;};}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        },
+        {
+          "source": "const importedFn=importedOuter.<string>(\"x\");importedFn.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    }
+  ]
+}
