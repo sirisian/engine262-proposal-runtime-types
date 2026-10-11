@@ -41,7 +41,7 @@ for (const { name, steps } of corpus.cases) {
 
 for (const ref of [false, true]) {
   const declarations = 'let entered=0;function g(' + (ref ? 'ref ' : '') + '...ys:[].<uint8>){entered++;return String(ys.length);}';
-  const source = 'function f(ref ...xs:[].<uint8>){return g(...xs);}let out="missed";try{out=f();}catch(e){out=e.name;}';
+  const source = 'const destination:any=g;function f(ref ...xs:[].<uint8>){return destination(...xs);}let out="missed";try{out=f();}catch(e){out=e.name;}';
   const expected = ref ? '0/1' : 'TypeError/0';
   test(`generated Function empty forwarding (ref=${ref})`, () => {
     setSurroundingAgent(new Agent({ features: ['runtime-types'] }));

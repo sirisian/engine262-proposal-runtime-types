@@ -158,6 +158,8 @@ interface Frame {
   /** Lexical identity is independent of the value's type or narrowing. */
   readonly bindingKinds: Map<string, BindingKind>;
   readonly dynamicBindings?: boolean;
+  /** Parameter binding convention, independent of initialization and type. */
+  refRestNames?: Set<string>;
 
   /**
    * Names bound by a `const` whose initializer is a compile-time numeric
@@ -30690,6 +30692,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     formals.forEach((p, i) => declarePatternAnnotations(p, frames[frames.length - 1],
       parameterBodyType(p, contextual?.[i] ?? null, records?.[i])));
     const parameterFrame = frames[frames.length - 1];
+    // Binding identity, including the reference-run convention, is available
+    // for every parameter while checking defaults. This does not initialize
+    // the run or bypass a later parameter's temporal dead zone.
+    for (const p of params ?? []) {
+      if (p.type === 'BindingRestElement' && (p as { Ref?: boolean }).Ref && p.BindingIdentifier) {
+        (parameterFrame.refRestNames ??= new Set()).add(p.BindingIdentifier.name);
+      }
+    }
     activeParameterFrames.add(parameterFrame);
     let index = 0;
     for (const p of params ?? []) {
@@ -30723,10 +30733,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // since the run time refuses only an out-of-range index or a store.
         const restName = (p as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name;
         if (typeof restName === 'string') {
-          const frame = frames[frames.length - 1] as { refRestNames?: Set<string> };
-          if ((p as { Ref?: boolean }).Ref === true) {
-            (frame.refRestNames ??= new Set<string>()).add(restName);
-          }
           declare(restName, restType);
         } else {
           checkPattern(p.BindingPattern as PatternNode, { type: restType, typed: !!restType, annotated: !!p.TypeAnnotation }, true, !!restType);
@@ -32031,6 +32037,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
   if (callee && callee.Kind === 'function' && Array.isArray(c.Arguments)) {
+    // A reference run needs a reference-rest contract even when it is empty.
+    // Inspect written arguments before spread expansion loses that identity.
+    // These are the effective signatures in view, not implementation syntax:
+    // a compatible implementation may use individual refs or no parameters.
+    // The absence of any eligible position proves failure without determining
+    // the run's length or choosing a partition. A possible rest leaves those
+    // separate admission/routing judgments to their existing checks.
+    if (callee.Signatures.length > 0
+      && callee.Signatures.every((signature) => !signature.Parameters.some((p) => p.Rest && p.Ref))) {
+      for (const argument of c.Arguments) {
+        if (argument.type !== 'AssignmentRestElement') continue;
+        const source = patternExpression(argument.AssignmentExpression);
+        if (source?.type === 'IdentifierReference' && isRefRestName(source.name)) {
+          reportType('rt-reference-permission', argument,
+            'a reference run can only be forwarded to a reference-rest position; no signature in this callable contract has one');
+        }
+      }
+    }
     const supplied = expandValueSpreads(c.Arguments);
     if (!decoratorCalls.has(c) && callee.Signatures.length > 0
       && callee.Signatures.every((signature) => trailingSpreadCannotBind(signature.Parameters, supplied))) {
@@ -33244,11 +33268,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // innermost frame that knows the name decides, as the read-side check does.
   const isRefRestName = (name: string): boolean => {
     for (let i = frames.length - 1; i >= 0; i -= 1) {
-      const fr = frames[i] as { declaredNames: Set<string>, refRestNames?: Set<string> };
+      const fr = frames[i];
       if (fr.refRestNames?.has(name)) {
         return true;
       }
-      if (fr.declaredNames.has(name)) {
+      if (fr.declaredNames.has(name) || fr.bindingKinds.has(name) || fr.dynamicBindings) {
         return false;
       }
     }

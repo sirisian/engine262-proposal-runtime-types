@@ -957,10 +957,14 @@
         {
           "source": "function g(...ys:[].<uint8>,label:string){return label;}function f(ref ...xs:[].<uint8>){return g(...xs,label:\"bad\");}let a:uint8=1;let result=\"missed\";try{f(ref a);}catch(e){result=e.name;}result;",
           "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError"
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
           }
         }
       ]

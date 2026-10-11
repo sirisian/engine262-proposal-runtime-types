@@ -6,10 +6,14 @@
         {
           "source": "let entered=0;function g(...ys:[].<uint8>){entered++;return String(ys.length);}function f(ref ...xs:[].<uint8>){return g(...xs);}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
           "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
           }
         }
       ]
@@ -20,10 +24,14 @@
         {
           "source": "let entered=0;function g(...ys:[].<uint8>){entered++;return String(ys.length);}function f(ref ...xs:[].<uint8>){return g(...xs);}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
           "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
           }
         }
       ]
@@ -62,10 +70,14 @@
         {
           "source": "let entered=0;function g(...ys:[].<uint8>,label:string){entered++;return String(ys.length);}function f(ref ...xs:[].<uint8>){return g(...xs,label:\"ok\");}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
           "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
           }
         }
       ]
@@ -76,10 +88,14 @@
         {
           "source": "let entered=0;function g(...ys:[].<uint8>,label:string){entered++;return String(ys.length);}function f(ref ...xs:[].<uint8>){return g(...xs,label:\"ok\");}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
           "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
           }
         }
       ]
@@ -342,10 +358,14 @@
         {
           "source": "let entered=0;function g(...ys:[].<uint8>){entered++;return String(ys.length);}const obj={g};function f(ref ...xs:[].<uint8>){return obj.g(...xs);}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
           "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
           }
         }
       ]
@@ -356,10 +376,14 @@
         {
           "source": "let entered=0;function g(...ys:[].<uint8>){entered++;return String(ys.length);}const obj={g};function f(ref ...xs:[].<uint8>){return obj.g(...xs);}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
           "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
           }
         }
       ]
@@ -398,10 +422,14 @@
         {
           "source": "let entered=0;function g(...ys:[].<uint8>,label:string){entered++;return String(ys.length);}const obj={g};function f(ref ...xs:[].<uint8>){return obj.g(...xs,label:\"ok\");}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
           "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
           }
         }
       ]
@@ -412,10 +440,14 @@
         {
           "source": "let entered=0;function g(...ys:[].<uint8>,label:string){entered++;return String(ys.length);}const obj={g};function f(ref ...xs:[].<uint8>){return obj.g(...xs,label:\"ok\");}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
           "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
           }
         }
       ]
@@ -454,10 +486,14 @@
         {
           "source": "let entered=0;class C {constructor(...ys:[].<uint8>){entered++;}}function f(ref ...xs:[].<uint8>){new C(...xs);return \"ok\";}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
           "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
           }
         }
       ]
@@ -468,10 +504,14 @@
         {
           "source": "let entered=0;class C {constructor(...ys:[].<uint8>){entered++;}}function f(ref ...xs:[].<uint8>){new C(...xs);return \"ok\";}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
           "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
           }
         }
       ]
@@ -482,10 +522,14 @@
         {
           "source": "let entered=0;class C {constructor(...ys:[].<uint8>,label:string){entered++;}}function f(ref ...xs:[].<uint8>){new C(...xs,label:\"ok\");return \"ok\";}let a:uint8=1;let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
           "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
           }
         }
       ]
@@ -496,10 +540,14 @@
         {
           "source": "let entered=0;class C {constructor(...ys:[].<uint8>,label:string){entered++;}}function f(ref ...xs:[].<uint8>){new C(...xs,label:\"ok\");return \"ok\";}let a:uint8=1;let out=\"ok\";try{out=f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
           "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
           }
         }
       ]
@@ -622,10 +670,14 @@
         {
           "source": "let entered=0;function g(...ys:[].<uint8>){entered++;return String(ys.length);}function f(ref ...xs:[].<uint8>){let a:uint8=1;return g(ys:a,...xs);}let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
           "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
           }
         }
       ]
@@ -692,10 +744,14 @@
         {
           "source": "let entered=0;function g(){entered++;return \"bad\";}function f(ref ...xs:[].<uint8>){return g(...xs);}let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
           "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
           }
         }
       ]
@@ -718,7 +774,7 @@
       "name": "empty occurrence preserves all argument effects",
       "steps": [
         {
-          "source": "let effects=\"\";let entered=0;function g(...ys:[].<uint8>,label:string){entered++;return \"bad\";}function f(ref ...xs:[].<uint8>){return g(...(effects+=\"A\",[]),...xs,label:(effects+=\"B\",\"L\"));}let out=\"ok\";try{f();}catch(e){out=e.name;}out+\"/\"+effects+\"/\"+entered;",
+          "source": "let effects=\"\";let entered=0;function g(...ys:[].<uint8>,label:string){entered++;return \"bad\";}const dynamicDestination:any=g;function f(ref ...xs:[].<uint8>){return dynamicDestination(...(effects+=\"A\",[]),...xs,label:(effects+=\"B\",\"L\"));}let out=\"ok\";try{f();}catch(e){out=e.name;}out+\"/\"+effects+\"/\"+entered;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -732,7 +788,7 @@
       "name": "argument throw precedes forwarding failure",
       "steps": [
         {
-          "source": "let entered=0;function g(...ys:[].<uint8>,label:string){entered++;}function fail(){throw new Error(\"argument\");}function f(ref ...xs:[].<uint8>){g(...xs,label:fail());}let out=\"missed\";try{f();}catch(e){out=e.message;}out+\"/\"+entered;",
+          "source": "let entered=0;function g(...ys:[].<uint8>,label:string){entered++;}function fail(){throw new Error(\"argument\");}const dynamicDestination:any=g;function f(ref ...xs:[].<uint8>){dynamicDestination(...xs,label:fail());}let out=\"missed\";try{f();}catch(e){out=e.message;}out+\"/\"+entered;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -746,7 +802,7 @@
       "name": "empty failure precedes parameter initializer",
       "steps": [
         {
-          "source": "let effects=0;function g(...ys:[].<uint8>,label:string=(effects++,\"L\")){}function f(ref ...xs:[].<uint8>){g(...xs);}let out=\"missed\";try{f();}catch(e){out=e.name;}out+\"/\"+effects;",
+          "source": "let effects=0;function g(...ys:[].<uint8>,label:string=(effects++,\"L\")){}const dynamicDestination:any=g;function f(ref ...xs:[].<uint8>){dynamicDestination(...xs);}let out=\"missed\";try{f();}catch(e){out=e.name;}out+\"/\"+effects;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -858,7 +914,7 @@
       "name": "failed forwarding does not contaminate later call",
       "steps": [
         {
-          "source": "function g(...ys:[].<uint8>){return \"ok\";}function f(ref ...xs:[].<uint8>){try{g(...xs);}catch(e){}return g();}f();",
+          "source": "function g(...ys:[].<uint8>){return \"ok\";}const dynamicDestination:any=g;function f(ref ...xs:[].<uint8>){try{dynamicDestination(...xs);}catch(e){}return g();}f();",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -872,7 +928,7 @@
       "name": "nested call cannot steal forwarding occurrence",
       "steps": [
         {
-          "source": "function g(...ys:[].<uint8>,label:string){return \"bad\";}function h(ref ...ys:[].<uint8>){return \"ok\";}function f(ref ...xs:[].<uint8>){let out=\"missed\";try{g(...xs,label:h(...xs));}catch(e){out=e.name;}return out+\"/\"+h(...xs);}f();",
+          "source": "function g(...ys:[].<uint8>,label:string){return \"bad\";}function h(ref ...ys:[].<uint8>){return \"ok\";}const dynamicDestination:any=g;function f(ref ...xs:[].<uint8>){let out=\"missed\";try{dynamicDestination(...xs,label:h(...xs));}catch(e){out=e.name;}return out+\"/\"+h(...xs);}f();",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -958,10 +1014,14 @@
         {
           "source": "let entered=0;const view:(...ys:[])=>string=()=>{entered++;return \"bad\";};function f(ref ...xs:[]){return view(...xs);}let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
           "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
           }
         }
       ]
@@ -986,10 +1046,14 @@
         {
           "source": "let entered=0;function g<T:type>(...ys:[].<T>):string{entered++;return \"bad\";}const h=g.<uint8>;function f(ref ...xs:[].<uint8>){return h(...xs);}let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
           "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
           }
         }
       ]
