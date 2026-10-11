@@ -100,11 +100,15 @@ test('a computed access with a String literal key is TYPED', () => {
   expectError('let o: { n: uint8 } = { n: 1 }; let v: uint8 = o["zz"];');
 });
 
-test('a key that is not a String literal TYPE stays untyped', () => {
-  // `IndexedTypeOf` answers ~empty~ for such a key, so there is no property
-  // named and nothing to check. This reads as an omission beside the case above
-  // and is not one: the key genuinely does not name a member.
-  expect(evaluated('let o: { n: uint8 } = { n: 1 }; let k: string = "n"; let v: string = o[k]; String(v);')).toBe('1');
+test('a general String key without a current singleton fact stays untyped', () => {
+  // A parameter retains the general domain. A typed initialization with "n"
+  // instead establishes a singleton fact used by ordinary computed reads.
+  expect(evaluated('function f(o: { n: uint8 }, k: string): string { return o[k]; } f({ n: 1 }, "n");')).toBe('1');
+});
+
+test('a known current String key selects the property contract', () => {
+  expectStaticTypeError('let o: { n: uint8 } = { n: 1 }; let k: string = "n"; let v: string = o[k];');
+  expect(evaluated('let o: { n: uint8 } = { n: 1 }; let k: string = "n"; let v: uint8 = o[k]; String(v);')).toBe('1');
 });
 
 test('the other computed receivers are unchanged', () => {

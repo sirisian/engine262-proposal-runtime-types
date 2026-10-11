@@ -1,0 +1,1022 @@
+{
+  "cases": [
+    {
+      "name": "=== uint8/uint16 discard",
+      "steps": [
+        {
+          "source": "(5:=uint8)===(5:=uint16);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "=== uint8/uint16 String argument",
+      "steps": [
+        {
+          "source": "String((5:=uint8)===(5:=uint16));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "=== uint8/uint16 stored",
+      "steps": [
+        {
+          "source": "let answer:boolean=(5:=uint8)===(5:=uint16);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "=== uint8/uint16 returned",
+      "steps": [
+        {
+          "source": "function unused(){return (5:=uint8)===(5:=uint16);}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "=== uint8/uint16 deciding",
+      "steps": [
+        {
+          "source": "if((5:=uint8)===(5:=uint16)){}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "=== uint8/uint16 untyped parameters preserve runtime identity",
+      "steps": [
+        {
+          "source": "function equal(a,b){return a===b;}String(equal((5:=uint8),(5:=uint16)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "=== uint8/int8 discard",
+      "steps": [
+        {
+          "source": "(5:=uint8)===(5:=int8);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "=== uint8/int8 String argument",
+      "steps": [
+        {
+          "source": "String((5:=uint8)===(5:=int8));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "=== uint8/int8 stored",
+      "steps": [
+        {
+          "source": "let answer:boolean=(5:=uint8)===(5:=int8);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "=== uint8/int8 returned",
+      "steps": [
+        {
+          "source": "function unused(){return (5:=uint8)===(5:=int8);}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "=== uint8/int8 deciding",
+      "steps": [
+        {
+          "source": "if((5:=uint8)===(5:=int8)){}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "=== uint8/int8 untyped parameters preserve runtime identity",
+      "steps": [
+        {
+          "source": "function equal(a,b){return a===b;}String(equal((5:=uint8),(5:=int8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "=== let annotated narrowing retains participation",
+      "steps": [
+        {
+          "source": "let a:uint8|string=1;let b:string=\"s\";String(a===b);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "=== const annotated narrowing retains participation",
+      "steps": [
+        {
+          "source": "const a:uint8|string=1;const b:string=\"s\";String(a===b);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "=== broad union parameter still overlaps",
+      "steps": [
+        {
+          "source": "function f(a:uint8|string,b:string):boolean{return a===b;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "=== explicitly unknown parameters",
+      "steps": [
+        {
+          "source": "function f(a:any,b:any):boolean{return a===b;}String(f((5:=uint8),(5:=uint16)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "=== overlapping numeric domains",
+      "steps": [
+        {
+          "source": "function f(a:uint8,b:uint8):boolean{return a===b;}String(f(1,2));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "=== fresh literal adopts",
+      "steps": [
+        {
+          "source": "let a:uint8=5;String(a===5);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "!== uint8/uint16 discard",
+      "steps": [
+        {
+          "source": "(5:=uint8)!==(5:=uint16);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "!== uint8/uint16 String argument",
+      "steps": [
+        {
+          "source": "String((5:=uint8)!==(5:=uint16));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "!== uint8/uint16 stored",
+      "steps": [
+        {
+          "source": "let answer:boolean=(5:=uint8)!==(5:=uint16);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "!== uint8/uint16 returned",
+      "steps": [
+        {
+          "source": "function unused(){return (5:=uint8)!==(5:=uint16);}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "!== uint8/uint16 deciding",
+      "steps": [
+        {
+          "source": "if((5:=uint8)!==(5:=uint16)){}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "!== uint8/uint16 untyped parameters preserve runtime identity",
+      "steps": [
+        {
+          "source": "function equal(a,b){return a!==b;}String(equal((5:=uint8),(5:=uint16)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "!== uint8/int8 discard",
+      "steps": [
+        {
+          "source": "(5:=uint8)!==(5:=int8);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "!== uint8/int8 String argument",
+      "steps": [
+        {
+          "source": "String((5:=uint8)!==(5:=int8));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "!== uint8/int8 stored",
+      "steps": [
+        {
+          "source": "let answer:boolean=(5:=uint8)!==(5:=int8);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "!== uint8/int8 returned",
+      "steps": [
+        {
+          "source": "function unused(){return (5:=uint8)!==(5:=int8);}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "!== uint8/int8 deciding",
+      "steps": [
+        {
+          "source": "if((5:=uint8)!==(5:=int8)){}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "!== uint8/int8 untyped parameters preserve runtime identity",
+      "steps": [
+        {
+          "source": "function equal(a,b){return a!==b;}String(equal((5:=uint8),(5:=int8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "!== let annotated narrowing retains participation",
+      "steps": [
+        {
+          "source": "let a:uint8|string=1;let b:string=\"s\";String(a!==b);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "!== const annotated narrowing retains participation",
+      "steps": [
+        {
+          "source": "const a:uint8|string=1;const b:string=\"s\";String(a!==b);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "!== broad union parameter still overlaps",
+      "steps": [
+        {
+          "source": "function f(a:uint8|string,b:string):boolean{return a!==b;}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "!== explicitly unknown parameters",
+      "steps": [
+        {
+          "source": "function f(a:any,b:any):boolean{return a!==b;}String(f((5:=uint8),(5:=uint16)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "!== overlapping numeric domains",
+      "steps": [
+        {
+          "source": "function f(a:uint8,b:uint8):boolean{return a!==b;}String(f(1,2));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "!== fresh literal adopts",
+      "steps": [
+        {
+          "source": "let a:uint8=5;String(a!==5);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pure membership value query",
+      "steps": [
+        {
+          "source": "let a:uint8|string=1;String(a is uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "broad union parameter membership branch",
+      "steps": [
+        {
+          "source": "function f(a:uint8|string){if(a is uint8){let n:uint8=a;}}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "settled membership branch rejects",
+      "steps": [
+        {
+          "source": "let a:uint8|string=1;if(a is uint8){}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-impossible-test",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "loose comparison retains mathematical meaning",
+      "steps": [
+        {
+          "source": "let a:uint8=1;let b:float32=1;String(a==b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "private unannotated result stays unknown",
+      "steps": [
+        {
+          "source": "function g(){return 1;}let b:string=\"s\";String(g()===b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "store changes current union member",
+      "steps": [
+        {
+          "source": "let a:uint8|string=1;a=\"s\";let b:string=\"s\";String(a===b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "call invalidates captured union fact",
+      "steps": [
+        {
+          "source": "let a:uint8|string=1;function change(){a=\"s\";}change();let b:string=\"s\";String(a===b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same-spelled untyped shadow stays dynamic",
+      "steps": [
+        {
+          "source": "let a:uint8=1;function f(a,b){return a===b;}String(f((1:=uint8),\"s\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "let known key k rejects String destination",
+      "steps": [
+        {
+          "source": "let o:{n:uint8}={n:1};let k:string=\"n\";let v:string=o[k];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "let known key k admits uint8 destination",
+      "steps": [
+        {
+          "source": "let o:{n:uint8}={n:1};let k:string=\"n\";let v:uint8=o[k];String(v);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "let known key (k) rejects String destination",
+      "steps": [
+        {
+          "source": "let o:{n:uint8}={n:1};let k:string=\"n\";let v:string=o[(k)];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "let known key (k) admits uint8 destination",
+      "steps": [
+        {
+          "source": "let o:{n:uint8}={n:1};let k:string=\"n\";let v:uint8=o[(k)];String(v);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const known key k rejects String destination",
+      "steps": [
+        {
+          "source": "let o:{n:uint8}={n:1};const k:string=\"n\";let v:string=o[k];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "const known key k admits uint8 destination",
+      "steps": [
+        {
+          "source": "let o:{n:uint8}={n:1};const k:string=\"n\";let v:uint8=o[k];String(v);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const known key (k) rejects String destination",
+      "steps": [
+        {
+          "source": "let o:{n:uint8}={n:1};const k:string=\"n\";let v:string=o[(k)];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "const known key (k) admits uint8 destination",
+      "steps": [
+        {
+          "source": "let o:{n:uint8}={n:1};const k:string=\"n\";let v:uint8=o[(k)];String(v);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "general String parameter remains dynamic",
+      "steps": [
+        {
+          "source": "function f(o:{n:uint8},k:string):string{return o[k];}f({n:1},\"n\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "untyped mutable key remains dynamic",
+      "steps": [
+        {
+          "source": "let o:{n:uint8}={n:1};let k=\"n\";let v:string=o[k];String(v);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown call result key remains dynamic",
+      "steps": [
+        {
+          "source": "function key(){return \"n\";}let o:{n:uint8}={n:1};let k:string=key();let v:string=o[k];String(v);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "call invalidates captured key fact",
+      "steps": [
+        {
+          "source": "let o:{n:uint8,s:string}={n:1,s:\"ok\"};let k:string=\"n\";function change(){k=\"s\";}change();let v:string=o[k];String(v);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "key store selects new contract",
+      "steps": [
+        {
+          "source": "let o:{n:uint8,s:string}={n:1,s:\"ok\"};let k:string=\"n\";k=\"s\";let v:string=o[k];v;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite key alternatives join read contracts",
+      "steps": [
+        {
+          "source": "function f(o:{n:uint8,s:string},k:\"n\"|\"s\"):string{return o[k];}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "key evaluation executes once",
+      "steps": [
+        {
+          "source": "let calls=0;function key():\"n\"{calls++;return \"n\";}let o:{n:uint8}={n:1};let v:uint8=o[key()];String(v)+\":\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rejected comparison leaves no body effects or lexical declarations",
+      "steps": [
+        {
+          "source": "var log=\"\";\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        },
+        {
+          "source": "log+=\"bad\";let fresh:uint8=1;let other:string=\"s\";String(fresh===other);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "let fresh:uint8=1;let other:string=\"s\";log+String(fresh);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rejected known-key read leaves no body effects or lexical declarations",
+      "steps": [
+        {
+          "source": "var log=\"\";\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        },
+        {
+          "source": "log+=\"bad\";let o:{n:uint8}={n:1};let k:string=\"n\";let fresh:string=o[k];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "let o:{n:uint8}={n:1};let k:string=\"n\";let fresh:uint8=o[k];log+String(fresh);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    }
+  ]
+}

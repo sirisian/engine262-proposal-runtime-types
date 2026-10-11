@@ -36,9 +36,14 @@ test('a typed number is never strictly equal to a plain Number', () => {
 
 test('typed numbers of different types are not strictly equal', () => {
   expectStaticTypeError('(5 := uint8) === (5 := uint16) ? "eq" : "neq";');
-  expect(evaluated('String((5 := uint8) === (5 := uint16));')).toBe('false');
+  expectStaticTypeError('String((5 := uint8) === (5 := uint16));');
   expectStaticTypeError('(5 := uint8) === (5 := int8) ? "eq" : "neq";');
-  expect(evaluated('String((5 := uint8) === (5 := int8));')).toBe('false');
+  expectStaticTypeError('String((5 := uint8) === (5 := int8));');
+  // #sec-narrowfrom: a value consumer does not exempt the operator obligation.
+  // Unannotated parameters retain a runtime identity query without importing
+  // the callers' operand contracts into the function body.
+  expect(evaluated('function equal(a,b){return a===b;}String(equal((5:=uint8),(5:=uint16)));')).toBe('false');
+  expect(evaluated('function equal(a,b){return a===b;}String(equal((5:=uint8),(5:=int8)));')).toBe('false');
 });
 
 test('typed numbers of the same type and payload are strictly equal', () => {

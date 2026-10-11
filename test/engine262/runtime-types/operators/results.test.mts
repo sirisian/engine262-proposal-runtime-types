@@ -254,7 +254,9 @@ test('a strict comparison between disjoint types is refused', () => {
 });
 
 test('what the disjointness rule leaves alone', () => {
-  expect(ok('let a: uint8 | string = 1; let b: string = "s"; let c: boolean = a === b;')).toBe(true);
+  // A parameter supplies the broad union; a successful typed initializer
+  // would establish the current member under #sec-narrowing-flow.
+  expect(ok('function f(a: uint8 | string, b: string) { let c: boolean = a === b; }')).toBe(true);
   expect(ok('let a: uint8 = 1; let b: uint8 = 2; let c: boolean = a === b;')).toBe(true);
   // A LOOSE `==` across numeric types is meaningful - it compares mathematical
   // values - so disjointness of the types says nothing about it.
@@ -272,8 +274,15 @@ test('what the disjointness rule leaves alone', () => {
   expectStaticTypeError('let a: uint8 = 1; let b: string = "s"; if (a === b) { }');
   // A condition that is fine is untouched, narrowing included.
   expect(ok('let a: uint8 = 1; let b: uint8 = 2; if (a === b) { }')).toBe(true);
-  expect(ok('let a: uint8 | string = 1; if (a is uint8) { let u: uint8 = a; }')).toBe(true);
+  expect(ok('function f(a: uint8 | string) { if (a is uint8) { let u: uint8 = a; } }')).toBe(true);
   expect(ok('let a: uint8 = 1; if (a+a+a+a+a+a+a+a+a+a+a+a === 12) { }')).toBe(true);
+});
+
+test('a typed union initialization establishes the current comparison domain', () => {
+  expectStaticTypeError('let a: uint8 | string = 1; let b: string = "s"; let c: boolean = a === b;');
+  expectStaticTypeError('let a: uint8 | string = 1; if (a is uint8) { let u: uint8 = a; }');
+  // The destination still permits a later String store.
+  expect(ok('let a: uint8 | string = 1; a = "s"; let b: string = "s"; let c: boolean = a === b;')).toBe(true);
 });
 
 // ---------------------------------------------------------------------------
