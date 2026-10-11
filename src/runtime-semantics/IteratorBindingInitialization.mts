@@ -17,10 +17,10 @@ import { __ts_cast__ } from '../utils/language.mts';
 import { CreateRefBinding, DeclarativeEnvironmentRecord, RefBindingHolder } from '../execution-context/Environment.mts';
 import { EnforceAnnotation, IsOfTypeNode, CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
 import { CreateListIteratorRecord } from '../abstract-ops/iterator-operations.mts';
-import { IsOfType, TypeNodeToTypeRecord, RuntimeTypeOf } from '../type-system/runtime.mts';
+import { TypeNodeToTypeRecord, RuntimeTypeOf } from '../type-system/runtime.mts';
 import { SameType } from '../type-system/relations.mts';
 import { restElementType, displayType } from '../type-system/records.mts';
-import { SequenceAssignment } from '../type-system/sequence-assignment.mts';
+import { AssignRuntimeArguments } from '../abstract-ops/argument-distribution.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';
 import {
@@ -102,54 +102,24 @@ function* IteratorBindingInitialization_AssignedParameters(FormalParameters: Par
     }
     args.push(next);
   }
-  // A parameter admits an argument when it is of the parameter's declared type,
-  // its ELEMENT type where the parameter is a rest, since that is what one
-  // argument reaching it must be. An unannotated parameter admits anything.
-  const admitted: boolean[][] = [];
-  for (const arg of args) {
-    const row: boolean[] = [];
-    for (const p of FormalParameters) {
-      const annotation = (p as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-      if (!annotation) {
-        row.push(true);
-        continue;
-      }
-      // The assignment is a DISTRIBUTION, not the enforcement: each parameter's
-      // own annotation check runs when it is bound, below, and rejects what
-      // does not fit. So a type this cannot resolve - a generic parameter whose
-      // substitution is not in scope here, which `...a: [].<T>` is - admits
-      // rather than throwing, and the distribution falls back to positions
-      // while the enforcement stays exact.
-      const resolved = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation.Type));
-      if (resolved.Type === 'throw') {
-        row.push(true);
-        continue;
-      }
-      const declared = resolved.Value;
-      const wanted = p.type === 'BindingRestElement' ? restElementType(declared) : declared;
-      let ok = Q(yield* IsOfType(arg, wanted));
-      if (!ok && !(arg instanceof ObjectValue)) {
-        // #sec-literal-propagation: an untyped primitive argument takes a
-        // typed parameter by CONVERSION at binding, so the distribution admits
-        // exactly what the enforcement below will accept - the README's
-        // `f(...a: [].<uint32>, c: uint32)` called `f(0, 1, 2)` splits, while a
-        // value the element type refuses still refuses. The dry run is the same
-        // operation binding performs, so the two cannot disagree; it is
-        // attempted for primitives only, since converting an object could run
-        // its own code inside what is merely a distribution question.
-        const convertedProbe = EnsureCompletion(yield* CheckedConvertValue(arg, wanted as never));
-        ok = convertedProbe.Type === 'normal';
-      }
-      row.push(ok);
+  // Resolve parameter contracts once, then distribute without replacing a
+  // borrow by its value. Binding below still enforces the selected contract.
+  const parameters = [];
+  for (const p of FormalParameters) {
+    const declaration = p as { TypeAnnotation?: ParseNode.TypeAnnotation | null, Ref?: boolean, Optional?: boolean };
+    let type: TypeRecord = { Kind: 'any' };
+    if (declaration.TypeAnnotation) {
+      const resolved = EnsureCompletion(yield* TypeNodeToTypeRecord(declaration.TypeAnnotation.Type));
+      // Preserve the existing unresolved-annotation fallback; binding performs
+      // the required annotation check under the callee's actual environment.
+      if (resolved.Type === 'normal') type = resolved.Value;
     }
-    admitted.push(row);
+    parameters.push({ Name: '', Type: type, Ref: declaration.Ref === true,
+      Rest: p.type === 'BindingRestElement',
+      Optional: declaration.Optional === true || HasInitializer(p as ParseNode.FormalParameter) });
   }
-  const slots = FormalParameters.map((p) => ({
-    Rest: p.type === 'BindingRestElement',
-    Optional: HasInitializer(p as ParseNode.FormalParameter),
-  }));
-  const counts = SequenceAssignment(slots, args.length, (i, k) => admitted[i][k]);
-  if (counts === 'unmatched') {
+  const counts = Q(yield* AssignRuntimeArguments(parameters, args));
+  if (counts === null) {
     return Throw.TypeError('no assignment of the arguments satisfies the parameter list');
   }
   let at = 0;

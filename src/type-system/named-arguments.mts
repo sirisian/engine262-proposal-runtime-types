@@ -7,14 +7,23 @@ export interface NamedSlot {
 export interface ArgumentItem<T> {
   name?: string;
   value: T;
+  /** A forwarded second-class run must reach another reference-rest position. */
+  referenceRun?: boolean;
 }
 
-/** BindArguments: pin names first, then match the remaining positional list. */
-export function BindNamedArguments<T, P extends NamedSlot>(
+export interface NamedBindingPlan<T, P extends NamedSlot> {
+  groups: T[][];
+  error?: 'unknown-name' | 'position-after-name' | 'unmatched';
+  name?: string;
+  remaining: { p: P, i: number }[];
+  positional: T[];
+}
+
+/** Pin names without reading values; runtime admission can then suspend. */
+export function PrepareNamedArguments<T, P extends NamedSlot>(
   parameters: readonly P[],
   args: readonly ArgumentItem<T>[],
-  assign: (parameters: readonly P[], values: readonly T[]) => readonly number[] | null,
-): { groups: T[][], error?: 'unknown-name' | 'position-after-name' | 'unmatched', name?: string } {
+): NamedBindingPlan<T, P> {
   const groups = parameters.map(() => [] as T[]);
   const pinned = new Set<number>();
   const positional: T[] = [];
@@ -25,7 +34,7 @@ export function BindNamedArguments<T, P extends NamedSlot>(
       sawName = true;
       const slot = parameters.findIndex((p) => p.Name === arg.name);
       if (slot < 0) {
-        return { groups, error: 'unknown-name', name: arg.name };
+        return { groups, error: 'unknown-name', name: arg.name, remaining: [], positional };
       }
       pinned.add(slot);
       if (parameters[slot].Rest) {
@@ -40,7 +49,7 @@ export function BindNamedArguments<T, P extends NamedSlot>(
     } else if (!sawName) {
       positional.push(arg.value);
     } else {
-      return { groups, error: 'position-after-name' };
+      return { groups, error: 'position-after-name', remaining: [], positional };
     }
   }
   // A named rest gives back a suffix needed by required parameters after it.
@@ -67,7 +76,15 @@ export function BindNamedArguments<T, P extends NamedSlot>(
     }
   }
   const remaining = parameters.map((p, i) => ({ p, i })).filter(({ i }) => !pinned.has(i));
-  const counts = assign(remaining.map(({ p }) => p), positional);
+  return { groups, remaining, positional };
+}
+
+/** Complete the same placement after static or runtime positional admission. */
+export function CompleteNamedArguments<T, P extends NamedSlot>(
+  plan: NamedBindingPlan<T, P>, counts: readonly number[] | null,
+): { groups: T[][], error?: 'unknown-name' | 'position-after-name' | 'unmatched', name?: string } {
+  if (plan.error) return plan;
+  const { groups, remaining, positional } = plan;
   if (!counts) {
     // Retain destinations for static diagnostics even where the match failed.
     let cursor = 0;
@@ -85,4 +102,14 @@ export function BindNamedArguments<T, P extends NamedSlot>(
     cursor += counts[at];
   });
   return { groups };
+}
+
+/** BindArguments: the synchronous checker uses the same preparation and finish. */
+export function BindNamedArguments<T, P extends NamedSlot>(
+  parameters: readonly P[], args: readonly ArgumentItem<T>[],
+  assign: (parameters: readonly P[], values: readonly T[]) => readonly number[] | null,
+): { groups: T[][], error?: 'unknown-name' | 'position-after-name' | 'unmatched', name?: string } {
+  const plan = PrepareNamedArguments(parameters, args);
+  if (plan.error) return plan;
+  return CompleteNamedArguments(plan, assign(plan.remaining.map(({ p }) => p), plan.positional));
 }

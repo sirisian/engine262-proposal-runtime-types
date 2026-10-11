@@ -9,8 +9,9 @@ import { OutOfRange, isArray } from '../utils/language.mts';
 import { registerTemplateArgument } from '../type-system/template-argument.mts';
 import { TemplateStrings } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { BindNamedArguments, type ArgumentItem } from '../type-system/named-arguments.mts';
+import { PrepareNamedArguments, CompleteNamedArguments, type ArgumentItem } from '../type-system/named-arguments.mts';
 import { assignArguments } from '../type-system/overloads.mts';
+import { AssignRuntimeArguments } from '../abstract-ops/argument-distribution.mts';
 import { RuntimeTypeOf, SpecializedFunctionSignatureOf } from '../type-system/runtime.mts';
 import { anyType, type TypeRecord } from '../type-system/records.mts';
 import {
@@ -232,7 +233,7 @@ export function hasNamedArguments(args: ParseNode.Arguments): boolean {
  * a required parameter left unfilled is an error, since named arguments skip
  * defaulted parameters rather than required ones.
  */
-function parameterInfo(func: Value): { names: string[], omittable: boolean[], rests: boolean[], restIndex: number } {
+function parameterInfo(func: Value): { names: string[], omittable: boolean[], rests: boolean[], refs: boolean[], restIndex: number } {
   // A specialization is a builtin wrapper, not an ECMAScript closure with
   // FormalParameters. Its completed signature preserves names and omissions;
   // the original callee still owns ordinary parameter-default evaluation.
@@ -242,16 +243,19 @@ function parameterInfo(func: Value): { names: string[], omittable: boolean[], re
   const names: string[] = [];
   const omittable: boolean[] = [];
   const rests: boolean[] = [];
+  const refs: boolean[] = [];
   let restIndex = -1;
   formals.forEach((p, i) => {
     const node = p as {
       type?: string,
       BindingIdentifier?: { name?: string },
       Optional?: boolean,
+      Ref?: boolean,
       Initializer?: unknown,
       TypedInitializer?: unknown,
     };
     rests.push(node.type === 'BindingRestElement');
+    refs.push(node.Ref === true);
     if (node.type === 'BindingRestElement') {
       restIndex = i;
       names.push(node.BindingIdentifier?.name ?? '');
@@ -263,7 +267,7 @@ function parameterInfo(func: Value): { names: string[], omittable: boolean[], re
       omittable.push(node.Optional === true || hasDefault);
     }
   });
-  return { names, omittable, rests, restIndex };
+  return { names, omittable, rests, refs, restIndex };
 }
 
 /**
@@ -278,18 +282,20 @@ function parameterInfo(func: Value): { names: string[], omittable: boolean[], re
  * list and its own defaults never engage. With several signatures, the first
  * whose names cover every named argument is selected.
  */
-type SignatureInView = { Parameters: readonly { Name: string, Type?: unknown, Optional: boolean, Rest: boolean, Initial?: Value }[] };
+type SignatureInView = { Parameters: readonly { Name: string, Type?: unknown, Optional: boolean, Rest: boolean, Ref?: boolean, Initial?: Value }[] };
 
-function parameterInfoOfSignature(sig: SignatureInView): { names: string[], omittable: boolean[], rests: boolean[], restIndex: number, initials: (Value | undefined)[], types: unknown[] } {
+function parameterInfoOfSignature(sig: SignatureInView): { names: string[], omittable: boolean[], rests: boolean[], refs: boolean[], restIndex: number, initials: (Value | undefined)[], types: unknown[] } {
   const names: string[] = [];
   const omittable: boolean[] = [];
   const rests: boolean[] = [];
+  const refs: boolean[] = [];
   const initials: (Value | undefined)[] = [];
   const types: unknown[] = [];
   let restIndex = -1;
   sig.Parameters.forEach((p, i) => {
     names.push(p.Name);
     rests.push(p.Rest);
+    refs.push(p.Ref === true);
     if (p.Rest) {
       restIndex = i;
     }
@@ -297,7 +303,7 @@ function parameterInfoOfSignature(sig: SignatureInView): { names: string[], omit
     initials.push(p.Initial);
     types.push(p.Type);
   });
-  return { names, omittable, rests, restIndex, initials, types };
+  return { names, omittable, rests, refs, restIndex, initials, types };
 }
 
 /** The signature in view for a callee reference, or undefined where its binding declares no callable type. */
@@ -351,6 +357,10 @@ export function* ArgumentListEvaluationItems(args: ParseNode.Arguments): PlainEv
       const { AssignmentExpression } = element as ParseNode.AssignmentRestElement;
       const spreadRef = Q(yield* Evaluate(AssignmentExpression));
       const spreadObj = Q(yield* GetValue(spreadRef));
+      if (spreadObj instanceof ReferenceRunValue) {
+        for (const location of spreadObj.Locations) items.push({ value: new ReferenceValue(location), referenceRun: true });
+        continue;
+      }
       // A plain object spread binds by parameter name; an iterable spread fills
       // positions in order. Distinguish by whether the value has an iterator.
       const method = spreadObj instanceof ObjectValue
@@ -396,27 +406,35 @@ export function* ArgumentListEvaluationItems(args: ParseNode.Arguments): PlainEv
  */
 export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Value, signature?: SignatureInView): PlainEvaluator<Arguments> {
   const info = signature ? parameterInfoOfSignature(signature) : { ...parameterInfo(func), initials: [] as (Value | undefined)[], types: [] as unknown[] };
-  const { names, omittable, rests, initials } = info;
+  const { names, omittable, rests, refs, initials } = info;
   const types = signature ? info.types : (Q(yield* soleSignatureParameterTypes(func)) ?? []);
   const items = Q(yield* ArgumentListEvaluationItems(args));
 
   const parameters = names.map((Name, i) => ({
-    Name, Rest: rests[i], Optional: omittable[i], Type: (types[i] ?? anyType) as TypeRecord,
+    Name, Rest: rests[i], Ref: refs[i], Optional: omittable[i], Type: (types[i] ?? anyType) as TypeRecord,
   }));
-  const placed = BindNamedArguments(parameters, items, (slots, values) => {
-    const argumentTypes = values.map((value): TypeRecord => {
-      const type = RuntimeTypeOf(value);
-      return value instanceof ObjectValue || value instanceof ReferenceValue ? type
-        : { Kind: 'literal', Base: type, Value: value };
-    });
-    return assignArguments(slots, argumentTypes);
-  });
+  const plan = PrepareNamedArguments(parameters, items);
+  let counts: readonly number[] | null = null;
+  if (!plan.error) {
+    const slots = plan.remaining.map(({ p }) => p);
+    if (plan.positional.some((value) => value instanceof ReferenceValue) || slots.some((p) => p.Ref || p.Type.Kind === 'reference')) {
+      counts = Q(yield* AssignRuntimeArguments(slots, plan.positional));
+    } else {
+      const argumentTypes = plan.positional.map((value): TypeRecord => {
+        const type = RuntimeTypeOf(value);
+        return value instanceof ObjectValue ? type : { Kind: 'literal', Base: type, Value: value };
+      });
+      counts = assignArguments(slots, argumentTypes);
+    }
+  }
+  const placed = CompleteNamedArguments(plan, counts);
   if (placed.error === 'unknown-name') {
     return Throw.TypeError('no parameter named $1 for this call', Value(placed.name!));
   }
   if (placed.error) {
     return Throw.TypeError('the named arguments do not satisfy the signature in view');
   }
+  const forwarded = new Set(items.filter((item) => item.referenceRun).map((item) => item.value));
   const result: Value[] = [];
   for (let i = 0; i < names.length; i += 1) {
     const values = placed.groups[i];
@@ -427,6 +445,9 @@ export function* ArgumentListEvaluationNamed(args: ParseNode.Arguments, func: Va
       values.push(initials[i] ?? Value.undefined);
     }
     for (let value of values) {
+      if (forwarded.has(value) && !(rests[i] && refs[i])) {
+        return Throw.TypeError('$1', Value('a ref rest binds no array: forward it into a ref rest parameter'));
+      }
       const type = types[i] as TypeRecord | undefined;
       if (signature && !rests[i] && type && type.Kind !== 'any'
           && !(value instanceof ObjectValue) && !(value instanceof ReferenceValue) && value !== Value.undefined) {

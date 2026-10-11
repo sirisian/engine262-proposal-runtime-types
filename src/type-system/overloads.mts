@@ -11,9 +11,9 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import type { Value } from '../value.mts';
 import { isTemplateArgumentType, templateArgumentTypeOf } from './template-argument.mts';
 import type { ParameterRecord, TypeRecord, NarrowingRecord } from './records.mts';
-import { anyType, restElementType } from './records.mts';
+import { anyType, restElementType, mentionsTypeParameter } from './records.mts';
 import { SequenceAssignment, slotReceiving } from './sequence-assignment.mts';
-import { ClassImplements, IsAssignable, IsSubtype } from './relations.mts';
+import { ClassImplements, IsAssignable, IsSubtype, SameType } from './relations.mts';
 import { RuntimeTypeOf, ConstraintAdmits } from './runtime.mts';
 import { Q } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
@@ -189,7 +189,19 @@ export function assignArguments(params: readonly OverloadParameter[], argTypes: 
   const slots = params.map((p) => ({ Rest: p.Rest, Optional: p.Optional }));
   const counts = SequenceAssignment(slots, argTypes.length, (i, k) => {
     const p = params[k];
-    return argumentTier(argTypes[i], p.Rest ? restElementType(p.Type) : p.Type) !== null;
+    const source = argTypes[i];
+    const target = p.Rest ? restElementType(p.Type) : p.Type;
+    if (p.Ref || target.Kind === 'reference') {
+      if (source.Kind === 'any') return true;
+      if (source.Kind !== 'reference') return false;
+      const wanted = target.Kind === 'reference' ? target.Target : target;
+      if (source.Target.Kind === 'any' || wanted.Kind === 'any') return true;
+      // Closed borrowed storage is invariant. Open generic contributions still
+      // participate in inference; this partition is not a liveness proof.
+      if (!mentionsTypeParameter(wanted) && !mentionsTypeParameter(source.Target)) return SameType(source.Target, wanted);
+      return argumentTier(source.Target, wanted) !== null;
+    }
+    return argumentTier(source.Kind === 'reference' ? source.Target : source, target) !== null;
   });
   return counts === 'unmatched' ? null : counts;
 }
