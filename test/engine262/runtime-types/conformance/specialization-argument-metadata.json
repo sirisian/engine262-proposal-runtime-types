@@ -1,0 +1,913 @@
+{
+  "cases": [
+    {
+      "name": "pending default const fn=inner.<U:T>; fn(y:1)",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<U:T>;return fn(y:1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending default const fn=inner.<U:T>; fn(...{y:1})",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<U:T>;return fn(...{y:1});}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending default const fn=inner.<U:T>; fn(1)",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<U:T>;return fn(1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending default let fn=inner.<T>; fn(y:1)",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}let fn=inner.<T>;return fn(y:1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending default let fn=inner.<T>; fn(...{y:1})",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}let fn=inner.<T>;return fn(...{y:1});}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending default let fn=inner.<T>; fn(1)",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}let fn=inner.<T>;return fn(1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending default const fn := inner.<T>; fn(y:1)",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn := inner.<T>;return fn(y:1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending default const fn := inner.<T>; fn(...{y:1})",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn := inner.<T>;return fn(...{y:1});}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending default const fn := inner.<T>; fn(1)",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn := inner.<T>;return fn(1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending default let fn := inner.<T>; fn(y:1)",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}let fn := inner.<T>;return fn(y:1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending default let fn := inner.<T>; fn(...{y:1})",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}let fn := inner.<T>;return fn(...{y:1});}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending default let fn := inner.<T>; fn(1)",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}let fn := inner.<T>;return fn(1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending default const saved=inner.<T>;const fn=saved; fn(y:1)",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const saved=inner.<T>;const fn=saved;return fn(y:1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending default const saved=inner.<T>;const fn=saved; fn(...{y:1})",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const saved=inner.<T>;const fn=saved;return fn(...{y:1});}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending default const saved=inner.<T>;const fn=saved; fn(1)",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const saved=inner.<T>;const fn=saved;return fn(1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source function inner<T:type> fn(b:\"B\",a:\"A\")",
+      "steps": [
+        {
+          "source": "function inner<T:type>(a:T,b:T):string{return a+b;}const fn=inner.<string>;fn(b:\"B\",a:\"A\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source function inner<T:type> fn(...{b:\"B\",a:\"A\"})",
+      "steps": [
+        {
+          "source": "function inner<T:type>(a:T,b:T):string{return a+b;}const fn=inner.<string>;fn(...{b:\"B\",a:\"A\"});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source function inner<T:type> fn(\"A\",b:\"B\")",
+      "steps": [
+        {
+          "source": "function inner<T:type>(a:T,b:T):string{return a+b;}const fn=inner.<string>;fn(\"A\",b:\"B\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source const inner=function<T fn(b:\"B\",a:\"A\")",
+      "steps": [
+        {
+          "source": "const inner=function<T:type>(a:T,b:T):string{return a+b;};const fn=inner.<string>;fn(b:\"B\",a:\"A\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source const inner=function<T fn(...{b:\"B\",a:\"A\"})",
+      "steps": [
+        {
+          "source": "const inner=function<T:type>(a:T,b:T):string{return a+b;};const fn=inner.<string>;fn(...{b:\"B\",a:\"A\"});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source const inner=function<T fn(\"A\",b:\"B\")",
+      "steps": [
+        {
+          "source": "const inner=function<T:type>(a:T,b:T):string{return a+b;};const fn=inner.<string>;fn(\"A\",b:\"B\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source const obj={inner<T:typ fn(b:\"B\",a:\"A\")",
+      "steps": [
+        {
+          "source": "const obj={inner<T:type>(a:T,b:T):string{return a+b;}};const fn=obj.inner.<string>;fn(b:\"B\",a:\"A\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source const obj={inner<T:typ fn(...{b:\"B\",a:\"A\"})",
+      "steps": [
+        {
+          "source": "const obj={inner<T:type>(a:T,b:T):string{return a+b;}};const fn=obj.inner.<string>;fn(...{b:\"B\",a:\"A\"});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source const obj={inner<T:typ fn(\"A\",b:\"B\")",
+      "steps": [
+        {
+          "source": "const obj={inner<T:type>(a:T,b:T):string{return a+b;}};const fn=obj.inner.<string>;fn(\"A\",b:\"B\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "arguments evaluate once in written order",
+      "steps": [
+        {
+          "source": "let log=\"\";function arg(s:string):string{log+=s;return s;}function f<T:type>(a:T,b:T){return a+b;}const fn=f.<string>;const value=fn(b:arg(\"B\"),a:arg(\"A\"));log+\"/\"+value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "BA/AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "spread getter evaluated once in property order",
+      "steps": [
+        {
+          "source": "let log=\"\";function f<T:type>(a:T,b:T){return a+b;}const fn=f.<string>;const args={get b(){log+=\"B\";return \"B\";},get a(){log+=\"A\";return \"A\";}};const value=fn(...args,...{});log+\"/\"+value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "BA/AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary defaults run only per omitted call",
+      "steps": [
+        {
+          "source": "let count=0;function next():string{count++;return String(count);}function f<T:type>(a:string=next(),b:T):string{return a+b;}const fn=f.<string>;const before=count;const x=fn(b:\"B\");const y=fn(b:\"C\");String(before)+\"/\"+x+\"/\"+y+\"/\"+String(count);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/1B/2C/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default initializer retains declaration environment",
+      "steps": [
+        {
+          "source": "function make<T:type>(prefix:T){function f<U:type>(a:T=prefix,b:U){return a+b;}return f.<string>;}const fn=make.<string>(\"A\");function consume(){const prefix=\"wrong\";return fn(b:\"B\");}consume();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default initializer sees preceding parameter",
+      "steps": [
+        {
+          "source": "function f<T:type>(a:T,b:T=a){return a+b;}const fn=f.<string>;fn(a:\"A\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AA"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional omission keeps undefined",
+      "steps": [
+        {
+          "source": "function f<T:type>(a?:T,b:string=\"B\"){return String(a)+b;}const fn=f.<uint8>;fn(b:\"C\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefinedC"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit undefined engages ordinary default",
+      "steps": [
+        {
+          "source": "function f<T:type>(a:string=\"A\",b:T){return a+b;}const fn=f.<string>;fn(a:undefined,b:\"B\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit function view renames parameters",
+      "steps": [
+        {
+          "source": "function f<T:type>(a:T,b:T):string{return a+b;}const fn:(left:string,right:string)=>string=f.<string>;fn(right:\"B\",left:\"A\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "interface view renames parameters",
+      "steps": [
+        {
+          "source": "interface I{(left:string,right:string):string;}function f<T:type>(a:T,b:T):string{return a+b;}const fn:I=f.<string>;fn(right:\"B\",left:\"A\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "view default wins over ordinary default",
+      "steps": [
+        {
+          "source": "let calls=0;function own():string{calls++;return \"own\";}function f<T:type>(a:string=own(),b:T):string{return a+b;}const fn:(left:string=\"view\",right:string)=>string=f.<string>;const value=fn(right:\"B\");value+\"/\"+String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "viewB/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "positional view default wins",
+      "steps": [
+        {
+          "source": "function f<T:type>(a:string=\"own\"):string{return a;}const fn:(left:string=\"view\")=>string=f.<string>;fn();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "view"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed rest of bound element",
+      "steps": [
+        {
+          "source": "function f<T:type>(a:string=\"A\",...xs:[].<T>){return a+\"/\"+String(xs.length)+\"/\"+String(xs[1]);}const fn=f.<uint8>;fn(xs:1,2);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/2/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bound tuple rest",
+      "steps": [
+        {
+          "source": "function f<T:type>(a:string=\"A\",...xs:[T,T]){return a+\"/\"+String(xs.length)+\"/\"+String(xs[1]);}const fn=f.<uint8>;fn(xs:1,2);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "A/2/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bound nonfinal rest distribution",
+      "steps": [
+        {
+          "source": "function f<T:type>(...xs:[].<T>,tail:string){return String(xs.length)+\"/\"+tail;}const fn=f.<uint8>;fn(xs:1,2,tail:\"Z\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/Z"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two bound rests distribution",
+      "steps": [
+        {
+          "source": "function f<T:type,U:type>(...xs:[].<T>,...ys:[].<U>){return String(xs.length)+\"/\"+String(ys.length);}const fn=f.<uint8,string>;fn(xs:1,2,ys:\"a\",\"b\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterable spread still positional",
+      "steps": [
+        {
+          "source": "function f<T:type>(a:T,b:T){return a+b;}const fn=f.<string>;fn(...[\"A\",\"B\"]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiver comes from current member call",
+      "steps": [
+        {
+          "source": "const obj={prefix:\"A\",m<T:type>(x:T){return this.prefix+x;}};const fn=obj.m.<string>;const other={prefix:\"B\",fn:fn};other.fn(x:\"C\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "BC"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class method specialization names",
+      "steps": [
+        {
+          "source": "class C{m<T:type>(x:T):T{return x;}}const c=new C();c.fn=c.m.<string>;c.fn(x:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same specialization identity and metadata",
+      "steps": [
+        {
+          "source": "function f<T:type>(x:T):T{return x;}const a=f.<string>;const b=f.<T:string>;String(a===b)+\"/\"+a(x:\"A\")+b(x:\"B\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/AB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "separate specializations keep separate types",
+      "steps": [
+        {
+          "source": "function f<T:type>(x:T):T{return x;}const a=f.<string>;const b=f.<uint8>;String(b(x:1))+\"/\"+a(x:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection retains completed signature",
+      "steps": [
+        {
+          "source": "function f<T:type>(x:T):T{return x;}const fn=f.<uint8>;String(Reflect.typeOf(fn))+\"/\"+String(fn(x:1));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "(x: uint.<8>) => uint.<8>/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased callable retains runtime names",
+      "steps": [
+        {
+          "source": "function f<T:type>(x:T):T{return x;}const fn:any=f.<string>;fn(x:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "positional reference still writes through",
+      "steps": [
+        {
+          "source": "function f<T:type>(ref x:T,y:T):void{x=y;}let x:uint8=1;const fn=f.<uint8>;fn(ref x,2);String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default failure restores frame",
+      "steps": [
+        {
+          "source": "function fail():string{throw new Error(\"default\");}function f<T:type>(a:string=fail(),b:T):T{return b;}const fn=f.<string>;let result=\"missed\";try{fn(b:\"bad\");}catch(e){result=e.message;}function fresh<U:type>(x:U):U{return x;}const good=fresh.<uint8>;result+\"/\"+String(good(x:1));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "default/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "argument failure restores state",
+      "steps": [
+        {
+          "source": "function fail():string{throw new Error(\"argument\");}function f<T:type>(x:T):T{return x;}const fn=f.<string>;let result=\"missed\";try{fn(x:fail());}catch(e){result=e.message;}result+\"/\"+fn(x:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "argument/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic invalid names fn(unknown:\"bad\")",
+      "steps": [
+        {
+          "source": "let calls=0;function f<T:type>(x:T):T{calls++;return x;}const fn:any=f.<string>;let result=\"missed\";try{fn(unknown:\"bad\");}catch(e){result=e.name;}result+\"/\"+String(calls)+\"/\"+fn(x:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic invalid names fn(...{unknown:\"bad\"})",
+      "steps": [
+        {
+          "source": "let calls=0;function f<T:type>(x:T):T{calls++;return x;}const fn:any=f.<string>;let result=\"missed\";try{fn(...{unknown:\"bad\"});}catch(e){result=e.name;}result+\"/\"+String(calls)+\"/\"+fn(x:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic invalid argument keeps admission",
+      "steps": [
+        {
+          "source": "function f<T:type>(x:T):T{return x;}const fn:any=f.<uint8>;let result=\"missed\";try{fn(x:\"bad\");}catch(e){result=e.name;}result+\"/\"+String(fn(x:1));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "positional ref to value parameter decays at actual callee",
+      "steps": [
+        {
+          "source": "function f<T:type>(x:T):T{return x;}let x:uint8=1;const fn=f.<uint8>;String(fn(ref x));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflective call remains a decay boundary",
+      "steps": [
+        {
+          "source": "function f<T:type>(ref x:T):void{x=x;}let x:uint8=1;const fn=f.<uint8>;let result=\"missed\";try{fn.call(undefined,ref x);}catch(e){result=e.name;}result+\"/\"+String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ref rest forwarding",
+      "steps": [
+        {
+          "source": "function f<T:type>(ref ...xs:[].<T>):void{xs[0]=xs[1];}let a:uint8=1;let b:uint8=2;const fn=f.<uint8>;fn(ref a,ref b);String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed parameter annotation keeps metadata",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function f<T:type>(x:identity(T)){return \"ok\";}const fn:any=f.<uint8>;fn(x:1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "runtime rest mapping uses completed types",
+      "steps": [
+        {
+          "source": "function f<T:type,U:type>(...a:[].<T>,...b:[].<U>,label:string){return String(a.length)+\"/\"+String(b.length)+\"/\"+label;}const fn:any=f.<uint8,string>;fn(1,2,\"a\",\"b\",label:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/2/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed pending named value False",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(y:\"bad\");}outer.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed pending named value True",
+      "steps": [
+        {
+          "source": "function identity(t:type):type{return t;}function outer<T:type>(){function inner<U:type,W:type=identity(U)>(y:W){return \"ok\";}const fn=inner.<T>;return fn(y:1);}outer.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid erased ref value still rejects",
+      "steps": [
+        {
+          "source": "function f<T:type>(ref x:T,y:T):void{x=y;}let x:uint8=1;const fn:any=f.<uint8>;let result=\"missed\";try{fn(1,2);}catch(e){result=e.name;}fn(ref x,3);result+\"/\"+String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ref forwarding retains argument object value semantics",
+      "steps": [
+        {
+          "source": "function f<T:type>(ref x:T,y:T):string{x=y;return String(arguments[0]);}let x:uint8=1;const fn=f.<uint8>;const result=fn(ref x,2);result+\"/\"+String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "omitted required erased parameter rejects",
+      "steps": [
+        {
+          "source": "function f<T:type>(x:T,y:T):T{return x;}const fn:any=f.<string>;let result=\"missed\";try{fn(y:\"bad\");}catch(e){result=e.name;}result+\"/\"+fn(x:\"ok\",y:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ref alias forwards without copying location",
+      "steps": [
+        {
+          "source": "function f<T:type>(ref x:T,y:T):void{x=y;}let x:uint8=1;const saved=f.<uint8>;const fn=saved;fn(ref x,2);String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two scripts retain stored runtime metadata",
+      "steps": [
+        {
+          "source": "function f<T:type>(x:T):T{return x;}globalThis.saved=f.<string>;\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        },
+        {
+          "source": "saved(x:\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    }
+  ]
+}

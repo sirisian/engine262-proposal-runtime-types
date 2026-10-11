@@ -2325,6 +2325,12 @@ export function RegisterSpecializedFunctionType(fn: object, record: TypeRecord):
   specializedFunctionTypes.set(fn, record);
 }
 
+/** Read completed call metadata without deriving a type or evaluating annotations. */
+export function SpecializedFunctionSignatureOf(value: Value): SignatureRecord | undefined {
+  const record = value instanceof ObjectValue ? specializedFunctionTypes.get(value) : undefined;
+  return record?.Kind === 'function' && record.Signatures.length === 1 ? record.Signatures[0] : undefined;
+}
+
 export function RuntimeTypeOf(value: Value): TypeRecord {
   if (value instanceof ObjectValue) {
     const specialized = specializedFunctionTypes.get(value as unknown as object);

@@ -33,7 +33,7 @@ import {
 } from '../runtime-semantics/all.mts';
 import { type Mutable } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { DefaultValueOf, IsOfType } from '../type-system/runtime.mts';
+import { DefaultValueOf, IsOfType, SpecializedFunctionSignatureOf } from '../type-system/runtime.mts';
 import { substituteTypeParameters, type TypeRecord } from '../type-system/records.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { FunctionProto_toString, type BoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
@@ -991,10 +991,14 @@ function* BuiltinCallOrConstruct(F: BuiltinFunctionObject, thisArgument: Value |
   // on entry to %Function.prototype.call%, so the list it forwards to its
   // target carries values, and `bind` stores values in [[BoundArguments]]
   // rather than references.
+  // A specialization wrapper only forwards to its original function under
+  // completed bindings. Let that function distribute rests and enforce or
+  // decay references; this implementation wrapper is not a value boundary.
+  const forwardsSpecialization = SpecializedFunctionSignatureOf(F) !== undefined;
   let decayed: Value[] | null = null;
   for (let i = 0; i < argumentsList.length; i += 1) {
     const arg = argumentsList[i]!;
-    if (arg instanceof ReferenceValue && !(F as { RefParameterIndices?: readonly number[] }).RefParameterIndices?.includes(i)) {
+    if (arg instanceof ReferenceValue && !forwardsSpecialization && !(F as { RefParameterIndices?: readonly number[] }).RefParameterIndices?.includes(i)) {
       if (decayed === null) {
         decayed = [...argumentsList] as Value[];
       }

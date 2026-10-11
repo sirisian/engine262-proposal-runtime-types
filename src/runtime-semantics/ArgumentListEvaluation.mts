@@ -11,7 +11,7 @@ import { TemplateStrings } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { BindNamedArguments, type ArgumentItem } from '../type-system/named-arguments.mts';
 import { assignArguments } from '../type-system/overloads.mts';
-import { RuntimeTypeOf } from '../type-system/runtime.mts';
+import { RuntimeTypeOf, SpecializedFunctionSignatureOf } from '../type-system/runtime.mts';
 import { anyType, type TypeRecord } from '../type-system/records.mts';
 import {
   surroundingAgent,
@@ -233,6 +233,11 @@ export function hasNamedArguments(args: ParseNode.Arguments): boolean {
  * defaulted parameters rather than required ones.
  */
 function parameterInfo(func: Value): { names: string[], omittable: boolean[], rests: boolean[], restIndex: number } {
+  // A specialization is a builtin wrapper, not an ECMAScript closure with
+  // FormalParameters. Its completed signature preserves names and omissions;
+  // the original callee still owns ordinary parameter-default evaluation.
+  const specialized = SpecializedFunctionSignatureOf(func);
+  if (specialized) return parameterInfoOfSignature(specialized);
   const formals = ((func as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? []);
   const names: string[] = [];
   const omittable: boolean[] = [];

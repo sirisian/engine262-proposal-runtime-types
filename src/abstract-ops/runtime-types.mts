@@ -1,6 +1,6 @@
 import { publishedReturnTypeOfFunction, instantiateGenericCapture } from '../type-system/runtime.mts';
 import { primitiveMembership } from '../type-system/runtime.mts';
-import { currentTypeParameterFrame } from '../type-system/runtime.mts';
+import { currentTypeParameterFrame, SpecializedFunctionSignatureOf } from '../type-system/runtime.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { sourceTextOf } from '../parser/TokensOf.mts';
 import { Q, X, EnsureCompletion, isEvaluator, Await, type ThrowCompletion } from '../completion.mts';
@@ -5929,6 +5929,10 @@ function enclosingClassTypeParameters(node: ParseNode | undefined): readonly Par
  * answers null and the inner call reports its own ambiguity.
  */
 export function* soleSignatureParameterTypes(func: Value): PlainEvaluator<(TypeRecord | null)[] | null> {
+  // Read the already bound types of a stored specialization. Re-reading its
+  // source annotations here would lose the producer's generic environment.
+  const specialized = SpecializedFunctionSignatureOf(func);
+  if (specialized) return specialized.Parameters.map((p) => p.Type);
   // Only the COUNT is wanted here - "sole" means one declaration - and that is
   // the number of functions the overload group was made from, which is known
   // without resolving any annotation.
