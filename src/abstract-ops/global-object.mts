@@ -147,7 +147,7 @@ export function* PerformEval(x: Value, strictCaller: boolean, direct: boolean, c
     // #sec-checked-code: direct eval code in checked code is checked, since it
     // sees the caller's typed bindings, as it inherits the caller's strictness.
     if (checkedCaller) MarkInheritedChecked(script as unknown as ParseNode);
-    const typeErrors = CheckScript(script);
+    const typeErrors = CheckScript(script, false, direct ? surroundingAgent.runningExecutionContext.LexicalEnvironment : evalRealm.GlobalEnv);
     if (typeErrors.length > 0) {
       Parser.decorateSyntaxErrorWithScriptId(typeErrors[0], scriptId);
       return ThrowCompletion(typeErrors[0]);

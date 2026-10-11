@@ -145,7 +145,8 @@ export function* performDevtoolsEval(source: string, evalRealm: ManagedRealm, st
       session = CreateCheckSession();
       checkSessions.set(evalRealm, session);
     }
-    const { errors: typeErrors, next } = CheckScriptInSession(script, session);
+    const currentEnvironment = surroundingAgent.runningExecutionContext.LexicalEnvironment;
+    const { errors: typeErrors, next } = CheckScriptInSession(script, session, cascadeStack.get(currentEnvironment) ?? currentEnvironment);
     if (typeErrors.length > 0) {
       if (scriptContext) {
         surroundingAgent.executionContextStack.pop(scriptContext);

@@ -487,7 +487,7 @@ function ParseScriptInRealm(sourceText: string, realm: Realm, hostDefined: Parse
       Parser.decorateSyntaxErrorWithScriptId(completion.Value as ObjectValue, scriptId);
       return [completion.Value as ObjectValue];
     }
-    const typeErrors = CheckScript(body);
+    const typeErrors = CheckScript(body, false, realm.GlobalEnv);
     // Where the walk RECORDED a narrowing request it ran without the
     // narrowing, so it both over-reports and under-reports and must not speak.
     // The checking pass re-walks with the resolutions and reports instead -

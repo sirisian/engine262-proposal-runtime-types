@@ -13,10 +13,13 @@ import { SameValue, ToBoolean } from '../abstract-ops/all.mts';
 import { ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { TV } from '../static-semantics/TemplateStrings.mts';
 import { NumericValue } from '../static-semantics/NumericValue.mts';
+import { LexicallyDeclaredNames } from '../static-semantics/LexicallyDeclaredNames.mts';
+import { VarDeclaredNames } from '../static-semantics/VarDeclaredNames.mts';
 import { refineLeftHandSideExpression } from '../runtime-semantics/AssignmentExpression.mts';
 import { firstUnreadableControl, readClassControls, readFieldControls } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
 import { isRangeObject, endpointOf, type RangeObject } from '../intrinsics/Range.mts';
+import type { EnvironmentRecord } from '../execution-context/Environment.mts';
 import { TypeDiagnosticOf, CreateTypeDiagnostic, ReportTypeDiagnostic } from './diagnostics.mts';
 import type { TypeDiagnosticRule } from './diagnostic-catalog.mts';
 import { ClassifyDynamicFunction, IsCheckedCode } from './checked-code.mts';
@@ -43,6 +46,7 @@ import { CheckReferencePermissions, ReferenceFunction, type ReferenceSlot, type 
 import { isWellKnownNumericConstant } from './numeric-constants.mts';
 import { ForPatternPositions, PatternBindingNames, PatternHasGovernedPosition, PatternScopeOf } from './pattern-scopes.mts';
 import { resolvedAlias } from './resolving-aliases.mts';
+import { PublishedConstantBindings, type StringConstantEvidence } from './published-constants.mts';
 import { InferenceResources, type InferenceLimits, type InferenceComponent } from './inference-limits.mts';
 import { FindConstructorGrowth, LiteralConstructorEquation } from './constructor-growth.mts';
 import { ReusableCheckingContext, SnapshotCheckingContext, SameCheckingContext } from './checking-context.mts';
@@ -185,6 +189,8 @@ interface Frame {
    * which the `v === e` row of #sec-narrowing reads as naming one value.
    */
   readonly constOperandLiterals: Map<string, TypeRecord>;
+  /** Established unannotated String values; aliasing does not grant literal-name syntax. */
+  readonly constStringValues: Map<string, TypeRecord>;
   readonly constPropertyKeys: Map<string, string | SymbolValue>;
   /** The EXACT integer value of a `const` whose initializer is a constant expression, for folding a use of it. */
   readonly constLiteralValues: Map<string, bigint>;
@@ -238,6 +244,7 @@ function emptyFrame(): Frame {
     bindingKinds: new Map(),
     constLiterals: new Set<string>(),
     constLiteralTypes: new Map<string, TypeRecord>(), constOperandLiterals: new Map<string, TypeRecord>(),
+    constStringValues: new Map<string, TypeRecord>(),
     constPropertyKeys: new Map<string, string | SymbolValue>(),
     constLiteralValues: new Map<string, bigint>(), constDecimalValues: new Map<string, Dec>(), constClosedInitializers: new Map<string, ParseNode>(),
     constTypedValues: new Map<string, bigint>(),
@@ -270,6 +277,7 @@ function cloneFrame(frame: Frame): Frame {
     constLiterals: new Set(frame.constLiterals),
     constLiteralTypes: new Map(frame.constLiteralTypes),
     constOperandLiterals: new Map(frame.constOperandLiterals),
+    constStringValues: new Map(frame.constStringValues),
     constPropertyKeys: new Map(frame.constPropertyKeys),
     constLiteralValues: new Map(frame.constLiteralValues),
     constDecimalValues: new Map(frame.constDecimalValues),
@@ -2732,6 +2740,12 @@ export function RecheckAfterTypeEvaluation(root: ParseNode.Script | ParseNode.Mo
 }
 
 const inferredConstTypes = new WeakMap<object, TypeRecord>();
+const literalConstantTypes = new WeakMap<object, StringConstantEvidence>();
+const checkingEnvironments = new WeakMap<object, EnvironmentRecord>();
+
+export function StringConstantEvidenceOf(binding: object): StringConstantEvidence | undefined {
+  return literalConstantTypes.get(binding);
+}
 
 export function InferredConstTypeOf(binding: object): TypeRecord | undefined {
   return inferredConstTypes.get(binding);
@@ -2772,7 +2786,8 @@ export function CheckDynamicFunction(expression: ParseNode): ObjectValue[] {
     && TakeNarrowingRequests(root).length > 0 ? [] : errors;
 }
 
-export function CheckScript(script: ParseNode.Script, afterTypeEvaluation = false): ObjectValue[] {
+export function CheckScript(script: ParseNode.Script, afterTypeEvaluation = false, environment?: EnvironmentRecord): ObjectValue[] {
+  if (environment) checkingEnvironments.set(script, environment);
   return checkCompletedDeclarations(script.ScriptBody?.StatementList ?? null, script, CreateCheckSession(), afterTypeEvaluation);
 }
 
@@ -2791,8 +2806,20 @@ export function CheckScript(script: ParseNode.Script, afterTypeEvaluation = fals
  * would accept it, and a lexical binding has no run-time boundary to catch it
  * afterwards.
  */
-export function CheckScriptInSession(script: ParseNode.Script, session: CheckSession): { errors: ObjectValue[], next: CheckSession } {
+export function CheckScriptInSession(script: ParseNode.Script, session: CheckSession,
+  environment = surroundingAgent.runningExecutionContext.LexicalEnvironment): { errors: ObjectValue[], next: CheckSession } {
+  checkingEnvironments.set(script, environment);
   const next: CheckSession = { frame: cloneFrame(session.frame), enumNodes: new Map(session.enumNodes) };
+  // Checking an accepted console entry does not initialize every declaration.
+  // Refresh String facts from actual bindings, including after an abrupt body.
+  for (const name of next.frame.constStringValues.keys()) next.frame.constOperandLiterals.delete(name);
+  next.frame.constStringValues.clear();
+  const newNames = new Set([...LexicallyDeclaredNames(script), ...VarDeclaredNames(script)].map((name) => name.stringValue()));
+  for (const [name, evidence] of PublishedConstantBindings(environment)) {
+    if (!next.frame.declaredNames.has(name) || newNames.has(name)) continue;
+    if (evidence.stringValue) next.frame.constStringValues.set(name, evidence.stringValue);
+    if (evidence.literal) next.frame.constOperandLiterals.set(name, evidence.literal);
+  }
   const errors = checkCompletedDeclarations(script.ScriptBody?.StatementList ?? null, script, next);
   return { errors, next };
 }
@@ -2854,6 +2881,7 @@ function checkCompletedDeclarations(statementList: readonly ParseNode[] | null, 
       else if (typeof (node as ParseNode).type === 'string') {
         publishedReturnTypes.delete(node);
         inferredConstTypes.delete(node);
+        literalConstantTypes.delete(node);
         for (const [key, child] of Object.entries(node)) {
           if (key !== 'parent' && key !== 'location') pending.push(child);
         }
@@ -3563,7 +3591,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   // ---- scope: frames, bindings, type parameters ---------------------
 
-  const frames: Frame[] = [session ? session.frame : emptyFrame()];
+  const checkingEnvironment = checkingEnvironments.get(root) ?? surroundingAgent.currentRealmRecord.GlobalEnv;
+  const outerConstants = emptyFrame();
+  for (const [name, evidence] of PublishedConstantBindings(checkingEnvironment)) {
+    outerConstants.declaredNames.add(name);
+    if (evidence.contract) outerConstants.bindings.set(name, evidence.contract);
+    if (evidence.literal) outerConstants.constOperandLiterals.set(name, evidence.literal);
+    if (evidence.stringValue) outerConstants.constStringValues.set(name, evidence.stringValue);
+    if (evidence.contract || evidence.stringValue) outerConstants.immutableNames.add(name);
+  }
+  const sourceFrame = session ? session.frame : emptyFrame();
+  const frames: Frame[] = [outerConstants, sourceFrame];
   // Value origin is not part of a function signature. Keep it local to this
   // checking pass; a prior script's mutable function value is not a new proof.
   type InvocationOrigin = { node: ParseNode, immutable: boolean, annotated: boolean };
@@ -3577,7 +3615,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     origins.set(name, { node, immutable, annotated });
   };
-  const varFrames: Frame[] = [frames[0]];
+  const varFrames: Frame[] = [sourceFrame];
   const uninitializedVars = new WeakMap<Frame, Set<string>>();
   const referenceWriteKey = (node: ParseNode): ParseNode => referenceSyntax.nodes.get(node) ?? node;
   const referenceSlots = new WeakMap<Frame, Map<string, ReferenceSlot>>();
@@ -10494,7 +10532,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // of the caller's same-spelled frame entries.
   const lookupAlias = (name: string, declaration?: ParseNode | null): Known => {
     if (declaration && resolvingAliasRecords.has(declaration)) return resolvingAliasRecords.get(declaration)!;
-    for (let i = declaration ? -1 : declaration === null ? 0 : frames.length - 1; i >= 0; i -= 1) {
+    for (let i = declaration ? -1 : declaration === null ? frames.indexOf(sourceFrame) : frames.length - 1; i >= 0; i -= 1) {
       const t = frames[i].aliases.get(name);
       if (t) {
         return t;
@@ -12100,7 +12138,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           examine(declaration.node.Type);
         }
       }
-      if (name && (assignedGlobalProperties.has(name) || typeParameterInScope(name) || enclosingParameters.has(name) || (frames.some((frame) => frame.declaredNames.has(name))
+      // External aliases remain closed pre-evaluation obligations; their
+      // presence in the constant frame must not classify them as open values.
+      if (name && (assignedGlobalProperties.has(name) || typeParameterInScope(name) || enclosingParameters.has(name) || (frames.some((frame) => frame.declaredNames.has(name)
+          && (frame !== outerConstants || !resolvedAlias(checkingEnvironment, name)))
           && !frames.some((frame) => frame.constLiteralValues.has(name) || frame.aliases.has(name))
           && !functionNodes.has(name) && !classNodes.has(name) && !interfaceNodes.has(name) && !aliasNodes.has(name)))) {
         open = true;
@@ -20353,7 +20394,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (type || node.type !== 'AdditiveExpression' || node.operator !== '+') return type;
           // Reuse the existing lexical constant proof; do not turn an
           // unannotated mutable initializer into a permanent operand contract.
-          const constant = singleValueOperandType(operand);
+          const constant = stringConstantValue(operand);
           return stringOnly(constant) ? constant : null;
         };
         const leftT = leftLit ? null : enumUnderlying(operationalType(operandType(leftNode)));
@@ -22075,12 +22116,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return t?.Kind === 'literal' ? t : null;
   };
 
+  /** A closed String value is useful evidence without granting literal-name syntax. */
+  const stringConstantValue = (node: ParseNode): TypeRecord | null => {
+    const literal = literalExpressionType(node);
+    if (literal && stringOnly(literal)) return literal;
+    const n = unparenthesized(node);
+    if (n.type !== 'IdentifierReference') return null;
+    for (let i = frames.length - 1; i >= 0; i -= 1) {
+      const frame = frames[i];
+      if (frame.declaredNames.has(n.name) || frame.bindingKinds.has(n.name)
+        || frame.bindings.has(n.name) || frame.dynamicBindings) return frame.constStringValues.get(n.name) ?? null;
+    }
+    return null;
+  };
+
   /**
-   * #sec-narrowing: the literal type an operand of the `v === e` row names -
-   * a literal expression, a `const` bound to one, or an enumerator reference,
-   * whose type is that enumerator's. An enumerator is read so only against a
-   * value of an enum (_against_); against any other operand it is a value of
-   * its underlying type (#sec-enums), which the comparison rules read as before.
+   * #sec-narrowing: a literal expression, a const directly bound to one, or
+   * an enumerator reference names a literal type. A copied String constant
+   * alone does not. An enumerator is read over its enum only against an enum;
+   * other comparisons use its underlying value under #sec-enums.
    */
   const singleValueOperandType = (node: ParseNode, against: Known = null): TypeRecord | null => {
     const literal = literalExpressionType(node);
@@ -22090,7 +22144,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (n.type === 'IdentifierReference') {
       const name = (n as unknown as { name: string }).name;
       for (let i = frames.length - 1; i >= 0; i -= 1) {
-        if (frames[i].declaredNames.has(name) || frames[i].bindings.has(name)) return frames[i].constOperandLiterals.get(name) ?? null;
+        if (frames[i].declaredNames.has(name) || frames[i].bindingKinds.has(name)
+          || frames[i].bindings.has(name) || frames[i].dynamicBindings) return frames[i].constOperandLiterals.get(name) ?? null;
       }
       return null;
     }
@@ -36001,8 +36056,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (isConstDeclaration && n.Initializer) {
             const key = memberKey({ Expression: n.Initializer });
             if (key !== undefined) bindingFrame.constPropertyKeys.set(n.BindingIdentifier.name, key);
-            const literal = n.TypeAnnotation ? null : literalExpressionType(n.Initializer);
+            const literal = n.TypeAnnotation || n.Ref ? null : literalExpressionType(n.Initializer);
             if (literal) bindingFrame.constOperandLiterals.set(n.BindingIdentifier.name, literal);
+            const stringValue = n.TypeAnnotation || n.Ref ? null : stringConstantValue(n.Initializer);
+            if (stringValue) {
+              bindingFrame.constStringValues.set(n.BindingIdentifier.name, stringValue);
+              literalConstantTypes.set(n, { type: stringValue, namesLiteral: !!literal });
+            } else literalConstantTypes.delete(n);
           }
           if (!n.TypeAnnotation && n.Initializer && isNumericConstantExpression(n.Initializer)) {
             const frame = frames[frames.length - 1];

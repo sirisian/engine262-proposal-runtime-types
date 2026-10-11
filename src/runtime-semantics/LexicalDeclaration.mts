@@ -15,7 +15,8 @@ import { GetTypeObject, NoDefaultValueError } from '../type-system/intern.mts';
 import { TypeNodeToTypeRecord, IsOfType, DefaultValueOf, BindTypeArgumentRecords, toNumericArgument } from '../type-system/runtime.mts';
 import { CreateRefBinding, RefBindingHolder, EnvironmentRecord } from '../execution-context/Environment.mts';
 import { IsOfTypeNode, RequireType } from '../abstract-ops/runtime-types.mts';
-import { InferredConstTypeOf } from '../type-system/check.mts';
+import { InferredConstTypeOf, StringConstantEvidenceOf } from '../type-system/check.mts';
+import { PublishStringConstant } from '../type-system/published-constants.mts';
 import { currentTypeParameterFrame } from '../type-system/runtime.mts';
 import { substituteParametersNamed } from '../type-system/unify.mts';
 import { AddDisposableResource } from '../abstract-ops/disposal.mts';
@@ -210,6 +211,7 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
     } else if (inferred) {
       recordDeclaredType(lhs, inferred);
     }
+    if (lhs.Base instanceof EnvironmentRecord) PublishStringConstant(lhs.Base, bindingId, StringConstantEvidenceOf(node));
     return initialized;
   } else {
     // 1. Let lhs be ResolveBinding(StringValue of BindingIdentifier).

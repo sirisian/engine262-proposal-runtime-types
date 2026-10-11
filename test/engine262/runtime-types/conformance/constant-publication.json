@@ -1,0 +1,1516 @@
+{
+  "cases": [
+    {
+      "name": "local chain 1 n+a1 bad destination",
+      "steps": [
+        {
+          "source": "const a0=\"a\";const a1=(a0);let n:uint8=1;let bad:uint8=n+a1;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "local chain 1 n+a1 String result",
+      "steps": [
+        {
+          "source": "const a0=\"a\";const a1=(a0);let n:uint8=1;let good:string=n+a1;good;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local chain 1 a1+n bad destination",
+      "steps": [
+        {
+          "source": "const a0=\"a\";const a1=(a0);let n:uint8=1;let bad:uint8=a1+n;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "local chain 1 a1+n String result",
+      "steps": [
+        {
+          "source": "const a0=\"a\";const a1=(a0);let n:uint8=1;let good:string=a1+n;good;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local chain 2 n+a2 bad destination",
+      "steps": [
+        {
+          "source": "const a0=\"a\";const a1=(a0);const a2=(a1);let n:uint8=1;let bad:uint8=n+a2;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "local chain 2 n+a2 String result",
+      "steps": [
+        {
+          "source": "const a0=\"a\";const a1=(a0);const a2=(a1);let n:uint8=1;let good:string=n+a2;good;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local chain 2 a2+n bad destination",
+      "steps": [
+        {
+          "source": "const a0=\"a\";const a1=(a0);const a2=(a1);let n:uint8=1;let bad:uint8=a2+n;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "local chain 2 a2+n String result",
+      "steps": [
+        {
+          "source": "const a0=\"a\";const a1=(a0);const a2=(a1);let n:uint8=1;let good:string=a2+n;good;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local chain 8 n+a8 bad destination",
+      "steps": [
+        {
+          "source": "const a0=\"a\";const a1=(a0);const a2=(a1);const a3=(a2);const a4=(a3);const a5=(a4);const a6=(a5);const a7=(a6);const a8=(a7);let n:uint8=1;let bad:uint8=n+a8;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "local chain 8 n+a8 String result",
+      "steps": [
+        {
+          "source": "const a0=\"a\";const a1=(a0);const a2=(a1);const a3=(a2);const a4=(a3);const a5=(a4);const a6=(a5);const a7=(a6);const a8=(a7);let n:uint8=1;let good:string=n+a8;good;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local chain 8 a8+n bad destination",
+      "steps": [
+        {
+          "source": "const a0=\"a\";const a1=(a0);const a2=(a1);const a3=(a2);const a4=(a3);const a5=(a4);const a6=(a5);const a7=(a6);const a8=(a7);let n:uint8=1;let bad:uint8=a8+n;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "local chain 8 a8+n String result",
+      "steps": [
+        {
+          "source": "const a0=\"a\";const a1=(a0);const a2=(a1);const a3=(a2);const a4=(a3);const a5=(a4);const a6=(a5);const a7=(a6);const a8=(a7);let n:uint8=1;let good:string=a8+n;good;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local chain 40 n+a40 bad destination",
+      "steps": [
+        {
+          "source": "const a0=\"a\";const a1=(a0);const a2=(a1);const a3=(a2);const a4=(a3);const a5=(a4);const a6=(a5);const a7=(a6);const a8=(a7);const a9=(a8);const a10=(a9);const a11=(a10);const a12=(a11);const a13=(a12);const a14=(a13);const a15=(a14);const a16=(a15);const a17=(a16);const a18=(a17);const a19=(a18);const a20=(a19);const a21=(a20);const a22=(a21);const a23=(a22);const a24=(a23);const a25=(a24);const a26=(a25);const a27=(a26);const a28=(a27);const a29=(a28);const a30=(a29);const a31=(a30);const a32=(a31);const a33=(a32);const a34=(a33);const a35=(a34);const a36=(a35);const a37=(a36);const a38=(a37);const a39=(a38);const a40=(a39);let n:uint8=1;let bad:uint8=n+a40;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "local chain 40 n+a40 String result",
+      "steps": [
+        {
+          "source": "const a0=\"a\";const a1=(a0);const a2=(a1);const a3=(a2);const a4=(a3);const a5=(a4);const a6=(a5);const a7=(a6);const a8=(a7);const a9=(a8);const a10=(a9);const a11=(a10);const a12=(a11);const a13=(a12);const a14=(a13);const a15=(a14);const a16=(a15);const a17=(a16);const a18=(a17);const a19=(a18);const a20=(a19);const a21=(a20);const a22=(a21);const a23=(a22);const a24=(a23);const a25=(a24);const a26=(a25);const a27=(a26);const a28=(a27);const a29=(a28);const a30=(a29);const a31=(a30);const a32=(a31);const a33=(a32);const a34=(a33);const a35=(a34);const a36=(a35);const a37=(a36);const a38=(a37);const a39=(a38);const a40=(a39);let n:uint8=1;let good:string=n+a40;good;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local chain 40 a40+n bad destination",
+      "steps": [
+        {
+          "source": "const a0=\"a\";const a1=(a0);const a2=(a1);const a3=(a2);const a4=(a3);const a5=(a4);const a6=(a5);const a7=(a6);const a8=(a7);const a9=(a8);const a10=(a9);const a11=(a10);const a12=(a11);const a13=(a12);const a14=(a13);const a15=(a14);const a16=(a15);const a17=(a16);const a18=(a17);const a19=(a18);const a20=(a19);const a21=(a20);const a22=(a21);const a23=(a22);const a24=(a23);const a25=(a24);const a26=(a25);const a27=(a26);const a28=(a27);const a29=(a28);const a30=(a29);const a31=(a30);const a32=(a31);const a33=(a32);const a34=(a33);const a35=(a34);const a36=(a35);const a37=(a36);const a38=(a37);const a39=(a38);const a40=(a39);let n:uint8=1;let bad:uint8=a40+n;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "local chain 40 a40+n String result",
+      "steps": [
+        {
+          "source": "const a0=\"a\";const a1=(a0);const a2=(a1);const a3=(a2);const a4=(a3);const a5=(a4);const a6=(a5);const a7=(a6);const a8=(a7);const a9=(a8);const a10=(a9);const a11=(a10);const a12=(a11);const a13=(a12);const a14=(a13);const a15=(a14);const a16=(a15);const a17=(a16);const a18=(a17);const a19=(a18);const a20=(a19);const a21=(a20);const a22=(a21);const a23=(a22);const a24=(a23);const a25=(a24);const a26=(a25);const a27=(a26);const a28=(a27);const a29=(a28);const a30=(a29);const a31=(a30);const a32=(a31);const a33=(a32);const a34=(a33);const a35=(a34);const a36=(a35);const a37=(a36);const a38=(a37);const a39=(a38);const a40=(a39);let n:uint8=1;let good:string=a40+n;good;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "untyped parameter shadows outer literal",
+      "steps": [
+        {
+          "source": "const text=\"a\";function f(text,n){const copy=text;return n+copy;}String(f(2,1));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local typed shadow uses own contract",
+      "steps": [
+        {
+          "source": "const text=\"a\";function f(){const text:uint8=2;const copy=text;let n:uint8=1;return n+copy;}String(f());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "String template alias",
+      "steps": [
+        {
+          "source": "const a=`a`;const b=a;let n:uint8=1;let s:string=b+n;s;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated any erases local evidence",
+      "steps": [
+        {
+          "source": "const a:any=\"a\";const b=a;let n:uint8=1;String(n+b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mutable source stays dynamic",
+      "steps": [
+        {
+          "source": "let a=\"a\";const b=a;a=2;let n:uint8=1;String(n+b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric literal adoption unchanged",
+      "steps": [
+        {
+          "source": "const a=300;const b=a;let n:uint16=b;String(n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "300"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pure literal alias equality remains a query",
+      "steps": [
+        {
+          "source": "const a=\"a\";const b=a;let n:uint8=1;String(n===b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct eval uses captured constant",
+      "steps": [
+        {
+          "source": "function f(){const text=\"a\";try{eval(\"let n:uint8=1;let bad:uint8=n+text;\");}catch(e){return e.name;}}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "StaticTypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "eval shadow blocks captured literal",
+      "steps": [
+        {
+          "source": "function f(){const text=\"a\";return eval(\"let text:uint8=2;let n:uint8=1;String(n+text);\");}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 2,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "indirect eval uses global environment",
+      "steps": [
+        {
+          "source": "const text:uint8=2;function f(){const text=\"a\";return (0,eval)(\"let n:uint8=1;String(n+text);\");}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 2,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generated Function does not capture caller",
+      "steps": [
+        {
+          "source": "const text:uint8=2;function f(){const text=\"a\";return Function(\"let n:uint8=1;return String(n+text);\")();}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal alias cycle retains runtime TDZ",
+      "steps": [
+        {
+          "source": "const a=b;const b=a;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "ReferenceError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "self alias does not borrow outer constant",
+      "steps": [
+        {
+          "source": "const a=\"a\";{const a=a;String(a);}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "ReferenceError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior literal n+text rejects before body",
+      "steps": [
+        {
+          "source": "const text=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let bad:uint8=n+text;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior literal n+text String result",
+      "steps": [
+        {
+          "source": "const text=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let good:string=n+text;good;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior literal text+n rejects before body",
+      "steps": [
+        {
+          "source": "const text=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let bad:uint8=text+n;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior literal text+n String result",
+      "steps": [
+        {
+          "source": "const text=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let good:string=text+n;good;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior annotated n+text rejects before body",
+      "steps": [
+        {
+          "source": "const text:string=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let bad:uint8=n+text;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior annotated n+text String result",
+      "steps": [
+        {
+          "source": "const text:string=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let good:string=n+text;good;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior annotated text+n rejects before body",
+      "steps": [
+        {
+          "source": "const text:string=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let bad:uint8=text+n;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior annotated text+n String result",
+      "steps": [
+        {
+          "source": "const text:string=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let good:string=text+n;good;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior inferred n+text rejects before body",
+      "steps": [
+        {
+          "source": "let source:string=\"a\";const text=source;\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let bad:uint8=n+text;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior inferred n+text String result",
+      "steps": [
+        {
+          "source": "let source:string=\"a\";const text=source;\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let good:string=n+text;good;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior inferred text+n rejects before body",
+      "steps": [
+        {
+          "source": "let source:string=\"a\";const text=source;\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let bad:uint8=text+n;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior inferred text+n String result",
+      "steps": [
+        {
+          "source": "let source:string=\"a\";const text=source;\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let good:string=text+n;good;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior annotated union n+text rejects before body",
+      "steps": [
+        {
+          "source": "const text:\"a\"|\"b\"=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let bad:uint8=n+text;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior annotated union n+text String result",
+      "steps": [
+        {
+          "source": "const text:\"a\"|\"b\"=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let good:string=n+text;good;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior annotated union text+n rejects before body",
+      "steps": [
+        {
+          "source": "const text:\"a\"|\"b\"=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let bad:uint8=text+n;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior annotated union text+n String result",
+      "steps": [
+        {
+          "source": "const text:\"a\"|\"b\"=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let good:string=text+n;good;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior aliased n+text rejects before body",
+      "steps": [
+        {
+          "source": "const original=\"a\";const text=(original);\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let bad:uint8=n+text;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior aliased n+text String result",
+      "steps": [
+        {
+          "source": "const original=\"a\";const text=(original);\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let good:string=n+text;good;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior aliased text+n rejects before body",
+      "steps": [
+        {
+          "source": "const original=\"a\";const text=(original);\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let bad:uint8=text+n;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior aliased text+n String result",
+      "steps": [
+        {
+          "source": "const original=\"a\";const text=(original);\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let good:string=text+n;good;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "three Scripts preserve literal alias evidence",
+      "steps": [
+        {
+          "source": "const text=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "const copy=text;\"copy\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "copy"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let bad:uint8=n+copy;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior typed constant contract reaches direct destination",
+      "steps": [
+        {
+          "source": "const text:string=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let bad:uint8=text;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior contract anchors a returned value",
+      "steps": [
+        {
+          "source": "const text:string=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(){return text;}let bad:uint8=f();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-return-contract",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior untyped literal does not anchor return",
+      "steps": [
+        {
+          "source": "const text=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(){return text;}String(f());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior numeric const carries its enforced contract",
+      "steps": [
+        {
+          "source": "const number:uint8=2;\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let bad:string=number;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior annotation is not a literal-name exception",
+      "steps": [
+        {
+          "source": "const text:string=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;String(n===text);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-disjoint-comparison",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior literal retains literal-name exception",
+      "steps": [
+        {
+          "source": "const text=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;String(n===text);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior explicit any does not become String evidence",
+      "steps": [
+        {
+          "source": "const text:any=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let bad:uint8=n+text;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior ordinary mutable initializer remains dynamic",
+      "steps": [
+        {
+          "source": "let text=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let bad:uint8=n+text;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior unknown immutable initializer stays unknown",
+      "steps": [
+        {
+          "source": "function get(){return \"a\";}const text=get();\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let bad:uint8=n+text;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prior typed reference is not an immutable snapshot",
+      "steps": [
+        {
+          "source": "let source:string=\"a\";const ref text=source;\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "source=\"b\";String(text);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later local parameter blocks publication",
+      "steps": [
+        {
+          "source": "const text:string=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(text){let n:uint8=1;return n+text;}String(f((2:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later block declaration blocks publication",
+      "steps": [
+        {
+          "source": "const text=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "{let text:uint8=2;let n:uint8=1;String(n+text);}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed checking publishes no binding or body effects",
+      "steps": [
+        {
+          "source": "var log=\"\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "log+=\"bad\";const text=\"a\";const copy=text;let n:uint8=1;let bad:uint8=n+copy;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "const text:uint8=2;log+String(text);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "successful earlier initialization survives later runtime abrupt completion",
+      "steps": [
+        {
+          "source": "const text=\"a\";throw new Error(\"later\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "Error"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let bad:uint8=n+text;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "unreached constant has no publication",
+      "steps": [
+        {
+          "source": "throw new Error(\"first\");const text=\"a\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "Error"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let bad:uint8=n+text;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "ReferenceError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "throwing initializer has no publication",
+      "steps": [
+        {
+          "source": "const text=(()=>{throw new Error(\"initializer\");})();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "Error"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let bad:uint8=n+text;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "ReferenceError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a direct literal name supplies comparison narrowing",
+      "steps": [
+        {
+          "source": "const text=\"a\";function f(v:uint8|string){if(v===text){let s:string=v;}}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a String alias does not acquire literal-name narrowing",
+      "steps": [
+        {
+          "source": "const text=\"a\";const copy=text;function f(v:uint8|string){if(v===copy){let s:string=v;}}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "a prior direct literal name supplies comparison narrowing",
+      "steps": [
+        {
+          "source": "const text=\"a\";\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(v:uint8|string){if(v===text){let s:string=v;}}\"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a prior String alias does not acquire literal-name narrowing",
+      "steps": [
+        {
+          "source": "const text=\"a\";const copy=text;\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(v:uint8|string){if(v===copy){let s:string=v;}}\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "String value evidence alone does not publish a return contract",
+      "steps": [
+        {
+          "source": "const text=\"a\";const copy=text;\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(){return copy;}let bad:uint8=f();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "global accessor is not a lexical constant",
+      "steps": [
+        {
+          "source": "var reads=0;Object.defineProperty(globalThis,\"text\",{get(){reads++;return \"a\";}});\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "let n:uint8=1;let bad:uint8=n+text;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "String(reads);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    }
+  ]
+}
