@@ -614,10 +614,14 @@
         {
           "source": "let entered=0;function g(head:string,ref ...ys:[].<uint8>,label:string=\"L\"){entered++;return \"ok\";}function f(ref ...xs:[].<uint8>){let a:uint8=1;return g(...xs,\"s\",ref a);}let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
           "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
           }
         }
       ]
@@ -656,10 +660,14 @@
         {
           "source": "let entered=0;function g(head:string,ref ...ys:[].<uint8>,label:string=\"L\"){entered++;return \"ok\";}function f(ref ...xs:[].<uint8>){let a:uint8=1;return g(\"s\",ref a,label:\"L\",...xs);}let out=\"ok\";try{out=f();}catch(e){out=e.name;}out+\"/\"+entered;",
           "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
           }
         }
       ]

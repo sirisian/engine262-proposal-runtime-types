@@ -1,0 +1,979 @@
+{
+  "cases": [
+    {
+      "name": "required prefix, run [].<uint8>",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>){} function unused(ref ...xs:[].<uint8>){g(...xs,\"L\");} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "required prefix, run []",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>){} function unused(ref ...xs:[]){g(...xs,\"L\");} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "required prefix, run [uint8]",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>){} function unused(ref ...xs:[uint8]){g(...xs,\"L\");} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "required suffix, run [].<uint8>",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>,last:string){} function unused(ref ...xs:[].<uint8>){g(\"L\",...xs);} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "required suffix, run []",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>,last:string){} function unused(ref ...xs:[]){g(\"L\",...xs);} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "required suffix, run [uint8]",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>,last:string){} function unused(ref ...xs:[uint8]){g(\"L\",...xs);} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed named scope, run [].<uint8>",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>,label:string){} function unused(ref ...xs:[].<uint8>){g(label:\"L\",...xs);} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed named scope, run []",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>,label:string){} function unused(ref ...xs:[]){g(label:\"L\",...xs);} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed named scope, run [uint8]",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>,label:string){} function unused(ref ...xs:[uint8]){g(label:\"L\",...xs);} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed named scope after earlier run, run [].<uint8>",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>,label:string){} function unused(ref ...xs:[].<uint8>){g(...xs,label:\"L\",...xs);} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed named scope after earlier run, run []",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>,label:string){} function unused(ref ...xs:[]){g(...xs,label:\"L\",...xs);} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed named scope after earlier run, run [uint8]",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>,label:string){} function unused(ref ...xs:[uint8]){g(...xs,label:\"L\",...xs);} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "named value rest with another ref rest, run [].<uint8>",
+      "steps": [
+        {
+          "source": "function g(...vs:[].<string>,ref ...ys:[].<uint8>){} function unused(ref ...xs:[].<uint8>){g(vs:\"L\",...xs);} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "named value rest with another ref rest, run []",
+      "steps": [
+        {
+          "source": "function g(...vs:[].<string>,ref ...ys:[].<uint8>){} function unused(ref ...xs:[]){g(vs:\"L\",...xs);} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "named value rest with another ref rest, run [uint8]",
+      "steps": [
+        {
+          "source": "function g(...vs:[].<string>,ref ...ys:[].<uint8>){} function unused(ref ...xs:[uint8]){g(vs:\"L\",...xs);} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "object literal closes scope, run [].<uint8>",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>,label:string){} function unused(ref ...xs:[].<uint8>){g(...{label:\"L\"},...xs);} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "object literal closes scope, run []",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>,label:string){} function unused(ref ...xs:[]){g(...{label:\"L\"},...xs);} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "object literal closes scope, run [uint8]",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>,label:string){} function unused(ref ...xs:[uint8]){g(...{label:\"L\"},...xs);} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "pinned fixed suffix cannot receive forward run, run [].<uint8>",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>,last:string){} function unused(ref ...xs:[].<uint8>){g(...xs,last:\"L\");} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "pinned fixed suffix cannot receive forward run, run []",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>,last:string){} function unused(ref ...xs:[]){g(...xs,last:\"L\");} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "pinned fixed suffix cannot receive forward run, run [uint8]",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>,last:string){} function unused(ref ...xs:[uint8]){g(...xs,last:\"L\");} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional prefix giveback",
+      "steps": [
+        {
+          "source": "function g(first:string=\"d\",ref ...ys:[].<uint8>,last:string=\"t\"){} function unused(ref ...xs:[].<uint8>){g(...xs,\"L\");} \"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary prefix",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>){} function unused(ref ...xs:[].<uint8>){g(\"L\",...xs);} \"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary suffix",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>,last:string){} function unused(ref ...xs:[].<uint8>){g(...xs,\"L\");} \"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two run occurrences at same boundary",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>){} function unused(ref ...xs:[].<uint8>){g(...xs,...xs);} \"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "separated reference rests",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>,label:string,ref ...zs:[].<uint8>){} function unused(ref ...xs:[].<uint8>){g(...xs,\"L\",...xs);} \"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later explicit name pins prefix",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>){} function unused(ref ...xs:[].<uint8>){g(...xs,first:\"L\");} \"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later object literal pins prefix",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>){} function unused(ref ...xs:[].<uint8>){g(...xs,...{first:\"L\"});} \"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named rest can give back required prefix",
+      "steps": [
+        {
+          "source": "function g(...vs:[].<string>,first:string,ref ...ys:[].<uint8>){} function unused(ref ...xs:[].<uint8>){g(...xs,vs:\"L\");} \"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown object spread may pin required prefix",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>){} function unused(o:any,ref ...xs:[].<uint8>){g(...xs,...o);} \"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown object spread may change named scope",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>,label:string){} function unused(o:any,ref ...xs:[].<uint8>){g(label:\"L\",...o,...xs);} \"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit name restores scope after unknown spread",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>,label:string){} function unused(o:any,ref ...xs:[].<uint8>){g(...o,label:\"L\",...xs);} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "mutable array storage does not establish iteration",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>){} function unused(o:[].<string>,ref ...xs:[].<uint8>){g(...xs,...o);} \"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "required iterator supplies arbitrary positional prefix",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>){} function unused(o:{[Symbol.iterator]():Generator.<string>},ref ...xs:[].<uint8>){g(...o,...xs);} \"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "required iterator cannot cross pending reference occurrence",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>){} function unused(o:{[Symbol.iterator]():Generator.<string>},ref ...xs:[].<uint8>){g(...xs,...o);} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "required iterator does not reopen named scope",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>,label:string){} function unused(o:{[Symbol.iterator]():Generator.<string>},ref ...xs:[].<uint8>){g(label:\"L\",...o,...xs);} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional iterator leaves object routing unknown",
+      "steps": [
+        {
+          "source": "function g(ref ...ys:[].<uint8>,label:string){} function unused(o:{[Symbol.iterator]?:()=>Generator.<string>},ref ...xs:[].<uint8>){g(label:\"L\",...o,...xs);} \"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic callee",
+      "steps": [
+        {
+          "source": "function g<T:type>(first:string,ref ...ys:[].<T>){} function unused<T:type>(ref ...xs:[].<T>){g.<T>(...xs,\"L\");} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored generic callee",
+      "steps": [
+        {
+          "source": "function g<T:type>(first:string,ref ...ys:[].<T>){}const h=g.<uint8>;function unused(ref ...xs:[].<uint8>){h(...xs,\"L\");} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "method",
+      "steps": [
+        {
+          "source": "class C{g(first:string,ref ...ys:[].<uint8>){}}const c=new C();function unused(ref ...xs:[].<uint8>){c.g(...xs,\"L\");} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor",
+      "steps": [
+        {
+          "source": "class C{constructor(first:string,ref ...ys:[].<uint8>){}}function unused(ref ...xs:[].<uint8>){new C(...xs,\"L\");} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "super constructor",
+      "steps": [
+        {
+          "source": "class C{constructor(first:string,ref ...ys:[].<uint8>){}}class D extends C{constructor(ref ...xs:[].<uint8>){super(...xs,\"L\");}} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "property contract",
+      "steps": [
+        {
+          "source": "function unused(o:{g:(first:string,ref ...ys:[].<uint8>)=>void},ref ...xs:[].<uint8>){o.g(...xs,\"L\");} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nullable optional call",
+      "steps": [
+        {
+          "source": "function unused(g:((first:string,ref ...ys:[].<uint8>)=>void)|undefined,ref ...xs:[].<uint8>){g?.(...xs,\"L\");} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured source",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>){}function unused(ref ...xs:[].<uint8>){function nested(){g(...xs,\"L\");}} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "later default source",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>){}function unused(x=g(...xs,\"L\"),ref ...xs:[].<uint8>){} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "shadowed source remains ordinary spread",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>){}function unused(ref ...xs:[].<uint8>){function nested(xs:any){g(...xs,\"L\");}} \"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "one overload has a route",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>):number{return 1;}function g(ref ...ys:[].<uint8>,label:string):string{return label;}function unused(ref ...xs:[].<uint8>){g(...xs,\"L\");} \"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "every overload lacks a route",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>):number{return 1;}function g(first:uint8,ref ...ys:[].<uint8>):string{return \"L\";}function unused(ref ...xs:[].<uint8>){g(...xs,\"L\");} \"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "live optional-prefix giveback, length 0",
+      "steps": [
+        {
+          "source": "function g(first:string=\"d\",ref ...ys:[].<uint8>,last:string=\"t\"){return first+\"/\"+last+\"/\"+ys.length+\"/\"+arguments.length;}function f(ref ...xs:[].<uint8>){return g(...xs,\"L\");}let a:uint8=1;f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "d/L/0/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic forbidden prefix, length 0",
+      "steps": [
+        {
+          "source": "let entered=0;function g(first:string,ref ...ys:[].<uint8>){entered++;}const h:any=g;function f(ref ...xs:[].<uint8>){h(...xs,\"L\");}let a:uint8=1;let out=\"missed\";try{f();}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "live later name pins prefix, length 0",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>){return first+\"/\"+ys.length;}function f(ref ...xs:[].<uint8>){return g(...xs,first:\"L\");}let a:uint8=1;f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "L/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "live optional-prefix giveback, length 1",
+      "steps": [
+        {
+          "source": "function g(first:string=\"d\",ref ...ys:[].<uint8>,last:string=\"t\"){return first+\"/\"+last+\"/\"+ys.length+\"/\"+arguments.length;}function f(ref ...xs:[].<uint8>){return g(...xs,\"L\");}let a:uint8=1;f(ref a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "d/L/1/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic forbidden prefix, length 1",
+      "steps": [
+        {
+          "source": "let entered=0;function g(first:string,ref ...ys:[].<uint8>){entered++;}const h:any=g;function f(ref ...xs:[].<uint8>){h(...xs,\"L\");}let a:uint8=1;let out=\"missed\";try{f(ref a);}catch(e){out=e.name;}out+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "live later name pins prefix, length 1",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>){return first+\"/\"+ys.length;}function f(ref ...xs:[].<uint8>){return g(...xs,first:\"L\");}let a:uint8=1;f(ref a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "L/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "live named-rest suffix giveback",
+      "steps": [
+        {
+          "source": "function g(...vs:[].<string>,first:string,ref ...ys:[].<uint8>){return first+\"/\"+ys.length;}function f(ref ...xs:[].<uint8>){return g(...xs,vs:\"L\");}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "L/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ref view still permits individual implementation",
+      "steps": [
+        {
+          "source": "function apply2<...Cs:[].<type>>(cb:(ref ...xs:Cs)=>void,ref ...xs:Cs):void{cb(...xs);}let a:uint8=1;apply2((ref x:uint8)=>{x=7;},ref a);String(a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty ref view still permits zero implementation",
+      "steps": [
+        {
+          "source": "function apply2<...Cs:[].<type>>(cb:(ref ...xs:Cs)=>string,ref ...xs:Cs):string{return cb(...xs);}apply2(()=>\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed routing check restores same realm",
+      "steps": [
+        {
+          "source": "function g(first:string,ref ...ys:[].<uint8>){}function unused(ref ...xs:[].<uint8>){g(...xs,\"L\");}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-reference-permission",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "function g(first:string=\"d\",ref ...ys:[].<uint8>,last:string=\"t\"){}function unused(ref ...xs:[].<uint8>){g(...xs,\"L\");} \"accepted\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    }
+  ]
+}

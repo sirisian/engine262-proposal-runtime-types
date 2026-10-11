@@ -79,6 +79,7 @@ import { MetadataObjectFromType, fitsNumericType, KeyTypesOf, IndexedAccessTypeR
 import { isWideIntegerType, wrapToType } from './arithmetic.mts';
 import { resolveOverloadByTypes, assignArguments, parameterReceiving, operatorTableKey, IsNumericIndexType, type OverloadSignature as OperatorSignature } from './overloads.mts';
 import { PlanReferenceArguments } from './reference-rest.mts';
+import { ReferenceRoutePossible, type RoutingContribution } from './reference-routing.mts';
 import { BindNamedArguments, type ArgumentItem } from './named-arguments.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { invalidTupleRest } from './tuple-rests.mts';
@@ -32037,22 +32038,43 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
   if (callee && callee.Kind === 'function' && Array.isArray(c.Arguments)) {
-    // A reference run needs a reference-rest contract even when it is empty.
-    // Inspect written arguments before spread expansion loses that identity.
-    // These are the effective signatures in view, not implementation syntax:
-    // a compatible implementation may use individual refs or no parameters.
-    // The absence of any eligible position proves failure without determining
-    // the run's length or choosing a partition. A possible rest leaves those
-    // separate admission/routing judgments to their existing checks.
-    if (callee.Signatures.length > 0
+    // Preserve source occurrences before spread expansion, and judge the
+    // effective callable view rather than the implementation's parameter list.
+    const forwardsRun = (argument: ParseNode): boolean => {
+      if (argument.type !== 'AssignmentRestElement') return false;
+      const source = patternExpression(argument.AssignmentExpression);
+      return source?.type === 'IdentifierReference' && isRefRestName(source.name);
+    };
+    if (c.Arguments.some(forwardsRun) && callee.Signatures.length > 0
       && callee.Signatures.every((signature) => !signature.Parameters.some((p) => p.Rest && p.Ref))) {
+      // Keep the established absence proof and its source diagnostic. It
+      // needs no other spread's type, names or possible evaluation inputs.
       for (const argument of c.Arguments) {
-        if (argument.type !== 'AssignmentRestElement') continue;
-        const source = patternExpression(argument.AssignmentExpression);
-        if (source?.type === 'IdentifierReference' && isRefRestName(source.name)) {
-          reportType('rt-reference-permission', argument,
-            'a reference run can only be forwarded to a reference-rest position; no signature in this callable contract has one');
-        }
+        if (forwardsRun(argument)) reportType('rt-reference-permission', argument,
+          'a reference run can only be forwarded to a reference-rest position; no signature in this callable contract has one');
+      }
+    } else if (c.Arguments.some(forwardsRun)) {
+      const contributions = c.Arguments.flatMap<RoutingContribution>((argument) => {
+        if (forwardsRun(argument)) return [{ kind: 'reference-run' }];
+        if (argument.type === 'NamedArgument') return [{ kind: 'named', name: argument.Name }];
+        if (argument.type !== 'AssignmentRestElement') return [{ kind: 'value' }];
+        const objectItems = objectSpreadItems(argument);
+        if (objectItems) return objectItems.map((item) => ({ kind: 'named', name: item.name! }));
+        // Array/tuple storage alone cannot rule out object-spread routing.
+        // Require an established non-optional callable iteration hook. Its
+        // count and yielded types are irrelevant to this routing-only proof.
+        const shape = structureOf(erasedForJudgment(staticType(argument.AssignmentExpression)));
+        const iterator = shape?.Kind === 'object' ? shape.Properties.find((p) => p.key === wellKnownSymbols.iterator) : undefined;
+        return [{ kind: iterator && !iterator.optional && iterator.type.Kind === 'function' ? 'spread' : 'unknown' }];
+      });
+      const named = contributions.some((item) => item.kind === 'named');
+      if (callee.Signatures.length > 0 && callee.Signatures.every((signature) => !ReferenceRoutePossible(
+        signature.Parameters.map((p) => ({ ...p,
+          Optional: p.Optional || p.Initial !== undefined || p.DeclaredDefault === true || (!named && IsAssignable(undefinedType, p.Type)),
+        })), contributions,
+      ))) {
+        reportType('rt-reference-permission', n,
+          'a reference run can only be forwarded to a reference-rest position; no signature in this callable contract has a possible forwarding route');
       }
     }
     const supplied = expandValueSpreads(c.Arguments);
