@@ -422,13 +422,14 @@ function componentHost(resolve: (node: ParseNode) => TypeRecord | null, unknownS
       }
       const domain = resolve(meta as unknown as ParseNode);
       if (unknownSubjects.has(subject) && (subject.Kind !== 'parameterized' || domain?.Kind !== 'object' || !domain.Properties.some((p) => Object.hasOwn(subject.Metadata, MetadataStorageKey(p.key))))) return UnknownMetadataCapture();
-      const metaType = domain ? MetaTypeForConstraint(domain) : undefined;
+      const base = subject.Kind === 'parameterized' ? subject.Base : subject;
+      const metaType = domain ? MetaTypeForConstraint(domain, base) : undefined;
       // Before the meta type is registered - statically, where the checker
       // resolves a result's type ahead of evaluation - the capture binds the
       // lane's whole metadata, which is its meta type's portion wherever one
       // meta type governs the lane (as the scalar result's checking assumes).
       if (metaType !== undefined) {
-        return metadataAsObjectRecord(MetadataPortion(subject.Kind === 'parameterized' ? subject.Metadata : null as unknown as MetadataRecord, metaType), domain ?? undefined);
+        return metadataAsObjectRecord(MetadataPortion(subject.Kind === 'parameterized' ? subject.Metadata : null as unknown as MetadataRecord, metaType, base), domain ?? undefined);
       }
       // Before the meta type is registered - statically - its portion is the
       // metadata's keys that its written shape declares: a portion by the

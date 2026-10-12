@@ -12141,7 +12141,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       reportType('rt-variadic-contract', node, '$1', Value(`a tuple rest operand must be an array or tuple type, got ${displayType(invalidRest)}`));
       return null;
     }
-    if (result && node.type !== 'ComputedType') {
+    // A completed structural description has not checked its metadata field
+    // domains. Closed source constructions still owe the ordinary admission
+    // boundary after meta declarations publish; dependent/default uses retain
+    // the availability rules below.
+    const governingMetadata = result?.Kind === 'parameterized' ? GoverningMetaTypes(result.Metadata) : undefined;
+    // An established pending local claimant has not published its protocol.
+    // The existing unclaimed-key pass owns that dependency. Once declarations
+    // publish, their recheck discovers this admission obligation too.
+    const metadataAdmission = governingMetadata && governingMetadata.unclaimed.length === 0
+      && (node.type === 'ParameterizedType' || (node.type === 'TypeReference' && !!node.TypeArguments));
+    if (result && node.type !== 'ComputedType' && !metadataAdmission) {
       unresolvedTypes.delete(node);
       return result;
     }
@@ -12266,6 +12276,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         Kind: 'range',
         Start: endpoint(r.RangeTypeStart),
         End: endpoint(r.RangeTypeEnd),
+        StartSource: r.RangeTypeStart?.SourceText,
+        EndSource: r.RangeTypeEnd?.SourceText,
         StartBound: r.RangeTypeStartBound ?? undefined,
         EndBound: r.RangeTypeEndBound ?? undefined,
       } as unknown as TypeRecord;

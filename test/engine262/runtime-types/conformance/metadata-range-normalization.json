@@ -1,0 +1,1265 @@
+{
+  "cases": [
+    {
+      "name": "all origins share uint8",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:1..<3};subtype(a,b){return true;}}type W=uint8.<{mark:1..<3}>;function build(){return {mark:1..<3};}type B=uint8.<build()>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:1..<3}});function capture<uint8.<const D:M>>():string{return String(Reflect.typeOf(D.mark.start)===uint8);}String(W===B)+\"/\"+String(W===R)+\"/\"+String(Reflect.makeType(Reflect.getReflection(W))===W)+\"/\"+capture.<W>()+\"/\"+capture.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "all origins share int64",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<int64>};meta M{default={mark:1..<3};subtype(a,b){return true;}}type W=uint8.<{mark:1..<3}>;function build(){return {mark:1..<3};}type B=uint8.<build()>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:1..<3}});function capture<uint8.<const D:M>>():string{return String(Reflect.typeOf(D.mark.start)===int64);}String(W===B)+\"/\"+String(W===R)+\"/\"+String(Reflect.makeType(Reflect.getReflection(W))===W)+\"/\"+capture.<W>()+\"/\"+capture.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "all origins share uint64",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint64>};meta M{default={mark:1..<3};subtype(a,b){return true;}}type W=uint8.<{mark:1..<3}>;function build(){return {mark:1..<3};}type B=uint8.<build()>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:1..<3}});function capture<uint8.<const D:M>>():string{return String(Reflect.typeOf(D.mark.start)===uint64);}String(W===B)+\"/\"+String(W===R)+\"/\"+String(Reflect.makeType(Reflect.getReflection(W))===W)+\"/\"+capture.<W>()+\"/\"+capture.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "all origins share float32",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<float32>};meta M{default={mark:1..<3};subtype(a,b){return true;}}type W=uint8.<{mark:1..<3}>;function build(){return {mark:1..<3};}type B=uint8.<build()>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:1..<3}});function capture<uint8.<const D:M>>():string{return String(Reflect.typeOf(D.mark.start)===float32);}String(W===B)+\"/\"+String(W===R)+\"/\"+String(Reflect.makeType(Reflect.getReflection(W))===W)+\"/\"+capture.<W>()+\"/\"+capture.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "all origins share float64",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<float64>};meta M{default={mark:1..<3};subtype(a,b){return true;}}type W=uint8.<{mark:1..<3}>;function build(){return {mark:1..<3};}type B=uint8.<build()>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:1..<3}});function capture<uint8.<const D:M>>():string{return String(Reflect.typeOf(D.mark.start)===float64);}String(W===B)+\"/\"+String(W===R)+\"/\"+String(Reflect.makeType(Reflect.getReflection(W))===W)+\"/\"+capture.<W>()+\"/\"+capture.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "all origins share float128",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<float128>};meta M{default={mark:1..<3};subtype(a,b){return true;}}type W=uint8.<{mark:1..<3}>;function build(){return {mark:1..<3};}type B=uint8.<build()>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:1..<3}});function capture<uint8.<const D:M>>():string{return String(Reflect.typeOf(D.mark.start)===float128);}String(W===B)+\"/\"+String(W===R)+\"/\"+String(Reflect.makeType(Reflect.getReflection(W))===W)+\"/\"+capture.<W>()+\"/\"+capture.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "all origins share rational64",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<rational64>};meta M{default={mark:1..<3};subtype(a,b){return true;}}type W=uint8.<{mark:1..<3}>;function build(){return {mark:1..<3};}type B=uint8.<build()>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:1..<3}});function capture<uint8.<const D:M>>():string{return String(Reflect.typeOf(D.mark.start)===rational64);}String(W===B)+\"/\"+String(W===R)+\"/\"+String(Reflect.makeType(Reflect.getReflection(W))===W)+\"/\"+capture.<W>()+\"/\"+capture.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "all origins share decimal128",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<decimal128>};meta M{default={mark:1..<3};subtype(a,b){return true;}}type W=uint8.<{mark:1..<3}>;function build(){return {mark:1..<3};}type B=uint8.<build()>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:1..<3}});function capture<uint8.<const D:M>>():string{return String(Reflect.typeOf(D.mark.start)===decimal128);}String(W===B)+\"/\"+String(W===R)+\"/\"+String(Reflect.makeType(Reflect.getReflection(W))===W)+\"/\"+capture.<W>()+\"/\"+capture.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shape retains omitted endpoints 0..<3",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}type W=uint8.<{mark:0..<3}>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:0..<3}});const r=Reflect.getReflection(W).metadata.mark;String(W===R)+\"/\"+String(r.start===undefined||Reflect.typeOf(r.start)===uint8)+\"/\"+String(r.end===undefined||Reflect.typeOf(r.end)===uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shape retains omitted endpoints 0..=3",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}type W=uint8.<{mark:0..=3}>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:0..=3}});const r=Reflect.getReflection(W).metadata.mark;String(W===R)+\"/\"+String(r.start===undefined||Reflect.typeOf(r.start)===uint8)+\"/\"+String(r.end===undefined||Reflect.typeOf(r.end)===uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shape retains omitted endpoints 0<..<3",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}type W=uint8.<{mark:0<..<3}>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:0<..<3}});const r=Reflect.getReflection(W).metadata.mark;String(W===R)+\"/\"+String(r.start===undefined||Reflect.typeOf(r.start)===uint8)+\"/\"+String(r.end===undefined||Reflect.typeOf(r.end)===uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shape retains omitted endpoints 0<..=3",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}type W=uint8.<{mark:0<..=3}>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:0<..=3}});const r=Reflect.getReflection(W).metadata.mark;String(W===R)+\"/\"+String(r.start===undefined||Reflect.typeOf(r.start)===uint8)+\"/\"+String(r.end===undefined||Reflect.typeOf(r.end)===uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shape retains omitted endpoints 0..",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}type W=uint8.<{mark:0..}>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:0..}});const r=Reflect.getReflection(W).metadata.mark;String(W===R)+\"/\"+String(r.start===undefined||Reflect.typeOf(r.start)===uint8)+\"/\"+String(r.end===undefined||Reflect.typeOf(r.end)===uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shape retains omitted endpoints 0<..",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}type W=uint8.<{mark:0<..}>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:0<..}});const r=Reflect.getReflection(W).metadata.mark;String(W===R)+\"/\"+String(r.start===undefined||Reflect.typeOf(r.start)===uint8)+\"/\"+String(r.end===undefined||Reflect.typeOf(r.end)===uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shape retains omitted endpoints ..<3",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}type W=uint8.<{mark:..<3}>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:..<3}});const r=Reflect.getReflection(W).metadata.mark;String(W===R)+\"/\"+String(r.start===undefined||Reflect.typeOf(r.start)===uint8)+\"/\"+String(r.end===undefined||Reflect.typeOf(r.end)===uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shape retains omitted endpoints ..=3",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}type W=uint8.<{mark:..=3}>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:..=3}});const r=Reflect.getReflection(W).metadata.mark;String(W===R)+\"/\"+String(r.start===undefined||Reflect.typeOf(r.start)===uint8)+\"/\"+String(r.end===undefined||Reflect.typeOf(r.end)===uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shape retains omitted endpoints ..",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}type W=uint8.<{mark:..}>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:..}});const r=Reflect.getReflection(W).metadata.mark;String(W===R)+\"/\"+String(r.start===undefined||Reflect.typeOf(r.start)===uint8)+\"/\"+String(r.end===undefined||Reflect.typeOf(r.end)===uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written rejects endpoint 0..<256",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}type Bad=uint8.<{mark:0..<256}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "builder rejects endpoint 0..<256",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}function build(){return {mark:0..<256};}type Bad=uint8.<build()>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects endpoint 0..<256",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:0..<256}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "default rejects endpoint 0..<256",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:0..<256};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "written rejects endpoint 300..<301",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}type Bad=uint8.<{mark:300..<301}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "builder rejects endpoint 300..<301",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}function build(){return {mark:300..<301};}type Bad=uint8.<build()>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects endpoint 300..<301",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:300..<301}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "default rejects endpoint 300..<301",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:300..<301};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "written rejects endpoint -1..<3",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}type Bad=uint8.<{mark:-1..<3}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "builder rejects endpoint -1..<3",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}function build(){return {mark:-1..<3};}type Bad=uint8.<build()>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects endpoint -1..<3",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:-1..<3}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "default rejects endpoint -1..<3",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:-1..<3};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "written rejects endpoint 0.5..<3",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}type Bad=uint8.<{mark:0.5..<3}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "builder rejects endpoint 0.5..<3",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}function build(){return {mark:0.5..<3};}type Bad=uint8.<build()>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects endpoint 0.5..<3",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:0.5..<3}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "default rejects endpoint 0.5..<3",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:0.5..<3};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "written rejects endpoint ..=256",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}type Bad=uint8.<{mark:..=256}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "builder rejects endpoint ..=256",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}function build(){return {mark:..=256};}type Bad=uint8.<build()>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects endpoint ..=256",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:..=256}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "default rejects endpoint ..=256",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..=256};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "written rejects endpoint 256..",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}type Bad=uint8.<{mark:256..}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "builder rejects endpoint 256..",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}function build(){return {mark:256..};}type Bad=uint8.<build()>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects endpoint 256..",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:256..}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "default rejects endpoint 256..",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:256..};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "fixed wider domain on uint8",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint16>};meta M{default={mark:..};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:0..<256}});const b=Reflect.getReflection(T).metadata.mark;String(Reflect.typeOf(b.end)===uint16)+\"/\"+String(b.end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/256"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed wider domain on string",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint16>};meta M{default={mark:..};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:string,metadata:{mark:0..<256}});const b=Reflect.getReflection(T).metadata.mark;String(Reflect.typeOf(b.end)===uint16)+\"/\"+String(b.end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/256"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unconstrained endpoint has no host coercion any",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:..};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:0..<300}});String(Reflect.typeOf(Reflect.getReflection(T).metadata.mark.end)===number);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unconstrained endpoint has no host coercion RangeBounds.<any>",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<any>};meta M{default={mark:..};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:0..<300}});String(Reflect.typeOf(Reflect.getReflection(T).metadata.mark.end)===number);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed endpoint mismatch RangeBounds.<uint8>",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:(1:=uint16)..<(3:=uint16)}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "typed endpoint matches RangeBounds.<uint8>",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:(1:=uint8)..<(3:=uint8)}});type W=uint8.<{mark:1..<3}>;String(T===W);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed endpoint mismatch RangeBounds.<uint8> | undefined",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8> | undefined};meta M{default={mark:..};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:(1:=uint16)..<(3:=uint16)}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "typed endpoint matches RangeBounds.<uint8> | undefined",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8> | undefined};meta M{default={mark:..};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:(1:=uint8)..<(3:=uint8)}});type W=uint8.<{mark:1..<3}>;String(T===W);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional range supplies its endpoint domain",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8> | undefined};meta M{default={mark:..};subtype(a,b){return true;}}type W=uint8.<{mark:1..<3}>;String(Reflect.typeOf(Reflect.getReflection(W).metadata.mark.end)===uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ambiguous range union rejects untyped endpoints RangeBounds.<uint8> | RangeBounds.<uint16>",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8> | RangeBounds.<uint16>};meta M{default={mark:..};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:1..<3}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "ambiguous range union admits explicit domain RangeBounds.<uint8> | RangeBounds.<uint16>",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8> | RangeBounds.<uint16>};meta M{default={mark:..};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:(1:=uint16)..<(3:=uint16)}});String(Reflect.typeOf(Reflect.getReflection(T).metadata.mark.end)===uint16);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ambiguous range union rejects untyped endpoints RangeBounds.<uint16> | RangeBounds.<uint8>",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint16> | RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:1..<3}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "ambiguous range union admits explicit domain RangeBounds.<uint16> | RangeBounds.<uint8>",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint16> | RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:(1:=uint16)..<(3:=uint16)}});String(Reflect.typeOf(Reflect.getReflection(T).metadata.mark.end)===uint16);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested range normalizes {a:RangeBounds.<uint8>}",
+      "steps": [
+        {
+          "source": "type M={mark:{a:RangeBounds.<uint8>}};meta M{default={mark:{a:1..<3}};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:{a:1..<3}}});String(Reflect.typeOf(Reflect.getReflection(T).metadata.mark.a.end)===uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested range rejects {a:RangeBounds.<uint8>}",
+      "steps": [
+        {
+          "source": "type M={mark:{a:RangeBounds.<uint8>}};meta M{default={mark:{a:1..<3}};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:{a:0..<256}}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "nested range normalizes [RangeBounds.<uint8>]",
+      "steps": [
+        {
+          "source": "type M={mark:[RangeBounds.<uint8>]};meta M{default={mark:[1..<3]};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:[1..<3]}});String(Reflect.typeOf(Reflect.getReflection(T).metadata.mark[0].end)===uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested range rejects [RangeBounds.<uint8>]",
+      "steps": [
+        {
+          "source": "type M={mark:[RangeBounds.<uint8>]};meta M{default={mark:[1..<3]};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:[0..<256]}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "nested range normalizes [].<RangeBounds.<uint8>>",
+      "steps": [
+        {
+          "source": "type M={mark:[].<RangeBounds.<uint8>>};meta M{default={mark:[1..<3,2..<4]};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:[1..<3,2..<4]}});String(Reflect.typeOf(Reflect.getReflection(T).metadata.mark[0].end)===uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested range rejects [].<RangeBounds.<uint8>>",
+      "steps": [
+        {
+          "source": "type M={mark:[].<RangeBounds.<uint8>>};meta M{default={mark:[1..<3,2..<4]};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:[1..<3,0..<256]}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "written endpoint keeps source digits uint64 9007199254740993",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint64>};meta M{default={mark:..};subtype(a,b){return true;}}type W=uint8.<{mark:9007199254740993..=9007199254740993}>;type Leaf={n:uint64};meta Leaf{default={n:0};subtype(a,b){return true;}}type L=uint8.<{n:9007199254740993}>;const w=Reflect.getReflection(W).metadata.mark;const n=Reflect.getReflection(L).metadata.n;String(w.start===n)+\"/\"+String(w.end===n)+\"/\"+String(Reflect.makeType(Reflect.getReflection(W))===W);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written endpoint keeps source digits int64 -9007199254740993",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<int64>};meta M{default={mark:..};subtype(a,b){return true;}}type W=uint8.<{mark:-9007199254740993..=-9007199254740993}>;type Leaf={n:int64};meta Leaf{default={n:0};subtype(a,b){return true;}}type L=uint8.<{n:-9007199254740993}>;const w=Reflect.getReflection(W).metadata.mark;const n=Reflect.getReflection(L).metadata.n;String(w.start===n)+\"/\"+String(w.end===n)+\"/\"+String(Reflect.makeType(Reflect.getReflection(W))===W);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written endpoint keeps source digits uint64 0x20000000000001",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint64>};meta M{default={mark:..};subtype(a,b){return true;}}type W=uint8.<{mark:0x20000000000001..=0x20000000000001}>;type Leaf={n:uint64};meta Leaf{default={n:0};subtype(a,b){return true;}}type L=uint8.<{n:0x20000000000001}>;const w=Reflect.getReflection(W).metadata.mark;const n=Reflect.getReflection(L).metadata.n;String(w.start===n)+\"/\"+String(w.end===n)+\"/\"+String(Reflect.makeType(Reflect.getReflection(W))===W);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written endpoint keeps source digits rational64 0.1",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<rational64>};meta M{default={mark:..};subtype(a,b){return true;}}type W=uint8.<{mark:0.1..=0.1}>;type Leaf={n:rational64};meta Leaf{default={n:0};subtype(a,b){return true;}}type L=uint8.<{n:0.1}>;const w=Reflect.getReflection(W).metadata.mark;const n=Reflect.getReflection(L).metadata.n;String(w.start===n)+\"/\"+String(w.end===n)+\"/\"+String(Reflect.makeType(Reflect.getReflection(W))===W);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written endpoint keeps source digits float128 0.1",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<float128>};meta M{default={mark:..};subtype(a,b){return true;}}type W=uint8.<{mark:0.1..=0.1}>;type Leaf={n:float128};meta Leaf{default={n:0};subtype(a,b){return true;}}type L=uint8.<{n:0.1}>;const w=Reflect.getReflection(W).metadata.mark;const n=Reflect.getReflection(L).metadata.n;String(w.start===n)+\"/\"+String(w.end===n)+\"/\"+String(Reflect.makeType(Reflect.getReflection(W))===W);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written endpoint keeps source digits decimal128 0.1000000000000000000000000000000001",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<decimal128>};meta M{default={mark:..};subtype(a,b){return true;}}type W=uint8.<{mark:0.1000000000000000000000000000000001..=0.1000000000000000000000000000000001}>;type Leaf={n:decimal128};meta Leaf{default={n:0};subtype(a,b){return true;}}type L=uint8.<{n:0.1000000000000000000000000000000001}>;const w=Reflect.getReflection(W).metadata.mark;const n=Reflect.getReflection(L).metadata.n;String(w.start===n)+\"/\"+String(w.end===n)+\"/\"+String(Reflect.makeType(Reflect.getReflection(W))===W);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "runtime Number cannot recover rounded digits",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint64>};meta M{default={mark:..};subtype(a,b){return true;}}type W=uint8.<{mark:9007199254740993..=9007199254740993}>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:9007199254740993..=9007199254740993}});String(W===R)+\"/\"+String(Reflect.getReflection(R).metadata.mark.end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/9007199254740992"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written and runtime BigInt preserve a wide integer",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint64>};meta M{default={mark:..};subtype(a,b){return true;}}type W=uint8.<{mark:9007199254740993..=9007199254740993}>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:9007199254740993n..=9007199254740993n}});String(W===R);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "normalized range retains signed zero",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<float64>};meta M{default={mark:..};subtype(a,b){return true;}}type P=uint8.<{mark:0..=1}>;type N=uint8.<{mark:-0..=1}>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:-0..=1}});String(P===N)+\"/\"+String(N===R)+\"/\"+String(1/Number(Reflect.getReflection(N).metadata.mark.start));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true/-Infinity"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic shape substitutes each host independently",
+      "steps": [
+        {
+          "source": "type M<T:type>={mark:RangeBounds.<T>};meta M<T:type>{default={mark:..};subtype(a,b){return true;}}type A=uint8.<{mark:1..<3}>;type B=uint16.<{mark:1..<3}>;const a=Reflect.getReflection(A).metadata.mark;const b=Reflect.getReflection(B).metadata.mark;String(Reflect.typeOf(a.start)===uint8)+\"/\"+String(Reflect.typeOf(b.start)===uint16)+\"/\"+String(Reflect.makeType(Reflect.getReflection(A))===A);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic reflected host rejects an unrepresentable endpoint",
+      "steps": [
+        {
+          "source": "type M<T:type>={mark:RangeBounds.<T>};meta M<T:type>{default={mark:..};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:0..<256}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "shape"
+        }
+      ]
+    },
+    {
+      "name": "generic builder receives the completed host",
+      "steps": [
+        {
+          "source": "type M<T:type>={mark:RangeBounds.<T>};meta M<T:type>{default={mark:..};subtype(a,b){return true;}}function build(){return {mark:1..<3};}type A=uint8.<build()>;String(Reflect.typeOf(Reflect.getReflection(A).metadata.mark.start)===uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "capture builder preserves endpoint identity",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}type A=uint8.<{mark:1..<3}>;function make(m:M){return m;}function f<uint8.<const D:M>>():boolean{return (type uint8.<make(D)>)===A;}String(f.<A>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "meet hook normalizes returned endpoints",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}meet(a,b){return {mark:2..<3};}}type A=uint8.<{mark:1..<4}>&uint8.<{mark:2..<5}>;type B=uint8.<{mark:2..<3}>;String(A===B)+\"/\"+String(Reflect.typeOf(Reflect.getReflection(A).metadata.mark.start)===uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed default can be replaced without a stale claim",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:0..<256};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "pre-evaluation"
+            }
+          },
+          "messageIncludes": "shape"
+        },
+        {
+          "source": "meta M{default={mark:1..<3};subtype(a,b){return true;}}type T=uint8.<{mark:2..<4}>;String(Reflect.typeOf(Reflect.getReflection(T).metadata.mark.start)===uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed reflected normalization does not poison later interning",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}let caught=false;try{Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:0..<256}});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}type W=uint8.<{mark:1..<3}>;const R=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:1..<3}});String(caught)+\"/\"+String(W===R);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range normalization ignores public endpoint getters",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};meta M{default={mark:..};subtype(a,b){return true;}}let reads=0;const r=1..<3;Object.defineProperty(r,\"start\",{get(){reads++;throw new Error(\"public\");}});const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:r}});String(reads)+\"/\"+String(Reflect.typeOf(Reflect.getReflection(T).metadata.mark.start)===uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata domain does not change ordinary iteration fit",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[...(0..<256)];String(a.length)+\"/\"+String(a[255]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "256/255"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic nonempty default is normalized for each capture",
+      "steps": [
+        {
+          "source": "type M<T:type>={mark:RangeBounds.<T>};meta M<T:type>{default={mark:1..<3};subtype(a,b){return true;}}function f<uint8.<const D:M.<uint8>>>():boolean{return Reflect.typeOf(D.mark.start)===uint8;}String(f.<uint8>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rescale return endpoint domain 0..<256",
+      "steps": [
+        {
+          "source": "type U={ratio:number};meta U{default={ratio:1};subtype(a,b){return true;}conversionFactor(a,b){return a.ratio/b.ratio;}}type M={mark:RangeBounds.<uint16>};meta M{default={mark:..};subtype(a,b){return true;}rescale(a,f){return {mark:0..<256};}}type A=float64.<{ratio:2,mark:1..<3}>;type B=float64.<{ratio:1}>;function convert(x:any):B{return x;}const x=convert(1:=A);const r=Reflect.getReflection(Reflect.typeOf(x)).metadata.mark;String(Reflect.typeOf(r.end)===uint16)+\"/\"+String(r.end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/256"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rescale return endpoint domain 0..<65536",
+      "steps": [
+        {
+          "source": "type U={ratio:number};meta U{default={ratio:1};subtype(a,b){return true;}conversionFactor(a,b){return a.ratio/b.ratio;}}type M={mark:RangeBounds.<uint16>};meta M{default={mark:..};subtype(a,b){return true;}rescale(a,f){return {mark:0..<65536};}}type A=float64.<{ratio:2,mark:1..<3}>;type B=float64.<{ratio:1}>;function convert(x:any):B{return x;}const x=convert(1:=A);const r=Reflect.getReflection(Reflect.typeOf(x)).metadata.mark;String(Reflect.typeOf(r.end)===uint16)+\"/\"+String(r.end);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic default participation compares at the actual host",
+      "steps": [
+        {
+          "source": "type M<T:type>={mark:RangeBounds.<T>};meta M<T:type>{default={mark:1..<3};subtype(a,b){throw new Error(\"default hook\");}}type A=uint8.<{mark:1..<3}>;String((2:=uint8) is A);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending local range default retains source ownership",
+      "steps": [
+        {
+          "source": "type M={mark:RangeBounds.<uint8>};const n=0;meta M{default={mark:n..<3};subtype(a,b){return true;}}type T=uint8.<{mark:1..<3}>;String(Reflect.typeOf(Reflect.getReflection(T).metadata.mark.start)===uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

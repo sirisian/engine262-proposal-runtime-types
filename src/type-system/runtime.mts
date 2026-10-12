@@ -26,7 +26,7 @@ import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator
 import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, OrdinaryGetPrototypeOf, CreateArrayFromList, SetIntegrityLevel, PrivateFieldAdd, IsArray, LengthOfArrayLike } from '../abstract-ops/all.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
-import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf, MetadataAsObject, RequireType, ApplyMetaHook, MetadataShape, NormalizeMetadataRecord, CheckMetadataRecord, SnapshotMetadataValue, IsMetadataAtom } from '../abstract-ops/runtime-types.mts';
+import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf, MetadataAsObject, RequireType, ApplyMetaHook, MetadataShape, MetadataRangeElementShape, MetadataSatisfiesShape, NormalizeMetadataRecord, CheckMetadataRecord, SnapshotMetadataValue, IsMetadataAtom } from '../abstract-ops/runtime-types.mts';
 import { SelectClassCase, SelectionOfValue } from '../abstract-ops/callable-selection.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
@@ -470,17 +470,21 @@ export function* MetadataCaptureView(record: TypeRecord): ValueEvaluator {
     for (const [key, raw] of MetadataEntries<Value>(snapshot)) {
       const property = shape.Properties.find((p) => p.key === MetadataKey(key));
       if (!property) {
-        fields[key] = raw;
+        fields[key] = MetadataAsObject(raw as unknown as MetadataRecord);
       } else if (raw !== null && typeof raw === 'object' && !(raw instanceof Value)
           && property.type.Kind === 'object') {
         fields[key] = Q(yield* materialize(raw as MetadataRecord, property.type));
       } else {
-        fields[key] = Q(yield* RequireType(raw, property.type));
+        fields[key] = Q(yield* RequireType(MetadataAsObject(raw as unknown as MetadataRecord), property.type));
       }
     }
     return MetadataAsObject(Object.freeze(fields) as unknown as MetadataRecord);
   };
-  const value = Q(yield* materialize(Q(MetadataObjectFromType(record)), domain));
+  const snapshot = NormalizeMetadataRecord(Q(MetadataObjectFromType(record)), domain);
+  if (domain) {
+    if (!Q(yield* MetadataSatisfiesShape(snapshot, domain))) return Throw.TypeError('a metadata capture must satisfy its declared shape');
+  }
+  const value = Q(yield* materialize(snapshot, domain));
   metadataCaptureViews.set(record, value);
   return value;
 }
@@ -4059,13 +4063,14 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       // boundary, and admitting bare values would make it a comment.
       const { types: governing } = GoverningMetaTypes(t.Metadata);
       for (const metaType of governing) {
-        if (!MetaTypeGoverns(t.Metadata, metaType)) {
+        if (!MetaTypeGoverns(t.Metadata, metaType, t.Base)) {
           // Default admission is about the source's effective portion too.
           // Testing only the target admitted metres as dimensionless scalars.
-          if (carried?.Kind === 'parameterized' && MetaTypeGoverns(carried.Metadata, metaType)
-              && Q(yield* ApplyMetaHook(metaType, 'subtype', [
-                MetadataPortion(carried.Metadata, metaType), MetadataPortion(t.Metadata, metaType),
-              ], t.Base)) !== Value.true) return false;
+          if (carried?.Kind === 'parameterized' && MetaTypeGoverns(carried.Metadata, metaType, carried.Base)) {
+            if (Q(yield* ApplyMetaHook(metaType, 'subtype', [
+              MetadataPortion(carried.Metadata, metaType), MetadataPortion(t.Metadata, metaType),
+            ], t.Base)) !== Value.true) return false;
+          }
           continue;
         }
         // "it holds of v and THAT PORTION": each meta type judges its own
@@ -4826,7 +4831,10 @@ export function ProjectMetadataValueFromType(t: TypeRecord, shape?: TypeRecord):
       return { status: 'invalid', type: t };
     }
     return { status: 'complete', value: Object.freeze(Object.assign(Object.create(null), {
-      __range: true, start: t.Start, end: t.End, startBound: t.StartBound, endBound: t.EndBound,
+      __range: true,
+      start: t.Start === undefined ? undefined : NormalizeMetadataRecord(t.Start, MetadataRangeElementShape(shape), undefined, false, t.StartSource),
+      end: t.End === undefined ? undefined : NormalizeMetadataRecord(t.End, MetadataRangeElementShape(shape), undefined, false, t.EndSource),
+      startBound: t.StartBound, endBound: t.EndBound,
     })) };
   }
   if (t.Kind === 'object' || t.Kind === 'tuple') {
@@ -6138,6 +6146,8 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
         Kind: 'range',
         Start: endpoint(node.RangeTypeStart),
         End: endpoint(node.RangeTypeEnd),
+        StartSource: node.RangeTypeStart?.SourceText,
+        EndSource: node.RangeTypeEnd?.SourceText,
         StartBound: node.RangeTypeStartBound ?? undefined,
         EndBound: node.RangeTypeEndBound ?? undefined,
       };

@@ -621,6 +621,8 @@ export type TypeRecord =
     readonly Kind: 'range',
     readonly Start: Value | undefined,
     readonly End: Value | undefined,
+    readonly StartSource?: string,
+    readonly EndSource?: string,
     readonly StartBound: 'closed' | 'open' | undefined,
     readonly EndBound: 'closed' | 'open' | undefined,
   }

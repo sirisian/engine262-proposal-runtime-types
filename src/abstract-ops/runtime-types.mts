@@ -26,8 +26,8 @@ import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { skipDebugger } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { IsCheckElided, PublishedReturnTypeOf, PublishedNarrowingOf } from '../type-system/check.mts';
-import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue, typeParameterRecordsOf } from '../type-system/records.mts';
-import { IsAssignable, IsSubtype, SameMetadata, SameType, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
+import { generatorDeclaredType, generatorParameters, anyType, displayType, makePrimitive, builtinTypeRecord, type TypeRecord, type MetadataRecord, propertyKeyValue, mentionsTypeParameter, typeParameterRecordsOf } from '../type-system/records.mts';
+import { IsAssignable, IsSubtype, SameMetadata, SameType, SameTypeStructural, COLLECTION_LIBRARY_NAMES } from '../type-system/relations.mts';
 import { IsReferenceClass, IsValueTypeClass, LayoutOf, SubclassAddsStorageOver } from '../type-system/layout.mts';
 import type { PrivateName } from '../value.mts';
 import { wrapToType } from '../type-system/arithmetic.mts';
@@ -1099,7 +1099,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
       const mp = m as TypeRecord & { Kind: 'parameterized' };
       const { types: governing } = GoverningMetaTypes(mp.Metadata);
       for (const metaType of governing) {
-        if (!MetaTypeGoverns(mp.Metadata, metaType)) {
+        if (!MetaTypeGoverns(mp.Metadata, metaType, mp.Base)) {
           continue;
         }
         const verdict = Q(yield* ApplyValidateHook(
@@ -1231,7 +1231,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     // different things.
     const { types: governing } = GoverningMetaTypes(t.Metadata);
     for (const metaType of governing) {
-      if (!MetaTypeGoverns(t.Metadata, metaType)) {
+      if (!MetaTypeGoverns(t.Metadata, metaType, t.Base)) {
         continue;
       }
       const verdict = Q(yield* ApplyValidateHook(metaType, atBase, MetadataPortion(t.Metadata, metaType), t.Base));
@@ -3254,6 +3254,68 @@ export function MetadataShape(owner: object, base?: TypeRecord): TypeRecord | un
   return shape && base && parameter ? substituteParametersNamed(shape, new Map([[parameter, base]])) ?? shape : shape;
 }
 
+/** A range field supplies its endpoint domain; the host only substitutes a
+ * declared meta parameter. An ambiguous union supplies no numeric context.
+ */
+export function MetadataRangeElementShape(shape?: TypeRecord): TypeRecord | undefined {
+  if (shape?.Kind === 'union') {
+    const present = shape.Members.filter((member) => !(member.Kind === 'primitive' && member.Name === 'undefined'));
+    if (present.length !== 1) return undefined;
+    [shape] = present;
+  }
+  if (shape?.Kind !== 'nominal') return undefined;
+  if (!['Range', 'RangeFrom', 'RangeTo', 'RangeFull', 'RangeBounds'].includes(shape.LibraryName ?? '')) {
+    return shape.Structure ? MetadataRangeElementShape(shape.Structure) : undefined;
+  }
+  const element = shape.Arguments[0];
+  return typeof element === 'object' ? element : undefined;
+}
+
+/** Check stored endpoint domains as well as ordinary shape membership. Range
+ * iteration's produced-element fit is a different judgment: a metadata bound
+ * is itself a stored value of the declared domain, including an open bound.
+ * This reads only admitted snapshots and never public endpoint accessors.
+ */
+export function* MetadataSatisfiesShape(value: MetadataRecord, shape: TypeRecord): PlainEvaluator<boolean> {
+  if (!Q(yield* IsOfType(MetadataAsObject(value), shape))) return false;
+  return Q(yield* MetadataRangeDomainsMatch(value, shape));
+}
+
+function* MetadataRangeDomainsMatch(value: MetadataRecord, shape: TypeRecord): PlainEvaluator<boolean> {
+  if (shape.Kind === 'union') {
+    for (const member of shape.Members) {
+      if (Q(yield* MetadataSatisfiesShape(value, member))) return true;
+    }
+    return false;
+  }
+  if (value === null || typeof value !== 'object' || value instanceof Value) return true;
+  if ((value as { __range?: boolean }).__range === true) {
+    const element = MetadataRangeElementShape(shape);
+    if (!element || mentionsTypeParameter(element)) return true;
+    const range = value as unknown as { start?: Value; end?: Value };
+    for (const endpoint of [range.start, range.end]) {
+      if (endpoint === undefined) continue;
+      if (!Q(yield* IsOfType(endpoint, element))) return false;
+    }
+    return true;
+  }
+  if (shape.Kind === 'nominal') shape = shape.Structure ?? shape;
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i += 1) {
+      const itemShape = shape.Kind === 'tuple' ? shape.Elements[i]?.Type : shape.Kind === 'array' ? shape.Element : undefined;
+      if (!itemShape) continue;
+      if (!Q(yield* MetadataRangeDomainsMatch(value[i], itemShape))) return false;
+    }
+  } else if (shape.Kind === 'object') {
+    for (const [key, leaf] of MetadataEntries(value)) {
+      const field = shape.Properties.find((property) => property.key === MetadataKey(key));
+      if (!field) continue;
+      if (!Q(yield* MetadataRangeDomainsMatch(leaf as MetadataRecord, field.type))) return false;
+    }
+  }
+  return true;
+}
+
 /** Normalize logical metadata values, independently of the engine's storage.
  * Only literal numeric leaves acquire a declared numeric domain here. Invalid
  * leaves remain invalid and are rejected by the checked shape boundary; this
@@ -3311,7 +3373,16 @@ export function NormalizeMetadataRecord(value: unknown, shape?: TypeRecord, base
     return value as unknown as MetadataRecord;
   }
   if (value === null || typeof value !== 'object') return value as MetadataRecord;
-  if ((value as { __range?: unknown, __pattern?: unknown }).__range || (value as { __pattern?: unknown }).__pattern) return value as MetadataRecord;
+  if ((value as { __pattern?: unknown }).__pattern) return value as MetadataRecord;
+  if ((value as { __range?: unknown }).__range) {
+    const element = MetadataRangeElementShape(shape);
+    if (!element) return value as MetadataRecord;
+    const range = value as { start?: Value; end?: Value };
+    return Object.freeze(Object.assign(Object.create(null), value, {
+      start: range.start === undefined ? undefined : NormalizeMetadataRecord(range.start, element, base, false),
+      end: range.end === undefined ? undefined : NormalizeMetadataRecord(range.end, element, base, false),
+    })) as MetadataRecord;
+  }
   if (Array.isArray(value)) {
     return Object.freeze(value.map((v, i) => NormalizeMetadataRecord(v,
       shape?.Kind === 'tuple' ? shape.Elements[i]?.Type : shape?.Kind === 'array' ? shape.Element : undefined, base, false))) as unknown as MetadataRecord;
@@ -3337,7 +3408,7 @@ export function* CheckMetadataRecord(metadata: MetadataRecord, base: TypeRecord)
     const shape = MetadataShape(owner, base);
     if (shape?.Kind !== 'object') continue;
     const portion = NormalizeMetadataRecord(MetadataPortion(normalized, owner), shape, base);
-    if (!Q(yield* IsOfType(MetadataAsObject(portion), shape))) {
+    if (!Q(yield* MetadataSatisfiesShape(portion, shape))) {
       return Throw.TypeError('$1', `${LookupMetaTypeName(owner) ?? 'a meta type'}'s metadata must satisfy its declared shape`);
     }
   }
@@ -3365,9 +3436,9 @@ const EMPTY_METADATA_RECORD: Value = Object.freeze(Object.create(null)) as unkno
  * portion is always empty and it governs nothing, which the empty record makes
  * literal.
  */
-export function MetaTypeGoverns(metadata: MetadataRecord, metaType: object): boolean {
+export function MetaTypeGoverns(metadata: MetadataRecord, metaType: object, base?: TypeRecord): boolean {
   const snapshot = LookupMetaDefaultSnapshot(metaType) ?? EMPTY_METADATA_RECORD;
-  return !SameMetadata(MetadataPortion(metadata, metaType), snapshot);
+  return !SameMetadata(MetadataPortion(metadata, metaType, base), NormalizeMetadataRecord(snapshot, MetadataShape(metaType, base), base));
 }
 
 // proposal-runtime-types #sec-meta-declarations: the meta-type method hooks are
@@ -3538,7 +3609,7 @@ export function GoverningMetaTypes(metadata: MetadataRecord): { types: object[],
  * metadata, because a metadata value may be governed by several meta types at
  * once and each must see only what it claims.
  */
-export function MetadataPortion(metadata: MetadataRecord, metaType: object): MetadataRecord {
+export function MetadataPortion(metadata: MetadataRecord, metaType: object, base?: TypeRecord): MetadataRecord {
   // sec-metadataportion, as written: start from a copy of the meta type's
   // `default` and overwrite with the metadata's own claimed keys, so every
   // judgment of the protocol sees a COMPLETE portion. The missing completion
@@ -3562,7 +3633,7 @@ export function MetadataPortion(metadata: MetadataRecord, metaType: object): Met
       }
     }
   }
-  return NormalizeMetadataRecord(portion, MetadataShape(metaType));
+  return NormalizeMetadataRecord(portion, MetadataShape(metaType, base), base);
 }
 
 /** Apply a named hook of a meta type, or *undefined* where it defines none. */
@@ -3619,7 +3690,20 @@ export function* ApplyMetaHook(typeObject: object, name: string, args: readonly 
       if (IsBudgetExhausted()) {
         return Throw.TypeError('the type evaluation budget was exhausted at $1', Value(`${LookupMetaTypeName(typeObject) ?? 'a meta type'}'s ${name} hook`));
       }
-      const values = args.map((a) => MetadataAsObject(a));
+      const shape = MetadataShape(typeObject, base);
+      const values: Value[] = [];
+      for (const argument of args) {
+        // A generic default is stored once before a host exists. Complete its
+        // portion at the actual hook host, preserving already typed atoms.
+        let supplied = argument;
+        if (!(argument instanceof Value) && shape?.Kind === 'object') {
+          supplied = NormalizeMetadataRecord(argument, shape, base);
+          if (!Q(yield* MetadataSatisfiesShape(supplied as MetadataRecord, shape))) {
+            return Throw.TypeError('a metadata hook argument must satisfy its declared shape');
+          }
+        }
+        values.push(MetadataAsObject(supplied));
+      }
       if ((name === 'validate' || name === 'quantize') && values.length > 0) values[0] = WithoutMetadata(values[0]);
       const result = EnsureCompletion(yield* Call(fn as never, Value.undefined, values));
       if (IsBudgetExhausted()) {
@@ -3753,7 +3837,7 @@ export function CastCoversTarget(castTarget: TypeRecord, target: TypeRecord): bo
   if (metadata === undefined) {
     return false;
   }
-  return MetaTypeGoverns(metadata, metaType);
+  return MetaTypeGoverns(metadata, metaType, target.Base);
 }
 
 /**
@@ -3977,7 +4061,7 @@ export function* RequireTypeAfterCast(value: Value, t: TypeRecord): ValueEvaluat
   }
   const { types: governing } = GoverningMetaTypes(t.Metadata);
   for (const metaType of governing) {
-    if (!MetaTypeGoverns(t.Metadata, metaType)) {
+    if (!MetaTypeGoverns(t.Metadata, metaType, t.Base)) {
       // The judgment's sit-out: a portion equal to the default constrains
       // nothing, so the meta type takes no part in the crossing either.
       continue;
@@ -4032,7 +4116,7 @@ export function* CrossBareValueIntoParameterization(value: Value, t: TypeRecord 
   // nothing has. MetadataPortion of *undefined* is that copy of the default.
   const { types: governing } = GoverningMetaTypes(t.Metadata);
   for (const metaType of governing) {
-    if (!MetaTypeGoverns(t.Metadata, metaType)) {
+    if (!MetaTypeGoverns(t.Metadata, metaType, t.Base)) {
       continue;
     }
     // "No metadata" is the EMPTY RECORD. `Value.undefined` spelled it only
@@ -4198,8 +4282,8 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
   // with a written claimed key can govern, so the key union above stays the
   // iteration and these are filters, provably equivalent to the rule.
   const pinned = new Set(GoverningMetaTypes(to.Metadata).types);
-  const participating = [...governing].filter((m) => pinned.has(m) && (MetaTypeGoverns(from.Metadata, m) || MetaTypeGoverns(to.Metadata, m)));
-  const quantizing = [...governing].filter((m) => MetaTypeGoverns(to.Metadata, m));
+  const participating = [...governing].filter((m) => pinned.has(m) && (MetaTypeGoverns(from.Metadata, m, from.Base) || MetaTypeGoverns(to.Metadata, m, to.Base)));
+  const quantizing = [...governing].filter((m) => MetaTypeGoverns(to.Metadata, m, to.Base));
   for (const metaType of participating) {
     const fp = MetadataPortion(from.Metadata, metaType);
     const tp = MetadataPortion(to.Metadata, metaType);
@@ -4310,10 +4394,10 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
         MetadataPortion(from.Metadata, metaType), factorValue,
       ], to.Base));
       if (rescaled === undefined) return Throw.TypeError('a required rescale hook produced no result');
-      const portion = NormalizeMetadataRecord(Q(yield* SnapshotMetadataValue(rescaled, true, 'a rescale hook result')), (metaType as { TypeRecord?: TypeRecord }).TypeRecord) as unknown as Record<string | symbol, unknown>;
-      const shape = (metaType as { TypeRecord?: TypeRecord }).TypeRecord;
+      const shape = MetadataShape(metaType, to.Base);
+      const portion = NormalizeMetadataRecord(Q(yield* SnapshotMetadataValue(rescaled, true, 'a rescale hook result')), shape, to.Base) as unknown as Record<string | symbol, unknown>;
       if (shape) {
-        const valid = Q(yield* IsOfType(MetadataAsObject(portion as MetadataRecord), shape));
+        const valid = Q(yield* MetadataSatisfiesShape(portion as MetadataRecord, shape));
         if (!valid) return Throw.TypeError('$1', `${LookupMetaTypeName(metaType) ?? 'a meta type'}'s rescale hook must return its metadata shape`);
       }
       if (portion && typeof portion === 'object') {
@@ -5962,9 +6046,20 @@ export function MergeOperatorResultMetadata(
  * constraint is not a meta type. A meta type is identified by its interned Type
  * Object, which is what the claim registry and the hooks are keyed on.
  */
-export function MetaTypeForConstraint(constraint: TypeRecord): object | undefined {
+export function MetaTypeForConstraint(constraint: TypeRecord, base?: TypeRecord): object | undefined {
   const typeObject = GetTypeObject(constraint) as unknown as object;
-  return LookupMetaTypeName(typeObject) === undefined ? undefined : typeObject;
+  if (LookupMetaTypeName(typeObject) !== undefined) return typeObject;
+  // A concrete generic constraint has a different Type Object from its
+  // declaration's binder shape. Match the complete instantiated shape, never
+  // just possession of one claimed key or gradual assignability through any.
+  if (base && constraint.Kind === 'object') {
+    for (const property of constraint.Properties) {
+      const owner = MetaTypeClaiming(property.key);
+      const shape = owner && MetadataShape(owner, base);
+      if (shape && SameTypeStructural(constraint, shape)) return owner;
+    }
+  }
+  return undefined;
 }
 
 

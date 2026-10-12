@@ -886,7 +886,7 @@ function isVectorType(t: TypeRecord | null | undefined): boolean {
 /** Arithmetic need not stamp a portion that only restates absence. Types stay distinct. */
 function ResultWithMetadata(base: TypeRecord, metadata: MetadataRecord): TypeRecord {
   const governing = GoverningMetaTypes(metadata);
-  return governing.unclaimed.length > 0 || governing.types.some((metaType) => MetaTypeGoverns(metadata, metaType))
+  return governing.unclaimed.length > 0 || governing.types.some((metaType) => MetaTypeGoverns(metadata, metaType, base))
     ? { Kind: 'parameterized', Base: base, Metadata: metadata } as TypeRecord : base;
 }
 

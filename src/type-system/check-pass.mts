@@ -1143,7 +1143,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     const b = pair.right.Metadata;
     const governing = new Set<object>([...GoverningMetaTypes(a).types, ...GoverningMetaTypes(b).types]);
     for (const metaType of governing) {
-      if (!MetaTypeGoverns(a, metaType) && !MetaTypeGoverns(b, metaType)) {
+      if (!MetaTypeGoverns(a, metaType, pair.left.Base) && !MetaTypeGoverns(b, metaType, pair.right.Base)) {
         continue;
       }
       const met = Q(yield* ApplyMetaHook(metaType, 'meet', [
@@ -1438,7 +1438,7 @@ export function* MetadataSubtypeJudgment(pair: DeferredMetadataCheck): PlainEval
     ...GoverningMetaTypes(t).types,
   ]);
   for (const metaType of governing) {
-    if (!MetaTypeGoverns(s, metaType) && !MetaTypeGoverns(t, metaType)) {
+    if (!MetaTypeGoverns(s, metaType, pair.source.Base) && !MetaTypeGoverns(t, metaType, pair.target.Base)) {
       // Participation: both portions at the default means no
       // part taken. `subtype(default, default)` is never consulted, so a
       // hostile or throwing hook cannot veto a crossing carrying none of its

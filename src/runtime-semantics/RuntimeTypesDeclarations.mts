@@ -69,7 +69,7 @@ import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
 import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
 import { Assert, OrdinaryObjectCreate, CreateDataProperty } from '#self';
-import { ClaimMetaKey, MetaTypeClaiming, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaShape, NormalizeMetadataRecord, RegisterMetaHook, RegisterMetaTypeName, RegisterMetaTypeParameterName, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
+import { ClaimMetaKey, MetaTypeClaiming, CreateDataPropertyOrThrow, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaShape, NormalizeMetadataRecord, MetadataSatisfiesShape, RegisterMetaHook, RegisterMetaTypeName, RegisterMetaTypeParameterName, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
 
 /**
  * proposal-runtime-types
@@ -1621,7 +1621,7 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration, claim
     // the claim shape's literal context; ordinary binding defaults are separate.
     const snapshot = Q(yield* SnapshotMetadataValue(v, true));
     const converted = NormalizeMetadataRecord(snapshot, claimShape);
-    if (!Q(yield* IsOfType(MetadataAsObject(converted), claimShape))) {
+    if (!Q(yield* MetadataSatisfiesShape(converted, claimShape))) {
       return Throw.TypeError('the default of a meta type must be a value of its constraint shape');
     }
     return converted as unknown as Value;
