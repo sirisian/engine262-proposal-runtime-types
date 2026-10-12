@@ -4,16 +4,17 @@ import {
 } from '../value.mts';
 import { type ValueEvaluator } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
-import { LookupClassOperator, ScaleMetadataValue } from '../abstract-ops/runtime-types.mts';
+import { ScaleMetadataValue } from '../abstract-ops/runtime-types.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { exactNumericValue } from '../abstract-ops/testing-comparison.mts';
 import { type Mutable } from '../utils/language.mts';
+import { RangeEndpointCompare, RangeIsEmpty, rangeContainsRange, rangeIntersect } from '../type-system/range-selection.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
-import { surroundingAgent, Throw, Q, Get, Call, IsCallable, ToBoolean, ToIntegerOrInfinity } from '#self';
+import { surroundingAgent, Throw, Q, Get, Call, IsCallable, ToIntegerOrInfinity } from '#self';
 import { boundValue, intervalValue } from './RangeEnums.mts';
 import {
-  rangeContainsRange, rangeIntersect, rangeScale, scaleFactor,
+  rangeScale, scaleFactor,
 } from '../type-system/range-ops.mts';
 import {
 
@@ -54,7 +55,7 @@ export type RangeEndpoint = NumberValue | BigIntValue | TypedNumberValue | Objec
  * enum intrinsics exist.
  *
  * Deferred: the bounds' placement in the type (`Range.<T, S, E>`), the
- * `RangeBounds` operations `contains(range)`, `intersect`, and `scale` with the
+ * `RangeBounds` operation `scale` with the
  * interval arithmetic, slicing, and the random and Temporal integrations.
  */
 
@@ -231,17 +232,7 @@ function* RangeProto_isEmptyGetter(_args: Arguments, { thisValue }: FunctionCall
   if (!self) {
     return Throw.TypeError('$1 is not a range', thisValue);
   }
-  if (self.RangeStart === undefined || self.RangeEnd === undefined) {
-    // An unbounded range is not empty.
-    return Value.false;
-  }
-  const start = (endpointOf(self.RangeStart) as number | bigint);
-  const end = (endpointOf(self.RangeEnd) as number | bigint);
-  // Descending is empty, as before. At EQUAL endpoints the bounds decide: `5..=5`
-  // holds exactly one value, while `5..<5`, `5<..=5`, and `5<..<5` hold none,
-  // because an open endpoint excludes the only value the interval could contain.
-  const bothClosed = self.RangeStartBound !== 'open' && self.RangeEndBound !== 'open';
-  const empty = bothClosed ? start > end : start >= end;
+  const empty = Q(yield* RangeIsEmpty(self));
   return empty ? Value.true : Value.false;
 }
 
@@ -360,101 +351,27 @@ function* RangeProto_intervalGetter(_args: Arguments, { thisValue }: FunctionCal
   return intervalValue(closedEnd ? 'OpenClosed' : 'Open');
 }
 
-/**
- * `a < b` through the element type's own operator. `Ordered` declares exactly
- * this one, and it is a TOTAL order, so every comparison a range needs derives
- * from it.
- */
-function* orderedLessThan(a: Value, b: Value): PlainEvaluator<boolean> {
-  const compare = LookupClassOperator(a, '<');
-  if (compare === null) {
-    return Throw.TypeError('a range endpoint must be ordered: a number, a bigint, or a type declaring operator<');
-  }
-  const result = Q(yield* Call(compare, a, [b]));
-  return ToBoolean(result) === Value.true;
-}
-
-/**
- * `a <= b`, as `!(b < a)`. Deriving rather than calling `<=` is what keeps a
- * range clear of an UNDECLARED `<=`, which falls through to the base language:
- * `{} <= {}` is *true*, both operands coercing to NaN and `<=` meaning "not
- * greater than", so a range built on it would report every value as contained.
- */
-function* orderedAtMost(a: Value, b: Value): PlainEvaluator<boolean> {
-  const greater = Q(yield* orderedLessThan(b, a));
-  return !greater;
-}
-
 /** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
 function* RangeProto_contains([value = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const self = thisRange(thisValue);
   if (!self) {
     return Throw.TypeError('$1 is not a range', thisValue);
   }
-  // `contains` overloads on a value and on a range. Against a range it is the
-  // subset test, so an empty range is contained in every range and the full
-  // range contains them all.
   if (isRangeObject(value)) {
-    return rangeContainsRange(self, value) ? Value.true : Value.false;
+    const contains = Q(yield* rangeContainsRange(self, value));
+    return contains ? Value.true : Value.false;
   }
-  // #sec-matchrange: containment admits "a value of a type ORDERED WITH the
-  // element type", so a typed number counts. Without this a `uint8` reaching
-  // `contains` -- which is how a range `case` label sees an enum-like
-  // discriminant, and how a typed value reaches a range pattern -- answered
-  // false for a value plainly inside the range.
-  // #sec-matchrange admits "a value of a type ORDERED WITH the element type", so
-  // a typed number counts - and so does a bigint, over a bigint range. `R`
-  // yields each one's mathematical value and JS compares across them.
-  // An element type of its own: compare through `operator<`, which is the whole
-  // of what `Ordered` requires. `Q(yield* …)` may not appear in a ternary - the
-  // build's Babel pass rewrites Q and cannot place the result there - so each
-  // branch is a statement.
-  if (value instanceof ObjectValue && !isRangeObject(value)) {
-    if (self.RangeStart !== undefined) {
-      let within;
-      if (self.RangeStartBound === 'open') {
-        within = Q(yield* orderedLessThan(self.RangeStart as Value, value));
-      } else {
-        within = Q(yield* orderedAtMost(self.RangeStart as Value, value));
-      }
-      if (!within) {
-        return Value.false;
-      }
-    }
-    if (self.RangeEnd !== undefined) {
-      let within;
-      if (self.RangeEndBound === 'closed') {
-        within = Q(yield* orderedAtMost(value, self.RangeEnd as Value));
-      } else {
-        within = Q(yield* orderedLessThan(value, self.RangeEnd as Value));
-      }
-      if (!within) {
-        return Value.false;
-      }
-    }
-    return Value.true;
-  }
-  const numeric: number | bigint | undefined = value instanceof NumberValue ? R(value)
-    : (value instanceof BigIntValue ? R(value)
-      : (isTypedNumber(value) ? Number(value.numberValue()) : undefined));
-  if (numeric === undefined) {
-    return Value.false;
-  }
-  const x = numeric;
-  // One comparison per endpoint, each by its own bound.
+  // Preserve the existing refusal of nonnumeric primitive candidates. Class
+  // candidates are compared by their declared ordering, without coercion.
+  const numeric = exactNumericValue(value);
+  if (numeric?.kind === 'nan' || (!(value instanceof ObjectValue) && numeric === undefined)) return Value.false;
   if (self.RangeStart !== undefined) {
-    const start = (endpointOf(self.RangeStart) as number | bigint);
-    const withinStart = self.RangeStartBound === 'open' ? x > start : x >= start;
-    if (!withinStart) {
-      return Value.false;
-    }
+    const order = Q(yield* RangeEndpointCompare(self.RangeStart, value));
+    if (order > 0 || (order === 0 && self.RangeStartBound === 'open')) return Value.false;
   }
   if (self.RangeEnd !== undefined) {
-    const end = (endpointOf(self.RangeEnd) as number | bigint);
-    const withinEnd = self.RangeEndBound === 'closed' ? x <= end : x < end;
-    if (!withinEnd) {
-      return Value.false;
-    }
+    const order = Q(yield* RangeEndpointCompare(value, self.RangeEnd));
+    if (order > 0 || (order === 0 && self.RangeEndBound === 'open')) return Value.false;
   }
   return Value.true;
 }
@@ -468,7 +385,7 @@ function* RangeProto_intersect([other = Value.undefined]: Arguments, { thisValue
   if (!isRangeObject(other)) {
     return Throw.TypeError('$1 is not a range', other);
   }
-  return rangeIntersect(self, other, surroundingAgent.currentRealmRecord);
+  return Q(yield* rangeIntersect(self, other, surroundingAgent.currentRealmRecord));
 }
 
 /** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */

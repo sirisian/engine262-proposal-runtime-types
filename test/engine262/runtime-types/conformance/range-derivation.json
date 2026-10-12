@@ -1,0 +1,675 @@
+{
+  "cases": [
+    {
+      "name": "intersection preserves uint8",
+      "steps": [
+        {
+          "source": "const a:Range.<uint8>=0..<10;const b:Range.<uint8>=2..<8;const r=a.intersect(b);`${r.start};${r.end};${r.start is uint8};${r.end is uint8};${Reflect.typeOf(r)===(type Range.<uint8>)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2;8;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "full intersection preserves uint8",
+      "steps": [
+        {
+          "source": "const a:RangeFull.<uint8>=(..);const b:RangeFull.<uint8>=(..);String(Reflect.typeOf(a.intersect(b))===(type RangeFull.<uint8>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "full identity in both orders uint8",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<5;`${Reflect.typeOf((..).intersect(r))===Reflect.typeOf(r)};${Reflect.typeOf(r.intersect(..))===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersection preserves int16",
+      "steps": [
+        {
+          "source": "const a:Range.<int16>=0..<10;const b:Range.<int16>=2..<8;const r=a.intersect(b);`${r.start};${r.end};${r.start is int16};${r.end is int16};${Reflect.typeOf(r)===(type Range.<int16>)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2;8;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "full intersection preserves int16",
+      "steps": [
+        {
+          "source": "const a:RangeFull.<int16>=(..);const b:RangeFull.<int16>=(..);String(Reflect.typeOf(a.intersect(b))===(type RangeFull.<int16>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "full identity in both orders int16",
+      "steps": [
+        {
+          "source": "const r:Range.<int16>=0..<5;`${Reflect.typeOf((..).intersect(r))===Reflect.typeOf(r)};${Reflect.typeOf(r.intersect(..))===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersection preserves float32",
+      "steps": [
+        {
+          "source": "const a:Range.<float32>=0..<10;const b:Range.<float32>=2..<8;const r=a.intersect(b);`${r.start};${r.end};${r.start is float32};${r.end is float32};${Reflect.typeOf(r)===(type Range.<float32>)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2;8;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "full intersection preserves float32",
+      "steps": [
+        {
+          "source": "const a:RangeFull.<float32>=(..);const b:RangeFull.<float32>=(..);String(Reflect.typeOf(a.intersect(b))===(type RangeFull.<float32>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "full identity in both orders float32",
+      "steps": [
+        {
+          "source": "const r:Range.<float32>=0..<5;`${Reflect.typeOf((..).intersect(r))===Reflect.typeOf(r)};${Reflect.typeOf(r.intersect(..))===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersection preserves float64",
+      "steps": [
+        {
+          "source": "const a:Range.<float64>=0..<10;const b:Range.<float64>=2..<8;const r=a.intersect(b);`${r.start};${r.end};${r.start is float64};${r.end is float64};${Reflect.typeOf(r)===(type Range.<float64>)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2;8;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "full intersection preserves float64",
+      "steps": [
+        {
+          "source": "const a:RangeFull.<float64>=(..);const b:RangeFull.<float64>=(..);String(Reflect.typeOf(a.intersect(b))===(type RangeFull.<float64>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "full identity in both orders float64",
+      "steps": [
+        {
+          "source": "const r:Range.<float64>=0..<5;`${Reflect.typeOf((..).intersect(r))===Reflect.typeOf(r)};${Reflect.typeOf(r.intersect(..))===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide BigInt intersection at 9007199254740993",
+      "steps": [
+        {
+          "source": "const a=9007199254740993n..=9007199254741000n;const b=9007199254740995n..=9007199254741002n;const r=a.intersect(b);`${r.start};${r.end};${Reflect.typeOf(r)===(type ClosedRange.<bigint>)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "9007199254740995;9007199254741000;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide BigInt intersection at -9007199254741001",
+      "steps": [
+        {
+          "source": "const a=-9007199254741001n..=-9007199254740994n;const b=-9007199254740999n..=-9007199254740992n;const r=a.intersect(b);`${r.start};${r.end};${Reflect.typeOf(r)===(type ClosedRange.<bigint>)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-9007199254740999;-9007199254740994;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide BigInt intersection at 18446744073709551590",
+      "steps": [
+        {
+          "source": "const a=18446744073709551590n..=18446744073709551597n;const b=18446744073709551592n..=18446744073709551599n;const r=a.intersect(b);`${r.start};${r.end};${Reflect.typeOf(r)===(type ClosedRange.<bigint>)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "18446744073709551592;18446744073709551597;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide uint64 selection retains exact endpoints",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint64>=9007199254740993..=9007199254741000;const b:ClosedRange.<uint64>=9007199254740995..=9007199254741001;const r=a.intersect(b);`${r.start};${r.end};${r.start is uint64};${r.end is uint64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "9007199254740995;9007199254741000;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide adjacent BigInt ranges are not contained",
+      "steps": [
+        {
+          "source": "const a=9007199254740992n..=9007199254740992n;const b=9007199254740993n..=9007199254740993n;String(a.contains(b));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide adjacent typed values are not contained",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint64>=9007199254740992..=9007199254740992;const x:uint64=9007199254740993;String(a.contains(x));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide descending typed interval is empty",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint64>=9007199254740993..=9007199254740992;String(r.isEmpty);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide typed open singleton is not empty",
+      "steps": [
+        {
+          "source": "const r:Range.<uint64>=9007199254740992..<9007199254740993;String(r.isEmpty);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "joined domain includes discarded endpoints",
+      "steps": [
+        {
+          "source": "const a:Range.<uint8>=0..<10;const b:Range.<uint16>=2..<8;const r=a.intersect(b);`${r.start is uint16};${r.end is uint16};${Reflect.typeOf(r)===(type Range.<uint8|uint16>)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "joined domain independent of operand order",
+      "steps": [
+        {
+          "source": "const a:Range.<uint8>=0..<10;const b:Range.<uint16>=2..<8;String(Reflect.typeOf(a.intersect(b))===Reflect.typeOf(b.intersect(a)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declared union domain is not narrowed",
+      "steps": [
+        {
+          "source": "const a:Range.<number|uint8>=0..<10;const b=2..<8;String(Reflect.typeOf(a.intersect(b))===(type Range.<number|uint8>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed full domains join even without endpoints",
+      "steps": [
+        {
+          "source": "const a:RangeFull.<uint8>=(..);const b:RangeFull.<number>=(..);String(Reflect.typeOf(a.intersect(b))===(type RangeFull.<uint8|number>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain joins are associative with a neutral full",
+      "steps": [
+        {
+          "source": "const a:Range.<uint8>=0..<10;const b:Range.<uint16>=2..<8;const c:Range.<uint32>=3..<7;const x=a.intersect(b).intersect(c);const y=a.intersect(b.intersect(c));`${Reflect.typeOf(x)===Reflect.typeOf(y)};${Reflect.typeOf((..).intersect(x))===Reflect.typeOf(x)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "one-ended shape selection 0.. ..<5",
+      "steps": [
+        {
+          "source": "const a:RangeBounds.<uint8>=(0..);const b:RangeBounds.<uint8>=(..<5);const r=a.intersect(b);`${r.start};${r.end};${r.start is uint8};${r.end is uint8}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;5;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "one-ended shape selection 0<.. ..=5",
+      "steps": [
+        {
+          "source": "const a:RangeBounds.<uint8>=(0<..);const b:RangeBounds.<uint8>=(..=5);const r=a.intersect(b);`${r.start};${r.end};${r.start is uint8};${r.end is uint8}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;5;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "full versus one-ended preserves type and missing bound",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint8>=0..;const x=r.intersect(..);`${Reflect.typeOf(x)===Reflect.typeOf(r)};${x.end===undefined};${x.endBound===undefined}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty selection remains typed and crossed",
+      "steps": [
+        {
+          "source": "const a:Range.<uint8>=1..<3;const b:Range.<uint8>=5..<7;const r=a.intersect(b);`${r.isEmpty};${r.start};${r.end};${Reflect.typeOf(r)===(type Range.<uint8>)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;5;3;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty inner is contained outside outer endpoints",
+      "steps": [
+        {
+          "source": "String((0..<3).contains(20..<10));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed singleton is not covered by open equal bound",
+      "steps": [
+        {
+          "source": "`${(0..<3).contains(3..=3)};${(0..=3).contains(3..=3)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric NaN candidate is never contained",
+      "steps": [
+        {
+          "source": "`${(0..<3).contains(NaN)};${(..).contains(NaN)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric infinities remain endpoints",
+      "steps": [
+        {
+          "source": "const r=(-Infinity..<Infinity).intersect(-2..=3);`${r.start};${r.end};${r.isFull}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-2;3;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "equivalent endpoints retain signed zero and join openness",
+      "steps": [
+        {
+          "source": "const a=(-0..=5);const b=(0<..=5);const r=a.intersect(b);`${Object.is(r.start,-0)};${r.startBound===Range.Bound.Open};${r.endBound===Range.Bound.Closed}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class intersection selects original endpoints",
+      "steps": [
+        {
+          "source": "class P{constructor(v,tag){this.v=v;this.tag=tag;}operator<(o){return this.v<o.v;}}const a=new P(0,\"a\")..<new P(5,\"b\");const b=new P(2,\"c\")..<new P(8,\"d\");const r=a.intersect(b);`${r.isFull};${r.start.v};${r.end.v};${r.start.tag};${r.end.tag};${Reflect.typeOf(r)===(type Range.<P>)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false;2;5;c;b;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class descending interval is empty",
+      "steps": [
+        {
+          "source": "class P{constructor(v,tag){this.v=v;this.tag=tag;}operator<(o){return this.v<o.v;}}String((new P(5)..<new P(2)).isEmpty);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class equal open interval is empty",
+      "steps": [
+        {
+          "source": "class P{constructor(v,tag){this.v=v;this.tag=tag;}operator<(o){return this.v<o.v;}}String((new P(5)..<new P(5)).isEmpty);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class equal closed singleton is not empty",
+      "steps": [
+        {
+          "source": "class P{constructor(v,tag){this.v=v;this.tag=tag;}operator<(o){return this.v<o.v;}}String((new P(5)..=new P(5)).isEmpty);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class containment uses order",
+      "steps": [
+        {
+          "source": "class P{constructor(v,tag){this.v=v;this.tag=tag;}operator<(o){return this.v<o.v;}}const a=new P(0)..<new P(5);const b=new P(6)..<new P(8);String(a.contains(b));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class empty inner is contained",
+      "steps": [
+        {
+          "source": "class P{constructor(v,tag){this.v=v;this.tag=tag;}operator<(o){return this.v<o.v;}}const a=new P(0)..<new P(5);const b=new P(8)..<new P(6);String(a.contains(b));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class point containment still works",
+      "steps": [
+        {
+          "source": "class P{constructor(v,tag){this.v=v;this.tag=tag;}operator<(o){return this.v<o.v;}}const a=new P(0)..<new P(5);`${a.contains(new P(2))};${a.contains(new P(5))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "equivalent class representatives retain left payload",
+      "steps": [
+        {
+          "source": "class P{constructor(v,tag){this.v=v;this.tag=tag;}operator<(o){return this.v<o.v;}}const a=new P(0,\"left\")..=new P(5,\"end-left\");const b=new P(0,\"right\")<..<new P(5,\"end-right\");const r=a.intersect(b);`${r.start.tag};${r.end.tag};${r.startBound===Range.Bound.Open};${r.endBound===Range.Bound.Open}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "left;end-left;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selection performs no arithmetic or coercion",
+      "steps": [
+        {
+          "source": "let extra=0;class P{constructor(v){this.v=v;}operator<(o){return this.v<o.v;}valueOf(){extra++;throw new Error(\"coercion\");}toString(){extra++;throw new Error(\"coercion\");}}const a=new P(0)..<new P(5);const b=new P(2)..<new P(8);const r=a.intersect(b);`${r.start.v};${r.end.v};${extra}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2;5;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "comparison order is lower then upper",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{constructor(v){this.v=v;}operator<(o){log+=`${this.v}<${o.v};`;return this.v<o.v;}}const r=(new P(0)..<new P(5)).intersect(new P(2)..<new P(8));log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0<2;5<8;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "abrupt lower comparison stops upper selection",
+      "steps": [
+        {
+          "source": "let count=0;let result=\"unchanged\";class P{constructor(v){this.v=v;}operator<(o){count++;throw new Error(\"stop\");}}const a=new P(0)..<new P(5);const b=new P(2)..<new P(8);try{result=a.intersect(b);}catch(e){} `${result};${count};${a.start.v};${b.end.v}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "unchanged;1;0;8"
+          }
+        }
+      ]
+    },
+    {
+      "name": "abrupt emptiness comparison is restored",
+      "steps": [
+        {
+          "source": "let count=0;class P{constructor(v){this.v=v;}operator<(o){count++;throw new Error(\"stop\");}}try{(new P(0)..<new P(5)).isEmpty;}catch(e){}`${count};${(1..<3).intersect(2..<4).start}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "incomparable ordered and numeric ranges are refused",
+      "steps": [
+        {
+          "source": "class P{constructor(v,tag){this.v=v;this.tag=tag;}operator<(o){return this.v<o.v;}}(new P(0)..<new P(5)).intersect(0..<3);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "non-range intersect operand retains refusal",
+      "steps": [
+        {
+          "source": "(0..<3).intersect({start:1,end:2});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inputs do not acquire the result domain",
+      "steps": [
+        {
+          "source": "const a:Range.<uint8>=0..<10;const b:Range.<uint16>=2..<8;a.intersect(b);`${Reflect.typeOf(a)===(type Range.<uint8>)};${Reflect.typeOf(b)===(type Range.<uint16>)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same generic source retains each full activation",
+      "steps": [
+        {
+          "source": "function f<T:type>():RangeFull.<T>{const a:RangeFull.<T>=(..);return a.intersect(a);}const a=f.<uint8>();const b=f.<number>();`${Reflect.typeOf(a)===(type RangeFull.<uint8>)};${Reflect.typeOf(b)===(type RangeFull.<number>)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "next Script after failed ordering",
+      "steps": [
+        {
+          "source": "class Bad{operator<(o){throw new Error(\"order\");}}(new Bad()..<new Bad()).intersect(new Bad()..<new Bad());",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "Error"
+          }
+        },
+        {
+          "source": "const r:Range.<uint8>=0..<5;String(Reflect.typeOf(r.intersect(..))===(type Range.<uint8>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    }
+  ]
+}
