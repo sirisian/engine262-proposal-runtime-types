@@ -26,7 +26,7 @@ import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator
 import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, OrdinaryGetPrototypeOf, CreateArrayFromList, SetIntegrityLevel, PrivateFieldAdd, IsArray, LengthOfArrayLike } from '../abstract-ops/all.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
-import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf, MetadataAsObject, RequireType, ApplyMetaHook, MetadataShape, NormalizeMetadataRecord, CheckMetadataRecord, SnapshotMetadataValue } from '../abstract-ops/runtime-types.mts';
+import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf, MetadataAsObject, RequireType, ApplyMetaHook, MetadataShape, NormalizeMetadataRecord, CheckMetadataRecord, SnapshotMetadataValue, IsMetadataAtom } from '../abstract-ops/runtime-types.mts';
 import { SelectClassCase, SelectionOfValue } from '../abstract-ops/callable-selection.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
@@ -4822,6 +4822,9 @@ export function ProjectMetadataValueFromType(t: TypeRecord, shape?: TypeRecord):
     })) };
   }
   if (t.Kind === 'range') {
+    if (t.Start !== undefined && !IsMetadataAtom(t.Start) || t.End !== undefined && !IsMetadataAtom(t.End)) {
+      return { status: 'invalid', type: t };
+    }
     return { status: 'complete', value: Object.freeze(Object.assign(Object.create(null), {
       __range: true, start: t.Start, end: t.End, startBound: t.StartBound, endBound: t.EndBound,
     })) };

@@ -1,0 +1,1136 @@
+{
+  "cases": [
+    {
+      "name": "reflected rejects class endpoints",
+      "steps": [
+        {
+          "source": "class C{constructor(v){this.v=v;}operator <(o:C){return this.v<o.v;}}type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:(new C(1))..<(new C(3))}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed rejects class endpoints",
+      "steps": [
+        {
+          "source": "class C{constructor(v){this.v=v;}operator <(o:C){return this.v<o.v;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}function build(){return {mark:(new C(1))..<(new C(3))};}type T=uint8.<build()>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-type-evaluation",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default rejects class endpoints",
+      "steps": [
+        {
+          "source": "class C{constructor(v){this.v=v;}operator <(o:C){return this.v<o.v;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={mark:any};meta M{default={mark:(new C(1))..<(new C(3))};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflected rejects class start",
+      "steps": [
+        {
+          "source": "class C{constructor(v){this.v=v;}operator <(o:C){return this.v<o.v;}}type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:(new C(1))..}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed rejects class start",
+      "steps": [
+        {
+          "source": "class C{constructor(v){this.v=v;}operator <(o:C){return this.v<o.v;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}function build(){return {mark:(new C(1))..};}type T=uint8.<build()>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-type-evaluation",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default rejects class start",
+      "steps": [
+        {
+          "source": "class C{constructor(v){this.v=v;}operator <(o:C){return this.v<o.v;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={mark:any};meta M{default={mark:(new C(1))..};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflected rejects class end",
+      "steps": [
+        {
+          "source": "class C{constructor(v){this.v=v;}operator <(o:C){return this.v<o.v;}}type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:..<(new C(3))}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed rejects class end",
+      "steps": [
+        {
+          "source": "class C{constructor(v){this.v=v;}operator <(o:C){return this.v<o.v;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}function build(){return {mark:..<(new C(3))};}type T=uint8.<build()>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-type-evaluation",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default rejects class end",
+      "steps": [
+        {
+          "source": "class C{constructor(v){this.v=v;}operator <(o:C){return this.v<o.v;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={mark:any};meta M{default={mark:..<(new C(3))};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflected rejects Composite record",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:Composite({x:1})}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed rejects Composite record",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}function build(){return {mark:Composite({x:1})};}type T=uint8.<build()>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-type-evaluation",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default rejects Composite record",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:Composite({x:1})};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflected rejects Composite tuple",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:Composite([1,2])}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed rejects Composite tuple",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}function build(){return {mark:Composite([1,2])};}type T=uint8.<build()>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-type-evaluation",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default rejects Composite tuple",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:Composite([1,2])};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflected rejects empty Composite record",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:Composite({})}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed rejects empty Composite record",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}function build(){return {mark:Composite({})};}type T=uint8.<build()>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-type-evaluation",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default rejects empty Composite record",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:Composite({})};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflected rejects empty Composite tuple",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:Composite(([] := any))}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed rejects empty Composite tuple",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}function build(){return {mark:Composite(([] := any))};}type T=uint8.<build()>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-type-evaluation",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default rejects empty Composite tuple",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:Composite(([] := any))};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflected rejects buffer Span",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:Span.<uint8>(new ArrayBuffer(4))}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed rejects buffer Span",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}function build(){return {mark:Span.<uint8>(new ArrayBuffer(4))};}type T=uint8.<build()>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-type-evaluation",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default rejects buffer Span",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:Span.<uint8>(new ArrayBuffer(4))};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflected rejects array Span",
+      "steps": [
+        {
+          "source": "function view(s:Span.<number>){return s;}type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:view([1,2])}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed rejects array Span",
+      "steps": [
+        {
+          "source": "function view(s:Span.<number>){return s;}type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}function build(){return {mark:view([1,2])};}type T=uint8.<build()>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-type-evaluation",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default rejects array Span",
+      "steps": [
+        {
+          "source": "function view(s:Span.<number>){return s;}type M={mark:any};meta M{default={mark:view([1,2])};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "root rejects Composite record",
+      "steps": [
+        {
+          "source": "meta uint8{default={};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:Composite({x:1})});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "root rejects Composite tuple",
+      "steps": [
+        {
+          "source": "meta uint8{default={};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:Composite([1,2])});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "root rejects empty Composite record",
+      "steps": [
+        {
+          "source": "meta uint8{default={};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:Composite({})});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "root rejects empty Composite tuple",
+      "steps": [
+        {
+          "source": "meta uint8{default={};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:Composite(([] := any))});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "root rejects buffer Span",
+      "steps": [
+        {
+          "source": "meta uint8{default={};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:Span.<uint8>(new ArrayBuffer(4))});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "root rejects array Span",
+      "steps": [
+        {
+          "source": "function view(s:Span.<number>){return s;}meta uint8{default={};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:view([1,2])});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "deep list rejects class endpoints",
+      "steps": [
+        {
+          "source": "class C{constructor(v){this.v=v;}operator <(o:C){return this.v<o.v;}}type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:[1,{x:(new C(1))..<(new C(3))}]}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "deep list rejects Composite record",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:[1,{x:Composite({x:1})}]}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "deep list rejects Composite tuple",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:[1,{x:Composite([1,2])}]}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "deep list rejects buffer Span",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:[1,{x:Span.<uint8>(new ArrayBuffer(4))}]}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "deep list rejects array Span",
+      "steps": [
+        {
+          "source": "function view(s:Span.<number>){return s;}type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:[1,{x:view([1,2])}]}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range reflection retains numbers",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:0..<3}});const x=Reflect.getReflection(T).metadata.mark;String(x.start)+\"/\"+String(x.end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range reflection retains bigints",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:0n..=3n}});const x=Reflect.getReflection(T).metadata.mark;String(x.start)+\"/\"+String(x.end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range reflection retains typed integers",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:(1:=uint8)..=(3:=uint8)}});const x=Reflect.getReflection(T).metadata.mark;String(x.start)+\"/\"+String(x.end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range reflection retains start only",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:0..}});const x=Reflect.getReflection(T).metadata.mark;String(x.start)+\"/\"+String(x.end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range reflection retains end only",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:..<3}});const x=Reflect.getReflection(T).metadata.mark;String(x.start)+\"/\"+String(x.end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range reflection retains full",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:..}});const x=Reflect.getReflection(T).metadata.mark;String(x.start)+\"/\"+String(x.end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined/undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written numeric range remains valid",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=uint8.<{mark:1..<3}>;String(Reflect.getReflection(T).metadata.mark.end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range reflection roundtrip preserves type",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:float64,metadata:{mark:1n..=4n}});String(T===Reflect.makeType(Reflect.getReflection(T)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary ordered class range remains valid",
+      "steps": [
+        {
+          "source": "class C{constructor(v){this.v=v;}operator <(o:C){return this.v<o.v;}}const r=(new C(1))..<(new C(3));String(r.contains(new C(2)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary class range is a usable nonmetadata field",
+      "steps": [
+        {
+          "source": "class C{constructor(v){this.v=v;}operator <(o:C){return this.v<o.v;}}const o={r:(new C(1))..<(new C(3))};String(o.r.start.v);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata endpoint admission does not call ordering",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(v){this.v=v;}operator <(o:C){calls++;return this.v<o.v;}}type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}let caught=false;try{Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:(new C(1))..<(new C(3))}});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}String(caught)+\"/\"+String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Composite record explicit projection",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}const c=Composite({x:1});const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:{...c}}});String(Reflect.getReflection(T).metadata.mark.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Composite tuple explicit projection",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}const c=Composite([1,2]);const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:Array.from(c)}});String(Reflect.getReflection(T).metadata.mark[1]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Span explicit projection",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}const v=Span.<uint8>(new ArrayBuffer(2));v[1]=7;const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:[...v]}});String(Reflect.getReflection(T).metadata.mark[1]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed owning Array remains a list",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}const a:[].<uint8>=[1,2];const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:a}});String(Reflect.getReflection(T).metadata.mark[1]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "frozen ordinary record remains a record",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}const x=Object.freeze({x:2});const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:x}});String(Reflect.getReflection(T).metadata.mark.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit projection keeps nested admission",
+      "steps": [
+        {
+          "source": "class C{constructor(v){this.v=v;}operator <(o:C){return this.v<o.v;}}type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}const c=Composite({x:new C(1)});Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:{...c}}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed range default leaves no publication",
+      "steps": [
+        {
+          "source": "class C{constructor(v){this.v=v;}operator <(o:C){return this.v<o.v;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={mark:any};meta M{default={mark:(new C(1))..<(new C(3))};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{default={mark:0..<2};subtype(a,b){return true;}}type T=uint8.<{mark:1..<3}>;String(Reflect.getReflection(T).metadata.mark.end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed carrier default leaves no publication",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:Composite({x:1})};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{default={mark:{x:1}};subtype(a,b){return true;}}type T=uint8.<{mark:{x:2}}>;String(Reflect.getReflection(T).metadata.mark.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "current-source class dependency rejects at evaluation",
+      "steps": [
+        {
+          "source": "class C{constructor(v){this.v=v;}operator <(o:C){return this.v<o.v;}}type M={mark:any};meta M{default={mark:(new C(1))..<(new C(3))};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range endpoint work exhausts a shared low budget",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}const ranges=[];for(let i=0;i<10;i++)ranges.push(0..<2);const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:ranges}});\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:1}});\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ],
+      "limits": {
+        "steps": 40,
+        "records": 200,
+        "depth": 64
+      }
+    },
+    {
+      "name": "range endpoint work fits a sufficient budget",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}const ranges=[];for(let i=0;i<10;i++)ranges.push(0..<2);const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:ranges}});\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ],
+      "limits": {
+        "steps": 200,
+        "records": 200,
+        "depth": 64
+      }
+    },
+    {
+      "name": "numeric range snapshot ignores public endpoint getters",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}let reads=0;const r=0..<3;Object.defineProperty(r,\"start\",{get(){reads++;throw new Error(\"public getter\");}});const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:r}});String(Reflect.getReflection(T).metadata.mark.start)+\"/\"+String(reads);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid range snapshot ignores public endpoint getters",
+      "steps": [
+        {
+          "source": "class C{constructor(v){this.v=v;}operator <(o:C){return this.v<o.v;}}type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}let reads=0;const r=(new C(1))..<(new C(3));Object.defineProperty(r,\"start\",{get(){reads++;return 1;}});let caught=false;try{Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:r}});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}String(caught)+\"/\"+String(reads);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty Span is still not a nested record",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:Span.<uint8>(new ArrayBuffer(0))}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty Span is still not a root record",
+      "steps": [
+        {
+          "source": "meta uint8{default={};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:Span.<uint8>(new ArrayBuffer(0))});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint signed zero is retained",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}const A=Reflect.makeType({kind:\"parameterized\",base:float64,metadata:{mark:-0..=1}});const B=Reflect.makeType({kind:\"parameterized\",base:float64,metadata:{mark:0..=1}});String(A===B)+\"/\"+String(Object.is(Reflect.getReflection(A).metadata.mark.start,-0));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unsupported carrier stops before later sibling reads",
+      "steps": [
+        {
+          "source": "type M={mark:any,tail?:number};meta M{default={mark:{}};subtype(a,b){return true;}}let reads=0;const input={get mark(){reads++;return Span.<uint8>(new ArrayBuffer(2));},get tail(){reads+=10;return 1;}};let caught=false;try{Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:input});}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}String(caught)+\"/\"+String(reads);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed numeric range retains its canonical representation",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}function build(){return {mark:1..<3};}type T=uint8.<build()>;String(Reflect.getReflection(T).metadata.mark.end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed bigint range retains its canonical representation",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}function build(){return {mark:1n..=3n};}type T=uint8.<build()>;String(Reflect.getReflection(T).metadata.mark.end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    }
+  ]
+}

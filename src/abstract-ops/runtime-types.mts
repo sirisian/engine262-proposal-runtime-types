@@ -3126,13 +3126,21 @@ export function LookupTypeDefault(typeObject: object): Value | undefined {
   return typeDefaults.get(typeObject);
 }
 
+/** Immutable atoms of the closed metadata language, independent of storage. */
+export function IsMetadataAtom(value: Value): boolean {
+  return value === Value.null || value instanceof NumberValue || value instanceof TypedNumberValue
+    || value instanceof BigIntValue || value instanceof JSStringValue || value instanceof BooleanValue || value instanceof SymbolValue
+    || isRationalObject(value) || isDecimalObject(value) || isFloat128Object(value) || isComplexObject(value);
+}
+
 /** Admit the closed metadata language while taking one ordered snapshot.
  * A worklist prevents host recursion; active ancestors detect cycles without
  * confusing a shared child with a cycle or caching observable getter reads.
  */
 export function* SnapshotMetadataValue(value: Value, recordRoot = false, recordDescription = 'the outer metadata value'): PlainEvaluator<Value> {
   type Store = (snapshot: unknown) => void;
-  type Task = { kind: 'value'; value: Value; store: Store }
+  type Task = { kind: 'value'; value: Value; store: Store; endpoint?: boolean }
+    | { kind: 'range'; out: Record<string, unknown>; store: Store }
     | { kind: 'record'; value: ObjectValue; out: Record<string | symbol, unknown>; keys: readonly (JSStringValue | SymbolValue)[]; index: number; store: Store }
     | { kind: 'list'; value: ObjectValue; out: unknown[]; length: number; index: number; store: Store };
   let result: unknown;
@@ -3146,6 +3154,10 @@ export function* SnapshotMetadataValue(value: Value, recordRoot = false, recordD
       const task = tasks.pop()!;
       ConsumeEvaluationSteps(1);
       if (IsBudgetExhausted()) return Throw.TypeError('the type evaluation budget was exhausted while snapshotting metadata');
+      if (task.kind === 'range') {
+        task.store(Object.freeze(task.out));
+        continue;
+      }
       if (task.kind !== 'value') {
         const length = task.kind === 'list' ? task.length : task.keys.length;
         if (task.index === length) {
@@ -3180,26 +3192,35 @@ export function* SnapshotMetadataValue(value: Value, recordRoot = false, recordD
             || current.OriginalSource !== undefined || Q(IsArray(current)) === Value.true)) {
         return Throw.TypeError('$1 must be a record', Value(recordDescription));
       }
-      if (isRationalObject(current) || isDecimalObject(current) || isFloat128Object(current) || isComplexObject(current)) {
+      if (task.endpoint && !IsMetadataAtom(current)) {
+        return Throw.TypeError('a metadata range endpoint must be an admitted metadata atom');
+      }
+      if (IsMetadataAtom(current)) {
         task.store(current);
       } else if (!(current instanceof ObjectValue)) {
-        if (current !== Value.null && !(current instanceof NumberValue) && !(current instanceof TypedNumberValue) && !(current instanceof BigIntValue)
-            && !(current instanceof JSStringValue) && !(current instanceof BooleanValue) && !(current instanceof SymbolValue)) {
-          return Throw.TypeError('the value is not in the metadata value language');
-        }
-        task.store(current);
+        return Throw.TypeError('the value is not in the metadata value language');
       } else if (isRangeObject(current)) {
-        const marker = Object.assign(Object.create(null), { __range: true,
-          start: current.RangeStart, end: current.RangeEnd,
+        // Endpoints are values too. A Range wrapper must not carry live class
+        // instances past admission. Visit start then end without public Get,
+        // coercion or ordering calls; publish the marker only after both pass.
+        const marker: Record<string, unknown> = Object.assign(Object.create(null), { __range: true,
+          start: undefined, end: undefined,
           startBound: current.RangeStartBound, endBound: current.RangeEndBound });
-        task.store(Object.freeze(marker));
+        tasks.push({ kind: 'range', out: marker, store: task.store });
+        if (current.RangeEnd !== undefined) tasks.push({ kind: 'value', value: current.RangeEnd, endpoint: true, store: (snapshot) => {
+          marker.end = snapshot;
+        } });
+        if (current.RangeStart !== undefined) tasks.push({ kind: 'value', value: current.RangeStart, endpoint: true, store: (snapshot) => {
+          marker.start = snapshot;
+        } });
       } else if (current.OriginalSource !== undefined && current.OriginalFlags !== undefined) {
         task.store(Object.freeze(Object.assign(Object.create(null), { __pattern: true,
           source: current.OriginalSource.stringValue(), flags: current.OriginalFlags.stringValue() })));
       } else {
         // No user property, prototype traversal, coercion or Proxy trap decides
         // whether an unsupported object can impersonate a record or an atom.
-        if (IsCallable(current) === Value.true || current.ConstructedBy.length > 0 || current.PrivateElements.length > 0
+        if (IsComposite(current) || ArraySpanBackingOf(current) !== undefined || ArrayViewBackingOf(current) !== undefined
+            || IsCallable(current) === Value.true || current.ConstructedBy.length > 0 || current.PrivateElements.length > 0
             || current.internalSlotsList.some((slot) => slot !== 'Prototype' && slot !== 'Extensible')
             || current.Get !== ObjectValue.prototype.Get || current.GetOwnProperty !== ObjectValue.prototype.GetOwnProperty
             || current.OwnPropertyKeys !== ObjectValue.prototype.OwnPropertyKeys) {
