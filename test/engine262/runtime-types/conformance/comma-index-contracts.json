@@ -1,0 +1,851 @@
+{
+  "cases": [
+    {
+      "name": "original parenthesized comma witness",
+      "steps": [
+        {
+          "source": "class C { get operator[](i: uint32) { return (i * 10) := uint32; } get operator[](x: uint32, y: uint32) { return (999) := uint32; } } String(new C()[(1, 2)]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested parentheses",
+      "steps": [
+        {
+          "source": "class C { get operator[](i: uint32) { return (i * 10) := uint32; } get operator[](x: uint32, y: uint32) { return (999) := uint32; } } String(new C()[(((1,2)))]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested comma",
+      "steps": [
+        {
+          "source": "class C { get operator[](i: uint32) { return (i * 10) := uint32; } get operator[](x: uint32, y: uint32) { return (999) := uint32; } } String(new C()[(0,(1,2))]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary single",
+      "steps": [
+        {
+          "source": "class C { get operator[](i: uint32) { return (i * 10) := uint32; } get operator[](x: uint32, y: uint32) { return (999) := uint32; } } String(new C()[2]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary multiple",
+      "steps": [
+        {
+          "source": "class C { get operator[](i: uint32) { return (i * 10) := uint32; } get operator[](x: uint32, y: uint32) { return (999) := uint32; } } String(new C()[1,2]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "999"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two grouped indices",
+      "steps": [
+        {
+          "source": "class C { get operator[](i: uint32) { return (i * 10) := uint32; } get operator[](x: uint32, y: uint32) { return (999) := uint32; } } String(new C()[(0,1),(0,2)]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "999"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit final conversion",
+      "steps": [
+        {
+          "source": "class C { get operator[](i: uint32) { return (i * 10) := uint32; } get operator[](x: uint32, y: uint32) { return (999) := uint32; } } String(new C()[(1,(2:=uint32))]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constant name",
+      "steps": [
+        {
+          "source": "const I=2;class C { get operator[](i: uint32) { return (i * 10) := uint32; } get operator[](x: uint32, y: uint32) { return (999) := uint32; } } String(new C()[(0,I)]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constant expression",
+      "steps": [
+        {
+          "source": "const I=1+1;class C { get operator[](i: uint32) { return (i * 10) := uint32; } get operator[](x: uint32, y: uint32) { return (999) := uint32; } } String(new C()[(0,I)]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constant alias",
+      "steps": [
+        {
+          "source": "const I=2;const J=I;class C { get operator[](i: uint32) { return (i * 10) := uint32; } get operator[](x: uint32, y: uint32) { return (999) := uint32; } } String(new C()[(0,J)]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "signed literal",
+      "steps": [
+        {
+          "source": "class C { get operator[](i: uint32) { return (i * 10) := uint32; } get operator[](x: uint32, y: uint32) { return (999) := uint32; } } String(new C()[(0,+2)]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "arithmetic final",
+      "steps": [
+        {
+          "source": "class C { get operator[](i: uint32) { return (i * 10) := uint32; } get operator[](x: uint32, y: uint32) { return (999) := uint32; } } String(new C()[(0,1+1)]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide literal preserves exact mathematical value",
+      "steps": [
+        {
+          "source": "class C{get operator[](i:uint64){return String(i);}}new C()[(0,9007199254740993)];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "9007199254740993"
+          }
+        }
+      ]
+    },
+    {
+      "name": "discarded literal has no parameter context",
+      "steps": [
+        {
+          "source": "class C{get operator[](i:uint8){return String(i);}}new C()[(300,2)];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "discarded void is permitted",
+      "steps": [
+        {
+          "source": "function effect():void{}class C{get operator[](i:uint8){return String(i);}}new C()[(effect(),2)];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "final index range (0,300)",
+      "steps": [
+        {
+          "source": "class C{get operator[](i:uint8){return i;}}function unused(c:C){c[(0,300)];}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "final index range (0,-1)",
+      "steps": [
+        {
+          "source": "class C{get operator[](i:uint8){return i;}}function unused(c:C){c[(0,-1)];}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-range",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "final index range (0,1.5)",
+      "steps": [
+        {
+          "source": "class C{get operator[](i:uint8){return i;}}function unused(c:C){c[(0,1.5)];}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated mutable",
+      "steps": [
+        {
+          "source": "let n:number=2;class C { get operator[](i: uint32) { return (i * 10) := uint32; } get operator[](x: uint32, y: uint32) { return (999) := uint32; } } new C()[(0,n)];\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated immutable",
+      "steps": [
+        {
+          "source": "const n:number=2;class C { get operator[](i: uint32) { return (i * 10) := uint32; } get operator[](x: uint32, y: uint32) { return (999) := uint32; } } new C()[(0,n)];\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "immutable alias",
+      "steps": [
+        {
+          "source": "let n:number=2;const k=n;class C { get operator[](i: uint32) { return (i * 10) := uint32; } get operator[](x: uint32, y: uint32) { return (999) := uint32; } } new C()[(0,k)];\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "assignment final",
+      "steps": [
+        {
+          "source": "let n:number=1;class C { get operator[](i: uint32) { return (i * 10) := uint32; } get operator[](x: uint32, y: uint32) { return (999) := uint32; } } new C()[(0,n=2)];\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain annotated",
+      "steps": [
+        {
+          "source": "let n:number=2;class C { get operator[](i: uint32) { return (i * 10) := uint32; } get operator[](x: uint32, y: uint32) { return (999) := uint32; } } new C()[n];\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "shadowed numeric constant",
+      "steps": [
+        {
+          "source": "const n=2;class C { get operator[](i: uint32) { return (i * 10) := uint32; } get operator[](x: uint32, y: uint32) { return (999) := uint32; } } {let n:number=2;new C()[(0,n)];}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed parameter comma",
+      "steps": [
+        {
+          "source": "class C{get operator[](i:uint32){return String(i);}}function f(c:C,n:uint32){return c[(0,n)];}f(new C(),2);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong typed parameter comma",
+      "steps": [
+        {
+          "source": "class C{get operator[](i:uint32){return String(i);}}function unused(c:C,n:uint8){return c[(0,n)];}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "called Number result stays fixed",
+      "steps": [
+        {
+          "source": "class C{get operator[](i:uint32){return String(i);}}function n():number{return 2;}new C()[(0,n())];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiver then prefix then accessor",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{get operator[](i:uint32){log+=\"g\";return i;}}function receiver():C{log+=\"r\";return new C();}function effect(){log+=\"e\";}const x=receiver()[(effect(),2)];log+\":\"+String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "reg:2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "multiple grouped effects stay in source order",
+      "steps": [
+        {
+          "source": "let log=\"\";function effect(s){log+=s;}class C{get operator[](x:uint32,y:uint32){log+=\"g\";return x+y;}}const v=new C()[(effect(\"a\"),1),(effect(\"b\"),2)];log+\":\"+String(v);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "abg:3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "throwing prefix prevents getter",
+      "steps": [
+        {
+          "source": "let log=\"\";function fail(){log+=\"e\";throw new Error(\"stop\");}class C{get operator[](i:uint32){log+=\"g\";return i;}}try{new C()[(fail(),2)];}catch(e){log+=\"c\";}log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ec"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prefix is still statically checked",
+      "steps": [
+        {
+          "source": "class C{get operator[](i:uint32){return i;}}function unused(c:C){c[((1:=uint8)*(1:=int32),2)];}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "simple setter",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{value:uint8=1;get operator[](i:uint32):uint8{log+=\"g\";return this.value;}set operator[](i:uint32,v:uint8){log+=\"s\";this.value=v;}}function effect(){log+=\"e\";}const c=new C();c[(effect(),2)]=7;log+\":\"+String(c.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "es:7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "compound setter",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{value:uint8=1;get operator[](i:uint32):uint8{log+=\"g\";return this.value;}set operator[](i:uint32,v:uint8){log+=\"s\";this.value=v;}}function effect(){log+=\"e\";}const c=new C();c[(effect(),2)]+=7;log+\":\"+String(c.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "egs:8"
+          }
+        }
+      ]
+    },
+    {
+      "name": "postfix setter",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{value:uint8=1;get operator[](i:uint32):uint8{log+=\"g\";return this.value;}set operator[](i:uint32,v:uint8){log+=\"s\";this.value=v;}}function effect(){log+=\"e\";}const c=new C();c[(effect(),2)]++;log+\":\"+String(c.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "egs:2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "logical setter",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{value:uint8=1;get operator[](i:uint32):uint8{log+=\"g\";return this.value;}set operator[](i:uint32,v:uint8){log+=\"s\";this.value=v;}}function effect(){log+=\"e\";}const c=new C();c[(effect(),2)]&&=7;log+\":\"+String(c.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "egs:7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "setter assigned value still checked",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{value:uint8=1;get operator[](i:uint32):uint8{log+=\"g\";return this.value;}set operator[](i:uint32,v:uint8){log+=\"s\";this.value=v;}}function effect(){log+=\"e\";}const c=new C();c[(effect(),2)]=\"bad\";\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "setter-only index context",
+      "steps": [
+        {
+          "source": "let seen=\"\";class C{set operator[](i:uint32,v:uint8){seen=String(i)+\":\"+String(v);}}new C()[(0,2)]=7;seen;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2:7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "borrowed index read",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{data:[].<uint8>=[1,2];get operator[](i:uint32){log+=\"g\";return ref this.data[i];}}function effect(){log+=\"e\";}const c=new C();const v=c[(effect(),0)];log+\":\"+String(c.data[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "eg:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "borrowed index store",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{data:[].<uint8>=[1,2];get operator[](i:uint32){log+=\"g\";return ref this.data[i];}}function effect(){log+=\"e\";}const c=new C();c[(effect(),0)]=7;log+\":\"+String(c.data[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "eg:7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "borrowed index update",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{data:[].<uint8>=[1,2];get operator[](i:uint32){log+=\"g\";return ref this.data[i];}}function effect(){log+=\"e\";}const c=new C();c[(effect(),0)]++;log+\":\"+String(c.data[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "egg:2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declared borrowed destination still checked",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{data:[].<uint8>=[1,2];get operator[](i:uint32):ref uint8{log+=\"g\";return ref this.data[i];}}function effect(){log+=\"e\";}const c=new C();c[(effect(),0)]=300;\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary array fallback",
+      "steps": [
+        {
+          "source": "let log=\"\";function effect(){log+=\"e\";}const a=[10,20,30];const n=a[(effect(),2)];log+\":\"+String(n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "e:30"
+          }
+        }
+      ]
+    },
+    {
+      "name": "String final key keeps ordinary lookup",
+      "steps": [
+        {
+          "source": "let log=\"\";function effect(){log+=\"e\";}class C{get operator[](i:uint32){log+=\"g\";return i;}m(){return \"method\";}}const result=new C()[(effect(),\"m\")]();log+\":\"+result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "e:method"
+          }
+        }
+      ]
+    },
+    {
+      "name": "non-numeric top-level operand prevents dispatch",
+      "steps": [
+        {
+          "source": "class C { get operator[](i: uint32) { return (i * 10) := uint32; } get operator[](x: uint32, y: uint32) { return (999) := uint32; } } const c=new C();c[\"2\"]=\"fallback\";String(c[\"x\",2]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "fallback"
+          }
+        }
+      ]
+    },
+    {
+      "name": "missing arity uses ordinary final key",
+      "steps": [
+        {
+          "source": "class C{get operator[](i:uint32){return 99;}}const c=new C();c[\"2\"]=\"fallback\";String(c[(0,1),(0,2)]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "fallback"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inherited grouped index",
+      "steps": [
+        {
+          "source": "class B{get operator[](i:uint32){return String(i);}}class D extends B{}new D()[(0,2)];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional grouped index live and skipped",
+      "steps": [
+        {
+          "source": "let log=\"\";function effect(){log+=\"e\";}class C{get operator[](i:uint32){log+=\"g\";return i;}}function f(c:C|undefined){return c?.[(effect(),2)];}const a=f(undefined);const b=f(new C());log+\":\"+String(a)+\":\"+String(b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "eg:undefined:2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary call uses same final context",
+      "steps": [
+        {
+          "source": "function f(i:uint32){return String(i);}f((0,2));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary binding uses same final context",
+      "steps": [
+        {
+          "source": "const i:uint32=(0,2);String(i);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binding comma prefix",
+      "steps": [
+        {
+          "source": "let x:uint32=((1:=uint8)*(1:=int32),2);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "call comma prefix",
+      "steps": [
+        {
+          "source": "function take(i:uint32){}take(((1:=uint8)*(1:=int32),2));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested comma prefix",
+      "steps": [
+        {
+          "source": "class C{get operator[](i:uint32){return i;}}new C()[(0,((1:=uint8)*(1:=int32),2))];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "discarded comparison obligation",
+      "steps": [
+        {
+          "source": "class C{get operator[](i:uint32){return i;}}function unused(c:C,a:uint8,b:int32){c[(a<b,2)];}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "discarded bound call obligation",
+      "steps": [
+        {
+          "source": "function f(i:uint8){}class C{get operator[](i:uint32){return i;}}function unused(c:C){c[(f(\"bad\"),2)];}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "'bad'"
+        }
+      ]
+    },
+    {
+      "name": "prefix guards its own conditional arms",
+      "steps": [
+        {
+          "source": "class C{get operator[](i:uint32){return i;}}function f(c:C,x:uint8|string){return c[((x is uint8 ? x*2 : x.length),2)];}String(f(new C(),1));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    }
+  ]
+}

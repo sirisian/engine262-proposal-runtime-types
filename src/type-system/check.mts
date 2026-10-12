@@ -17182,7 +17182,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     deferOperatorCases(receiver, `[]#${indices.length}`);
     const get = declaredOperator(receiver, `[]#${indices.length}`);
     const set = declaredOperator(receiver, `[]=#${indices.length}`);
-    return get || set ? { get, set, arguments: indices.map((index, i) => literalOperand(index) ? index : typedExpressionView(index, types[i])) } : null;
+    // Preserve the supplied expressions for the selected parameter's context,
+    // as at an ordinary call. A fixed-type view would hide the last literal
+    // in `m[(effect(), 2)]` and refuse it as a stored Number. The comma stays
+    // one index; ordinary contextual typing retains its effects and applies
+    // numeric-provenance restrictions to its final value.
+    return get || set ? { get, set, arguments: indices } : null;
   };
 
   const pipelineInputType = (expression: ParseNode): Known => {
@@ -35224,7 +35229,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // The last operand of a comma expression that decides a branch decides
         // it too (#sec-narrowing).
         const list = (n as unknown as { ExpressionList: readonly ParseNode[] }).ExpressionList;
-        list.forEach((operand) => walk(operand));
+        list.forEach((operand, index) => {
+          // Earlier results are discarded, but their operator obligations
+          // still apply. Judge each before advancing past its source effects;
+          // the final operand retains its consumer's contextual type.
+          if (index < list.length - 1) validateDiscardedExpression(operand);
+          walk(operand);
+        });
         return;
       }
       case 'LogicalANDExpression':
