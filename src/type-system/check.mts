@@ -8,7 +8,7 @@ import { MostSpecificPrimitiveOperator, OperandNamesCapture } from '../runtime-s
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { setNodeParent } from '../parse.mts';
 import { surroundingAgent } from '../execution-context/Agent.mts';
-import { ContractFactsOf, NumericArmRank, RegisteredPrimitiveOperators, GoverningMetaTypes, MetadataMismatchDescription } from '../abstract-ops/runtime-types.mts';
+import { type PrimitiveOperatorEntry, ContractFactsOf, NumericArmRank, RegisteredPrimitiveOperators, GoverningMetaTypes, MetadataMismatchDescription } from '../abstract-ops/runtime-types.mts';
 import { SameValue, ToBoolean } from '../abstract-ops/all.mts';
 import { ParseDecimalDigits } from '../intrinsics/Decimal.mts';
 import { TV } from '../static-semantics/TemplateStrings.mts';
@@ -80,7 +80,7 @@ import {
 import { OverrideParametersSubtype, SignatureNarrowingsSubtype, IsCallableContractSubtype, IsConstructorSignatureSubtype, IsSubtype, SameType, SameTypeWithAssumptions, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
 import { isBitLaneType, componentAccessorIndices, isAssignableAccessor, wideMaskTypeFor, maskTypeFor, vectorTypeName } from './vector-ops.mts';
 import { NarrowTo, NarrowFrom, nullishType, empty, isClassNominal, libraryClassNames } from './narrowing.mts';
-import { MetadataObjectFromType, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord, SubstituteTypeArguments, spreadElementsOf, packElementAdmits, packConstraintRefuses } from './runtime.mts';
+import { type CapturedTypeContext, MetadataObjectFromType, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord, SubstituteTypeArguments, spreadElementsOf, packElementAdmits, packConstraintRefuses } from './runtime.mts';
 import { isWideIntegerType, wrapToType } from './arithmetic.mts';
 import { resolveOverloadByTypes, assignArguments, parameterReceiving, operatorTableKey, IsNumericIndexType, type OverloadSignature as OperatorSignature } from './overloads.mts';
 import { PlanReferenceArguments } from './reference-rest.mts';
@@ -2702,9 +2702,27 @@ export interface DeferredTypeCheck {
    * numbers), as dispatch would, and the recheck types the site with it.
    */
   computedAt?: { site: object, bindings: ReadonlyMap<string, number | TypeRecord> };
+  /** An already registered operator retains live declaration identity and inputs. */
+  operatorContext?: CapturedTypeContext;
 }
 const deferredTypeChecks = new WeakMap<object, Map<object, DeferredTypeCheck>>();
 const evaluatedTypeNodes = new WeakMap<object, TypeRecord>();
+const registeredOperatorQueries = new WeakMap<object, { entry: PrimitiveOperatorEntry, bindings: ReadonlyMap<string, number | TypeRecord>, key: object }[]>();
+function RegisteredOperatorQuery(site: object, entry: PrimitiveOperatorEntry, bindings: ReadonlyMap<string, number | TypeRecord>): object {
+  const queries = registeredOperatorQueries.get(site) ?? [];
+  const query = queries.find((q) => q.entry === entry && q.bindings.size === bindings.size
+    && [...bindings].every(([name, value]) => {
+      const prior = q.bindings.get(name);
+      return prior !== undefined && (typeof value === 'number' || typeof prior === 'number'
+        ? value === prior : SameType(value, prior));
+    }));
+  if (query) return query.key;
+  const key = {};
+  queries.push({ entry, bindings: new Map(bindings), key });
+  registeredOperatorQueries.set(site, queries);
+  return key;
+}
+
 const evaluatedEnums = new WeakMap<object, { record: TypeRecord, members: ReadonlyMap<string, Value> }>();
 export function SetEvaluatedEnum(node: ParseNode.EnumDeclaration, record: TypeRecord, values: readonly Value[]): void {
   evaluatedEnums.set(node, { record, members: new Map(node.EnumMemberList.map((member, index) => [member.IdentifierName.name, values[index]])) });
@@ -20491,10 +20509,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // Registered blocks from another source may dispatch even when this
           // source cannot reconstruct their captures/signatures. Do not prove
           // built-in concatenation or elide a return check from that absence.
-          if (leftString) {
-            const local = new Set(blockDefinitionsFor('string', '+').map(({ def }) => def));
-            if (RegisteredPrimitiveOperators('string', '+').some((entry) => !local.has(entry.node as ParseNode.OperatorDefinition))) return null;
-          }
           const blockLeft = erasedKeepingBrand(leftT);
           const blockRight = erasedKeepingBrand(rightT);
           if (blockLeft && blockRight) {
@@ -20529,6 +20543,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // for every question about what the value can do.
         let lv = asValueType(erasedKeepingBrand(leftT));
         let rv = asValueType(erasedKeepingBrand(rightT));
+
+        // A declared block supplies an operation before the built-in family
+        // restrictions are considered. Literal adoption still follows its own
+        // path, since a literal is not already an operand of the adopted type.
+        if (token && lv && rv && !leftLit && !rightLit) {
+          const declared = bodylessResult(token, lv, rv, true, node);
+          if (declared !== undefined) return declared;
+        }
 
         // #table-family-operations: a binary floating-point type "does not
         // define bitwiseNOT, the shifts, and the bitwise operations, since each
@@ -33855,10 +33877,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * The program's blocks are collected once, so a block declared after its
    * first use counts as it does at run time.
    */
-  let blockDefinitionIndex: Map<string, { def: ParseNode.OperatorDefinition, block: ParseNode.PrimitiveOperatorDeclaration }[]> | null = null;
+  type BlockDefinition = { def: ParseNode.OperatorDefinition, block: ParseNode.PrimitiveOperatorDeclaration, registered?: PrimitiveOperatorEntry };
+  let blockDefinitionIndex: Map<string, BlockDefinition[]> | null = null;
   const blockDefinitionsFor = (typeName: string, op: string) => {
     if (!blockDefinitionIndex) {
-      const index = new Map<string, { def: ParseNode.OperatorDefinition, block: ParseNode.PrimitiveOperatorDeclaration }[]>();
+      const index = new Map<string, BlockDefinition[]>();
       // The SYNTAX TREE only, each node once: a node may cache non-AST data - a
       // call's ContextualType holds a type record whose Declaration is the
       // enclosing class - and following it re-entered the tree without end.
@@ -33890,7 +33913,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       visit(root);
       blockDefinitionIndex = index;
     }
-    return blockDefinitionIndex.get(`${typeName}\u0000${op}`) ?? [];
+    const local = blockDefinitionIndex.get(`${typeName}\u0000${op}`) ?? [];
+    const seen = new Set(local.map(({ def }) => def));
+    const registered: BlockDefinition[] = [];
+    for (const entry of RegisteredPrimitiveOperators(typeName, op)) {
+      const def = entry.node as ParseNode.OperatorDefinition | undefined;
+      if (def && entry.block && !seen.has(def)) {
+        seen.add(def);
+        registered.push({ def, block: entry.block, registered: entry });
+      }
+    }
+    return [...local, ...registered];
   };
   /**
    * #sec-primitive-operator-blocks: the result type the BODYLESS definitions
@@ -33911,24 +33944,40 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const firstArgument = (base.Arguments ?? [])[0];
     if (typeof firstArgument === 'number') levels.push(`${base.Name}${firstArgument}`);
     levels.push(base.Name);
-    const resolveNode = (n: ParseNode) => resolveType(n as ParseNode.Type);
     const found: TypeRecord[] = [];
     const bodies: TypeRecord[] = [];
-    const bodyCandidates: { parameter: TypeRecord | null, fixed: boolean, result: TypeRecord, level: string }[] = [];
+    const bodyCandidates: { parameter: TypeRecord | null, fixed: boolean, result: () => TypeRecord | null, level: string }[] = [];
     const operandNodes = site ? arithmeticOperands(site) : [];
     const leftFact = metadataFact(operandNodes[0]);
     const rightFact = metadataFact(operandNodes[1]);
     const plain = (fact: TypeRecord | undefined, type: TypeRecord) => fact?.Kind === 'primitive' && SameType(fact, type);
-    const leftPlain = plain(leftFact, left) || (!!operandNodes[0] && !!literalOperand(operandNodes[0]) && left.Kind === 'primitive');
-    const rightPlain = plain(rightFact, right) || (!!operandNodes[1] && !!literalOperand(operandNodes[1]) && right.Kind === 'primitive');
-    if (leftPlain && rightPlain && SameType(left, right)) return left;
+    const plainLiteral = (node: ParseNode | undefined, depth = 0): boolean => depth < 20 && !!node && (node.type === 'StringLiteral'
+      || (node.type === 'ParenthesizedExpression' && plainLiteral(node.Expression, depth + 1)) || !!literalOperand(node));
+    const leftPlain = plain(leftFact, left) || (plainLiteral(operandNodes[0]) && left.Kind === 'primitive');
+    const rightPlain = plain(rightFact, right) || (plainLiteral(operandNodes[1]) && right.Kind === 'primitive');
+    if (leftPlain && rightPlain && SameType(left, right)) return undefined;
     const unknownSubjects = new Set<TypeRecord>();
     if (!leftPlain && (!leftFact || !SameType(leftFact, left))) unknownSubjects.add(left);
     if (!rightPlain && (!rightFact || !SameType(rightFact, right))) unknownSubjects.add(right);
 
     let unknownContribution = false;
     for (const name of levels) {
-      for (const { def, block } of blockDefinitionsFor(name, op)) {
+      for (const { def, block, registered } of blockDefinitionsFor(name, op)) {
+        // External syntax is interpreted only through its captured descriptors.
+        // Unresolved results become captured pre-evaluation obligations below.
+        const resolveNode = (n: ParseNode): TypeRecord | null => {
+          if (!registered) return resolveType(n as ParseNode.Type);
+          if (n === def.TypeAnnotation?.Type && registered.returnType) return registered.returnType;
+          const parameter = (def.FormalParameters?.[0] as { TypeAnnotation?: ParseNode.TypeAnnotation })?.TypeAnnotation?.Type;
+          if (n === parameter && registered.parameterType) return registered.parameterType;
+          const fixed = registered.deferred?.componentResolved?.get(n) ?? registered.deferred?.operandResolved?.get(n);
+          if (fixed) return fixed;
+          const ref = n.type === 'TypeReference' && !n.TypeArguments ? n.TypeName : n.type === 'TypeName' ? n : null;
+          if (ref && ref.MemberNames.length === 0 && !ResolveBindingDeclaration(ref.IdentifierReference, ref.IdentifierReference.name)) {
+            return builtinTypeRecord(ref.IdentifierReference.name, []);
+          }
+          return null;
+        };
         // Two bare static types can still hold two parameterized values. A
         // value body may return a different base, so the runtime plain-pair
         // fast path is not a static proof of the result's primitive type.
@@ -33962,12 +34011,35 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (annotation) {
           admitted = MatchComponentOperand(annotation.Type as unknown as ParseNode, captures, bound, right, resolveNode, unknownSubjects);
         }
-        if (!admitted) continue;
-        const returns = def.TypeAnnotation ? InstantiateComponentType(def.TypeAnnotation.Type as unknown as ParseNode, admitted, resolveNode) : null;
+        if (!admitted) {
+          // Failure to admit the entire static domain is not disjointness: a
+          // literal overload may still run for one value of that domain.
+          const required = annotation ? InstantiateComponentType(annotation.Type as ParseNode, bound, resolveNode) : null;
+          const knownMetadataMismatch = required && typeof required === 'object' && required.Kind === 'parameterized'
+            && right.Kind === 'parameterized' && Object.keys(required.Metadata).length > 0
+            && Object.keys(required.Metadata).every((key) => Object.hasOwn(right.Metadata, key));
+          if (!knownMetadataMismatch && (!required || typeof required !== 'object' || !AreDisjoint(right, required))) unknownContribution = true;
+          continue;
+        }
+        let returns = def.TypeAnnotation ? InstantiateComponentType(def.TypeAnnotation.Type as unknown as ParseNode, admitted, resolveNode) : null;
+        let resultQuery: { key: object, obligation: DeferredTypeCheck } | undefined;
+        if (registered && !registered.returnType && def.TypeAnnotation && registered.context
+          && (!returns || containsComputedType(def.TypeAnnotation.Type))) {
+          if (site && ![...admitted.values()].some(IsUnknownMetadataCapture)) {
+            const key = RegisteredOperatorQuery(site, registered, admitted);
+            const evaluated = evaluatedTypeNodes.get(key);
+            if (evaluated) returns = evaluated;
+            else {
+              returns = null;
+              resultQuery = { key, obligation: { node: def.TypeAnnotation.Type, constants: new Map(), aliases: new Map(),
+                computedAt: { site: key, bindings: admitted }, operatorContext: registered.context } };
+            }
+          }
+        }
         // A return computed by a builder - `float32.<mul(X, Y)>` - is known
         // only when the builder runs; the definition applies, its type is
         // left unknown rather than guessed.
-        if (def.TypeAnnotation && containsComputedType(def.TypeAnnotation.Type)
+        if (!registered && def.TypeAnnotation && containsComputedType(def.TypeAnnotation.Type)
             && !(returns && typeof returns === 'object' && returns.Kind === 'parameterized')) {
           // The builder runs in the pass before evaluation, with the captures
           // bound to the operands' static metadata; the recheck then types
@@ -33998,32 +34070,47 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         // A definition with a body computes the value, so its return type is
         // the result's - for a unary operator, where no mixing rule decides it.
+        const result = (): TypeRecord | null => {
+          // Only a potentially selected definition needs its result builder.
+          // An unselected overload's failure cannot reject this expression.
+          if (resultQuery) unresolvedTypes.set(resultQuery.key, resultQuery.obligation);
+          return returns && typeof returns === 'object' ? returns : null;
+        };
         if (def.FunctionBody) {
-          if (returns && typeof returns === 'object') {
-            bodies.push(returns);
-            const parameter = annotation ? InstantiateComponentType(annotation.Type as ParseNode, admitted, resolveNode) : null;
-            bodyCandidates.push({ parameter: typeof parameter === 'object' ? parameter : null, result: returns, level: name,
-              fixed: !OperandNamesCapture({ parameterTypeNode: annotation?.Type, captureDeclarations: captures }) });
-          } else unknownContribution = true;
+          const parameter = annotation ? InstantiateComponentType(annotation.Type as ParseNode, admitted, resolveNode) : null;
+          bodyCandidates.push({ parameter: typeof parameter === 'object' ? parameter : null, result, level: name,
+            fixed: !OperandNamesCapture({ parameterTypeNode: annotation?.Type, captureDeclarations: captures }) });
           continue;
         }
+        returns = result();
+        if (!returns) unknownContribution = true;
         if (returns && typeof returns === 'object' && (returns.Kind === 'parameterized' || (returns.Kind === 'primitive' && returns.Name === 'vector'))) {
           found.push(returns);
         }
       }
     }
-    if (bodies.length > 0) {
-      if (bodyCandidates.length === bodies.length && unknownSubjects.size === 0
+    if (bodyCandidates.length > 0 || bodies.length > 0) {
+      const plainRequirement = (type: TypeRecord | null): boolean => !type || type.Kind === 'any'
+        || (type.Kind === 'primitive' && type.Name !== 'vector')
+        || ((type.Kind === 'union' || type.Kind === 'intersection') && type.Members.every(plainRequirement));
+      const canSelect = !unknownContribution && (unknownSubjects.size === 0
+        || (right.Kind === 'primitive' && !SameType(left, right) && bodyCandidates.every((c) => plainRequirement(c.parameter))));
+      if (bodies.length === 0 && unknownSubjects.size === 0
           && bodyCandidates.some((c) => c.parameter?.Kind === 'parameterized' && GoverningMetaTypes(c.parameter.Metadata).unclaimed.length > 0)) return null;
-      if (bodyCandidates.length === bodies.length && unknownSubjects.size === 0
+      if (bodies.length === 0 && canSelect
           && bodyCandidates.every((c) => c.parameter?.Kind !== 'parameterized' || GoverningMetaTypes(c.parameter.Metadata).unclaimed.length === 0)) {
         const candidates = bodyCandidates.filter((c) => c.level === bodyCandidates[0].level);
         const selection = EnsureCompletion(skipDebugger(MostSpecificPrimitiveOperator(candidates, right)));
-        if (selection.Type === 'normal' && selection.Value && selection.Value !== 'ambiguous') return selection.Value.result;
+        if (selection.Type === 'normal' && selection.Value && selection.Value !== 'ambiguous') return selection.Value.result();
         if (selection.Type === 'normal' && selection.Value === 'ambiguous') {
           reportType('rt-ambiguous-operator', site, '$1', `operator ${op} on ${displayType(left)} is ambiguous for an operand of ${displayType(right)}`);
           return null;
         }
+      }
+      for (const candidate of bodyCandidates) {
+        const result = candidate.result();
+        if (result) bodies.push(result);
+        else unknownContribution = true;
       }
       // The built-in path is possible for a pair whose actual values could both
       // be plain. Include its successful result without inventing defaults.

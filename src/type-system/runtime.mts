@@ -1,3 +1,4 @@
+import type { PrivateEnvironmentRecord } from '../execution-context/PrivateEnvironment.mts';
 import { EnvironmentRecord, DeclarativeEnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity } from '../execution-context/Environment.mts';
 import { TypeNameEnvironmentFor } from '../execution-context/TypeNames.mts';
 import { isRationalObject, rationalWidthOf } from '../intrinsics/Rational.mts';
@@ -370,6 +371,34 @@ export function currentTypeParameterFrame(): Map<string, TypeRecord> | undefined
   }
   declarationBindings.set(merged, declarations);
   return merged;
+}
+
+/** The environment and substitutions belonging to a registered declaration. */
+export interface CapturedTypeContext {
+  readonly Environment: EnvironmentRecord;
+  readonly PrivateEnvironment: PrivateEnvironmentRecord | null;
+  readonly TypeParameterFrame?: ReadonlyMap<string, TypeRecord>;
+}
+
+/** Resolve a signature without inheriting a caller's same-spelled generic inputs. */
+export function* TypeNodeToTypeRecordInContext(
+  node: ParseNode.Type, captured: CapturedTypeContext, bindings?: ReadonlyMap<string, TypeRecord>,
+): PlainEvaluator<TypeRecord> {
+  const context = surroundingAgent.runningExecutionContext;
+  const environment = context.LexicalEnvironment;
+  const privateEnvironment = context.PrivateEnvironment;
+  const frames = typeParameterFrames.splice(0);
+  context.LexicalEnvironment = captured.Environment;
+  context.PrivateEnvironment = captured.PrivateEnvironment;
+  if (captured.TypeParameterFrame) pushTypeParameterFrame(copyTypeParameterFrame(captured.TypeParameterFrame));
+  if (bindings) pushTypeParameterFrame(copyTypeParameterFrame(bindings));
+  try {
+    return yield* TypeNodeToTypeRecord(node);
+  } finally {
+    typeParameterFrames.splice(0, typeParameterFrames.length, ...frames);
+    context.LexicalEnvironment = environment;
+    context.PrivateEnvironment = privateEnvironment;
+  }
 }
 
 /**

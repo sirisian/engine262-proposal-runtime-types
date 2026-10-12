@@ -1,6 +1,6 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { OrdinaryFunctionCreate, RegisterPrimitiveCast, RegisterPrimitiveOperator } from '../abstract-ops/all.mts';
-import { TypeNodeToTypeRecord, pushTypeParameterFrame, popTypeParameterFrame } from '../type-system/runtime.mts';
+import { TypeNodeToTypeRecord, pushTypeParameterFrame, popTypeParameterFrame, currentTypeParameterFrame } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { MetadataCapturesOf, ComponentCapturesOf } from '../type-system/specialization-patterns.mts';
 import { ComponentListTypeNodes, FixedTypeSubtrees } from '../type-system/component-patterns.mts';
@@ -13,13 +13,9 @@ import { surroundingAgent, EnsureCompletion, Q, Value, type PlainEvaluator } fro
  * behaviour - which is the worst of the three outcomes, since it reads as
  * support.
  *
- * Only definitions WITH a body are registered here. A bodiless definition
- * contributes its meta type's portion of the result through its return type
- * and runs the primitive operation, which is the metadata half of the clause
- * and needs the merge rule; a definition whose name is a parameterization is
- * the implicit cast operator, whose consumer is ConvertParameterization's
- * second arm. Both are the next increment and are deliberately not guessed at
- * here.
+ * Value and bodyless definitions share registration and captured signature
+ * context. Bodyless definitions contribute metadata while the primitive
+ * operation supplies the value; implicit casts have their separate registry.
  */
 export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.PrimitiveOperatorDeclaration): PlainEvaluator {
   const typeName = (node.TypeName as unknown as { IdentifierReference?: { name?: string } })?.IdentifierReference?.name;
@@ -222,7 +218,8 @@ export function* Evaluate_PrimitiveOperatorDeclaration(node: ParseNode.Primitive
     if (!deferred && e.TypeAnnotation) {
       returnType = Q(yield* TypeNodeToTypeRecord(e.TypeAnnotation.Type));
     }
-    RegisterPrimitiveOperator(typeName, key, opFn, parameterType, deferred, e, returnType);
+    RegisterPrimitiveOperator(typeName, key, opFn, parameterType, deferred, e, returnType, node,
+      { Environment: env, PrivateEnvironment: privEnv, TypeParameterFrame: currentTypeParameterFrame() });
   }
   return undefined;
 }

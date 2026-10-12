@@ -16,7 +16,7 @@ import { isRangeBinaryOperator, rangeBinaryOperator } from '../type-system/range
 import { isRangeObject } from '../intrinsics/Range.mts';
 import { isTypedNumber, TypedNumberValue, VectorValue } from '../value.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { pushTypeParameterFrame, popTypeParameterFrame, TypeNodeToTypeRecord as ResolveTypeNode, RuntimeTypeOf, IsOfType } from '../type-system/runtime.mts';
+import { pushTypeParameterFrame, popTypeParameterFrame, TypeNodeToTypeRecord as ResolveTypeNode, TypeNodeToTypeRecordInContext, RuntimeTypeOf, IsOfType } from '../type-system/runtime.mts';
 import { makePrimitive } from '../type-system/records.mts';
 import { PrimitiveParameterDefault } from '../type-system/specialization-patterns.mts';
 import { MetaTypeForConstraint, MetadataPortion, MetaTypeGoverns, GoverningMetaTypes, MergeOperatorResultMetadata, StampFamilyValue, LookupPrimitiveOperatorLevels, MetadataOperandAdmits, MetadataOperandExact, MergeMetadataOperandRequirements, ConvertMetadataOperand, RequireType } from '../abstract-ops/runtime-types.mts';
@@ -531,6 +531,11 @@ function* PrimitiveOperandAdmits(value: Value, target: TypeRecord): PlainEvaluat
   return Q(yield* IsOfType(value, target));
 }
 
+function* ResolveOperatorType(entry: PreparedPrimitiveOperator['entry'], node: ParseNode.Type, frame: Map<string, TypeRecord> | null): PlainEvaluator<TypeRecord> {
+  if (entry.context) return yield* TypeNodeToTypeRecordInContext(node, entry.context, frame ?? undefined);
+  return yield* ResolveTypeNode(node);
+}
+
 /** Rebind operand captures and defer result builders until conversion is done. */
 function* FinishPrimitiveOperator(prepared: PreparedPrimitiveOperator, operand: Value): PlainEvaluator<boolean> {
   const deferred = prepared.entry.deferred;
@@ -540,7 +545,7 @@ function* FinishPrimitiveOperator(prepared: PreparedPrimitiveOperator, operand: 
       const names = deferred.operatorParameterNames ?? [];
       for (let i = 0; i < names.length; i += 1) {
         const domainNode = deferred.operatorParameterConstraints?.[i];
-        const domain = domainNode ? Q(yield* ResolveTypeNode(domainNode as never)) : undefined;
+        const domain = domainNode ? Q(yield* ResolveOperatorType(prepared.entry, domainNode as never, prepared.frame)) : undefined;
         const metaType = domain ? MetaTypeForConstraint(domain) : undefined;
         const carried = RuntimeTypeOf(operand);
         let portion = carried.Kind === 'parameterized' ? carried.Metadata : {} as MetadataRecord;
@@ -548,14 +553,14 @@ function* FinishPrimitiveOperator(prepared: PreparedPrimitiveOperator, operand: 
         prepared.frame.set(names[i]!, markValueParameterBinding(metadataAsObjectRecord(portion, domain)));
       }
       if (deferred.parameterTypeNode) {
-        prepared.parameter = Q(yield* ResolveTypeNode(deferred.parameterTypeNode as never));
+        prepared.parameter = Q(yield* ResolveOperatorType(prepared.entry, deferred.parameterTypeNode as never, prepared.frame));
       }
       if (prepared.parameter) {
         const admits = Q(yield* PrimitiveOperandAdmits(operand, prepared.parameter));
         if (!admits) return false;
       }
       if (deferred.returnTypeNode) {
-        prepared.returnType = Q(yield* ResolveTypeNode(deferred.returnTypeNode as never));
+        prepared.returnType = Q(yield* ResolveOperatorType(prepared.entry, deferred.returnTypeNode as never, prepared.frame));
       }
     } finally {
       popTypeParameterFrame();
@@ -654,7 +659,7 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
               const argument = base.Kind === 'primitive' ? (base.Arguments ?? [])[index] ?? PrimitiveParameterDefault(base.Name, index) : undefined;
               if (argument !== undefined) {
                 frame.set(name, typeof argument === 'number'
-                  ? { Kind: 'literal', Value: Value(argument), Base: makePrimitive('number') } as unknown as TypeRecord
+                  ? markValueParameterBinding({ Kind: 'literal', Value: Value(argument), Base: makePrimitive('number') } as TypeRecord)
                   : argument as TypeRecord);
               }
             });
@@ -670,7 +675,7 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
               let constraint: TypeRecord | undefined;
               let portion = carried.Kind === 'parameterized' ? carried.Metadata : Object.freeze(Object.create(null)) as MetadataRecord;
               if (constraintNode) {
-                constraint = Q(yield* ResolveTypeNode(constraintNode as never));
+                constraint = Q(yield* ResolveOperatorType(entry, constraintNode as never, frame));
                 const metaType = MetaTypeForConstraint(constraint);
                 if (metaType !== undefined) {
                   spokenFor.push(metaType);
@@ -704,7 +709,7 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
               const argConstraint = entry.deferred.operatorParameterConstraints?.[0];
               let constraint: TypeRecord | undefined;
               if (argConstraint) {
-                constraint = Q(yield* ResolveTypeNode(argConstraint as never));
+                constraint = Q(yield* ResolveOperatorType(entry, argConstraint as never, frame));
                 const metaType = MetaTypeForConstraint(constraint);
                 if (metaType !== undefined) {
                   argPortion = MetadataPortion(argPortion, metaType);
@@ -713,7 +718,7 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
               frame.set(operatorNames[0]!, markValueParameterBinding(metadataAsObjectRecord(argPortion, constraint)));
             }
             if (entry.deferred.parameterTypeNode) {
-              deferredParameterType = Q(yield* ResolveTypeNode(entry.deferred.parameterTypeNode as never));
+              deferredParameterType = Q(yield* ResolveOperatorType(entry, entry.deferred.parameterTypeNode as never, frame));
             }
 
           }

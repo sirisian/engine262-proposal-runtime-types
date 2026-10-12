@@ -14,7 +14,7 @@ import { JSStringValue, ObjectValue, Value } from '../value.mts';
 import { CreateTypeDiagnostic, TypeDiagnosticApplies, TypeDiagnosticOf } from './diagnostics.mts';
 import type { TypeRecord } from './records.mts';
 import {
-  DefaultValueOf, TypeNodeToTypeRecord, BindTypeParameterTyped, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame,
+  DefaultValueOf, TypeNodeToTypeRecord, TypeNodeToTypeRecordInContext, BindTypeParameterTyped, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame,
   EvaluateRefinementPredicate, ValuePackView, InferGenericBindingsFrom, staticArguments, markValueParameterBinding } from './runtime.mts';
 import { GenericWhereVerified, MarkGenericWhereVerified } from './generic-where.mts';
 import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
@@ -961,6 +961,25 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   for (const obligation of obligations) {
     const context = surroundingAgent.runningExecutionContext;
     const outer = context.LexicalEnvironment;
+    if (obligation.operatorContext) {
+      const bindings = new Map<string, TypeRecord>();
+      for (const [name, value] of obligation.computedAt?.bindings ?? []) {
+        bindings.set(name, typeof value === 'number'
+          ? markValueParameterBinding({ Kind: 'literal', Value: Value(value), Base: builtinTypeRecord('number', []) } as TypeRecord)
+          : value.Kind === 'object' ? markValueParameterBinding(value) : value);
+      }
+      BeginFragmentEvaluation();
+      let result;
+      try {
+        result = EnsureCompletion(yield* TypeNodeToTypeRecordInContext(obligation.node, obligation.operatorContext, bindings));
+      } finally {
+        EndFragmentEvaluation();
+      }
+      if (result.Type !== 'normal') return CreateTypeDiagnostic('rt-type-evaluation', obligation.node, 'pre-evaluation',
+        'a registered operator result could not be evaluated to a type: $1', Value(inspect(result.Value)));
+      SetEvaluatedTypeNode(obligation.computedAt!.site, result.Value);
+      continue;
+    }
     const prepared = EnsureCompletion(yield* prepareDeferredTypeEnvironment(obligation));
     if (prepared.Type !== 'normal') {
       return CreateTypeDiagnostic('rt-type-evaluation', obligation.node, 'pre-evaluation', 'a closed type annotation could not be evaluated to a type: $1', Value(inspect(prepared.Value)));

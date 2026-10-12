@@ -1,0 +1,1348 @@
+{
+  "cases": [
+    {
+      "name": "registered result rejects an unused wrong destination",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "globalThis.entered=true;function f(s:string,n:uint8):string{return s+n;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "String(globalThis.entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "registered result admits its true destination",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(s:string,n:uint8):uint8{return s+n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed result alias stays in the source declaration",
+      "steps": [
+        {
+          "source": "{type Out=uint8;primitive string{operator +(n:uint8):Out{return 7;}}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "{type Out=string;function f(s:string,n:uint8):string{return s+n;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed operand alias stays in the source declaration",
+      "steps": [
+        {
+          "source": "{type Arg=uint8;primitive string{operator +(n:Arg):uint8{return 7;}}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "{type Arg=float64;function f(s:string,n:uint8):string{return s+n;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "an unrelated registered operand leaves concatenation alone",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(s:string,n:float64):string{return s+n;}f(\"a\",(1:=float64));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a1"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain literal String pairs remain protected",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:any):uint8{return 7;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f():string{return \"a\"+\"b\";}f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed specificity general first",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:any):string{return \"wide\";}operator +(n:uint8):uint8{return 7;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(s:string,n:uint8):uint8{return s+n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed specificity specific first",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}operator +(n:any):string{return \"wide\";}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(s:string,n:uint8):uint8{return s+n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "equal-level incomparable signatures are statically ambiguous",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8|string):uint8{return 7;}operator +(n:uint8|boolean):uint16{return 8;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(s:string,n:uint8){return s+n;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-ambiguous-operator",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "registered numeric * returns its declared String",
+      "steps": [
+        {
+          "source": "primitive float64{operator *(n:uint8):string{return \"chosen\";}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a:float64,b:uint8):string{return a*b;}f((2:=float64),(1:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "registered numeric - returns its declared String",
+      "steps": [
+        {
+          "source": "primitive float64{operator -(n:uint8):string{return \"chosen\";}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a:float64,b:uint8):string{return a-b;}f((2:=float64),(1:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "registered numeric / returns its declared String",
+      "steps": [
+        {
+          "source": "primitive float64{operator /(n:uint8):string{return \"chosen\";}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a:float64,b:uint8):string{return a/b;}f((2:=float64),(1:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "registered numeric % returns its declared String",
+      "steps": [
+        {
+          "source": "primitive float64{operator %(n:uint8):string{return \"chosen\";}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a:float64,b:uint8):string{return a%b;}f((2:=float64),(1:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "registered numeric ** returns its declared String",
+      "steps": [
+        {
+          "source": "primitive float64{operator **(n:uint8):string{return \"chosen\";}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a:float64,b:uint8):string{return a**b;}f((2:=float64),(1:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "registered numeric & returns its declared String",
+      "steps": [
+        {
+          "source": "primitive float64{operator &(n:uint8):string{return \"chosen\";}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a:float64,b:uint8):string{return a&b;}f((2:=float64),(1:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "registered numeric | returns its declared String",
+      "steps": [
+        {
+          "source": "primitive float64{operator |(n:uint8):string{return \"chosen\";}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a:float64,b:uint8):string{return a|b;}f((2:=float64),(1:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "registered numeric ^ returns its declared String",
+      "steps": [
+        {
+          "source": "primitive float64{operator ^(n:uint8):string{return \"chosen\";}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a:float64,b:uint8):string{return a^b;}f((2:=float64),(1:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "registered numeric << returns its declared String",
+      "steps": [
+        {
+          "source": "primitive float64{operator <<(n:uint8):string{return \"chosen\";}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a:float64,b:uint8):string{return a<<b;}f((2:=float64),(1:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "registered numeric >> returns its declared String",
+      "steps": [
+        {
+          "source": "primitive float64{operator >>(n:uint8):string{return \"chosen\";}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a:float64,b:uint8):string{return a>>b;}f((2:=float64),(1:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "registered numeric >>> returns its declared String",
+      "steps": [
+        {
+          "source": "primitive float64{operator >>>(n:uint8):string{return \"chosen\";}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a:float64,b:uint8):string{return a>>>b;}f((2:=float64),(1:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "registered family uint<const W> rejects wrong result",
+      "steps": [
+        {
+          "source": "primitive uint<const W>{operator +(n:string):uint8{return 7;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a:uint16,b:string):string{return a+b;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "registered family rational<const W> rejects wrong result",
+      "steps": [
+        {
+          "source": "primitive rational<const W>{operator +(n:string):uint8{return 7;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a:rational64,b:string):string{return a+b;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "registered family complex<const E> rejects wrong result",
+      "steps": [
+        {
+          "source": "primitive complex<const E>{operator +(n:string):uint8{return 7;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a:complex128,b:string):string{return a+b;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "component capture determines result width",
+      "steps": [
+        {
+          "source": "primitive uint<const W>{operator +(n:string):uint.<W>{return this;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a:uint16,b:string):string{return a+b;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "deferred alias uses the registered lexical environment",
+      "steps": [
+        {
+          "source": "{type Out=uint8;primitive uint<const W>{operator +(n:string):Out{return 7;}}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "{type Out=string;function f(a:uint16,b:string):uint8{return a+b;}globalThis.result=String(f((1:=uint16),\"x\"));}String(globalThis.result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a deferred alias rejects an invalid consumer",
+      "steps": [
+        {
+          "source": "{type Out=uint8;primitive uint<const W>{operator +(n:string):Out{return 7;}}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "{type Out=string;function f(a:uint16,b:string):string{return a+b;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed result uses its original builder closure",
+      "steps": [
+        {
+          "source": "{function output():type{return type uint8;}primitive uint<const W>{operator +(n:string):output(){return 7;}}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function output():type{return type string;}function f(a:uint16,b:string):string{return a+b;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed result is keyed by the component binding",
+      "steps": [
+        {
+          "source": "function output(w:uint32):type{if(w===8)return type uint8;return type uint16;}primitive uint<const W>{operator +(n:string):output(W){return this;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function good(a:uint8,b:string):uint8{return a+b;}function bad(a:uint16,b:string):uint8{return a+b;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "runtime deferred result retains the producer environment",
+      "steps": [
+        {
+          "source": "{type Out=uint8;primitive uint<const W>{operator +(n:string):Out{return 7;}}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "{type Out=string;function f(a,b){return a+b;}const v=f((1:=uint16),\"x\");globalThis.result=String(Reflect.typeOf(v))+\":\"+String(v);}String(globalThis.result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "uint.<8>:7"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "an unannotated registered body remains unknown",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8){return 7;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(s:string,n:uint8):string{return s+n;}f(\"a\",(1:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown receiver keeps the runtime boundary",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a,b):string{return a+b;}f(\"a\",(1:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a registered result retains an enclosing generic capture",
+      "steps": [
+        {
+          "source": "globalThis.raw=7;function install<T:type>(){primitive uint<const W>{operator +(n:string):T{return globalThis.raw;}}}install.<uint8>();;\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a:uint16,b:string):string{return a+b;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a runtime caller generic cannot replace an enclosing capture",
+      "steps": [
+        {
+          "source": "globalThis.raw=7;function install<T:type>(){primitive uint<const W>{operator +(n:string):T{return globalThis.raw;}}}install.<uint8>();;\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function run<T:type>(a,b){return a+b;}const v=run.<string>((1:=uint16),\"x\");String(Reflect.typeOf(v))+\":\"+String(v);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "uint.<8>:7"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a computed builder failure prevents consumer source effects",
+      "steps": [
+        {
+          "source": "function output(w:uint32):type{throw \"builder failed\";}primitive uint<const W>{operator +(n:string):output(W){return 7;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "globalThis.entered=true;function f(a:uint16,b:string):uint8{return a+b;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-type-evaluation",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "String(globalThis.entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a registered bodyless result retains its captured alias",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}type M=float32.<{m:1}>;{type Out=M;primitive float32<const D:Dim>{operator +(n:float32.<D>):Out;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "{type Out=string;function f(a:float32.<{m:1}>,b:float32.<{m:1}>):string{return a+b;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a partial literal overload remains a runtime obligation",
+      "steps": [
+        {
+          "source": "primitive float64{operator *(n:string):uint8{return 7;}operator *(n:\"one\"):string{return \"one\";}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a:float64,b:string):string{return a*b;}f((1:=float64),\"one\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "one"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "an unselected generic result builder is not evaluated",
+      "steps": [
+        {
+          "source": "function fail(w:uint32):type{throw \"unused\";}primitive uint<const W>{operator +(n:any):fail(W){return globalThis.raw;}operator +(n:string):uint8{return 7;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a:uint16,b:string):uint8{return a+b;}String(f((1:=uint16),\"x\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a bare same-family pair keeps its built-in alternative",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:any):uint8{return 7;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a:string,b:string):uint8{return a+b;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "protected plain pairs retain built-in family exclusions",
+      "steps": [
+        {
+          "source": "primitive float32{operator &(n:uint8):uint8{return 7;}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "(1:=float32)&(2:=float32);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "an unresolved dependent operand cannot prove built-in fallback",
+      "steps": [
+        {
+          "source": "function operand(w:uint32):type{return type uint8;}primitive uint<const W>{operator +(n:operand(W)):string{return \"chosen\";}};\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(a:uint16,b:uint8):string{return a+b;}f((1:=uint16),(2:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "chosen"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    }
+  ]
+}

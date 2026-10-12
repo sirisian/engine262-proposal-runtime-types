@@ -883,7 +883,7 @@
           }
         },
         {
-          "source": "function f(s:string,n:uint8):string{return s+n;}const result=f(\"a\",(1:=uint8));typeof result+\":\"+String(result);",
+          "source": "function f(s,n):string{return s+n;}const result=f(\"a\",(1:=uint8));typeof result+\":\"+String(result);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

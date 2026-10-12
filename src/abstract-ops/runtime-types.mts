@@ -1,3 +1,4 @@
+import type { CapturedTypeContext } from '../type-system/runtime.mts';
 import { RawOperatorResultType } from '../type-system/operator-result.mts';
 import { publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, type StructuralStorageAdmission } from '../type-system/runtime.mts';
 import { primitiveMembership } from '../type-system/runtime.mts';
@@ -2751,7 +2752,9 @@ export function* AddClassOperator(proto: Value, key: string, fn: Value): PlainEv
  * declare an operator, get no error, and get no behaviour either - the worst of
  * the three outcomes.
  */
-interface PrimitiveOperatorEntry {
+export interface PrimitiveOperatorEntry {
+  readonly block?: ParseNode.PrimitiveOperatorDeclaration,
+  readonly context?: CapturedTypeContext,
   readonly fn: Value,
   readonly parameterType: TypeRecord | null,
   readonly returnType?: TypeRecord,
@@ -2831,7 +2834,7 @@ export interface DeferredOperatorTypes {
   readonly returnTypeNode: unknown;
 }
 
-export function RegisterPrimitiveOperator(typeName: string, opText: string, fn: Value, parameterType: TypeRecord | null, deferred?: DeferredOperatorTypes, node?: object, returnType?: TypeRecord): void {
+export function RegisterPrimitiveOperator(typeName: string, opText: string, fn: Value, parameterType: TypeRecord | null, deferred?: DeferredOperatorTypes, node?: object, returnType?: TypeRecord, block?: ParseNode.PrimitiveOperatorDeclaration, context?: CapturedTypeContext): void {
   const tables = primitiveTablesForAgent();
   let ops = tables.get(typeName);
   if (!ops) {
@@ -2852,7 +2855,7 @@ export function RegisterPrimitiveOperator(typeName: string, opText: string, fn: 
   if (node !== undefined && entries.some((e) => e.node === node)) {
     return;
   }
-  entries.push({ fn, parameterType, deferred, node, returnType });
+  entries.push({ fn, parameterType, deferred, node, returnType, block, context });
 }
 
 /**
