@@ -1,3 +1,4 @@
+import { RawOperatorResultType } from '../type-system/operator-result.mts';
 import { publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, type StructuralStorageAdmission } from '../type-system/runtime.mts';
 import { primitiveMembership } from '../type-system/runtime.mts';
 import { currentTypeParameterFrame, SpecializedFunctionSignatureOf } from '../type-system/runtime.mts';
@@ -3815,6 +3816,9 @@ export function* ApplyImplicitCast(value: Value, t: TypeRecord): PlainEvaluator<
         let raw;
         try {
           raw = Q(yield* Call(cast.fn as never, value, []));
+          const primitive = raw instanceof ObjectValue && 'NumberData' in raw
+            ? (raw as unknown as { NumberData: Value }).NumberData : raw;
+          raw = Q(yield* RequireType(WithoutMetadata(primitive), RawOperatorResultType(t)));
         } finally {
           LeaveOperatorBody();
         }
@@ -5153,24 +5157,9 @@ export function* VerifyContracts(fn: object, result: Value, args: readonly Value
   return Value.undefined;
 }
 export function* EnforceReturnType(fn: AnnotatedFunction, value: Value): ValueEvaluator {
-  // An IMPLICIT CAST's declared type names what its result BECOMES, not a
-  // boundary its body must already satisfy: the body computes a raw value -
-  // `return this;` is the whole of the usual one - and the crossing is what the
-  // cast supplies. Enforcing the annotation here would make the body's return
-  // re-enter the very conversion it defines, which is the raw-body rule's
-  // subject: "an operator body evaluates on raw values".
-  // #sec-primitive-operator-blocks: "The metadata of a result comes from the
-  // RETURN TYPE ANNOTATIONS ALONE." So an operator declared by a primitive
-  // block - a cast or an ordinary operator - has an annotation that says what
-  // its result CARRIES, not a boundary its body must satisfy. The body
-  // evaluates on raw values, which is the raw-body rule, and the dispatch
-  // stamps the result with the annotation's type afterwards.
-  //
-  // Enforcing it here fails twice over: it re-enters the crossing a cast
-  // defines, and for a PARAMETERIZED block it resolves the block's type
-  // parameter outside the frame that binds it, so `float64.<D>` raises
-  // "D is not defined" from inside the body of the operator that declared it.
-  // The narrower IsImplicitCast test this replaces covered only the first.
+  // Primitive dispatch admits the raw result at the resolved base type while
+  // its selected capture frame is active. It then composes result metadata.
+  // Re-resolving this full annotation here would re-enter a metadata cast.
   if ((fn as { IsPrimitiveOperator?: boolean }).IsPrimitiveOperator === true) {
     return value;
   }

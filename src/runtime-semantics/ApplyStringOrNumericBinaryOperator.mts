@@ -1,3 +1,4 @@
+import { RawOperatorResultType } from '../type-system/operator-result.mts';
 import { SetPendingCalleeContext, markValueParameterBinding, SetMetadataCaptureDomain } from '../type-system/runtime.mts';
 import {
   isComplexObject, complexAdd, complexSubtract, complexMultiply, complexDivide, complexPow, CreateComplexValue,
@@ -18,7 +19,7 @@ import type { TypeRecord } from '../type-system/records.mts';
 import { pushTypeParameterFrame, popTypeParameterFrame, TypeNodeToTypeRecord as ResolveTypeNode, RuntimeTypeOf, IsOfType } from '../type-system/runtime.mts';
 import { makePrimitive } from '../type-system/records.mts';
 import { PrimitiveParameterDefault } from '../type-system/specialization-patterns.mts';
-import { MetaTypeForConstraint, MetadataPortion, MetaTypeGoverns, GoverningMetaTypes, MergeOperatorResultMetadata, StampFamilyValue, LookupPrimitiveOperatorLevels, MetadataOperandAdmits, MetadataOperandExact, MergeMetadataOperandRequirements, ConvertMetadataOperand } from '../abstract-ops/runtime-types.mts';
+import { MetaTypeForConstraint, MetadataPortion, MetaTypeGoverns, GoverningMetaTypes, MergeOperatorResultMetadata, StampFamilyValue, LookupPrimitiveOperatorLevels, MetadataOperandAdmits, MetadataOperandExact, MergeMetadataOperandRequirements, ConvertMetadataOperand, RequireType } from '../abstract-ops/runtime-types.mts';
 import { SameType as SameTypeRecord } from '../type-system/relations.mts';
 import { MatchComponentList } from '../type-system/component-patterns.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
@@ -792,6 +793,11 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
     let raw;
     try {
       raw = Q(yield* Call(chosen.entry.fn as never, WithoutMetadata(lval), [WithoutMetadata(effectiveOperand)]));
+      // The resolved declaration belongs to the selected definition's frame.
+      // Metadata is composed afterwards; it cannot manufacture a base value.
+      if (chosen.returnType && chosen.returnType.Kind !== 'void') {
+        raw = Q(yield* RequireType(WithoutMetadata(raw), RawOperatorResultType(chosen.returnType)));
+      }
     } finally {
       LeaveOperatorBody();
       if (chosen.frame) {
@@ -918,6 +924,9 @@ function StampPrimitiveResult(raw: Value, resultType: TypeRecord): Value | Throw
     }
     return new VectorValue(lanes, resultType);
   }
+  // Admission already established the representation. A union or `any` is
+  // a contract, not a new runtime primitive tag. Only attach actual metadata.
+  if (resultType.Kind !== 'parameterized') return raw;
   if (isTypedNumber(raw)) return new TypedNumberValue(raw.value, resultType);
   const stamped = StampFamilyValue(raw, resultType);
   if (stamped !== undefined) return stamped;

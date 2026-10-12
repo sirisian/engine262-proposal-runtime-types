@@ -1,0 +1,789 @@
+{
+  "cases": [
+    {
+      "name": "known raw \"bad\" fails uint8 before source",
+      "steps": [
+        {
+          "source": "globalThis.entered=true; primitive string{operator +(n:uint8):uint8{return \"bad\";}}\"unused\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "String(globalThis.entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "known raw true fails uint8 before source",
+      "steps": [
+        {
+          "source": "globalThis.entered=true; primitive string{operator +(n:uint8):uint8{return true;}}\"unused\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "String(globalThis.entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "known raw {} fails uint8 before source",
+      "steps": [
+        {
+          "source": "globalThis.entered=true; primitive string{operator +(n:uint8):uint8{return {};}}\"unused\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "String(globalThis.entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "known raw 300 fails uint8 before source",
+      "steps": [
+        {
+          "source": "globalThis.entered=true; primitive string{operator +(n:uint8):uint8{return 300;}}\"unused\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "String(globalThis.entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "known raw (1:=uint16) fails uint8 before source",
+      "steps": [
+        {
+          "source": "globalThis.entered=true; primitive string{operator +(n:uint8):uint8{return (1:=uint16);}}\"unused\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "String(globalThis.entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "known raw \"bad\" fails boolean before source",
+      "steps": [
+        {
+          "source": "globalThis.entered=true; primitive string{operator +(n:uint8):boolean{return \"bad\";}}\"unused\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "String(globalThis.entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "known raw {} fails string before source",
+      "steps": [
+        {
+          "source": "globalThis.entered=true; primitive string{operator +(n:uint8):string{return {};}}\"unused\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "String(globalThis.entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint8 body has the same raw return obligation",
+      "steps": [
+        {
+          "source": " primitive uint8{operator +(n:string):uint8{return \"bad\";}}\"unused\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "float32 body has the same raw return obligation",
+      "steps": [
+        {
+          "source": " primitive float32{operator +(n:string):uint8{return \"bad\";}}\"unused\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex body has the same raw return obligation",
+      "steps": [
+        {
+          "source": " primitive complex{operator +(n:string):uint8{return \"bad\";}}\"unused\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational body has the same raw return obligation",
+      "steps": [
+        {
+          "source": " primitive rational{operator +(n:string):uint8{return \"bad\";}}\"unused\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint<const W> body has the same raw return obligation",
+      "steps": [
+        {
+          "source": " primitive uint<const W>{operator +(n:string):uint8{return \"bad\";}}\"unused\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid raw uint8 result is admitted and represented",
+      "steps": [
+        {
+          "source": " primitive string{operator +(n:uint8):uint8{return 7;}}function run(a,b){return a+b;}const v=run(\"a\",(1:=uint8));String(v)+\":\"+String(Reflect.typeOf(v));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7:uint.<8>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid raw string result is admitted and represented",
+      "steps": [
+        {
+          "source": " primitive string{operator +(n:uint8):string{return \"ok\";}}function run(a,b){return a+b;}const v=run(\"a\",(1:=uint8));String(v)+\":\"+String(Reflect.typeOf(v));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok:string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid raw boolean result is admitted and represented",
+      "steps": [
+        {
+          "source": " primitive string{operator +(n:uint8):boolean{return true;}}function run(a,b){return a+b;}const v=run(\"a\",(1:=uint8));String(v)+\":\"+String(Reflect.typeOf(v));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:boolean"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid raw uint16 result is admitted and represented",
+      "steps": [
+        {
+          "source": " primitive string{operator +(n:uint8):uint16{return 256;}}function run(a,b){return a+b;}const v=run(\"a\",(1:=uint8));String(v)+\":\"+String(Reflect.typeOf(v));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "256:uint.<16>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any preserves the admitted runtime representation",
+      "steps": [
+        {
+          "source": " primitive string{operator +(n:uint8):any{return (7:=uint8);}}function run(a,b){return a+b;}const v=run(\"a\",(1:=uint8));String(v)+\":\"+String(Reflect.typeOf(v));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7:uint.<8>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint8 | string preserves the admitted runtime representation",
+      "steps": [
+        {
+          "source": " primitive string{operator +(n:uint8):uint8 | string{return (7:=uint8);}}function run(a,b){return a+b;}const v=run(\"a\",(1:=uint8));String(v)+\":\"+String(Reflect.typeOf(v));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7:uint.<8>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown \"bad\" admitted at raw uint8 return",
+      "steps": [
+        {
+          "source": "globalThis.raw=\"bad\";globalThis.calls=0;primitive string{operator +(n:uint8):uint8{globalThis.calls++;return globalThis.raw;}}function run(a,b){return a+b;}run(\"a\",(1:=uint8));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "String(globalThis.calls)+\":\"+String(\"a\"+1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1:a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown 300 admitted at raw uint8 return",
+      "steps": [
+        {
+          "source": "globalThis.raw=300;globalThis.calls=0;primitive string{operator +(n:uint8):uint8{globalThis.calls++;return globalThis.raw;}}function run(a,b){return a+b;}run(\"a\",(1:=uint8));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "RangeError"
+          }
+        },
+        {
+          "source": "String(globalThis.calls)+\":\"+String(\"a\"+1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1:a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown (1:=uint16) admitted at raw uint8 return",
+      "steps": [
+        {
+          "source": "globalThis.raw=(1:=uint16);globalThis.calls=0;primitive string{operator +(n:uint8):uint8{globalThis.calls++;return globalThis.raw;}}function run(a,b){return a+b;}run(\"a\",(1:=uint8));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "String(globalThis.calls)+\":\"+String(\"a\"+1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1:a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown \"bad\" admitted at raw boolean return",
+      "steps": [
+        {
+          "source": "globalThis.raw=\"bad\";globalThis.calls=0;primitive string{operator +(n:uint8):boolean{globalThis.calls++;return globalThis.raw;}}function run(a,b){return a+b;}run(\"a\",(1:=uint8));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "String(globalThis.calls)+\":\"+String(\"a\"+1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1:a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown numeric return converts to uint8",
+      "steps": [
+        {
+          "source": "globalThis.raw=7; primitive string{operator +(n:uint8):uint8{return globalThis.raw;}}function run(a,b){return a+b;}const v=run(\"a\",(1:=uint8));String(v)+\":\"+String(Reflect.typeOf(v));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7:uint.<8>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown numeric return keeps existing String conversion",
+      "steps": [
+        {
+          "source": "globalThis.raw=(7:=uint8); primitive string{operator +(n:uint8):string{return globalThis.raw;}}function run(a,b){return a+b;}const v=run(\"a\",(1:=uint8));typeof v+\":\"+v;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string:7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "abrupt raw body preserves its thrown value and restores dispatch",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{throw \"body\";}}try{function run(a,b){return a+b;}run(\"a\",(1:=uint8));}catch(e){globalThis.caught=e;}String(globalThis.caught)+\":\"+String(\"a\"+1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "body:a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "an undeclared result still follows the value",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8){return \"free\";}}function run(a,b){return a+b;}run(\"a\",(1:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "free"
+          }
+        }
+      ]
+    },
+    {
+      "name": "missing raw return is rejected before source",
+      "steps": [
+        {
+          "source": "globalThis.entered=true;primitive string{operator +(n:uint8):uint8{}}\"unused\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "SyntaxError"
+          }
+        },
+        {
+          "source": "String(globalThis.entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata cannot mask invalid float32.<{m:1}> body",
+      "steps": [
+        {
+          "source": "type D={m:int32};meta D{default={m:0};subtype(a:D,b:D):boolean{return a.m===b.m;}} primitive string{operator +(n:uint8):float32.<{m:1}>{return \"bad\";}}\"unused\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata cannot mask invalid vector.<float32.<{m:1}>,2> body",
+      "steps": [
+        {
+          "source": "type D={m:int32};meta D{default={m:0};subtype(a:D,b:D):boolean{return a.m===b.m;}} primitive string{operator +(n:uint8):vector.<float32.<{m:1}>,2>{return \"bad\";}}\"unused\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured metadata retains a fixed vector base for checking",
+      "steps": [
+        {
+          "source": "type D={m:int32};meta D{default={m:0};subtype(a:D,b:D):boolean{return a.m===b.m;}}primitive float32<const X:D>{operator +(n:string):vector.<float32.<X>,2>{return \"bad\";}}\"unused\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured metadata in a union retains each raw alternative",
+      "steps": [
+        {
+          "source": "type D={m:int32};meta D{default={m:0};subtype(a:D,b:D):boolean{return a.m===b.m;}}primitive float32<const X:D>{operator +(n:string):float32.<X>|string{return {};}}\"unused\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured metadata still exposes raw base to checking",
+      "steps": [
+        {
+          "source": "type D={m:int32};meta D{default={m:0};subtype(a:D,b:D):boolean{return a.m===b.m;}}primitive float32<const X:D>{operator +(n:string):float32.<X>{return \"bad\";}}\"unused\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "a valid numeric body attaches its declared metadata once",
+      "steps": [
+        {
+          "source": "type D={m:int32};meta D{default={m:0};subtype(a:D,b:D):boolean{return a.m===b.m;}} primitive string{operator +(n:uint8):float32.<{m:1}>{return 7;}}function run(a,b){return a+b;}const v=run(\"a\",(1:=uint8));String(v)+\":\"+String(Reflect.typeOf(v));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7:float32.<{ m: 1 }>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a valid vector body admits its raw lane type",
+      "steps": [
+        {
+          "source": "type D={m:int32};meta D{default={m:0};subtype(a:D,b:D):boolean{return a.m===b.m;}} primitive string{operator +(n:uint8):vector.<float32.<{m:1}>,2>{return vector.<float32,2>(1,2);}}function run(a,b){return a+b;}const v=run(\"a\",(1:=uint8));String(v)+\":\"+String(Reflect.typeOf(v));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "(1, 2):vector.<float32.<{ m: 1 }>, 2>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "implicit cast rejects known incompatible raw result",
+      "steps": [
+        {
+          "source": "type D={m:int32};meta D{default={m:0};subtype(a:D,b:D):boolean{return a.m===b.m;}}primitive float32<const X:D>{operator float32.<X>(){return \"bad\";}}\"unused\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "implicit cast rejects unknown incompatible raw result",
+      "steps": [
+        {
+          "source": "type D={m:int32};meta D{default={m:0};subtype(a:D,b:D):boolean{return a.m===b.m;}}globalThis.raw=\"bad\";primitive float32<const X:D>{operator float32.<X>(){return globalThis.raw;}}const v:float32.<{m:1}>=7;String(v);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "String(\"a\"+1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity cast constructs the base without reentering metadata",
+      "steps": [
+        {
+          "source": "type D={m:int32};meta D{default={m:0};subtype(a:D,b:D):boolean{return a.m===b.m;}}globalThis.calls=0;primitive float32<const X:D>{operator float32.<X>(){globalThis.calls++;return this;}}const v:float32.<{m:1}>=7;String(v)+\":\"+String(globalThis.calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later Script invokes a captured raw result contract despite a shadow",
+      "steps": [
+        {
+          "source": "type Output=uint8;globalThis.raw=\"bad\";primitive string{operator +(n:uint8):Output{return globalThis.raw;}}\"ready\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ready"
+          }
+        },
+        {
+          "source": "{type Output=string;function run(a,b){return a+b;}run(\"a\",(1:=uint8));}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "deferred component result uses the selected frame and restores it after failure",
+      "steps": [
+        {
+          "source": "globalThis.raw=300;primitive uint<const W>{operator +(n:string):uint.<W>{return globalThis.raw;}}function run(a,b){return a+b;}run((1:=uint8),\"x\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "RangeError"
+          }
+        },
+        {
+          "source": "globalThis.raw=300;const v=run((1:=uint16),\"x\");String(v)+\":\"+String(Reflect.typeOf(v));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "300:uint.<16>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed raw admission leaves a compound destination unchanged",
+      "steps": [
+        {
+          "source": "globalThis.raw=\"bad\";globalThis.box={value:\"a\"};primitive string{operator +(n:uint8):uint8{return globalThis.raw;}}function update(b,n){b.value+=n;}update(globalThis.box,(1:=uint8));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "String(globalThis.box.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a"
+          }
+        }
+      ]
+    }
+  ]
+}

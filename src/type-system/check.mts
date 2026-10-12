@@ -20,6 +20,7 @@ import { firstUnreadableControl, readClassControls, readFieldControls } from '..
 import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
 import { isRangeObject, endpointOf, type RangeObject } from '../intrinsics/Range.mts';
 import type { EnvironmentRecord } from '../execution-context/Environment.mts';
+import { RawOperatorResultType } from './operator-result.mts';
 import { TypeDiagnosticOf, CreateTypeDiagnostic, ReportTypeDiagnostic } from './diagnostics.mts';
 import type { TypeDiagnosticRule } from './diagnostic-catalog.mts';
 import { ClassifyDynamicFunction, IsCheckedCode } from './checked-code.mts';
@@ -30706,7 +30707,44 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return type;
   };
 
-  const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known, resumable?: boolean, contextualReturn?: Known | null, contributions?: GeneratorContributions) => {
+  // An open metadata capture need not hide a known raw representation. Resolve
+  // the name in its declaration scope; never infer a base from its spelling.
+  const rawOperatorReturn = (node: ParseNode.Type): Known => {
+    const resolved = resolveType(node);
+    if (resolved) return RawOperatorResultType(resolved);
+    if (node.type === 'ParameterizedType') return rawOperatorReturn(node.BaseType);
+    if (node.type === 'ParenthesizedType') return rawOperatorReturn(node.Type);
+    if (node.type === 'UnionType' || node.type === 'IntersectionType') {
+      const members = node.Types.map(rawOperatorReturn);
+      if (members.every((member) => member !== null)) {
+        return CanonicalizeType({ Kind: node.type === 'UnionType' ? 'union' : 'intersection', Members: members as TypeRecord[] });
+      }
+    }
+    if (node.type === 'TypeReference' && node.TypeArguments) {
+      const name = node.TypeName.IdentifierReference.name;
+      const binding = ResolveBindingDeclaration(node.TypeName.IdentifierReference, name);
+      const declaration = declarationAt(node.TypeName.IdentifierReference, name, aliasNodes.get(name));
+      const generic = (declaration as { TypeParameters?: ParseNode.TypeParameters } | undefined)?.TypeParameters;
+      // A generic alias's first list supplies its parameters, even if its
+      // default application happens to resolve to a primitive base.
+      if (generic || binding?.kind === 'import') return null;
+      if (name === 'vector' && !binding && !shadowedByProgram(name) && node.TypeName.MemberNames.length === 0) {
+        const args = node.TypeArguments.TypeArgumentList;
+        const lane = args[0] ? rawOperatorReturn(args[0]) : null;
+        const count = args[1] ? resolveType(args[1]) : null;
+        if (lane && count?.Kind === 'literal' && count.Value instanceof NumberValue) {
+          return makePrimitive('vector', [lane, R(count.Value)]);
+        }
+      }
+      if (PrimitiveSlotParameters(name).length === 0) {
+        const base = resolveType({ ...node, TypeArguments: null });
+        if (base?.Kind === 'primitive' || base?.Kind === 'parameterized') return RawOperatorResultType(base);
+      }
+    }
+    return null;
+  };
+
+  const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known, resumable?: boolean, contextualReturn?: Known | null, contributions?: GeneratorContributions, rawOperatorResult = false) => {
     const formals = params ?? [];
     // Subtarget decorators are evaluated at declaration time, outside the
     // parameter bindings and local declarations of the function they decorate.
@@ -30730,7 +30768,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // type from the contextual member without a written annotation.
     const declaredForReturn = checkReturns
       ? (returnAnnotation?.NarrowsTarget ? makePrimitive('boolean')
-        : returnAnnotation ? resolveType(returnAnnotation.Type) : (contextualReturn ?? null))
+        : returnAnnotation ? (rawOperatorResult ? rawOperatorReturn(returnAnnotation.Type) : resolveType(returnAnnotation.Type)) : (contextualReturn ?? null))
       : null;
     const hasDeclaredReturn = !!returnAnnotation || !!contextualReturn;
     const generatorReturn = generatorType
@@ -30888,7 +30926,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const declaredReturn = returnTypes[returnTypes.length - 1];
     // This arm marks a WRITTEN annotation elidable, so it keeps testing
     // `returnAnnotation` - a contextual return has no annotation to elide.
-    if (checkReturns && returnAnnotation && declaredReturn && proven
+    if (checkReturns && !rawOperatorResult && returnAnnotation && declaredReturn && proven
         && !conversionHasEffect(declaredReturn) && endsWithReturn(body)) {
       elidableAnnotations.add(returnAnnotation);
     }
@@ -37354,13 +37392,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           parent = parent.parent;
         }
         const primitiveBody = parent?.type === 'PrimitiveOperatorDeclaration';
-        const annotation = primitiveBody ? null : n.TypeAnnotation
+        const annotation = n.TypeAnnotation
           ?? (n.Type ? { type: 'TypeAnnotation', Type: n.Type } as ParseNode.TypeAnnotation : null);
         const generator = n.OperatorGenerator && annotation
           ? generatorDeclaredType(resolveType(annotation.Type), false) : null;
         try {
-          enterFunction(n.FormalParameters, annotation, n.FunctionBody ?? n.GeneratorBody, !primitiveBody,
-            undefined, generator, n.OperatorGenerator);
+          enterFunction(n.FormalParameters, annotation, n.FunctionBody ?? n.GeneratorBody, true,
+            undefined, generator, n.OperatorGenerator, undefined, undefined, primitiveBody);
         } finally {
           if (scope) {
             typeParameterScopes.pop();
