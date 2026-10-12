@@ -81,7 +81,7 @@ import {
 import { OverrideParametersSubtype, SignatureNarrowingsSubtype, IsCallableContractSubtype, IsConstructorSignatureSubtype, IsSubtype, SameType, SameTypeWithAssumptions, IsAssignable, AreDisjoint, COLLECTION_LIBRARY_NAMES } from './relations.mts';
 import { isBitLaneType, componentAccessorIndices, isAssignableAccessor, wideMaskTypeFor, maskTypeFor, vectorTypeName } from './vector-ops.mts';
 import { NarrowTo, NarrowFrom, nullishType, empty, isClassNominal, libraryClassNames } from './narrowing.mts';
-import { type CapturedTypeContext, MetadataObjectFromType, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord, SubstituteTypeArguments, spreadElementsOf, packElementAdmits, packConstraintRefuses } from './runtime.mts';
+import { type CapturedTypeContext, ProjectMetadataObjectFromType, ProjectMetadataValueFromType, MetaTypeNamedByArgument, fitsNumericType, KeyTypesOf, IndexedAccessTypeRecord, SubstituteTypeArguments, spreadElementsOf, packElementAdmits, packConstraintRefuses } from './runtime.mts';
 import { isWideIntegerType, wrapToType } from './arithmetic.mts';
 import { resolveOverloadByTypes, assignArguments, parameterReceiving, operatorTableKey, IsNumericIndexType, type OverloadSignature as OperatorSignature } from './overloads.mts';
 import { PlanReferenceArguments } from './reference-rest.mts';
@@ -12215,6 +12215,36 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return result;
   };
 
+  const projectedMetadata = (argument: TypeRecord, base: TypeRecord, node: ParseNode, written: ParseNode | undefined): MetadataRecord | null => {
+    if (MetaTypeNamedByArgument(argument, base)) return Object.freeze(Object.create(null)) as MetadataRecord;
+    const projection = ProjectMetadataObjectFromType(argument, base);
+    if (projection.status === 'complete') return projection.value as MetadataRecord;
+    if (projection.status === 'invalid' && written?.type === 'ObjectType') {
+      reportType('rt-assignability', node, '$1 is not a metadata value', Value(displayType(projection.type)));
+    }
+    // A named argument may still name an unpublished meta type; a pending
+    // projection remains a dependency, never a completed empty record.
+    return null;
+  };
+
+  const checkClosedMetadataLeaves = (written: ParseNode.Type, application: ParseNode): void => {
+    // An unresolved sibling must not hide a closed invalid leaf. This walk is
+    // used only after the application's base establishes the metadata role.
+    if (written.type === 'ObjectType') {
+      for (const member of written.TypeMemberList) {
+        if (member.type === 'TypeMember' && member.TypeAnnotation) checkClosedMetadataLeaves(member.TypeAnnotation.Type, application);
+      }
+    } else if (written.type === 'TupleType') {
+      for (const element of written.TupleElementList) checkClosedMetadataLeaves(element.Type, application);
+    } else {
+      const resolved = resolveType(written);
+      const projection = resolved && ProjectMetadataValueFromType(resolved);
+      if (projection?.status === 'invalid') {
+        reportType('rt-assignability', application, '$1 is not a metadata value', Value(displayType(projection.type)));
+      }
+    }
+  };
+
   const resolveTypeStructure = (node: ParseNode.Type): Known => {
     // table-metadata-values: a RANGE in type position. This resolver "mirrors
     // TypeNodeToTypeRecord so the checker and the runtime agree on what the
@@ -12464,6 +12494,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           for (const [index, a] of orderedArgList.entries()) {
             const r = (applicationParameters[index]?.Arity ?? 0) > 0 ? kindedArgumentOf(a) : resolveType(a);
             if (!r) {
+              const nongenericDeclaration = (aliasDeclaration || classDeclaration || interfaceDeclaration) && applicationParameters.length === 0
+                && !(interfaceDeclaration as ParseNode.InterfaceDeclaration | undefined)?.TypeParameters;
+              const primitive = !lexicalBinding && !parameterInScope ? builtinTypeRecord(intrinsicName) : null;
+              const metadataRole = nongenericDeclaration || primitive?.Kind === 'primitive'
+                && primitive.Name !== 'type' && !intrinsicParameters(intrinsicName)
+                && !libraryTypeParameters(intrinsicName) && !PrimitiveDeclaresParameters(intrinsicName);
+              if (metadataRole && orderedArgList.length === 1 && a.type === 'ObjectType') checkClosedMetadataLeaves(a, node);
               return null;
             }
             let arg: TypeRecord | number = r;
@@ -12537,7 +12574,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   reportType('rt-unclaimed-metadata', node, '$1', Value(`\`${baseName}\` declares no type parameters, so its \`.<...>\` is one metadata record written as an object type, such as \`${baseName}.<{ brand: 'B' }>\``));
                   return null;
                 }
-                const metadata = MetadataObjectFromType(only, nominalBase);
+                const metadata = projectedMetadata(only, nominalBase, node, rawArgList[0]);
+                if (metadata === null) return null;
                 const keys = MetadataKeys(metadata).map(MetadataKey);
                 if (keys.length > 0) {
                   unclaimed.push({ node, display: displayType({ Kind: 'parameterized', Base: nominalBase, Metadata: metadata as unknown as MetadataRecord } as TypeRecord), base: nominalBase, keys });
@@ -12591,34 +12629,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 ? ({ Kind: 'parameter', Name: baseName } as TypeRecord)
                 : (baseIsGeneric ? null : selectedAlias() as TypeRecord | null));
             if (base) {
-              const metadata = MetadataObjectFromType(args[0] as TypeRecord, base);
+              const metadata = projectedMetadata(args[0] as TypeRecord, base, node, node.TypeArguments!.TypeArgumentList[0]);
+              if (metadata === null) return null;
               const record: TypeRecord = { Kind: 'parameterized', Base: base, Metadata: metadata as unknown as MetadataRecord };
               const keys = MetadataKeys(metadata).map(MetadataKey);
-              // table-metadata-values: the value language is CLOSED - "Nothing
-              // else is a metadata value. A function, an object other than the
-              // forms above, and *undefined* are not." A property whose type is
-              // none of the admitted forms is DROPPED by
-              // `MetadataObjectFromType`, and `float64.<{ bounds: SomeClass }>`
-              // must not pass carrying no bounds at all. The drop is observable
-              // as a missing key, which finds it without writing the form list
-              // twice.
-              //
-              // Only where the argument was WRITTEN INLINE. A parameterization's
-              // object-typed argument is two things in one shape: a metadata
-              // record, `float64.<{ bounds: 0..<10 }>`, whose properties must be
-              // metadata values; and a type argument to a generic,
-              // `Composite.<K>`, whose properties are ordinary types. The parser
-              // already tells them apart - an inline record is an `ObjectType`
-              // node and a name is a `TypeReference` - and the record they
-              // resolve to does not.
-              const argNode = node.TypeArguments!.TypeArgumentList[0] as ParseNode | undefined;
-              if (argNode?.type === 'ObjectType') {
-                for (const prop of (args[0] as TypeRecord & { Kind: 'object' }).Properties) {
-                  if (!Object.hasOwn(metadata, MetadataStorageKey(prop.key))) {
-                    report(prop.type, record);
-                  }
-                }
-              }
               if (keys.length > 0) {
                 unclaimed.push({ node, display: displayType(record), base, keys });
               }
@@ -13044,13 +13058,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         const metaArgs = node.TypeArguments.TypeArgumentList.map((a) => resolveType(a));
         if (metaArgs.length !== 1 || !metaArgs[0] || (metaArgs[0] as TypeRecord).Kind !== 'object') {
+          if (metaArgs.length === 1 && node.TypeArguments.TypeArgumentList[0]?.type === 'ObjectType') {
+            checkClosedMetadataLeaves(node.TypeArguments.TypeArgumentList[0], node);
+          }
           return null;
         }
-        return {
-          Kind: 'parameterized',
-          Base: baseType as TypeRecord,
-          Metadata: MetadataObjectFromType(metaArgs[0] as TypeRecord, baseType) as unknown as MetadataRecord,
-        } as unknown as Known;
+        const metadata = projectedMetadata(metaArgs[0] as TypeRecord, baseType, node, node.TypeArguments.TypeArgumentList[0]);
+        if (metadata === null) return null;
+        return { Kind: 'parameterized', Base: baseType as TypeRecord, Metadata: metadata } as Known;
       }
       case 'IndexedAccessType': {
         const objectType = resolveType(node.ObjectType);

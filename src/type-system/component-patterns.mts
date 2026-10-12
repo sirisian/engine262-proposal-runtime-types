@@ -194,7 +194,9 @@ export function InstantiateComponentType(
       const base = InstantiateComponentType(written.BaseType, bindings, resolve);
       const metadata = InstantiateComponentType(items[0], bindings, resolve);
       if (base !== null && typeof base === 'object' && metadata !== null && typeof metadata === 'object' && metadata.Kind === 'object') {
-        return IsUnknownMetadataCapture(metadata) ? base : { Kind: 'parameterized', Base: base, Metadata: MetadataObjectFromType(metadata) } as unknown as TypeRecord;
+        if (IsUnknownMetadataCapture(metadata)) return base;
+        const projected = EnsureCompletion(MetadataObjectFromType(metadata, base));
+        return projected.Type === 'normal' ? { Kind: 'parameterized', Base: base, Metadata: projected.Value } as TypeRecord : null;
       }
     }
     return resolve(node);
@@ -241,7 +243,9 @@ export function InstantiateComponentType(
         const base = builtinTypeRecord(name, []);
         const metadata = args[0];
         if (base && args.length === 1 && typeof metadata === 'object' && metadata.Kind === 'object') {
-          return IsUnknownMetadataCapture(metadata) ? base : { Kind: 'parameterized', Base: base, Metadata: MetadataObjectFromType(metadata) } as unknown as TypeRecord;
+          if (IsUnknownMetadataCapture(metadata)) return base;
+          const projected = EnsureCompletion(MetadataObjectFromType(metadata, base));
+          return projected.Type === 'normal' ? { Kind: 'parameterized', Base: base, Metadata: projected.Value } as TypeRecord : null;
         }
       }
     }

@@ -1619,7 +1619,7 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration, claim
     }
     // Check the snapshot, never reread the live object. Numeric leaves receive
     // the claim shape's literal context; ordinary binding defaults are separate.
-    const snapshot = Q(yield* SnapshotMetadataValue(v));
+    const snapshot = Q(yield* SnapshotMetadataValue(v, true));
     const converted = NormalizeMetadataRecord(snapshot, claimShape);
     if (!Q(yield* IsOfType(MetadataAsObject(converted), claimShape))) {
       return Throw.TypeError('the default of a meta type must be a value of its constraint shape');
@@ -3019,7 +3019,7 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
       return GetTypeObject(CanonicalizeType({
         Kind: 'parameterized',
         Base: record,
-        Metadata: MetadataObjectFromType(argRecords[0]!),
+        Metadata: Q(MetadataObjectFromType(argRecords[0]!, record)),
       } as unknown as TypeRecord, new Map()));
     }
     // A concrete intrinsic alias can be reapplied. Resolve its declaration's

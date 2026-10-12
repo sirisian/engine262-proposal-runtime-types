@@ -1153,7 +1153,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       if (met !== undefined && met !== Value.null && met !== Value.undefined) {
         // A CONSTRAINT: the pair reduces to it. Recorded for CanonicalizeType,
         // which is synchronous and cannot call the hook that produced this.
-        const snapshot = EnsureCompletion(yield* SnapshotMetadataValue(met as Value));
+        const snapshot = EnsureCompletion(yield* SnapshotMetadataValue(met as Value, true));
         if (snapshot.Type === 'normal') {
           SetMetResolution(pair.left, pair.right, {
             Kind: 'parameterized', Base: pair.left.Base, Metadata: snapshot.Value as unknown as Value,
@@ -1405,7 +1405,7 @@ function* NarrowedMetadata(subject: TypeRecord, operator: string, constant: Valu
     // metadata value language is what a meta type's `default` gets, for the same
     // reason: a portion is CARRIED structurally, not read off an object whose
     // fields happen to be enumerable.
-    const snapshot = EnsureCompletion(yield* SnapshotMetadataValue(attempt.Value as Value));
+    const snapshot = EnsureCompletion(yield* SnapshotMetadataValue(attempt.Value as Value, true));
     if (snapshot.Type !== 'normal') {
       continue;
     }

@@ -480,7 +480,7 @@ export function* MetadataCaptureView(record: TypeRecord): ValueEvaluator {
     }
     return MetadataAsObject(Object.freeze(fields) as unknown as MetadataRecord);
   };
-  const value = Q(yield* materialize(MetadataObjectFromType(record), domain));
+  const value = Q(yield* materialize(Q(MetadataObjectFromType(record)), domain));
   metadataCaptureViews.set(record, value);
   return value;
 }
@@ -4798,132 +4798,100 @@ export function toNumericArgument(record: TypeRecord): TypeRecord | number {
  * null-prototyped: a meta type's hooks read it, and the specification requires them
  * to be pure functions of their arguments.
  */
-/**
- * #sec-primitive-metadata, table-metadata-values: a metadata value is drawn from
- * a closed language. The top level is a flat record of claimed keys, and the
- * values under them may nest freely, so this reads a nested record and a list as
- * well as a primitive.
- *
- * Dropping the forms it could not read was not a limitation but a defect: a
- * property whose value did not survive simply vanished, and since interning
- * compares what survives, `float32.<{ q: { a: 1 } }>` and `float32.<{ q: { a: 2 }
- * }>` both reduced to the empty record and were ONE TYPE. Two distinct types
- * silently becoming one is the sharpest failure this design has, because nothing
- * about it looks wrong at the site that wrote it.
- *
- * A form the language does not admit is still omitted, which is correct: the
- * clause says nothing else is a metadata value, and the parameterization that
- * writes one is a type error the checker is to report at the site.
- */
-function metadataValueFromType(t: TypeRecord, shape?: TypeRecord): unknown {
+/** Projection never publishes a partial record after an invalid or pending leaf. */
+export type MetadataProjection = { status: 'complete'; value: unknown }
+  | { status: 'pending' }
+  | { status: 'invalid'; type: TypeRecord };
+
+export function ProjectMetadataValueFromType(t: TypeRecord, shape?: TypeRecord): MetadataProjection {
   if (shape?.Kind === 'nominal') shape = shape.Structure ?? shape;
+  if (t.Kind === 'parameter' || t.Kind === 'deferred') return { status: 'pending' };
+  // The null singleton is represented as a primitive type, not a literal.
+  if (t.Kind === 'primitive' && t.Name === 'null') return { status: 'complete', value: Value.null };
   if (t.Kind === 'literal') {
-    return NormalizeMetadataRecord(t.Value, shape, undefined, false, t.SourceText);
+    const value = t.Value;
+    if (value === Value.undefined || value instanceof ObjectValue
+        && !isRationalObject(value) && !isDecimalObject(value) && !isFloat128Object(value) && !isComplexObject(value)) {
+      return { status: 'invalid', type: t };
+    }
+    return { status: 'complete', value: NormalizeMetadataRecord(value, shape, undefined, false, t.SourceText) };
   }
   if (t.Kind === 'pattern') {
-    // A leaf of the metadata language, carried structurally. The marker is what
-    // lets the comparison and the hook boundary tell it from a nested record.
-    const marker: Record<string, unknown> = Object.create(null);
-    marker.__pattern = true;
-    marker.source = t.Source;
-    marker.flags = t.Flags;
-    return Object.freeze(marker);
+    return { status: 'complete', value: Object.freeze(Object.assign(Object.create(null), {
+      __pattern: true, source: t.Source, flags: t.Flags,
+    })) };
   }
   if (t.Kind === 'range') {
-    // A leaf of the metadata language, carried structurally like a pattern. The
-    // marker is what lets the comparison and the hook boundary tell it from a
-    // nested record.
-    const marker: Record<string, unknown> = Object.create(null);
-    marker.__range = true;
-    marker.start = t.Start;
-    marker.end = t.End;
-    marker.startBound = t.StartBound;
-    marker.endBound = t.EndBound;
-    return Object.freeze(marker);
+    return { status: 'complete', value: Object.freeze(Object.assign(Object.create(null), {
+      __range: true, start: t.Start, end: t.End, startBound: t.StartBound, endBound: t.EndBound,
+    })) };
   }
-  if (t.Kind === 'object') {
-    const nested: Record<string | symbol, unknown> = Object.create(null);
-    for (const p of t.Properties) {
-      const v = metadataValueFromType(p.type, shape?.Kind === 'object' ? shape.Properties.find((q) => q.key === p.key)?.type : undefined);
-      if (v !== METADATA_NOT_A_VALUE) {
-        nested[MetadataStorageKey(p.key)] = v;
-      }
+  if (t.Kind === 'object' || t.Kind === 'tuple') {
+    const result: Record<string | symbol, unknown> | unknown[] = t.Kind === 'object' ? Object.create(null) : [];
+    let pending = false;
+    const entries = t.Kind === 'object'
+      ? t.Properties.map((p) => ({ key: MetadataStorageKey(p.key), type: p.type,
+        shape: shape?.Kind === 'object' ? shape.Properties.find((q) => q.key === p.key)?.type : undefined }))
+      : t.Elements.map((e, i) => ({ key: String(i), type: e.Type,
+        shape: shape?.Kind === 'tuple' ? shape.Elements[i]?.Type : shape?.Kind === 'array' ? shape.Element : undefined }));
+    for (const entry of entries) {
+      const projected = ProjectMetadataValueFromType(entry.type, entry.shape);
+      if (projected.status === 'invalid') return projected;
+      if (projected.status === 'pending') pending = true;
+      else (result as Record<string | symbol, unknown>)[entry.key] = projected.value;
     }
-    return Object.freeze(nested);
+    return pending ? { status: 'pending' } : { status: 'complete', value: Object.freeze(result) };
   }
-  if (t.Kind === 'tuple') {
-    const list: unknown[] = [];
-    for (const [i, e] of t.Elements.entries()) {
-      const v = metadataValueFromType(e.Type, shape?.Kind === 'tuple' ? shape.Elements[i]?.Type : shape?.Kind === 'array' ? shape.Element : undefined);
-      if (v === METADATA_NOT_A_VALUE) {
-        return METADATA_NOT_A_VALUE;
-      }
-      list.push(v);
-    }
-    return Object.freeze(list);
-  }
-  return METADATA_NOT_A_VALUE;
+  return { status: 'invalid', type: t };
 }
 
-/** Distinguishes "this form is not a metadata value" from a value of *undefined*. */
-const METADATA_NOT_A_VALUE = Symbol('not-a-metadata-value');
-
-/**
- * The meta type an argument to a parameterization NAMES, where it names one
- * rather than supplying values.
- *
- * `float32.<Dimensions>` passes an object type whose members are TYPES; every
- * key of it is claimed by the meta type that declared them, so the first claimed
- * key identifies it. `float32.<{ m: 1 }>` passes literal values and names no
- * meta type - the metadata IS the argument - so this answers *undefined* and the
- * record is built as it always was.
- *
- * The distinction is the member's type: a `literal` supplies a value, anything
- * else declares a key. Without it a metadata object would be read as naming the
- * family that claims its keys, and `float32.<{ m: 1 }>` would cover every
- * dimensioned float32.
+/** A family names the registered constraint shape, not merely one owned key.
+ * Structural identity is required: gradual mutual subtyping through `any`
+ * does not identify a declaration's shape or erase supplied nested values.
  */
-export function MetaTypeNamedByArgument(t: TypeRecord): object | undefined {
-  if (t.Kind !== 'object') {
-    return undefined;
+export function MetaTypeNamedByArgument(t: TypeRecord, base?: TypeRecord): object | undefined {
+  if (t.Kind !== 'object' || t.Properties.some((p) => p.type.Kind === 'literal')) return undefined;
+  // Owning one key does not make every nonliteral record that meta type.
+  // A named family denotes the registered constraint shape itself.
+  for (const property of t.Properties) {
+    const owner = MetaTypeClaiming(property.key);
+    const shape = owner && MetadataShape(owner, base);
+    if (shape && SameTypeStructural(t, shape)) return owner;
   }
-  let found: object | undefined;
-  for (const p of t.Properties) {
-    if (p.type?.Kind === 'literal') {
-      return undefined;
-    }
-    if (found === undefined) {
-      found = MetaTypeClaiming(p.key);
-    }
-  }
-  return found;
+  return undefined;
 }
 
 /** The metadata record of a metadata object computed by a builder: its own string-keyed data, nested objects as nested records. */
 function* MetadataRecordFromObjectValue(value: ObjectValue): PlainEvaluator<MetadataRecord> {
-  return NormalizeMetadataRecord(Q(yield* SnapshotMetadataValue(value)));
+  return NormalizeMetadataRecord(Q(yield* SnapshotMetadataValue(value, true)));
 }
 
-export function MetadataObjectFromType(t: TypeRecord, base?: TypeRecord): MetadataRecord {
+export function ProjectMetadataObjectFromType(t: TypeRecord, base?: TypeRecord): MetadataProjection {
+  if (t.Kind === 'parameter' || t.Kind === 'deferred') return { status: 'pending' };
+  if (t.Kind !== 'object') return { status: 'invalid', type: t };
   const fields: Record<string | symbol, unknown> = Object.create(null);
-  if (t.Kind === 'object') {
-    for (const p of t.Properties) {
-      const owner = MetaTypeClaiming(p.key);
-      let shape = owner ? MetadataShape(owner, base) : undefined;
-      if (shape?.Kind === 'nominal') shape = shape.Structure ?? shape;
-      const v = metadataValueFromType(p.type, shape?.Kind === 'object' ? shape.Properties.find((q) => q.key === p.key)?.type : undefined);
-      if (v !== METADATA_NOT_A_VALUE) {
-        fields[MetadataStorageKey(p.key)] = v;
-      }
-    }
+  let pending = false;
+  for (const property of t.Properties) {
+    const owner = MetaTypeClaiming(property.key);
+    let shape = owner ? MetadataShape(owner, base) : undefined;
+    if (shape?.Kind === 'nominal') shape = shape.Structure ?? shape;
+    const projected = ProjectMetadataValueFromType(property.type,
+      shape?.Kind === 'object' ? shape.Properties.find((q) => q.key === property.key)?.type : undefined);
+    if (projected.status === 'invalid') return projected;
+    if (projected.status === 'pending') pending = true;
+    else fields[MetadataStorageKey(property.key)] = projected.value;
   }
-  // This is the canonical builder of the slot, and it
-  // is where the original cast lived: `as unknown as Value` asserted a contract
-  // the value did not satisfy, and that assertion is what let the record and
-  // the `Value` readings of [[Metadata]] diverge behind three separate bugs.
-  // The cast remains - a frozen null-prototype object is not a nominal type -
-  // but it now asserts the shape the slot actually declares.
-  return NormalizeMetadataRecord(fields);
+  return pending ? { status: 'pending' } : { status: 'complete', value: NormalizeMetadataRecord(fields) };
+}
+
+export function MetadataObjectFromType(t: TypeRecord, base?: TypeRecord): MetadataRecord | ThrowCompletion {
+  if (MetaTypeNamedByArgument(t, base)) return Object.freeze(Object.create(null)) as MetadataRecord;
+  const projected = ProjectMetadataObjectFromType(t, base);
+  if (projected.status !== 'complete') {
+    return Throw.TypeError(projected.status === 'pending'
+      ? 'the metadata value is not yet available' : 'the written value is not in the metadata value language');
+  }
+  return projected.value as MetadataRecord;
 }
 
 
@@ -5241,7 +5209,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
             return CanonicalizeType({
               Kind: 'parameterized',
               Base: bound,
-              Metadata: MetadataObjectFromType(boundArgs[0]!, bound),
+              Metadata: Q(MetadataObjectFromType(boundArgs[0]!, bound)),
             } as TypeRecord, new Map());
           }
           return bound;
@@ -5481,11 +5449,11 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
           // members, so the form `primitivemetadata.md` documents matched
           // nothing: declaring it changed no program, and a `Vector3` of `Meter`
           // fields had no zero-filled form.
-          const namedMetaType = MetaTypeNamedByArgument(metadataRecord);
+          const namedMetaType = MetaTypeNamedByArgument(metadataRecord, base);
           const record = {
             Kind: 'parameterized',
             Base: base,
-            Metadata: MetadataObjectFromType(metadataRecord, base),
+            Metadata: Q(MetadataObjectFromType(metadataRecord, base)),
             ...(namedMetaType === undefined ? {} : { MetaType: namedMetaType }),
           } as TypeRecord;
           // #sec-metadata-decomposition: "A metadata object whose own key no meta type
@@ -6438,9 +6406,9 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
       // A META TYPE named as the argument makes the application a family, as
       // the unchained form does: `complex.<E>.<P>` in a cast's target is every
       // P-parameterization, and a family is never the same type as a member.
-      const namedMetaType = MetaTypeNamedByArgument(metadataRecord);
+      const namedMetaType = MetaTypeNamedByArgument(metadataRecord, baseRecord);
       if (namedMetaType !== undefined) {
-        return { Kind: 'parameterized', Base: baseRecord, Metadata: MetadataObjectFromType(metadataRecord, baseRecord), MetaType: namedMetaType } as TypeRecord;
+        return { Kind: 'parameterized', Base: baseRecord, Metadata: Q(MetadataObjectFromType(metadataRecord, baseRecord)), MetaType: namedMetaType } as TypeRecord;
       }
       // CanonicalizeType is what makes the inline spelling and the alias
       // spelling the SAME type rather than two equal ones. The neighbouring
@@ -6449,7 +6417,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
       return CanonicalizeType({
         Kind: 'parameterized',
         Base: baseRecord,
-        Metadata: MetadataObjectFromType(metadataRecord, baseRecord),
+        Metadata: Q(MetadataObjectFromType(metadataRecord, baseRecord)),
       } as TypeRecord, new Map());
     }
     case 'IndexedAccessType': {

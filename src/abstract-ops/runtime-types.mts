@@ -3130,7 +3130,7 @@ export function LookupTypeDefault(typeObject: object): Value | undefined {
  * A worklist prevents host recursion; active ancestors detect cycles without
  * confusing a shared child with a cycle or caching observable getter reads.
  */
-export function* SnapshotMetadataValue(value: Value): PlainEvaluator<Value> {
+export function* SnapshotMetadataValue(value: Value, recordRoot = false, recordDescription = 'the outer metadata value'): PlainEvaluator<Value> {
   type Store = (snapshot: unknown) => void;
   type Task = { kind: 'value'; value: Value; store: Store }
     | { kind: 'record'; value: ObjectValue; out: Record<string | symbol, unknown>; keys: readonly (JSStringValue | SymbolValue)[]; index: number; store: Store }
@@ -3174,6 +3174,12 @@ export function* SnapshotMetadataValue(value: Value): PlainEvaluator<Value> {
         continue;
       }
       const current = task.value;
+      if (recordRoot && current === value && active.size === 0
+          && (!(current instanceof ObjectValue) || isRationalObject(current) || isDecimalObject(current)
+            || isFloat128Object(current) || isComplexObject(current) || isRangeObject(current)
+            || current.OriginalSource !== undefined || Q(IsArray(current)) === Value.true)) {
+        return Throw.TypeError('$1 must be a record', Value(recordDescription));
+      }
       if (isRationalObject(current) || isDecimalObject(current) || isFloat128Object(current) || isComplexObject(current)) {
         task.store(current);
       } else if (!(current instanceof ObjectValue)) {
@@ -4283,7 +4289,7 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
         MetadataPortion(from.Metadata, metaType), factorValue,
       ], to.Base));
       if (rescaled === undefined) return Throw.TypeError('a required rescale hook produced no result');
-      const portion = NormalizeMetadataRecord(Q(yield* SnapshotMetadataValue(rescaled)), (metaType as { TypeRecord?: TypeRecord }).TypeRecord) as unknown as Record<string | symbol, unknown>;
+      const portion = NormalizeMetadataRecord(Q(yield* SnapshotMetadataValue(rescaled, true, 'a rescale hook result')), (metaType as { TypeRecord?: TypeRecord }).TypeRecord) as unknown as Record<string | symbol, unknown>;
       const shape = (metaType as { TypeRecord?: TypeRecord }).TypeRecord;
       if (shape) {
         const valid = Q(yield* IsOfType(MetadataAsObject(portion as MetadataRecord), shape));

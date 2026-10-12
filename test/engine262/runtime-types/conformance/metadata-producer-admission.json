@@ -1,0 +1,974 @@
+{
+  "cases": [
+    {
+      "name": "reflection rejects root empty Array",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:[]});\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects root nonempty Array",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:[1]});\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects root pattern",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:/a/});\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects root range",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:0..=2});\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects root boxed Number",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:new Number(1)});\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects root function",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:function(){}});\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects root null",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:null});\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects root undefined",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:undefined});\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects root Number",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:1});\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects root String",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:\"s\"});\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects root Symbol",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:Symbol()});\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects root type object",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:uint8});\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "root array fails before indexed getter",
+      "steps": [
+        {
+          "source": "let reads=0;const a=[];Object.defineProperty(a,\"0\",{get(){reads++;return 1;},enumerable:true});try{Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:a});}catch(e){if(!(e instanceof TypeError))throw e;}String(reads);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "base form cannot admit root Array",
+      "steps": [
+        {
+          "source": "meta uint8{default={};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:[]});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "record can have Array prototype",
+      "steps": [
+        {
+          "source": "const x=Object.create(Array.prototype);Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:x});\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary empty root",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{}});\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "null prototype root",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}const x=Object.create(null);x.mark=1;const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:x});String(Reflect.getReflection(T).metadata.mark);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written invalid undefined depth 1",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=uint8.<{mark:{x:undefined}}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "written invalid undefined depth 2",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=uint8.<{mark:{a:[1,{b:{x:undefined}}]}}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "written invalid function depth 1",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=uint8.<{mark:{x:()=>void}}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "written invalid function depth 2",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=uint8.<{mark:{a:[1,{b:{x:()=>void}}]}}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "written invalid type depth 1",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=uint8.<{mark:{x:type}}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "written invalid type depth 2",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=uint8.<{mark:{a:[1,{b:{x:type}}]}}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "written invalid number domain depth 1",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=uint8.<{mark:{x:number}}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "written invalid number domain depth 2",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=uint8.<{mark:{a:[1,{b:{x:number}}]}}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "written invalid any domain depth 1",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=uint8.<{mark:{x:any}}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "written invalid any domain depth 2",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=uint8.<{mark:{a:[1,{b:{x:any}}]}}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "written invalid nominal class depth 1",
+      "steps": [
+        {
+          "source": "class C{};type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=uint8.<{mark:{x:C}}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "written invalid nominal class depth 2",
+      "steps": [
+        {
+          "source": "class C{};type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=uint8.<{mark:{a:[1,{b:{x:C}}]}}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid leaf under optional constraint",
+      "steps": [
+        {
+          "source": "type M={mark:{x?:number}};meta M{default={mark:{}};subtype(a,b){return true;}}type T=uint8.<{mark:{x:undefined}}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid leaf under Symbol key",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"mark\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:any};meta M{default={[k]:{}};subtype(a,b){return true;}}type T=uint8.<{[k]:{x:undefined}}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested list with invalid leaf",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=uint8.<{mark:[1,undefined]}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "chained base invalid leaf",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=uint8.<{}>.<{mark:{x:undefined}}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nominal base invalid leaf",
+      "steps": [
+        {
+          "source": "class C{};type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=C.<{mark:{x:undefined}}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "alias base invalid leaf",
+      "steps": [
+        {
+          "source": "type B=uint8;type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=B.<{mark:{x:undefined}}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "alias record invalid leaf",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type R={mark:{x:undefined}};type T=uint8.<R>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-type-evaluation",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed root Array",
+      "steps": [
+        {
+          "source": "function build(){return [];}type T=uint8.<build()>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-type-evaluation",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed nested invalid leaf",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}function build(){return {mark:{x:undefined}};}type T=uint8.<build()>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-type-evaluation",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default root Array",
+      "steps": [
+        {
+          "source": "type M={};meta M{default=[];subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default invalid nested leaf",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{x:undefined}};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid nested empty records",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=uint8.<{mark:{x:{}}}>;String(Reflect.ownKeys(Reflect.getReflection(T).metadata.mark.x).length);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid nested list",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=uint8.<{mark:[1,2,{x:3}]}>;String(Reflect.getReflection(T).metadata.mark[2].x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid reflected nested list",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:[1,2,{x:3}]}});String(Reflect.getReflection(T).metadata.mark[2].x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid computed nested list",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}function build(){return {mark:[1,2,{x:3}]};}type T=uint8.<build()>;String(Reflect.getReflection(T).metadata.mark[2].x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid tuple parameter stays a type",
+      "steps": [
+        {
+          "source": "type Box<T:type>={item:T};let x:Box.<[number,string]>={item:[1,\"x\"]};\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named meta family",
+      "steps": [
+        {
+          "source": "type M={mark:number};meta M{default={mark:0};subtype(a,b){return true;}}type T=uint8.<M>;\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "meta family alias",
+      "steps": [
+        {
+          "source": "type M={mark:number};meta M{default={mark:0};subtype(a,b){return true;}}type Alias=M;type T=uint8.<Alias>;\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named nested meta family",
+      "steps": [
+        {
+          "source": "type M={mark:{x:number}};meta M{default={mark:{x:0}};subtype(a,b){return true;}}type T=uint8.<M>;\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dependent value becomes valid",
+      "steps": [
+        {
+          "source": "type M={mark:number};meta M{default={mark:0};subtype(a,b){return true;}}type A<N:number>=uint8.<{mark:N}>;String(Reflect.getReflection(A.<1>).metadata.mark);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dependent nested value becomes valid",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type A<N:number>=uint8.<{mark:{x:N}}>;String(Reflect.getReflection(A.<2>).metadata.mark.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid field beside pending value",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type A<N:number>=uint8.<{mark:{x:N,y:undefined}}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed invalid generic application",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type A<T:type>=uint8.<{mark:{x:T}}>;type B=A.<undefined>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-type-evaluation",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid source leaves no body effects",
+      "steps": [
+        {
+          "source": "let effects=0;\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}effects++;type T=uint8.<{mark:{x:undefined}}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "String(effects);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection failure followed by valid record",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}try{Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:[]});}catch(e){if(!(e instanceof TypeError))throw e;}type T=uint8.<{mark:{x:1}}>;String(Reflect.getReflection(T).metadata.mark.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured nested list",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=float32.<{mark:[1,2,{x:3}]}>;function f<float32.<const D:M>>():string{return String(D.mark[2].x);}f.<T>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed default does not publish a protocol",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default=[];subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{default={mark:{}};subtype(a,b){return true;}}type Recovered=uint8.<{mark:{x:2}}>;String(Reflect.getReflection(Recovered).metadata.mark.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid null and boolean leaves",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}type T=uint8.<{mark:{a:null,b:true,c:false}}>;String(Reflect.getReflection(T).metadata.mark.a===null);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic expression application invalid leaf",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}function apply(Base:any):type{return Base.<{mark:{x:undefined}}>;} apply(uint8);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic expression application preserves nested value",
+      "steps": [
+        {
+          "source": "type M={mark:any};meta M{default={mark:{}};subtype(a,b){return true;}}function apply(Base:any):type{return Base.<{mark:{x:2}}>;} String(Reflect.getReflection(apply(uint8)).metadata.mark.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    }
+  ]
+}
