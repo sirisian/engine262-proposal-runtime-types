@@ -1,0 +1,808 @@
+{
+  "cases": [
+    {
+      "name": "initialized absent coalesce",
+      "steps": [
+        {
+          "source": "let x: uint32 | undefined = undefined; const c: uint32 = x ?? 10; `${c}`;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-impossible-test",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "never fail"
+        }
+      ]
+    },
+    {
+      "name": "initialized present coalesce",
+      "steps": [
+        {
+          "source": "let x: uint32 | undefined = 5; const c: uint32 = x ?? 10; `${c}`;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-impossible-test",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "never succeed"
+        }
+      ]
+    },
+    {
+      "name": "initialized zero coalesce",
+      "steps": [
+        {
+          "source": "let x: uint8 | undefined = 0; const c: uint8 = x ?? 7; `${c}`;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-impossible-test",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "never succeed"
+        }
+      ]
+    },
+    {
+      "name": "initialized false conjunction",
+      "steps": [
+        {
+          "source": "let b: boolean = false; function f(): uint32 { return 5; } const r: false | uint32 = b && f();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-unreachable-operand",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "never be evaluated"
+        }
+      ]
+    },
+    {
+      "name": "initialized union arithmetic",
+      "steps": [
+        {
+          "source": "function __never() { let u: uint8 | int32 = uint8(1); let b: int32 = int32(1); let q = u * b; }",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "do not mix"
+        }
+      ]
+    },
+    {
+      "name": "initialized union iteration",
+      "steps": [
+        {
+          "source": "function __never() { let m: uint8 | [].<uint8> = uint8(1); for (const x of m) { } }",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-iterable-required",
+              "phase": "static"
+            }
+          },
+          "messageIncludes": "not iterable"
+        }
+      ]
+    },
+    {
+      "name": "wrong consumer retains precedence",
+      "steps": [
+        {
+          "source": "let x: uint32 | undefined = 5; const s: string = x ?? 10;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated Number < reversed=False executed=False",
+      "steps": [
+        {
+          "source": "function f(){let n:uint8=uint8(1);let x:number=1;let q=n < x;}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated Number < reversed=False executed=True",
+      "steps": [
+        {
+          "source": "function f(){let n:uint8=uint8(1);let x:number=1;let q=n < x;}f();\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated Number < reversed=True executed=False",
+      "steps": [
+        {
+          "source": "function f(){let n:uint8=uint8(1);let x:number=1;let q=x < n;}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated Number < reversed=True executed=True",
+      "steps": [
+        {
+          "source": "function f(){let n:uint8=uint8(1);let x:number=1;let q=x < n;}f();\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated Number <= reversed=False executed=False",
+      "steps": [
+        {
+          "source": "function f(){let n:uint8=uint8(1);let x:number=1;let q=n <= x;}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated Number <= reversed=False executed=True",
+      "steps": [
+        {
+          "source": "function f(){let n:uint8=uint8(1);let x:number=1;let q=n <= x;}f();\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated Number <= reversed=True executed=False",
+      "steps": [
+        {
+          "source": "function f(){let n:uint8=uint8(1);let x:number=1;let q=x <= n;}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated Number <= reversed=True executed=True",
+      "steps": [
+        {
+          "source": "function f(){let n:uint8=uint8(1);let x:number=1;let q=x <= n;}f();\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated Number > reversed=False executed=False",
+      "steps": [
+        {
+          "source": "function f(){let n:uint8=uint8(1);let x:number=1;let q=n > x;}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated Number > reversed=False executed=True",
+      "steps": [
+        {
+          "source": "function f(){let n:uint8=uint8(1);let x:number=1;let q=n > x;}f();\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated Number > reversed=True executed=False",
+      "steps": [
+        {
+          "source": "function f(){let n:uint8=uint8(1);let x:number=1;let q=x > n;}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated Number > reversed=True executed=True",
+      "steps": [
+        {
+          "source": "function f(){let n:uint8=uint8(1);let x:number=1;let q=x > n;}f();\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated Number >= reversed=False executed=False",
+      "steps": [
+        {
+          "source": "function f(){let n:uint8=uint8(1);let x:number=1;let q=n >= x;}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated Number >= reversed=False executed=True",
+      "steps": [
+        {
+          "source": "function f(){let n:uint8=uint8(1);let x:number=1;let q=n >= x;}f();\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated Number >= reversed=True executed=False",
+      "steps": [
+        {
+          "source": "function f(){let n:uint8=uint8(1);let x:number=1;let q=x >= n;}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated Number >= reversed=True executed=True",
+      "steps": [
+        {
+          "source": "function f(){let n:uint8=uint8(1);let x:number=1;let q=x >= n;}f();\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated immutable",
+      "steps": [
+        {
+          "source": "let n:uint8=uint8(1);const x:number=1;let q=n<x;\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "parenthesized",
+      "steps": [
+        {
+          "source": "let n:uint8=uint8(1);let x:number=1;let q=n<((x));\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "immutable alias",
+      "steps": [
+        {
+          "source": "let n:uint8=uint8(1);let x:number=1;const y=x;let q=n<y;\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "assigned value",
+      "steps": [
+        {
+          "source": "let n:uint8=uint8(1);let x:number=2;x=1;let q=n<x;\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "shadowed constant",
+      "steps": [
+        {
+          "source": "let n:uint8=uint8(1);const x=1;{let x:number=1;let q=n<x;}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-numeric-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "written literal adopts",
+      "steps": [
+        {
+          "source": "let n:uint8=1;String(n<2);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "parenthesized literal adopts",
+      "steps": [
+        {
+          "source": "let n:uint8=1;String(n<((2)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "signed literal adopts",
+      "steps": [
+        {
+          "source": "let n:uint8=1;String(n<+2);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constant name adopts",
+      "steps": [
+        {
+          "source": "const x=2;let n:uint8=1;String(n<x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constant expression adopts",
+      "steps": [
+        {
+          "source": "const x=1+1;let n:uint8=1;String(n<x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constant alias adopts",
+      "steps": [
+        {
+          "source": "const x=2;const y=x;let n:uint8=1;String(n<y);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "parenthesized constant adopts",
+      "steps": [
+        {
+          "source": "const x=2;let n:uint8=1;String(n<((x)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit conversion adopts",
+      "steps": [
+        {
+          "source": "let x:number=2;let n:uint8=1;String(n<(x := uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same numeric domain",
+      "steps": [
+        {
+          "source": "let n:uint8=1;let x:uint8=2;String(n<x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary Number BigInt",
+      "steps": [
+        {
+          "source": "let n:number=1;let x:bigint=2n;String(n<x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic numeric operand",
+      "steps": [
+        {
+          "source": "function f(n:uint8,x:any){return n<x;}String(f(1,(2:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "broad viable numeric parameter",
+      "steps": [
+        {
+          "source": "function f(u:uint8|int32,b:int32){return u*b;}String(f(int32(2),int32(3)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "6"
+          }
+        }
+      ]
+    },
+    {
+      "name": "broad viable iterable parameter",
+      "steps": [
+        {
+          "source": "function f(m:uint8|[].<uint8>){let sum:uint8=0;for(const x of m){sum+=x;}return sum;}const a:[].<uint8>=[1,2];String(f(a));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "broad coalesce undefined",
+      "steps": [
+        {
+          "source": "function f(x:uint32|undefined):uint32{return x??10;}String(f(undefined));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "10"
+          }
+        }
+      ]
+    },
+    {
+      "name": "broad coalesce 5",
+      "steps": [
+        {
+          "source": "function f(x:uint32|undefined):uint32{return x??10;}String(f(5));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "broad boolean && false",
+      "steps": [
+        {
+          "source": "function get():uint32{return 5;}function f(b:boolean):false|uint32{return b&&get();}String(f(false));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "broad boolean && true",
+      "steps": [
+        {
+          "source": "function get():uint32{return 5;}function f(b:boolean):false|uint32{return b&&get();}String(f(true));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "broad boolean || false",
+      "steps": [
+        {
+          "source": "function get():uint32{return 5;}function f(b:boolean):true|uint32{return b||get();}String(f(false));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "broad boolean || true",
+      "steps": [
+        {
+          "source": "function get():uint32{return 5;}function f(b:boolean):true|uint32{return b||get();}String(f(true));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "known always evaluated fallback",
+      "steps": [
+        {
+          "source": "let x:uint32=0;const c:uint32=x||10;String(c);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "10"
+          }
+        }
+      ]
+    },
+    {
+      "name": "store retains declared union",
+      "steps": [
+        {
+          "source": "let x:uint8|string=1;x=\"next\";String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "next"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -71,8 +71,11 @@ test('|| is the truthy part of the left joined with the right', () => {
 });
 
 test('?? is the non-nullish part of the left joined with the right', () => {
-  expect(value('let x: uint32 | undefined = undefined; const c: uint32 = x ?? 10; `${c}`;')).toBe('10');
-  expect(value('let x: uint32 | undefined = 5; const c: uint32 = x ?? 10; `${c}`;')).toBe('5');
+  // A parameter keeps both alternatives; a known initializer narrows before
+  // the test and makes one nullish alternative impossible (#sec-narrowing).
+  const body = 'function choose(x: uint32 | undefined): uint32 { const c: uint32 = x ?? 10; return c; }';
+  expect(value(`${body} String(choose(undefined));`)).toBe('10');
+  expect(value(`${body} String(choose(5));`)).toBe('5');
   expectTypeError('let x: uint32 | undefined = 5; const s: string = x ?? 10;');
 });
 
@@ -83,7 +86,7 @@ test('a literal operand takes the position\'s type', () => {
   // program was refused at its own annotation.
   expect(value('let x: uint32 = 0; const c: uint32 = x || 10; `${c}`;')).toBe('10');
   expect(value('const c: uint32 = 0 || 10; `${c}`;')).toBe('10');
-  expect(value('let x: uint8 | undefined = 0; const c: uint8 = x ?? 7; `${c}`;')).toBe('0');
+  expect(value('function choose(x: uint8 | undefined): uint8 { const c: uint8 = x ?? 7; return c; } String(choose(0));')).toBe('0');
 });
 
 test('an unknown operand keeps the expression unknown', () => {
@@ -130,6 +133,11 @@ test('a part that cannot occur contributes nothing, in both directions', () => {
 });
 
 test('boolean contributes its literal true and false parts', () => {
-  expectOk('let b: boolean = false; function f(): uint32 { return 5; } const r: false | uint32 = b && f();');
-  expectOk('let b: boolean = false; function f(): uint32 { return 5; } const r: true | uint32 = b || f();');
+  const prefix = 'function f(): uint32 { return 5; }';
+  const and = `${prefix} function choose(b: boolean): false | uint32 { const r: false | uint32 = b && f(); return r; }`;
+  const or = `${prefix} function choose(b: boolean): true | uint32 { const r: true | uint32 = b || f(); return r; }`;
+  expect(value(`${and} String(choose(false));`)).toBe('false');
+  expect(value(`${and} String(choose(true));`)).toBe('5');
+  expect(value(`${or} String(choose(false));`)).toBe('5');
+  expect(value(`${or} String(choose(true));`)).toBe('true');
 });

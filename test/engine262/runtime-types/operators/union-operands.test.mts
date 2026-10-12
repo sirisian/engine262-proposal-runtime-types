@@ -24,7 +24,9 @@ test('a union no member of which mixes is refused', () => {
 });
 
 test('a union SOME member of which mixes is left alone', () => {
-  expect(ok(dead('let u: uint8 | int32 = uint8(1); let b: int32 = int32(1); let q = u * b;'))).toBe(true);
+  // A broad parameter retains the viable int32 alternative; initializing the
+  // union with uint8 instead proves the mismatching current member.
+  expect(ok('function __never(u: uint8 | int32, b: int32) { let q = u * b; }')).toBe(true);
   expect(ok(dead('let u: uint8 | uint8 = uint8(1); let b: uint8 = uint8(1); let q = u * b;'))).toBe(true);
 });
 
@@ -40,7 +42,6 @@ test('the three rules agree with each other', () => {
   expectThrown(dead(`${U}let q = new u();`), 'is not a constructor');
   expectThrown(dead(`${U}for (const x of u) { }`), 'is not iterable');
   // Iteration permits a viable alternative; calls require every known arm to be callable.
-  const M = 'let m: uint8 | [].<uint8> = uint8(1); ';
-  expect(ok(dead(`${M}for (const x of m) { }`))).toBe(true);
+  expect(ok('function __never(m: uint8 | [].<uint8>) { for (const x of m) { } }')).toBe(true);
   expectThrown(dead('let f: uint8 | (() => uint8) = uint8(1); let q = f();'), 'is not callable');
 });

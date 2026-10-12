@@ -20247,7 +20247,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // implementer passed in returns a value the signature does not mention.
         // Refusing it is defensible and would break a test that states the
         // opposite intent, so it is left for whoever reconciles the two.
-        const literalOperandType = (t: Known): boolean => !!t && (t.Kind === 'literal' || t.Kind === 'void');
         // TWO UNRELATED CLASSES have no common value, and the comparison is
         // therefore always the same. The judgment is the one the empty-
         // intersection rule already makes, for the reason recorded there:
@@ -20301,12 +20300,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // converting, so two numeric types are not a mistake there - they are
         // the disjointness question just above, which answers *false* rather
         // than refusing. A LITERAL operand adopts the other side's type, as it
-        // does everywhere, so `n < 5` is ordinary and the guard the disjoint
-        // rule already uses serves here too.
+        // does everywhere, so `n < 5` is ordinary. Eligibility comes from the
+        // source expression and its resolved declaration, not a narrowed
+        // literal Type Record (#sec-numeric-value-provenance). In particular,
+        // `let x: number = 1` retains Number's domain at `n < x`.
         if ((strictOperator === '<' || strictOperator === '>'
             || strictOperator === '<=' || strictOperator === '>=')
             && operandTypes.length === 2 && operandTypes[0] && operandTypes[1]
-            && !literalOperandType(operandTypes[0]) && !literalOperandType(operandTypes[1])) {
+            && !operandNodes.some(isNumericConstantExpression)) {
           // Through `shared` and a literal's base, and KEEPING a brand: the
           // comparison below is `SameType`, and a brand is part of the identity
           // it compares, exactly as at an arithmetic operator.
