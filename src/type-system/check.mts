@@ -2778,8 +2778,9 @@ export function CheckDynamicFunction(expression: ParseNode): ObjectValue[] {
   // The combined dynamic-function parse is a lexical source of its own.
   setNodeParent(expression, undefined);
   ClassifyDynamicFunction(expression);
-  const statement = { type: 'ExpressionStatement', Expression: expression } as unknown as ParseNode;
-  const root = { type: 'Script', ScriptBody: { type: 'ScriptBody', StatementList: [statement] } } as unknown as ParseNode.Script;
+  const statement = { type: 'ExpressionStatement', Expression: expression, location: expression.location } as unknown as ParseNode;
+  const root = { type: 'Script', location: expression.location,
+    ScriptBody: { type: 'ScriptBody', StatementList: [statement], location: expression.location } } as unknown as ParseNode.Script;
   dynamicFunctionRoots.set(expression, root);
   const errors = checkCompletedDeclarations([statement] as never, root, CreateCheckSession());
   return errors.length > 0 && !errors.some((error) => TypeDiagnosticOf(error)?.rule === 'rt-inference-limit')
@@ -20486,6 +20487,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             && (leftString || stringOnly(rightT))) {
           // A primitive block can replace the operation just as a selected
           // class operator above can. Keep its established result contract.
+          // Registered blocks from another source may dispatch even when this
+          // source cannot reconstruct their captures/signatures. Do not prove
+          // built-in concatenation or elide a return check from that absence.
+          if (leftString) {
+            const local = new Set(blockDefinitionsFor('string', '+').map(({ def }) => def));
+            if (RegisteredPrimitiveOperators('string', '+').some((entry) => !local.has(entry.node as ParseNode.OperatorDefinition))) return null;
+          }
           const blockLeft = erasedKeepingBrand(leftT);
           const blockRight = erasedKeepingBrand(rightT);
           if (blockLeft && blockRight) {

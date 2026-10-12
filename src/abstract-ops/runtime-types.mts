@@ -2957,6 +2957,9 @@ export function LookupPrimitiveOperatorLevels(value: Value, opText: string): rea
       }
       names.push(base.Name);
     }
+  } else if (value instanceof JSStringValue) {
+    // Literal/refined String carriers have the same primitive receiver.
+    names.push('string');
   } else if (value instanceof NumberValue) {
     names.push('number');
   } else if (isComplexObject(value)) {

@@ -1,0 +1,990 @@
+{
+  "cases": [
+    {
+      "name": "receiver string",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}}function f(s:string,n:uint8):uint8{return s+n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiver \"a\"",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}}function f(s:\"a\",n:uint8):uint8{return s+n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiver \"a\"|\"b\"",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}}function f(s:\"a\"|\"b\",n:uint8):uint8{return s+n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiver string & (\"a\"|\"b\")",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}}function f(s:string & (\"a\"|\"b\"),n:uint8):uint8{return s+n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiver any",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}}function f(s:any,n:uint8):uint8{return s+n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary +",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}}function f(s:string,n:uint8):uint8{return s + n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary -",
+      "steps": [
+        {
+          "source": "primitive string{operator -(n:uint8):uint8{return 7;}}function f(s:string,n:uint8):uint8{return s - n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary *",
+      "steps": [
+        {
+          "source": "primitive string{operator *(n:uint8):uint8{return 7;}}function f(s:string,n:uint8):uint8{return s * n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary /",
+      "steps": [
+        {
+          "source": "primitive string{operator /(n:uint8):uint8{return 7;}}function f(s:string,n:uint8):uint8{return s / n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary %",
+      "steps": [
+        {
+          "source": "primitive string{operator %(n:uint8):uint8{return 7;}}function f(s:string,n:uint8):uint8{return s % n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary **",
+      "steps": [
+        {
+          "source": "primitive string{operator **(n:uint8):uint8{return 7;}}function f(s:string,n:uint8):uint8{return s ** n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary &",
+      "steps": [
+        {
+          "source": "primitive string{operator &(n:uint8):uint8{return 7;}}function f(s:string,n:uint8):uint8{return s & n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary |",
+      "steps": [
+        {
+          "source": "primitive string{operator |(n:uint8):uint8{return 7;}}function f(s:string,n:uint8):uint8{return s | n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary ^",
+      "steps": [
+        {
+          "source": "primitive string{operator ^(n:uint8):uint8{return 7;}}function f(s:string,n:uint8):uint8{return s ^ n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary <<",
+      "steps": [
+        {
+          "source": "primitive string{operator <<(n:uint8):uint8{return 7;}}function f(s:string,n:uint8):uint8{return s << n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary >>",
+      "steps": [
+        {
+          "source": "primitive string{operator >>(n:uint8):uint8{return 7;}}function f(s:string,n:uint8):uint8{return s >> n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary >>>",
+      "steps": [
+        {
+          "source": "primitive string{operator >>>(n:uint8):uint8{return 7;}}function f(s:string,n:uint8):uint8{return s >>> n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "comparison <",
+      "steps": [
+        {
+          "source": "primitive string{operator <(n:uint8):boolean{return true;}}function f(s:string,n:uint8):boolean{return s < n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "comparison <=",
+      "steps": [
+        {
+          "source": "primitive string{operator <=(n:uint8):boolean{return true;}}function f(s:string,n:uint8):boolean{return s <= n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "comparison >",
+      "steps": [
+        {
+          "source": "primitive string{operator >(n:uint8):boolean{return true;}}function f(s:string,n:uint8):boolean{return s > n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "comparison >=",
+      "steps": [
+        {
+          "source": "primitive string{operator >=(n:uint8):boolean{return true;}}function f(s:string,n:uint8):boolean{return s >= n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "comparison ==",
+      "steps": [
+        {
+          "source": "primitive string{operator ==(n:uint8):boolean{return true;}}function f(s:string,n:uint8):boolean{return s == n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "comparison !=",
+      "steps": [
+        {
+          "source": "primitive string{operator !=(n:uint8):boolean{return true;}}function f(s:string,n:uint8):boolean{return s != n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "SyntaxError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "comparison ===",
+      "steps": [
+        {
+          "source": "primitive string{operator ===(n:uint8):boolean{return true;}}function f(s:string,n:uint8):boolean{return s === n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "SyntaxError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "comparison !==",
+      "steps": [
+        {
+          "source": "primitive string{operator !==(n:uint8):boolean{return true;}}function f(s:string,n:uint8):boolean{return s !== n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "SyntaxError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "protected string",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:any):uint8{return 7;}}function f(s:string,r:string){return s+r;}String(f(\"a\",\"b\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "protected \"a\"",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:any):uint8{return 7;}}function f(s:\"a\",r:string){return s+r;}String(f(\"a\",\"b\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "protected \"a\"|\"b\"",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:any):uint8{return 7;}}function f(s:\"a\"|\"b\",r:string){return s+r;}String(f(\"a\",\"b\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "protected any",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:any):uint8{return 7;}}function f(s:any,r:string){return s+r;}String(f(\"a\",\"b\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "no matching block",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}}function f(s:string,n:uint16):string{return s+n;}f(\"a\",(1:=uint16));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong destination",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}}function f(s:string,n:uint8){let result:string=s+n;}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "left literal",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}}String(\"a\"+(1:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "compound",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}}let s:string=\"a\";s+=(1:=uint8);String(s);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "reverse",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}}String((1:=uint8)+\"a\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "raw body",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):string{return this+String(n);}}function f(s:string,n:uint8):string{return s+n;}f(\"a\",(1:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "specificity",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:any):uint8{return 1;}operator +(n:uint8):uint8{return 7;}}String(\"a\"+(1:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ambiguity",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8|uint16):uint8{return 1;}operator +(n:uint16|uint32):uint8{return 7;}}function f(s,n){return s+n;}String(f(\"a\",(1:=uint16)));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "raw metadata \"a\"",
+      "steps": [
+        {
+          "source": "type Tag={tag?:string};meta Tag{default={};subtype(a:Tag,b:Tag):boolean{return true;}validate(v,m:Tag):boolean{return true;}}primitive string<const D:Tag>{operator +(n:uint8):uint8{if(Reflect.typeOf(this)!==(type string))throw new Error(\"not raw\");return 7;}}function f(s,n){return s+n;}String(f(\"a\", (1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "raw metadata (\"a\":=string.<{tag:\"A\"}>)",
+      "steps": [
+        {
+          "source": "type Tag={tag?:string};meta Tag{default={};subtype(a:Tag,b:Tag):boolean{return true;}validate(v,m:Tag):boolean{return true;}}primitive string<const D:Tag>{operator +(n:uint8):uint8{if(Reflect.typeOf(this)!==(type string))throw new Error(\"not raw\");return 7;}}function f(s,n){return s+n;}String(f((\"a\":=string.<{tag:\"A\"}>), (1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata plain pair",
+      "steps": [
+        {
+          "source": "type Tag={tag?:string};meta Tag{default={};subtype(a:Tag,b:Tag):boolean{return true;}validate(v,m:Tag):boolean{return true;}}primitive string<const D:Tag>{operator +(n:string.<D>):uint8{return 7;}}function f(s,n){return s+n;}String(f((\"a\":=string.<{tag:\"A\"}>),(\"b\":=string.<{tag:\"A\"}>)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negative equality",
+      "steps": [
+        {
+          "source": "primitive string{operator ==(n:uint8):boolean{return true;}}function f(s,n){return s!=n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rhs literal protection",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:any):uint8{return 7;}}function f(s:string,r:\"b\"){return s+r;}String(f(\"a\",\"b\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "both literal protection",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:any):uint8{return 7;}}function f(s:\"a\",r:\"b\"){return s+r;}String(f(\"a\",\"b\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "boxed left",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}}String(new String(\"a\")+(1:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stamped result",
+      "steps": [
+        {
+          "source": "type Tag={tag?:string};meta Tag{default={};subtype(a:Tag,b:Tag):boolean{return true;}validate(v,m:Tag):boolean{return true;}}primitive string{operator +(n:uint8):string.<{tag:\"A\"}>{return this;}}function f(s,n){return s+n;}const result=f(\"a\",(1:=uint8));String(Reflect.typeOf(result)===(type string.<{tag:\"A\"}>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bodyless result",
+      "steps": [
+        {
+          "source": "type Tag={tag?:string};meta Tag{default={};subtype(a:Tag,b:Tag):boolean{return true;}validate(v,m:Tag):boolean{return true;}}primitive string<const D:Tag>{operator +(n:uint8):string.<D>;}function f(s,n){return s+n;}const result=f((\"a\":=string.<{tag:\"A\"}>),(1:=uint8));String(Reflect.typeOf(result)===(type string.<{tag:\"A\"}>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiver value in body",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return this===\"a\"?7:9;}}function f(s,n){return s+n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "partial right union",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}}function f(s:string,n:uint8|uint16){return s+n;}String(f(\"a\",(1:=uint8)))+\":\"+String(f(\"a\",(1:=uint16)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7:a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unannotated constant receiver",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}}const a=\"a\";const s=a;String(s+(1:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reversed declarations",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}operator +(n:any):uint8{return 1;}}String(\"a\"+(1:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "operand order and no conversion",
+      "steps": [
+        {
+          "source": "globalThis.trace=\"\";primitive string{operator +(n:{}):uint8{globalThis.trace+=\"B\";return 7;}}function left(){globalThis.trace+=\"L\";return \"a\";}function right(){globalThis.trace+=\"R\";return {valueOf(){globalThis.trace+=\"C\";return 1;}};}const result=left()+right();globalThis.trace+\":\"+String(result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "LRB:7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unmatched fallback converts once",
+      "steps": [
+        {
+          "source": "globalThis.trace=\"\";primitive string{operator +(n:uint8):uint8{return 7;}}function left(){globalThis.trace+=\"L\";return \"a\";}function right(){globalThis.trace+=\"R\";return {valueOf(){globalThis.trace+=\"C\";return 1;}};}const result=left()+right();globalThis.trace+\":\"+String(result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "LRC:a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "abrupt body restores dispatch",
+      "steps": [
+        {
+          "source": "globalThis.calls=0;primitive string{operator +(n:uint8):uint8{globalThis.calls++;if(globalThis.calls===1)throw new Error(\"stop\");return 7;}}function f(s,n){return s+n;}try{f(\"a\",(1:=uint8));}catch(e){}String(f(\"a\",(1:=uint8)))+\":\"+String(globalThis.calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7:2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "strict equality retains identity",
+      "steps": [
+        {
+          "source": "primitive string{operator ==(n:uint8):boolean{return true;}}function f(s,n){return s===n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "derived inequality",
+      "steps": [
+        {
+          "source": "primitive string{operator ==(n:uint8):boolean{return true;}}function f(s,n){return s!=n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "protected equality literal carriers",
+      "steps": [
+        {
+          "source": "primitive string{operator ==(n:any):boolean{return true;}}function f(s:\"a\",n:\"b\"){return s==n;}String(f(\"a\",\"b\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain pair before block body",
+      "steps": [
+        {
+          "source": "globalThis.calls=0;primitive string{operator +(n:any):uint8{globalThis.calls++;return 7;}}function f(s:\"a\",n:\"b\"){return s+n;}String(f(\"a\",\"b\"))+\":\"+String(globalThis.calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "previous Script dispatch",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}}\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(s,n){return s+n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "String same-pair declaration rejected",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:string):uint8{return 7;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-duplicate-operator",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "previous Script typed successful return",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}}\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(s:string,n:uint8):uint8{return s+n;}String(f(\"a\",(1:=uint8)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "previous Script runtime String conversion",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}}\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(s:string,n:uint8):string{return s+n;}const result=f(\"a\",(1:=uint8));typeof result+\":\"+String(result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string:7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown operator result keeps runtime check",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):string{return \"custom\";}}\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "function f(s,n):uint8{return s+n;}f(\"a\",(1:=uint8));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "compound evaluates and stores once",
+      "steps": [
+        {
+          "source": "globalThis.trace=\"\";globalThis.stored=\"\";primitive string{operator +(n:uint8):uint8{globalThis.trace+=\"B\";return 7;}}let box:any={get x(){globalThis.trace+=\"G\";return \"a\";},set x(v){globalThis.trace+=\"S\";globalThis.stored=String(v);}};box.x+=(1:=uint8);globalThis.trace+\":\"+globalThis.stored;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "GBS:7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "raw effective right String",
+      "steps": [
+        {
+          "source": "type Tag={tag?:string};meta Tag{default={};subtype(a:Tag,b:Tag):boolean{return true;}validate(v,m:Tag):boolean{return true;}}primitive string{operator +(n:string.<{tag:\"A\"}>):uint8{if(Reflect.typeOf(n)!==(type string))throw new Error(\"not raw\");return 7;}}function f(s,n){return s+n;}String(f(\"a\",(\"b\":=string.<{tag:\"A\"}>)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bodyless keeps concatenated value",
+      "steps": [
+        {
+          "source": "type Tag={tag?:string};meta Tag{default={};subtype(a:Tag,b:Tag):boolean{return true;}validate(v,m:Tag):boolean{return true;}}primitive string<const D:Tag>{operator +(n:uint8):string.<D>;}function f(s,n){return s+n;}const result=f((\"a\":=string.<{tag:\"A\"}>),(1:=uint8));String(result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct eval",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}}eval(\"String(\\\"a\\\"+(1:=uint8));\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 2,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "indirect eval",
+      "steps": [
+        {
+          "source": "primitive string{operator +(n:uint8):uint8{return 7;}}(0,eval)(\"String(\\\"a\\\"+(1:=uint8));\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 2,
+            "value": "7"
+          }
+        }
+      ]
+    }
+  ]
+}

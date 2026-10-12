@@ -4,7 +4,7 @@ import {
   type ComplexObject,
 } from '../intrinsics/Complex.mts';
 import { ObjectValue,
-  JSStringValue, Value,
+  JSStringValue, TypedString, Value,
   NumberValue,
   BigIntValue,
   SameType,
@@ -576,8 +576,11 @@ export function* DispatchPrimitiveBlockOperator(lval: Value, opText: string, rva
   if (!surroundingAgent.feature('runtime-types') || (lval instanceof ObjectValue && !isComplexObject(lval) && !isRationalObject(lval) && !isDecimalObject(lval) && !isFloat128Object(lval))) {
     return undefined;
   }
-  const receiverType = RuntimeTypeOf(lval);
-  const operandType = RuntimeTypeOf(rval);
+  // Literal carriers refine a value without changing its primitive family.
+  // Metadata parameterizations remain distinct and may select a block.
+  const plainBase = (type: TypeRecord): TypeRecord => type.Kind === 'literal' ? type.Base : type;
+  const receiverType = plainBase(RuntimeTypeOf(lval));
+  const operandType = plainBase(RuntimeTypeOf(rval));
   const plainReceiver = receiverType.Kind === 'primitive'
     && !(receiverType.Name === 'vector' && (receiverType.Arguments[0] as TypeRecord)?.Kind === 'parameterized');
   const protectedPair = plainReceiver && (opText.startsWith('unary ') || SameTypeRecord(receiverType, operandType));
@@ -838,6 +841,9 @@ function chosenBodyless(entry: { readonly fn: unknown }): boolean {
  * result is stamped with the contributions afterwards.
  */
 export function WithoutMetadata(value: Value): Value {
+  if (value instanceof JSStringValue && RuntimeTypeOf(value).Kind === 'parameterized') {
+    return Value(value.stringValue());
+  }
   if (isDecimalObject(value) || isRationalObject(value) || isComplexObject(value) || isFloat128Object(value)) {
     const type = RuntimeTypeOf(value);
     return type.Kind === 'parameterized' ? StampFamilyValue(value, type.Base) as Value : value;
@@ -900,6 +906,9 @@ function MergePrimitiveResultType(
 }
 
 function StampPrimitiveResult(raw: Value, resultType: TypeRecord): Value | ThrowCompletion {
+  if (raw instanceof JSStringValue && resultType.Kind === 'parameterized') {
+    return TypedString(raw.stringValue(), resultType);
+  }
   if ((raw as { type?: string }).type === 'Vector' && isVectorType(resultType)) {
     const laneType = (resultType as TypeRecord & { Kind: 'primitive' }).Arguments[0] as TypeRecord;
     const lanes: Value[] = [];
