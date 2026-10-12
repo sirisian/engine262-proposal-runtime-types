@@ -1,0 +1,1162 @@
+{
+  "cases": [
+    {
+      "name": "default rejects function",
+      "steps": [
+        {
+          "source": "function value(){return {mark:()=>0};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default rejects undefined",
+      "steps": [
+        {
+          "source": "function value(){return {mark:undefined};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default rejects map",
+      "steps": [
+        {
+          "source": "function value(){return {mark:new Map()};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default rejects set",
+      "steps": [
+        {
+          "source": "function value(){return {mark:new Set()};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default rejects boxed number",
+      "steps": [
+        {
+          "source": "function value(){return {mark:new Number(1)};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default rejects type object",
+      "steps": [
+        {
+          "source": "function value(){return {mark:uint8};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects function",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:()=>0}});\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects undefined",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:undefined}});\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects date",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:new Date(0)}});\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects map",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:new Map()}});\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects set",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:new Set()}});\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects boxed number",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:new Number(1)}});\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects proxy",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:new Proxy({},{})}});\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects type object",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:uint8}});\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects typed array",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:new Uint8Array(2)}});\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects regexp proxy",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:new Proxy(/x/,{})}});\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection rejects class instance",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:new (class {x=1})()}});\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default rejects record cycle",
+      "steps": [
+        {
+          "source": "function value(){let a={};a.self=a;return {mark:a};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ],
+      "limits": {
+        "steps": 2000
+      }
+    },
+    {
+      "name": "default rejects list cycle",
+      "steps": [
+        {
+          "source": "function value(){let a=[];a[0]=a;return {mark:a};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ],
+      "limits": {
+        "steps": 2000
+      }
+    },
+    {
+      "name": "default rejects mixed cycle",
+      "steps": [
+        {
+          "source": "function value(){let a={};a.list=[a];return {mark:a};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ],
+      "limits": {
+        "steps": 2000
+      }
+    },
+    {
+      "name": "default rejects hole",
+      "steps": [
+        {
+          "source": "function value(){return {mark:[,1]};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default rejects undefined list element",
+      "steps": [
+        {
+          "source": "function value(){return {mark:[undefined]};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default rejects nested function",
+      "steps": [
+        {
+          "source": "function value(){return {mark:{a:[()=>0]}};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default accepts null",
+      "steps": [
+        {
+          "source": "function value(){return {mark:null};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default accepts symbol",
+      "steps": [
+        {
+          "source": "function value(){return {mark:Symbol.for(\"x\")};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default accepts record",
+      "steps": [
+        {
+          "source": "function value(){return {mark:{a:1}};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default accepts list",
+      "steps": [
+        {
+          "source": "function value(){return {mark:[1,2]};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default accepts pattern",
+      "steps": [
+        {
+          "source": "function value(){return {mark:/abc/i};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default accepts range",
+      "steps": [
+        {
+          "source": "function value(){return {mark:0..=10};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default accepts boolean",
+      "steps": [
+        {
+          "source": "function value(){return {mark:true};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default accepts bigint",
+      "steps": [
+        {
+          "source": "function value(){return {mark:2n};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default accepts shared record",
+      "steps": [
+        {
+          "source": "function value(){let a={v:1};return {mark:{a:a,b:a}};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default accepts shared list",
+      "steps": [
+        {
+          "source": "function value(){let a=[1,2];return {mark:[a,a]};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default accepts null prototype",
+      "steps": [
+        {
+          "source": "function value(){let a=Object.create(null);a.v=1;return {mark:a};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "list named properties do not become elements",
+      "steps": [
+        {
+          "source": "const a=[1];a.extra=()=>0;String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:a}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:[1]}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "list nonenumerable indices remain elements",
+      "steps": [
+        {
+          "source": "const a=[1];Object.defineProperty(a,\"0\",{enumerable:false});String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:a}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:[1]}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "list inherited index is read at its position",
+      "steps": [
+        {
+          "source": "const a=[,1];const p=Object.create(Array.prototype);p[0]=2;Object.setPrototypeOf(a,p);String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:a}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:[2,1]}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection round trip list",
+      "steps": [
+        {
+          "source": "const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:[1,2]}});String(Reflect.makeType(Reflect.getReflection(T))===T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection round trip pattern",
+      "steps": [
+        {
+          "source": "const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:/ab/i}});String(Reflect.makeType(Reflect.getReflection(T))===T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection round trip range",
+      "steps": [
+        {
+          "source": "const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:0..=10}});String(Reflect.makeType(Reflect.getReflection(T))===T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection round trip nested forms",
+      "steps": [
+        {
+          "source": "const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{a:[null,Symbol.for(\"s\")],b:/x/,c:..}}});String(Reflect.makeType(Reflect.getReflection(T))===T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "public range tag cannot conceal a function",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{__range:true,start:()=>0}}});\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "public range tag remains ordinary record",
+      "steps": [
+        {
+          "source": "const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{__range:true,start:1}}});String(Reflect.getReflection(T).metadata.brand.__range);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "snapshot getter reads once without marker probe",
+      "steps": [
+        {
+          "source": "let reads=0;const data={get value(){reads++;return 1;}};Object.defineProperty(data,\"__range\",{get(){throw new Error(\"unexpected marker read\");}});Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:data}});String(reads);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "record getter order is depth first",
+      "steps": [
+        {
+          "source": "let order=\"\";const x={get a(){order+=\"a\";return {get b(){order+=\"b\";return 1;}};},get c(){order+=\"c\";return 2;}};Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:x}});order;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "abc"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shared child getters are read per occurrence",
+      "steps": [
+        {
+          "source": "let count=0;const x={get v(){return ++count;}};const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{a:x,b:x}}});const r=Reflect.getReflection(T).metadata.brand;String(count)+\"/\"+String(r.a.v)+\"/\"+String(r.b.v);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/1/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "snapshot refusal leaves ordinary effects visible",
+      "steps": [
+        {
+          "source": "let reads=0;let message=\"\";try{Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{get x(){reads++;return ()=>0;}}}});}catch(e){message=e instanceof TypeError ? \"refused\":\"wrong\";}String(reads)+\"/\"+message;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/refused"
+          }
+        }
+      ]
+    },
+    {
+      "name": "proxy admission runs no traps",
+      "steps": [
+        {
+          "source": "let traps=0;const x=new Proxy({},{get(){traps++;return 1;},ownKeys(){traps++;return [];}});let refused=false;try{Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:x}});}catch(e){refused=e instanceof TypeError;}String(refused)+\"/\"+String(traps);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite list under sufficient snapshot budget",
+      "steps": [
+        {
+          "source": "function value(){return {mark:[1,2,3]};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ],
+      "limits": {
+        "steps": 10000
+      }
+    },
+    {
+      "name": "snapshot budget exhaustion publishes nothing",
+      "steps": [
+        {
+          "source": "function value(){let a=[];for(let i=0;i<40;i++)a.push(i);return {mark:a};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-type-evaluation-limit",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ],
+      "limits": {
+        "steps": 100
+      }
+    },
+    {
+      "name": "runtime snapshot traversal is metered",
+      "steps": [
+        {
+          "source": "Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:[1,2,3,4,5,6,7,8,9,10]}});\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ],
+      "limits": {
+        "steps": 10
+      }
+    },
+    {
+      "name": "snapshot exhaustion releases its budget frame",
+      "steps": [
+        {
+          "source": "let refused=false;try{Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:[1,2,3,4,5,6,7,8,9,10]}});}catch(e){refused=e instanceof TypeError;}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:1}});String(refused)+\"/\"+String(T===uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ],
+      "limits": {
+        "steps": 10
+      }
+    },
+    {
+      "name": "list getter order and captured length",
+      "steps": [
+        {
+          "source": "let order=\"\";const a=[1,2];Object.defineProperty(a,\"0\",{get(){order+=\"a\";a.push(3);return 1;}});Object.defineProperty(a,\"1\",{get(){order+=\"b\";return 2;}});const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:a}});order+\"/\"+String(T===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:[1,2]}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class instance cannot be a reflected record",
+      "steps": [
+        {
+          "source": "class C{x=1;}const x=new C();Object.setPrototypeOf(x,null);Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:x}});\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prototype change cannot hide opaque internal slots",
+      "steps": [
+        {
+          "source": "const x=new Map();Object.setPrototypeOf(x,null);Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:x}});\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "record projection ignores inherited and nonenumerable fields",
+      "steps": [
+        {
+          "source": "const x=Object.create({hidden:()=>0});x.a=1;Object.defineProperty(x,\"nonEnumerable\",{value:()=>0});String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:x}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{a:1}}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed numeric atom uint8",
+      "steps": [
+        {
+          "source": "function value(){return {mark:uint8(1)};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        },
+        {
+          "source": "const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:uint8(1)}});String(Reflect.makeType(Reflect.getReflection(T))===T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed numeric atom int64",
+      "steps": [
+        {
+          "source": "function value(){return {mark:int64(1)};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        },
+        {
+          "source": "const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:int64(1)}});String(Reflect.makeType(Reflect.getReflection(T))===T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed numeric atom wide uint64",
+      "steps": [
+        {
+          "source": "function value(){return {mark:uint64(9007199254740993n)};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        },
+        {
+          "source": "const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:uint64(9007199254740993n)}});String(Reflect.makeType(Reflect.getReflection(T))===T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed numeric atom float32",
+      "steps": [
+        {
+          "source": "function value(){return {mark:float32(0.5)};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        },
+        {
+          "source": "const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:float32(0.5)}});String(Reflect.makeType(Reflect.getReflection(T))===T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed numeric atom signed float64",
+      "steps": [
+        {
+          "source": "function value(){return {mark:float64(-0)};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        },
+        {
+          "source": "const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:float64(-0)}});String(Reflect.makeType(Reflect.getReflection(T))===T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed numeric atom rational64",
+      "steps": [
+        {
+          "source": "function value(){return {mark:rational64(1,2)};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        },
+        {
+          "source": "const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:rational64(1,2)}});String(Reflect.makeType(Reflect.getReflection(T))===T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed numeric atom decimal128",
+      "steps": [
+        {
+          "source": "function value(){return {mark:decimal128(2)};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        },
+        {
+          "source": "const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:decimal128(2)}});String(Reflect.makeType(Reflect.getReflection(T))===T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed numeric atom complex128",
+      "steps": [
+        {
+          "source": "function value(){return {mark:complex128(1,2)};}type M={mark?:any};meta M{subtype(a,b){return true;}default=value();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        },
+        {
+          "source": "const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:complex128(1,2)}});String(Reflect.makeType(Reflect.getReflection(T))===T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

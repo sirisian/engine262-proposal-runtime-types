@@ -10,7 +10,7 @@ import { GetTypeObject, isTypeObject, type TypeObject } from '../type-system/int
 import { matchTypeStructurally, HasSlotInsideApplication } from '../type-system/relations.mts';
 import { CaseGroupMembers, SelectionOfValue } from '../abstract-ops/callable-selection.mts';
 import { SpecializationPatternsOf } from '../type-system/specialization-patterns.mts';
-import { SnapshotMetadataValue, CheckMetadataRecord } from '../abstract-ops/runtime-types.mts';
+import { SnapshotMetadataValue, CheckMetadataRecord, MetadataAsObject } from '../abstract-ops/runtime-types.mts';
 import { MetadataSubtypeJudgment } from '../type-system/check-pass.mts';
 import type { DeferredMetadataCheck } from '../type-system/check.mts';
 import { MemberDeclarationOf } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
@@ -844,54 +844,6 @@ function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
  */
 
 /**
- * A [[Metadata]] record, as an ECMAScript object a program can read.
- *
- * The slot's canonical form is a FROZEN PLAIN RECORD -
- * `MetadataObjectFromType` builds one and casts it to `Value`, and
- * `SameMetadata` walks it with `Object.keys`, which only works on that form.
- * The emitter, though, handed the record straight to `CreateDataProperty`,
- * which wants a real Value. The cast is where the two readings diverged and it
- * is why nothing caught them: a cast asserts the contract instead of checking
- * it.
- *
- * The consequence was not a wrong answer but a CRASH. Reading `.metadata` off
- * any reflected parameterized type aborted the engine - "Cannot convert object
- * to primitive value" for a `typeof`, and an assertion failure inside
- * `Object.keys` - on the SYNTACTIC path as much as on a built one. So the
- * emitter has never produced a usable metadata value, and no test read one.
- *
- * Converting here keeps the plain record canonical, which is what the two
- * consumers that already work depend on, and confines the Value form to the
- * boundary that needs it.
- */
-function metadataToValue(metadata: unknown, realm: Realm): Value {
-  if (metadata === null || metadata === undefined) {
-    return Value.undefined;
-  }
-  if (metadata instanceof Value) {
-    return metadata;
-  }
-  if (typeof metadata === 'string') {
-    return Value(metadata);
-  }
-  if (typeof metadata === 'number') {
-    return Value(metadata);
-  }
-  if (typeof metadata === 'boolean') {
-    return metadata ? Value.true : Value.false;
-  }
-  if (typeof metadata !== 'object') {
-    return Value.undefined;
-  }
-  const out = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
-  for (const key of Object.keys(metadata as object)) {
-    const v = (metadata as Record<string, unknown>)[key];
-    X(CreateDataProperty(out, Value(key), metadataToValue(v, realm)));
-  }
-  return out;
-}
-
-/**
  * The structure of a type as the `Type` context of #sec-decorator-contexts describes
  * it, discriminated by `kind`. Exported so the context form of
  * `Reflect.getReflection` can ask for the same thing the value form does.
@@ -968,7 +920,9 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
     case 'parameterized':
       set('kind', Value('parameterized'));
       set('base', typeObj(t.Base));
-      set('metadata', metadataToValue(t.Metadata, realm));
+      // Reuse the hook materializer: lists, patterns and ranges retain their
+      // language forms; public marker properties never stand in for atoms.
+      set('metadata', MetadataAsObject(t.Metadata));
       break;
     case 'union':
       set('kind', Value('union'));

@@ -3125,95 +3125,96 @@ export function LookupTypeDefault(typeObject: object): Value | undefined {
   return typeDefaults.get(typeObject);
 }
 
-/**
- * sec-metadataportion, step 1's prerequisite: the snapshot of a meta type's
- * `default`, taken ONCE at declaration, in the host metadata-record shape
- * MetadataObjectFromType produces (frozen, null-prototype, engine Values at
- * the leaves, nested records and lists recursed), so a later structural
- * comparison of a portion against it cannot be defeated by a shape mismatch.
- * A getter on the default object therefore runs at declaration and never
- * again, and MetadataPortion stays synchronous, which its callers require.
- * Symbol-keyed properties are skipped, and a RegExp
- * default would snapshot by its own enumerable keys rather than as the
- * pattern form, pinned beside StringPattern.
+/** Admit the closed metadata language while taking one ordered snapshot.
+ * A worklist prevents host recursion; active ancestors detect cycles without
+ * confusing a shared child with a cycle or caching observable getter reads.
  */
 export function* SnapshotMetadataValue(value: Value): PlainEvaluator<Value> {
-  // Numeric families represented by objects are immutable atoms, not records
-  // of their enumerable implementation properties.
-  if (isRationalObject(value) || isDecimalObject(value) || isFloat128Object(value) || isComplexObject(value)) return value;
-  if (!(value instanceof ObjectValue)) {
-    return value;
-  }
-  // table-metadata-values: a RANGE and a PATTERN are carried structurally, as
-  // endpoints-and-bounds and as source-and-flags. Walking own enumerable keys
-  // cannot see either - a range's endpoints are internal slots behind prototype
-  // accessors, and a RegExp's source likewise - so a default holding one
-  // snapshotted as an EMPTY record and the meta type was then rejected for a
-  // default that "must be a value of its constraint shape". Carrying them here
-  // in the same markers `metadataValueFromType` produces is what lets
-  // MetadataAsObject rebuild them and the membership judgment see a real value.
-  if (isRangeObject(value)) {
-    const marker: Record<string, unknown> = Object.create(null);
-    marker.__range = true;
-    marker.start = value.RangeStart;
-    marker.end = value.RangeEnd;
-    marker.startBound = value.RangeStartBound;
-    marker.endBound = value.RangeEndBound;
-    return Object.freeze(marker) as unknown as Value;
-  }
-  // A marker the reflection side already produced, handed back through
-  // `makeType`. `metadataToValue` emits a range as `{ __range, start, end,
-  // startBound, endBound }` rather than as a live RangeObject, so a round trip
-  // arrives here as an ordinary object and was walked as one - the rebuilt type
-  // read `float64.<{ bounds: { __range: true, ... } }>` where the original read
-  // `float64.<{ bounds: 0..<10 }>`, which is a different interned type.
-  //
-  // Rebuilt into the same frozen marker the branch above produces, so the two
-  // ways of reaching a range agree. Reading the fields back is what makes the
-  // identity law hold for a range carried as metadata.
-  if (value instanceof ObjectValue) {
-    const flag = Q(yield* Get(value, Value('__range')));
-    if (flag === Value.true) {
-      const marker: Record<string, unknown> = Object.create(null);
-      marker.__range = true;
-      const start = Q(yield* Get(value, Value('start')));
-      const end = Q(yield* Get(value, Value('end')));
-      marker.start = start === Value.undefined ? undefined : start;
-      marker.end = end === Value.undefined ? undefined : end;
-      const startBound = Q(yield* Get(value, Value('startBound')));
-      const endBound = Q(yield* Get(value, Value('endBound')));
-      marker.startBound = startBound === Value.undefined ? undefined : startBound instanceof JSStringValue ? startBound.stringValue() : startBound;
-      marker.endBound = endBound === Value.undefined ? undefined : endBound instanceof JSStringValue ? endBound.stringValue() : endBound;
-      return Object.freeze(marker) as unknown as Value;
+  type Store = (snapshot: unknown) => void;
+  type Task = { kind: 'value'; value: Value; store: Store }
+    | { kind: 'record'; value: ObjectValue; out: Record<string, unknown>; keys: readonly (JSStringValue | SymbolValue)[]; index: number; store: Store }
+    | { kind: 'list'; value: ObjectValue; out: unknown[]; length: number; index: number; store: Store };
+  let result: unknown;
+  const tasks: Task[] = [{ kind: 'value', value, store: (snapshot) => {
+    result = snapshot;
+  } }];
+  const active = new Set<ObjectValue>();
+  BeginTypeEvaluation();
+  try {
+    while (tasks.length > 0) {
+      const task = tasks.pop()!;
+      ConsumeEvaluationSteps(1);
+      if (IsBudgetExhausted()) return Throw.TypeError('the type evaluation budget was exhausted while snapshotting metadata');
+      if (task.kind !== 'value') {
+        const length = task.kind === 'list' ? task.length : task.keys.length;
+        if (task.index === length) {
+          active.delete(task.value);
+          task.store(Object.freeze(task.out));
+          continue;
+        }
+        const index = task.index++;
+        tasks.push(task);
+        if (task.kind === 'list') {
+          // Lists preserve length and indexed Get order, irrespective of index
+          // enumerability. Named properties do not become extra elements.
+          const child = Q(yield* Get(task.value, Value(String(index))));
+          tasks.push({ kind: 'value', value: child, store: (snapshot) => {
+            task.out[index] = snapshot;
+          } });
+        } else {
+          const key = task.keys[index]!;
+          // Symbol-keyed record projection is a separate retained boundary.
+          if (!(key instanceof JSStringValue)) continue;
+          const desc = Q(yield* task.value.GetOwnProperty(key));
+          if (!desc || desc.Enumerable !== Value.true) continue;
+          const child = Q(yield* Get(task.value, key));
+          tasks.push({ kind: 'value', value: child, store: (snapshot) => {
+            task.out[key.stringValue()] = snapshot;
+          } });
+        }
+        continue;
+      }
+      const current = task.value;
+      if (isRationalObject(current) || isDecimalObject(current) || isFloat128Object(current) || isComplexObject(current)) {
+        task.store(current);
+      } else if (!(current instanceof ObjectValue)) {
+        if (current !== Value.null && !(current instanceof NumberValue) && !(current instanceof TypedNumberValue) && !(current instanceof BigIntValue)
+            && !(current instanceof JSStringValue) && !(current instanceof BooleanValue) && !(current instanceof SymbolValue)) {
+          return Throw.TypeError('the value is not in the metadata value language');
+        }
+        task.store(current);
+      } else if (isRangeObject(current)) {
+        const marker = Object.assign(Object.create(null), { __range: true,
+          start: current.RangeStart, end: current.RangeEnd,
+          startBound: current.RangeStartBound, endBound: current.RangeEndBound });
+        task.store(Object.freeze(marker));
+      } else if (current.OriginalSource !== undefined && current.OriginalFlags !== undefined) {
+        task.store(Object.freeze(Object.assign(Object.create(null), { __pattern: true,
+          source: current.OriginalSource.stringValue(), flags: current.OriginalFlags.stringValue() })));
+      } else {
+        // No user property, prototype traversal, coercion or Proxy trap decides
+        // whether an unsupported object can impersonate a record or an atom.
+        if (IsCallable(current) === Value.true || current.ConstructedBy.length > 0 || current.PrivateElements.length > 0
+            || current.internalSlotsList.some((slot) => slot !== 'Prototype' && slot !== 'Extensible')
+            || current.Get !== ObjectValue.prototype.Get || current.GetOwnProperty !== ObjectValue.prototype.GetOwnProperty
+            || current.OwnPropertyKeys !== ObjectValue.prototype.OwnPropertyKeys) {
+          return Throw.TypeError('the object is not in the metadata value language');
+        }
+        if (active.has(current)) return Throw.TypeError('a cyclic value is not in the metadata value language');
+        active.add(current);
+        if (Q(IsArray(current)) === Value.true) {
+          const length = Q(yield* ToLength(Q(yield* Get(current, Value('length')))));
+          tasks.push({ kind: 'list', value: current, out: [], length: R(length), index: 0, store: task.store });
+        } else {
+          const keys = Q(yield* current.OwnPropertyKeys());
+          tasks.push({ kind: 'record', value: current, out: Object.create(null), keys, index: 0, store: task.store });
+        }
+      }
     }
+    return result as Value;
+  } finally {
+    EndTypeEvaluation();
   }
-  const asRegExp = value as { OriginalSource?: JSStringValue, OriginalFlags?: JSStringValue };
-  if (asRegExp.OriginalSource !== undefined && asRegExp.OriginalFlags !== undefined) {
-    const marker: Record<string, unknown> = Object.create(null);
-    marker.__pattern = true;
-    marker.source = asRegExp.OriginalSource.stringValue();
-    marker.flags = asRegExp.OriginalFlags.stringValue();
-    return Object.freeze(marker) as unknown as Value;
-  }
-  const isList = Q(IsArray(value)) === Value.true;
-  const out: unknown[] | Record<string, unknown> = isList ? [] : Object.create(null);
-  const keys = Q(yield* value.OwnPropertyKeys());
-  for (const key of keys) {
-    if (!(key instanceof JSStringValue)) {
-      continue;
-    }
-    const desc = Q(yield* value.GetOwnProperty(key)) as { Enumerable?: unknown };
-    if (!desc || desc.Enumerable !== Value.true) {
-      continue;
-    }
-    const snapped = Q(yield* SnapshotMetadataValue(Q(yield* Get(value, key))));
-    if (isList) {
-      (out as unknown[]).push(snapped);
-    } else {
-      (out as Record<string, unknown>)[key.stringValue()] = snapped;
-    }
-  }
-  return Object.freeze(out) as unknown as Value;
 }
 
 const metaDefaultSnapshots = new WeakMap<object, Value>();
