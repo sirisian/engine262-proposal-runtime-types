@@ -1,0 +1,920 @@
+{
+  "cases": [
+    {
+      "name": "generic conflict prevents entry",
+      "steps": [
+        {
+          "source": "interface Ordered<T:type>{v:T;}type NB<T:type extends Ordered.<T>>={nonZero?:boolean};meta NB<T:type extends Ordered.<T>>{subtype(a,b){return true;}default={};}type Other={nonZero?:number};globalThis.entered=true;meta Other{subtype(a,b){return true;}default={};}\"declared\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "String(globalThis.entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "partial key claims",
+      "steps": [
+        {
+          "source": "type A={held?:boolean};meta A{subtype(a,b){return true;}default={};}\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type B={fresh?:number,held?:number};meta B{subtype(a,b){return true;}default={};}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "type C={fresh?:string};meta C{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bad default leaves no keys",
+      "steps": [
+        {
+          "source": "type Bad={mark:boolean};meta Bad{subtype(a,b){return true;}default={mark:1};}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "type Good={mark?:number};meta Good{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bad default leaves no declaration identity",
+      "steps": [
+        {
+          "source": "type M={mark:boolean};meta M{subtype(a,b){return true;}default={mark:1};}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={mark:true};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "throwing default leaves no hooks",
+      "steps": [
+        {
+          "source": "function boom(){throw \"default failed\";}type M={mark?:number};meta M{subtype(a,b){return true;}validate(v,c){return true;}default=boom();}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "type T=string.<{mark:1}>;\"type formed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-unclaimed-metadata",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unavailable default defers cleanly",
+      "steps": [
+        {
+          "source": "const d={mark:1};type M={mark:number};meta M{subtype(a,b){return true;}default=d;}\"declared\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "declared"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bad base default leaves no waiver",
+      "steps": [
+        {
+          "source": "function boom(){throw \"default failed\";}meta string{subtype(a,b){return true;}validate(v,c){return true;}default=boom();}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "type T=string.<{unclaimed:1}>;\"type formed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-unclaimed-metadata",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta string{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit ReferenceError is a failure",
+      "steps": [
+        {
+          "source": "function boom(){throw new ReferenceError(\"d cannot be used before initialization\");}type M={mark?:number};meta M{subtype(a,b){return true;}default=boom();}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "completed registration survives later error",
+      "steps": [
+        {
+          "source": "type M={mark?:number};meta M{subtype(a,b){return true;}default={};}type T=string.<{pattern:/^a$/}>;function f(){let v:T=\"b\";}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "type Other={mark?:string};meta Other{subtype(a,b){return true;}default={};}\"conflicting\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "runtime failed declaration does not publish identity",
+      "steps": [
+        {
+          "source": "type M={mark:boolean};try{meta M{subtype(a,b){return true;}default={mark:1};}}catch(e){}\"caught\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "caught"
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={mark:true};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "snapshot getter failure is static and does not publish",
+      "steps": [
+        {
+          "source": "function value(){return {get mark(){throw \"snapshot failed\";}};}type M={mark?:boolean};meta M{subtype(a,b){return true;}default=value();}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local builder TDZ is closed failure",
+      "steps": [
+        {
+          "source": "function boom(){const x=later;const later=1;return {};}type M={mark?:boolean};meta M{subtype(a,b){return true;}default=boom();}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "previous TDZ exception is not a pending read",
+      "steps": [
+        {
+          "source": "const saved=(()=>{try{return later;}catch(e){return e;}})();const later=0;function boom(){throw saved;}\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={mark?:boolean};meta M{subtype(a,b){return true;}default=boom();}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nonobject default is static and releases key",
+      "steps": [
+        {
+          "source": "type M={mark?:boolean};meta M{subtype(a,b){return true;}default=1;}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "type Good={mark?:number};meta Good{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default first has same failure state",
+      "steps": [
+        {
+          "source": "type M={mark:boolean};meta M{default={mark:1};subtype(a,b){return true;}}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={mark:true};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "missing shape argument leaves identity available",
+      "steps": [
+        {
+          "source": "type M<T:type>={mark?:boolean};meta M{subtype(a,b){return true;}default={};}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M<T:type>{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "missing meta parameter count leaves no stray keys",
+      "steps": [
+        {
+          "source": "type M<T:type>={mark?:boolean};meta M{subtype(a,b){return true;}default={};}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "type Good={mark?:number};meta Good{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "duplicate owner preserves original hooks",
+      "steps": [
+        {
+          "source": "type M={mark?:number};meta M{subtype(a,b){return a.mark===b.mark;}validate(v,c){return v.length===c.mark;}default={};}\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}validate(v,c){return true;}default={};}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "type T=string.<{mark:2}>;function f(){let v:T=\"a\";}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "type U=string.<{mark:2}>;let v:U=\"ab\";v;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "successful multi-key declaration governs every key",
+      "steps": [
+        {
+          "source": "type M={a?:number,b?:number};meta M{subtype(a,b){return true;}default={};}type T=string.<{a:1,b:2}>;String(T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string.<{ a: 1, b: 2 }>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed unused key cannot grant base waiver",
+      "steps": [
+        {
+          "source": "function boom(){throw 1;}meta string{subtype(a,b){return true;}default=boom();}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "type T=string.<{unknown:1}>;\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-unclaimed-metadata",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed builder RangeError remains static",
+      "steps": [
+        {
+          "source": "function boom(){throw new RangeError(\"bad default\");}type M={mark?:number};meta M{subtype(a,b){return true;}default=boom();}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "undefined required default field is refused",
+      "steps": [
+        {
+          "source": "type M={mark:number};meta M{subtype(a,b){return true;}default={mark:undefined};}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={mark:1};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "required missing field is refused",
+      "steps": [
+        {
+          "source": "type M={mark:number};meta M{subtype(a,b){return true;}default={};}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={mark:1};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default builder local references are ordinary valid code",
+      "steps": [
+        {
+          "source": "function value(){const v=2;return {mark:v};}type M={mark:number};meta M{subtype(a,b){return true;}default=value();}\"declared\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "declared"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default may read a later initialized source binding at body order",
+      "steps": [
+        {
+          "source": "type M={mark:number};const v={mark:2};meta M{subtype(a,b){return true;}default=v;}\"declared\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "declared"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default can defer through destructuring",
+      "steps": [
+        {
+          "source": "const {value}={value:{mark:2}};type M={mark:number};meta M{subtype(a,b){return true;}default=value;}\"declared\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "declared"
+          }
+        }
+      ]
+    },
+    {
+      "name": "helper with source pending input is deferred",
+      "steps": [
+        {
+          "source": "const value={mark:2};function obtain(){return value;}type M={mark:number};meta M{subtype(a,b){return true;}default=obtain();}\"declared\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "declared"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward TDZ at body remains ordinary failure",
+      "steps": [
+        {
+          "source": "type M={mark:number};meta M{subtype(a,b){return true;}default=value;}const value={mark:2};\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "ReferenceError"
+          }
+        },
+        {
+          "source": "type Good={mark?:number};meta Good{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "completed declaration remains after body throws",
+      "steps": [
+        {
+          "source": "type M={mark?:boolean};meta M{subtype(a,b){return true;}default={};}throw \"body failed\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        },
+        {
+          "source": "type Other={mark?:number};meta Other{subtype(a,b){return true;}default={};}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested registration keeps its key on outer conflict",
+      "steps": [
+        {
+          "source": "type Inner={mark?:number};function value(){meta Inner{subtype(a,b){return true;}default={};}return {};}type Outer={mark?:boolean};meta Outer{subtype(a,b){return true;}default=value();}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "type Third={mark?:string};meta Third{subtype(a,b){return true;}default={};}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending default shape reserves keys without publishing",
+      "steps": [
+        {
+          "source": "const d={mark:1};type M={mark:number};meta M{subtype(a,b){return true;}default=d;}type Later={mark?:boolean};meta Later{subtype(a,b){return true;}default={};}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "type Good={mark?:string};meta Good{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending default shape reserves an empty owner",
+      "steps": [
+        {
+          "source": "const d={};type M={};meta M{subtype(a,b){return true;}default=d;}type Alias=M;meta Alias{subtype(a,b){return true;}default={};}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default exhaustion publishes nothing",
+      "steps": [
+        {
+          "source": "function build(){let n=0;while(n<1000){n++;}return {};}type M={mark?:boolean};meta M{subtype(a,b){return true;}default=build();}\"bad\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-type-evaluation-limit",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "type Good={mark?:number};meta Good{subtype(a,b){return true;}default={};}\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ],
+      "limits": {
+        "steps": 100
+      }
+    },
+    {
+      "name": "sufficient default budget publishes normally",
+      "steps": [
+        {
+          "source": "function build(){let n=0;while(n<1000){n++;}return {};}type M={mark?:boolean};meta M{subtype(a,b){return true;}default=build();}\"declared\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "declared"
+          }
+        }
+      ],
+      "limits": {
+        "steps": 100000
+      }
+    },
+    {
+      "name": "successful default snapshot runs once",
+      "steps": [
+        {
+          "source": "function build(){let n=0;return {get mark(){if(n++>0)throw \"second read\";return true;}};}type M={mark:boolean};meta M{subtype(a,b){return true;}default=build();}\"declared\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "declared"
+          }
+        }
+      ]
+    }
+  ]
+}

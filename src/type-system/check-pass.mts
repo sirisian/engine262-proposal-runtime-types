@@ -1,12 +1,14 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { EnsureCompletion, Q, X } from '../completion.mts';
 import { FirstFreeReference } from '../static-semantics/PreprocessorEvaluability.mts';
-import { ModuleEnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity } from '../execution-context/Environment.mts';
+import { ModuleEnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity, RefBindingHolder } from '../execution-context/Environment.mts';
+import { BoundNames } from '../static-semantics/BoundNames.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { RequireType, ConvertValue, CheckedConvertValue, ApplyMetaHook, GoverningMetaTypes, LookupMetaHook, SnapshotMetadataValue, HasMetaHooks, MetaTypeClaiming, MetaTypeGoverns, MetadataPortion, LookupTypeDefault, PrimitiveCastsFor, CastCoversTarget } from '../abstract-ops/runtime-types.mts';
 import {
   Evaluate_MetaDeclaration, Evaluate_RuntimeTypesBindingDeclaration, preEvaluatedTypeDeclarations,
   BeginTypeDeclarationPreparation,
+  type MetaDeclarationClaims,
 } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { Evaluate_PrimitiveOperatorDeclaration } from '../runtime-semantics/PrimitiveOperatorDeclaration.mts';
 import { classConstructorOfNode } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
@@ -244,12 +246,12 @@ function sourcePreparationItems(root: ParseNode.Script | ParseNode.Module): read
  *    what makes a `meta` declared in a source govern a judgment in the same
  *    source; without it the realm's meta registry at check time would hold
  *    only earlier source texts' declarations. Processing is tolerant: a
- *    declaration whose evaluation completes abruptly here (a shape naming a
- *    binding the body has not yet initialized, say) is left unmarked and
- *    evaluates at its body position as before, registering late and governing
- *    only later sources; the abrupt completion is not this pass's to report,
- *    and the body's own evaluation will surface it if it is real. A
- *    declaration processed successfully is marked, and its body-position
+ *    declaration with an unavailable local dependency can be left unmarked
+ *    for body order. For meta declarations, only internal evidence of an
+ *    actual uninitialized binding read establishes that condition; completed
+ *    failures are reported here. An uninitialized import remains a failure
+ *    at the required module boundary. A successfully processed declaration
+ *    is marked, and its body-position
  *    evaluation is a no-op, so registration happens exactly once.
  *
  * 2. The metadata subtype judgment of #sec-primitive-metadata is applied to
@@ -315,6 +317,19 @@ function isUninitializedImportRead(error: unknown): boolean {
     if (!binding.indirect) continue;
     const [target, name] = binding.target;
     if (target.Environment && DeclarativeBindingIdentity(target.Environment, name) === identity) return true;
+  }
+  return false;
+}
+
+/** Only this source's still-pending direct declarations can become available in its body. */
+function isPendingDeclarationRead(error: unknown, items: readonly ParseNode[]): boolean {
+  const identity = UninitializedBindingIdentity(error);
+  if (identity === undefined) return false;
+  const environment = surroundingAgent.runningExecutionContext.LexicalEnvironment;
+  for (const name of BoundNames(items)) {
+    const binding = RefBindingHolder(environment, name)?.bindings.get(name);
+    if (binding && !binding.initialized && !binding.indirect
+        && DeclarativeBindingIdentity(environment, name) === identity) return true;
   }
   return false;
 }
@@ -584,6 +599,7 @@ function* prepareDeferredTypeEnvironment(obligation: DeferredTypeCheck): PlainEv
 
 function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Module): PlainEvaluator {
   const items = sourcePreparationItems(root);
+  const metaClaims: MetaDeclarationClaims = { owners: new Map(), keys: new Map() };
   // A |ComputedType| alias -
   // `type G = makeG();` - resolves by EVALUATING, so the walk that runs at
   // PARSE time cannot know what it denotes: nothing has evaluated yet, the
@@ -626,10 +642,16 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         operatorInputsPrepared = true;
       }
     } else if (item.type === 'MetaDeclaration') {
-      const attempt = EnsureCompletion(yield* Evaluate_MetaDeclaration(item));
+      const attempt = EnsureCompletion(yield* Evaluate_MetaDeclaration(item, metaClaims));
       if (attempt.Type === 'normal') {
         preEvaluatedTypeDeclarations.add(item);
         operatorInputsPrepared = true;
+      } else if (!isPendingDeclarationRead(attempt.Value, items) || isUninitializedImportRead(attempt.Value)) {
+        // A real uninitialized local dependency can remain for body order.
+        // A completed refusal (including a user-thrown ReferenceError) is not
+        // unavailable input. Imported TDZ reads retain their module boundary.
+        return CreateTypeDiagnostic('rt-meta-declaration', item, 'pre-evaluation',
+          'the meta declaration could not be completed: $1', Value(inspect(attempt.Value)));
       }
     }
   }

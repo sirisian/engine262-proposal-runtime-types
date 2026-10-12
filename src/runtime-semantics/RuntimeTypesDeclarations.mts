@@ -29,6 +29,7 @@ import { StringValue } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { FirstNonEvaluableForm } from '../type-system/evaluable-fragment.mts';
 import { BeginFragmentEvaluation, EndFragmentEvaluation } from '../type-system/fragment-library.mts';
+import { IsBudgetExhausted, EvaluateWithTypeBudget } from '../type-system/budget.mts';
 import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator.mts';
 import { GetValue } from '../abstract-ops/all.mts';
 import { iterationInterfaceRecord } from '../type-system/iteration-types.mts';
@@ -68,7 +69,7 @@ import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
 import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
 import { Assert, OrdinaryObjectCreate, CreateDataProperty } from '#self';
-import { ClaimMetaKey, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaShape, NormalizeMetadataRecord, RegisterMetaHook, RegisterMetaTypeName, RegisterMetaTypeParameterName, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
+import { ClaimMetaKey, MetaTypeClaiming, CreateDataPropertyOrThrow, MetadataAsObject, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaShape, NormalizeMetadataRecord, RegisterMetaHook, RegisterMetaTypeName, RegisterMetaTypeParameterName, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
 
 /**
  * proposal-runtime-types
@@ -1507,7 +1508,13 @@ export function* Evaluate_TypeOperatorExpression({ Type }: ParseNode.TypeOperato
 /** The meta declaration each Type Object carries, for the one-per-type rule. */
 const metaDeclarationByType = new WeakMap<object, ParseNode.MetaDeclaration>();
 
-export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): PlainEvaluator {
+/** Checking-unit reservations establish conflicts without publishing a protocol. */
+export interface MetaDeclarationClaims {
+  owners: Map<object, ParseNode.MetaDeclaration>;
+  keys: Map<string | SymbolValue, object>;
+}
+
+export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration, claims?: MetaDeclarationClaims): PlainEvaluator {
   if (preEvaluatedTypeDeclarations.has(node)) {
     return undefined;
   }
@@ -1566,11 +1573,10 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
   // resolve; this is the deferred half. A re-evaluation of one declaration
   // (the checking pass pre-evaluates, then evaluation runs) is not a second
   // declaration, so the registry records the declaration that claimed.
-  const priorDeclaration = metaDeclarationByType.get(typeObject as object);
+  const priorDeclaration = metaDeclarationByType.get(typeObject as object) ?? claims?.owners.get(typeObject as object);
   if (priorDeclaration !== undefined && priorDeclaration !== node) {
     return Throw.TypeError('a second meta declaration for one type: $1', Value(name));
   }
-  metaDeclarationByType.set(typeObject as object, node);
   const declaredParameterCount = node.TypeParameters?.TypeParameterList?.length ?? 0;
   const shapeParameterCount = aliasDeclaration?.type === 'TypeAliasDeclaration'
     ? (aliasDeclaration.TypeParameters?.TypeParameterList?.length ?? 0)
@@ -1585,106 +1591,50 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
   const claimShape = aliasDeclaration?.type === 'TypeAliasDeclaration' && aliasDeclaration.TypeParameters
     ? Q(yield* GenericAliasDeclarationShape(aliasDeclaration, shape!))
     : shape;
-  if (claimShape && claimShape.Kind === 'object') {
-    RegisterMetaShape(typeObject as object, claimShape);
-    for (const property of claimShape.Properties) {
-      const conflict = ClaimMetaKey(property.key, typeObject as object);
-      if (conflict !== undefined) {
-        return Throw.TypeError('$1 is already claimed by another meta type', propertyKeyValue(property.key));
+  const claimedKeys = claimShape?.Kind === 'object' ? claimShape.Properties.map((property) => property.key) : [];
+  const keyConflict = () => {
+    for (const key of claimedKeys) {
+      const owner = MetaTypeClaiming(key) ?? claims?.keys.get(key);
+      if (owner !== undefined && owner !== typeObject) {
+        return Throw.TypeError('$1 is already claimed by another meta type', propertyKeyValue(key));
       }
     }
+    return undefined;
+  };
+  const conflict = keyConflict();
+  if (conflict) return conflict;
+  // Even if its default needs a later binding, an available declaration shape
+  // already establishes which subsequent declarations would conflict with it.
+  claims?.owners.set(typeObject as object, node);
+  for (const key of claimedKeys) claims?.keys.set(key, typeObject as object);
+  // Stage the whole declaration. A failed or unavailable default must not
+  // leave an owner, any subset of its keys, or callable protocol hooks behind.
+  const hooks = new Map<string, Value>();
+  let defaultSnapshot: Value | undefined;
+  function* evaluateDefault(expression: ParseNode.AssignmentExpression): PlainEvaluator<Value | undefined> {
+    const v = Q(yield* GetValue(Q(yield* Evaluate(expression))));
+    if (claimShape?.Kind !== 'object') return undefined;
+    if (!(v instanceof ObjectValue)) {
+      return Throw.TypeError('a meta type whose constraint shape is an object type requires an object default');
+    }
+    // Check the snapshot, never reread the live object. Numeric leaves receive
+    // the claim shape's literal context; ordinary binding defaults are separate.
+    const snapshot = Q(yield* SnapshotMetadataValue(v));
+    const converted = NormalizeMetadataRecord(snapshot, claimShape);
+    if (!Q(yield* IsOfType(MetadataAsObject(converted), claimShape))) {
+      return Throw.TypeError('the default of a meta type must be a value of its constraint shape');
+    }
+    return converted as unknown as Value;
   }
   let sawDefault = false;
   let sawSubtype = false;
   for (const hook of node.MetaHookList) {
     if (hook.type === 'MetaDefaultHook') {
-      const ref = Q(yield* Evaluate(hook.AssignmentExpression));
-      const v = Q(yield* GetValue(ref));
-      // `RegisterTypeDefault(typeObject, v)`
-      // stood here and is gone.
-      //
-      // #table-meta-hooks scopes this hook to METADATA - "the unconstrained
-      // constraint: what a value carries where it has no field of this meta
-      // type" - and says nothing about what a binding of the constraint shape
-      // holds before it is assigned. #sec-defaultvalueof gives an ~object~ type
-      // no default at all. Registering the hook's value as the constraint
-      // shape's DEFAULT VALUE conflated the two, so declaring a meta type
-      // silently changed the defaulting of the type it names:
-      //
-      //   type M = { m: number }; meta M { default = { m: 0 }; ... }
-      //   let x: M;            // {"m":0} - #sec-defaultvalueof says type error
-      //   meta uint8 { default = 7; ... }
-      //   let y: uint8;        // 7 - the zero of a PRIMITIVE, redefined
-      //
-      // The registration for a non-object shape was expected to stay,
-      // whose comment claimed it "keeps its scalar default for the
-      // annotated-binding path". Instrumenting `LookupTypeDefault` found that
-      // path to be the two ordinary default-value consumers - the checking pass
-      // and the binding evaluation - and the uint8 case above is what they do
-      // with it. So the registration was wrong for every shape and the split
-      // that was reserved was not needed.
-      //
-      // What the hook IS for is below: the SNAPSHOT, which MetadataPortion
-      // reads and which is the only store the metadata protocol needs.
-      // sec-metadataportion copies the default, so where the constraint shape
-      // is an OBJECT type the default must be an object, and it is snapshotted
-      // here, once, into the host metadata-record shape: a getter on it runs
-      // at declaration and never again, and MetadataPortion starts from the
-      // snapshot. A declaration over a non-object shape,
-      // the suite's `meta uint8 { default = 0 }`, keeps its scalar default for
-      // the annotated-binding path and registers no snapshot: it claims no
-      // keys, so no portion of it exists to complete. The full rule, that the
-      // default is a VALUE OF the constraint shape, waits on a verdict about
-      // optional-key membership.
-      // The RESOLVED shape here too,
-      // for the same reason the claim loop needs it: a generic constraint shape
-      // is a nominal record, so this guard saw no ~object~ and registered no
-      // default snapshot - and MetadataPortion reads that snapshot to decide
-      // what a meta type governs. Without it a generic meta type claimed its
-      // keys, ran its hooks, and still refused a plain value crossing into a
-      // constrained position, because the unconstrained constraint had nowhere
-      // to come from.
-      if (claimShape && claimShape.Kind === 'object') {
-        if (!(v instanceof ObjectValue)) {
-          return Throw.TypeError('a meta type whose constraint shape is an object type requires an object default');
-        }
-        // The full rule: `default: T` means
-        // the default is a VALUE OF the constraint shape, checked by ordinary
-        // membership so the optional-key form (NumberBounds' `default = {}`)
-        // survives. The membership is judged over the SNAPSHOT, not
-        // the live object: the snapshot is what every portion is built from,
-        // so it is the artifact the rule protects, and judging it keeps a
-        // getter on the default to exactly ONE read, at declaration - the
-        // matrix caught the live-object check reading it a second time, which
-        // the earlier probes structurally could not see.
-        const snapshot = Q(yield* SnapshotMetadataValue(v));
-        // A literal in a default takes the type its claim shape gives the key.
-        //
-        // `meta D { default = { m: 0 } }` against `type D = { m: int32 }` was
-        // refused: by the time the membership test below runs, `{ m: 0 }` holds a
-        // plain number, and a plain number is not an `int32`. Writing
-        // `{ m: (0 := int32) }` passed, which made the default the one place a
-        // literal had to state a type the declaration beside it already fixed.
-        // #sec-literal-propagation gives a literal the type of its context, and a
-        // claim shape is exactly that.
-        //
-        // Converted here rather than at the default's evaluation because the
-        // SNAPSHOT is what the rule protects, and the comment above records why
-        // that matters: judging the snapshot keeps a getter on the default to
-        // exactly one read. Reading the live object again to convert it would
-        // spend a second.
-        //
-        // The snapshot is a null-prototype record of engine Values (lists are
-        // real Arrays), so this walks its own string keys and converts the leaves
-        // the claim shape names. A key the shape does not name is left alone and
-        // still faces the membership test.
-        // The snapshot is FROZEN - it is the artifact portions are built from -
-        // so this builds a converted copy rather than writing through it.
-        const converted = NormalizeMetadataRecord(snapshot, claimShape);
-        if (!Q(yield* IsOfType(MetadataAsObject(converted), claimShape))) {
-          return Throw.TypeError('the default of a meta type must be a value of its constraint shape');
-        }
-        RegisterMetaDefaultSnapshot(typeObject, converted as unknown as Value);
+      BeginFragmentEvaluation();
+      try {
+        defaultSnapshot = Q(yield* EvaluateWithTypeBudget(`${name}'s default`, evaluateDefault(hook.AssignmentExpression)));
+      } finally {
+        EndFragmentEvaluation();
       }
       sawDefault = true;
     } else {
@@ -1698,15 +1648,7 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
         const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
         const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
         const fn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'meta hook', params, body, 'non-lexical-this', env, privEnv);
-        RegisterMetaHook(typeObject, hookName, fn);
-        RegisterMetaTypeName(typeObject as object, name);
-        // The parameter's NAME, which a
-        // hook invocation needs to key its frame on. Kept here because this is
-        // the only place the declaration is in hand.
-        const parameterName = node.TypeParameters?.TypeParameterList?.[0]?.BindingIdentifier?.name;
-        if (typeof parameterName === 'string') {
-          RegisterMetaTypeParameterName(typeObject as object, parameterName);
-        }
+        hooks.set(hookName, fn);
       }
     }
   }
@@ -1723,6 +1665,23 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
   if (!sawSubtype) {
     return Throw.TypeError('a meta declaration requires a $1 hook', Value('subtype'));
   }
+  // A default may have caused a nested declaration to complete. Recheck
+  // ownership before the non-yielding publication step; never overwrite it.
+  const completed = metaDeclarationByType.get(typeObject as object);
+  if (completed !== undefined && completed !== node) {
+    return Throw.TypeError('a second meta declaration for one type: $1', Value(name));
+  }
+  const finalConflict = keyConflict();
+  if (finalConflict) return finalConflict;
+  if (IsBudgetExhausted()) return Throw.TypeError('the type evaluation budget was exhausted while declaring a meta type');
+  metaDeclarationByType.set(typeObject as object, node);
+  if (claimShape?.Kind === 'object') RegisterMetaShape(typeObject as object, claimShape);
+  for (const key of claimedKeys) ClaimMetaKey(key, typeObject as object);
+  if (defaultSnapshot !== undefined) RegisterMetaDefaultSnapshot(typeObject, defaultSnapshot);
+  for (const [hookName, fn] of hooks) RegisterMetaHook(typeObject, hookName, fn);
+  RegisterMetaTypeName(typeObject as object, name);
+  const parameterName = node.TypeParameters?.TypeParameterList?.[0]?.BindingIdentifier?.name;
+  if (parameterName !== undefined) RegisterMetaTypeParameterName(typeObject as object, parameterName);
   return undefined;
 }
 

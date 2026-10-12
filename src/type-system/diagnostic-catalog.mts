@@ -1,5 +1,5 @@
 // Generated from proposal-runtime-types/diagnostics.json.
-// Catalog SHA-256: b08e3a18b8ec80cebc22608d6a0fa1d2924b642d57edbfa1e6c82a02752f8eeb
+// Catalog SHA-256: e31b48497e7cb84d856fd9fac906b49c9fbe9ac6e2323a83b663923aa8d0c945
 export const TypeDiagnosticCatalog = [
   {
     "code": "RT_DEFAULT_EVALUATION",
@@ -766,7 +766,7 @@ export const TypeDiagnosticCatalog = [
     "specification": [
       "sec-meta-declarations"
     ],
-    "explanation": "The meta declaration duplicates an owner or omits a required hook.",
+    "explanation": "The meta declaration cannot be completed: its owner, key claims, parameter count, default or required hooks are invalid.",
     "arguments": {
       "type": "array",
       "items": {
@@ -2861,4 +2861,4 @@ export const TypeDiagnosticCatalog = [
 ] as const;
 export type TypeDiagnosticCode = typeof TypeDiagnosticCatalog[number]['code'];
 export type TypeDiagnosticRule = typeof TypeDiagnosticCatalog[number]['rule'];
-export const TypeDiagnosticCatalogHash = 'b08e3a18b8ec80cebc22608d6a0fa1d2924b642d57edbfa1e6c82a02752f8eeb';
+export const TypeDiagnosticCatalogHash = 'e31b48497e7cb84d856fd9fac906b49c9fbe9ac6e2323a83b663923aa8d0c945';
