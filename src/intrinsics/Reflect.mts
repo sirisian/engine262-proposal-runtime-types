@@ -1,3 +1,4 @@
+import { MetadataEntries } from '../type-system/metadata-keys.mts';
 import { SelectedDeclarationOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { JSStringValue, ObjectValue, Value, type Arguments } from '../value.mts';
 import { Q } from '../completion.mts';
@@ -368,7 +369,7 @@ function isCanonicalMetadata(record: unknown): boolean {
   if (record === null || typeof record !== 'object' || record instanceof ObjectValue) {
     return false;
   }
-  return Object.values(record as Record<string, unknown>).every(
+  return MetadataEntries(record).map(([, value]) => value).every(
     // A PRIMITIVE is a leaf too. The markers this form carries for a pattern and
     // a range - `{ __pattern: true, source, flags }` and `{ __range: true, ... }`
     // - hold JS primitives, because that is what `metadataValueFromType` and

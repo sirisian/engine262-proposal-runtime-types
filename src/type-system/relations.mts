@@ -2,6 +2,7 @@ import { SameValue, R } from '../abstract-ops/all.mts';
 import { NormalizeMetadataRecord } from '../abstract-ops/runtime-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { Value, NumberValue, isTypedNumber } from '../value.mts';
+import { MetadataKeys } from './metadata-keys.mts';
 import type { ParameterRecord, SignatureRecord, TypeRecord, TupleElementRecord } from './records.mts';
 import { IsFamilyRecord } from './records.mts';
 import { IsPlainData, IsValueType } from './layout.mts';
@@ -98,8 +99,9 @@ export function SameMetadata(a: unknown, b: unknown): boolean {
   if (!a || !b || typeof a !== 'object' || typeof b !== 'object') {
     return false;
   }
-  const ak = Object.keys(a as object);
-  const bk = Object.keys(b as object);
+  if (a instanceof Value && b instanceof Value) return SameValue(a, b);
+  const ak = MetadataKeys(a);
+  const bk = MetadataKeys(b);
   if (ak.length !== bk.length) {
     return false;
   }
@@ -112,7 +114,7 @@ export function SameMetadata(a: unknown, b: unknown): boolean {
   // in two modules would otherwise be two types.
   const ap = a as { __pattern?: boolean, source?: string, flags?: string };
   const bp = b as { __pattern?: boolean, source?: string, flags?: string };
-  if (ap.__pattern || bp.__pattern) {
+  if (ap.__pattern === true || bp.__pattern === true) {
     // `source` and `flags` reach here in one of two
     // representations - plain JS strings as `metadataValueFromType` builds
     // them, engine `JSStringValue`s when the record was rebuilt from a
@@ -134,7 +136,7 @@ export function SameMetadata(a: unknown, b: unknown): boolean {
   // endpoint's value. Carried structurally for the same reason a pattern is.
   const ar = a as { __range?: boolean, start?: Value, end?: Value, startBound?: string, endBound?: string };
   const br = b as { __range?: boolean, start?: Value, end?: Value, startBound?: string, endBound?: string };
-  if (ar.__range || br.__range) {
+  if (ar.__range === true || br.__range === true) {
     if (ar.__range !== br.__range || ar.startBound !== br.startBound || ar.endBound !== br.endBound) {
       return false;
     }
@@ -142,8 +144,9 @@ export function SameMetadata(a: unknown, b: unknown): boolean {
     return sameEnd(ar.start, br.start) && sameEnd(ar.end, br.end);
   }
   return ak.every((k) => {
-    const av = (a as Record<string, unknown>)[k];
-    const bv = (b as Record<string, unknown>)[k];
+    if (!Object.hasOwn(b, k)) return false;
+    const av = (a as Record<string | symbol, unknown>)[k];
+    const bv = (b as Record<string | symbol, unknown>)[k];
     if (av === bv) {
       return true;
     }

@@ -22,7 +22,7 @@ import { GenericWhereVerified, MarkGenericWhereVerified } from './generic-where.
 import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
 import { SetMetResolution, CanonicalizeType } from './intern.mts';
 import { GetTypeObject } from './intern.mts';
-import { displayType, builtinTypeRecord, BoundTypeRecordForName, neverType } from './records.mts';
+import { propertyKeyValue, displayType, builtinTypeRecord, BoundTypeRecordForName, neverType } from './records.mts';
 import { isIntegerTypeName, isFloatTypeName } from './numeric-signatures.mts';
 import {
   RecheckAfterTypeEvaluation, HasDeferredGuardChecks, DeferredTypeChecksOf, SetEvaluatedTypeNode, SetEvaluatedEnum,
@@ -856,7 +856,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     }
     for (const key of check.keys) {
       if (MetaTypeClaiming(key) === undefined) {
-        return CreateTypeDiagnostic('rt-unclaimed-metadata', check.node, 'pre-evaluation', '$1 is not claimed by any meta type, in $2', Value(key), Value(check.display));
+        return CreateTypeDiagnostic('rt-unclaimed-metadata', check.node, 'pre-evaluation', '$1 is not claimed by any meta type, in $2', propertyKeyValue(key), Value(check.display));
       }
     }
   }

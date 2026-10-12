@@ -1,3 +1,4 @@
+import { MetadataKeys, MetadataKey } from '../type-system/metadata-keys.mts';
 import { RawOperatorResultType } from '../type-system/operator-result.mts';
 import { SetPendingCalleeContext, markValueParameterBinding, SetMetadataCaptureDomain } from '../type-system/runtime.mts';
 import {
@@ -8,6 +9,7 @@ import { ObjectValue,
   JSStringValue, TypedString, Value,
   NumberValue,
   BigIntValue,
+  type SymbolValue,
   SameType,
 } from '../value.mts';
 import { vectorBinaryOperator } from '../type-system/vector-ops.mts';
@@ -47,12 +49,12 @@ import {
  * which is the form the projection hands back unchanged.
  */
 export function metadataAsObjectRecord(metadata: MetadataRecord, domain?: TypeRecord): TypeRecord {
-  const Properties: { key: string, type: TypeRecord, optional: boolean, readonly: boolean }[] = [];
+  const Properties: { key: string | SymbolValue, type: TypeRecord, optional: boolean, readonly: boolean }[] = [];
   if (metadata && typeof metadata === 'object') {
-    for (const key of Object.keys(metadata as unknown as Record<string, unknown>)) {
-      const raw = (metadata as unknown as Record<string, unknown>)[key];
+    for (const key of MetadataKeys(metadata)) {
+      const raw = (metadata as unknown as Record<string | symbol, unknown>)[key];
       Properties.push({
-        key,
+        key: MetadataKey(key),
         type: { Kind: 'literal', Value: raw as Value, Base: { Kind: 'primitive', Name: 'number', Arguments: [] } } as unknown as TypeRecord,
         optional: false,
         readonly: false,

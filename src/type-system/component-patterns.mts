@@ -23,6 +23,7 @@ import { skipDebugger } from '../evaluator.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import { Value } from '../value.mts';
+import { MetadataEntries, MetadataStorageKey } from './metadata-keys.mts';
 import { builtinTypeRecord, makePrimitive, CanonicalWidthArgument, substituteTypeParameters, type TypeRecord, type MetadataRecord } from './records.mts';
 import { SameType, IsAssignable } from './relations.mts';
 import { literalFitsNumericType } from './literal-fit.mts';
@@ -254,9 +255,9 @@ function PortionByShape(metadata: MetadataRecord, shape: TypeRecord | null): Met
   if (!shape || shape.Kind !== 'object' || !properties) {
     return metadata;
   }
-  const keys = new Set(properties.map((p) => (typeof p.key === 'string' ? p.key : (p.key as { stringValue?: () => string })?.stringValue?.())));
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(metadata as Record<string, unknown>)) {
+  const keys = new Set(shape.Properties.map((p) => MetadataStorageKey(p.key)));
+  const out: Record<string | symbol, unknown> = Object.create(null);
+  for (const [k, v] of MetadataEntries(metadata)) {
     if (keys.has(k)) out[k] = v;
   }
   return out as MetadataRecord;
@@ -416,7 +417,7 @@ function componentHost(resolve: (node: ParseNode) => TypeRecord | null, unknownS
         return null;
       }
       const domain = resolve(meta as unknown as ParseNode);
-      if (unknownSubjects.has(subject) && (subject.Kind !== 'parameterized' || domain?.Kind !== 'object' || !domain.Properties.some((p) => typeof p.key === 'string' && Object.hasOwn(subject.Metadata, p.key)))) return UnknownMetadataCapture();
+      if (unknownSubjects.has(subject) && (subject.Kind !== 'parameterized' || domain?.Kind !== 'object' || !domain.Properties.some((p) => Object.hasOwn(subject.Metadata, MetadataStorageKey(p.key))))) return UnknownMetadataCapture();
       const metaType = domain ? MetaTypeForConstraint(domain) : undefined;
       // Before the meta type is registered - statically, where the checker
       // resolves a result's type ahead of evaluation - the capture binds the

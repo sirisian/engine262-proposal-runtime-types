@@ -8,6 +8,7 @@ import { JSStringValue, NumberValue, BigIntValue, TypedNumberValue, Value, type 
 // the root here would make it wait on everything the root re-exports.
 import { R } from '../abstract-ops/spec-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { MetadataEntries, MetadataKey, MetadataKeys, SymbolInternIndex } from './metadata-keys.mts';
 
 /**
  * proposal-runtime-types #sec-types-and-type-objects
@@ -473,7 +474,7 @@ export interface TupleElementRecord {
  * weaker check - the `kind`, the base, the field values, even stability under
  * repeated round trips - passed while that identity was broken.
  */
-export type MetadataRecord = { readonly [key: string]: Value | MetadataRecord };
+export type MetadataRecord = { readonly [key: string | symbol]: Value | MetadataRecord };
 
 /*
  * HOW THIS SLOT CAME TO BE TYPED, because the history is the argument for
@@ -1287,19 +1288,6 @@ export function builtinTypeRecord(name: string, args: readonly (TypeRecord | num
  * would make a type's identity depend on the order its members were written -
  * exactly what this rule removes for string keys.
  */
-const symbolFirstInternOrder = new WeakMap<SymbolValue, number>();
-let nextSymbolInternIndex = 0;
-
-function symbolInternIndex(key: SymbolValue): number {
-  let index = symbolFirstInternOrder.get(key);
-  if (index === undefined) {
-    index = nextSymbolInternIndex;
-    nextSymbolInternIndex += 1;
-    symbolFirstInternOrder.set(key, index);
-  }
-  return index;
-}
-
 /** Compares two property keys by the canonical total order. */
 export function comparePropertyKeys(a: string | SymbolValue, b: string | SymbolValue): number {
   const aIsString = typeof a === 'string';
@@ -1312,7 +1300,7 @@ export function comparePropertyKeys(a: string | SymbolValue, b: string | SymbolV
     // "a String by code units".
     return a < b ? -1 : a > b ? 1 : 0;
   }
-  return symbolInternIndex(a as SymbolValue) - symbolInternIndex(b as SymbolValue);
+  return SymbolInternIndex(a as SymbolValue) - SymbolInternIndex(b as SymbolValue);
 }
 
 /** The properties of an ~object~ Type Record in canonical key order. */
@@ -1403,19 +1391,13 @@ function metadataOrderKey(m: unknown): string {
     return `[${m.map(metadataOrderKey).join(',')}]`;
   }
   if (typeof m === 'object') {
-    // A Symbol tag has no plain equivalent whose identity survives a string
-    // key, so it keys by its description AND its position in the realm's
-    // interning table would be needed to be exact. Two distinct symbols with
-    // one description therefore key alike here - which is safe, because the key
-    // only ORDERS members; `SameMetadata` decides identity and compares symbols
-    // by `SameValue`.
-    const sym = m as { Description?: { stringValue?(): string } };
-    if (typeof sym.Description?.stringValue === 'function') {
-      return `y:${JSON.stringify(sym.Description.stringValue())}`;
-    }
-    return `{${Object.keys(m as Record<string, unknown>).sort()
-      .map((k) => `${JSON.stringify(k)}:${metadataOrderKey((m as Record<string, unknown>)[k])}`)
-      .join(',')}}`;
+    if (m instanceof Value && m.type === 'Symbol') return `y:${SymbolInternIndex(m)}`;
+    return `{${MetadataKeys(m).sort((a, b) => comparePropertyKeys(MetadataKey(a), MetadataKey(b)))
+      .map((k) => {
+        const key = MetadataKey(k);
+        const identity = typeof key === 'string' ? JSON.stringify(key) : `@symbol:${SymbolInternIndex(key)}`;
+        return `${identity}:${metadataOrderKey((m as Record<string | symbol, unknown>)[k])}`;
+      }).join(',')}}`;
   }
   return `p:${String(m)}`;
 }
@@ -1876,7 +1858,7 @@ function displayMetadataValue(m: unknown): string {
     return `${start}${open}${close}${end}`;
   }
   if (typeof m === 'object') {
-    return `{ ${Object.entries(m as Record<string, unknown>).map(([k, v]) => `${k}: ${displayMetadataValue(v)}`).join(', ')} }`;
+    return `{ ${MetadataEntries(m).map(([k, v]) => `${displayPropertyKey(MetadataKey(k))}: ${displayMetadataValue(v)}`).join(', ')} }`;
   }
   return String(m);
 }

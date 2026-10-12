@@ -64,6 +64,7 @@ import {
 import { CanonicalizeType, GetTypeObject, isTypeObject, isClassTypeObject } from './intern.mts';
 import { invalidTupleRest } from './tuple-rests.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization, ClassTypeEnvironmentOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
+import { MetadataStorageKey, MetadataKey, MetadataEntries } from './metadata-keys.mts';
 import { GenericWhereVerified } from './generic-where.mts';
 import { GenericAliasContextOf } from './generic-alias-context.mts';
 import { bindLibraryTypeArguments, libraryTypeParameters } from './library-type-arguments.mts';
@@ -465,9 +466,9 @@ export function* MetadataCaptureView(record: TypeRecord): ValueEvaluator {
   const domain = metadataCaptureDomains.get(record);
   const materialize = function* (snapshot: MetadataRecord, shape: TypeRecord | undefined): ValueEvaluator {
     if (shape?.Kind !== 'object') return MetadataAsObject(snapshot);
-    const fields: Record<string, Value> = Object.create(null);
-    for (const [key, raw] of Object.entries(snapshot as unknown as Record<string, Value>)) {
-      const property = shape.Properties.find((p) => p.key === key);
+    const fields: Record<string | symbol, Value> = Object.create(null);
+    for (const [key, raw] of MetadataEntries<Value>(snapshot)) {
+      const property = shape.Properties.find((p) => p.key === MetadataKey(key));
       if (!property) {
         fields[key] = raw;
       } else if (raw !== null && typeof raw === 'object' && !(raw instanceof Value)
@@ -4841,16 +4842,11 @@ function metadataValueFromType(t: TypeRecord, shape?: TypeRecord): unknown {
     return Object.freeze(marker);
   }
   if (t.Kind === 'object') {
-    const nested: Record<string, unknown> = Object.create(null);
+    const nested: Record<string | symbol, unknown> = Object.create(null);
     for (const p of t.Properties) {
       const v = metadataValueFromType(p.type, shape?.Kind === 'object' ? shape.Properties.find((q) => q.key === p.key)?.type : undefined);
-      // A SYMBOL-keyed member is skipped in this projection rather than
-      // stringified: the projection is the plain object a hook receives, and
-      // giving it a key spelled "Symbol(x)" would let two distinct symbols
-      // collide on one string, which is the collision the symbol key exists to
-      // avoid. A hook that needs one reads it through the reflection.
-      if (v !== METADATA_NOT_A_VALUE && typeof p.key === 'string') {
-        nested[p.key] = v;
+      if (v !== METADATA_NOT_A_VALUE) {
+        nested[MetadataStorageKey(p.key)] = v;
       }
     }
     return Object.freeze(nested);
@@ -4896,7 +4892,7 @@ export function MetaTypeNamedByArgument(t: TypeRecord): object | undefined {
     if (p.type?.Kind === 'literal') {
       return undefined;
     }
-    if (found === undefined && typeof p.key === 'string') {
+    if (found === undefined) {
       found = MetaTypeClaiming(p.key);
     }
   }
@@ -4909,16 +4905,15 @@ function* MetadataRecordFromObjectValue(value: ObjectValue): PlainEvaluator<Meta
 }
 
 export function MetadataObjectFromType(t: TypeRecord, base?: TypeRecord): MetadataRecord {
-  const fields: Record<string, unknown> = Object.create(null);
+  const fields: Record<string | symbol, unknown> = Object.create(null);
   if (t.Kind === 'object') {
     for (const p of t.Properties) {
-      const owner = typeof p.key === 'string' ? MetaTypeClaiming(p.key) : undefined;
+      const owner = MetaTypeClaiming(p.key);
       let shape = owner ? MetadataShape(owner, base) : undefined;
       if (shape?.Kind === 'nominal') shape = shape.Structure ?? shape;
       const v = metadataValueFromType(p.type, shape?.Kind === 'object' ? shape.Properties.find((q) => q.key === p.key)?.type : undefined);
-      // Symbol-keyed members are skipped here for the reason given above.
-      if (v !== METADATA_NOT_A_VALUE && typeof p.key === 'string') {
-        fields[p.key] = v;
+      if (v !== METADATA_NOT_A_VALUE) {
+        fields[MetadataStorageKey(p.key)] = v;
       }
     }
   }

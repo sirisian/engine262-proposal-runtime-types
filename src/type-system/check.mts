@@ -20,6 +20,7 @@ import { firstUnreadableControl, readClassControls, readFieldControls } from '..
 import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
 import { isRangeObject, endpointOf, type RangeObject } from '../intrinsics/Range.mts';
 import type { EnvironmentRecord } from '../execution-context/Environment.mts';
+import { MetadataKeys, MetadataEntries, MetadataKey, MetadataStorageKey } from './metadata-keys.mts';
 import { RawOperatorResultType } from './operator-result.mts';
 import { TypeDiagnosticOf, CreateTypeDiagnostic, ReportTypeDiagnostic } from './diagnostics.mts';
 import type { TypeDiagnosticRule } from './diagnostic-catalog.mts';
@@ -695,7 +696,7 @@ export interface UnclaimedKeyCheck {
   readonly node: ParseNode;
   readonly display: string;
   readonly base: TypeRecord;
-  readonly keys: readonly string[];
+  readonly keys: readonly (string | SymbolValue)[];
 }
 
 const unclaimedKeyChecks = new WeakMap<object, readonly UnclaimedKeyCheck[]>();
@@ -5367,7 +5368,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const held = (metadata as { properties?: unknown } | undefined)?.properties;
     const values: unknown[] = held instanceof Map
       ? [...held.values()].map((descriptor) => (descriptor as { Value?: unknown } | undefined)?.Value)
-      : metadata && typeof metadata === 'object' ? Object.values(metadata as Record<string, unknown>) : [];
+      : metadata && typeof metadata === 'object' ? MetadataEntries(metadata).map(([, value]) => value) : [];
     if (values.some(rangeIsEmpty)) return true;
     return isUninhabited(t.Base as TypeRecord);
   };
@@ -12512,7 +12513,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                   return null;
                 }
                 const metadata = MetadataObjectFromType(only, nominalBase);
-                const keys = Object.keys(metadata as unknown as Record<string, unknown>);
+                const keys = MetadataKeys(metadata).map(MetadataKey);
                 if (keys.length > 0) {
                   unclaimed.push({ node, display: displayType({ Kind: 'parameterized', Base: nominalBase, Metadata: metadata as unknown as MetadataRecord } as TypeRecord), base: nominalBase, keys });
                 }
@@ -12567,7 +12568,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (base) {
               const metadata = MetadataObjectFromType(args[0] as TypeRecord, base);
               const record: TypeRecord = { Kind: 'parameterized', Base: base, Metadata: metadata as unknown as MetadataRecord };
-              const keys = Object.keys(metadata as unknown as Record<string, unknown>);
+              const keys = MetadataKeys(metadata).map(MetadataKey);
               // table-metadata-values: the value language is CLOSED - "Nothing
               // else is a metadata value. A function, an object other than the
               // forms above, and *undefined* are not." A property whose type is
@@ -12588,7 +12589,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const argNode = node.TypeArguments!.TypeArgumentList[0] as ParseNode | undefined;
               if (argNode?.type === 'ObjectType') {
                 for (const prop of (args[0] as TypeRecord & { Kind: 'object' }).Properties) {
-                  if (typeof prop.key === 'string' && !(prop.key in (metadata as unknown as Record<string, unknown>))) {
+                  if (!Object.hasOwn(metadata, MetadataStorageKey(prop.key))) {
                     report(prop.type, record);
                   }
                 }
@@ -34021,8 +34022,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // literal overload may still run for one value of that domain.
           const required = annotation ? InstantiateComponentType(annotation.Type as ParseNode, bound, resolveNode) : null;
           const knownMetadataMismatch = required && typeof required === 'object' && required.Kind === 'parameterized'
-            && right.Kind === 'parameterized' && Object.keys(required.Metadata).length > 0
-            && Object.keys(required.Metadata).every((key) => Object.hasOwn(right.Metadata, key));
+            && right.Kind === 'parameterized' && MetadataKeys(required.Metadata).length > 0
+            && MetadataKeys(required.Metadata).every((key) => Object.hasOwn(right.Metadata, key));
           if (!knownMetadataMismatch && (!required || typeof required !== 'object' || !AreDisjoint(right, required))) unknownContribution = true;
           continue;
         }

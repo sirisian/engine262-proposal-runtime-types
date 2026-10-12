@@ -1,0 +1,884 @@
+{
+  "cases": [
+    {
+      "name": "not empty",
+      "steps": [
+        {
+          "source": "const a=Symbol(\"x\"),b=Symbol(\"x\");String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[a]:1}}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{}}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "different identities",
+      "steps": [
+        {
+          "source": "const a=Symbol(\"x\"),b=Symbol(\"x\");String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[a]:1}}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[b]:1}}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "different values",
+      "steps": [
+        {
+          "source": "const a=Symbol(\"x\"),b=Symbol(\"x\");String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[a]:1}}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[a]:2}}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same key",
+      "steps": [
+        {
+          "source": "const a=Symbol(\"x\"),b=Symbol(\"x\");String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[a]:1}}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[a]:1}}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "permutation",
+      "steps": [
+        {
+          "source": "const a=Symbol(\"x\"),b=Symbol(\"x\");String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[a]:1,[b]:2}}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[b]:2,[a]:1}}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested permutation",
+      "steps": [
+        {
+          "source": "const a=Symbol(\"x\"),b=Symbol(\"x\");String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{p:[{[a]:1,[b]:2}]}}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{p:[{[b]:2,[a]:1}]}}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "list key identity",
+      "steps": [
+        {
+          "source": "const a=Symbol(\"x\"),b=Symbol(\"x\");String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:[{[a]:1}]}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:[{[b]:1}]}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mixed string key",
+      "steps": [
+        {
+          "source": "const a=Symbol(\"x\"),b=Symbol(\"x\");String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{x:1,[a]:2}}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[a]:2,x:1}}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "string is not symbol",
+      "steps": [
+        {
+          "source": "const a=Symbol(\"x\"),b=Symbol(\"x\");String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{x:1}}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[a]:1}}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "symbol leaf identity",
+      "steps": [
+        {
+          "source": "const a=Symbol(\"x\"),b=Symbol(\"x\");String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[a]:a}}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[a]:b}}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "symbol leaf same identity",
+      "steps": [
+        {
+          "source": "const a=Symbol(\"x\"),b=Symbol(\"x\");String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[a]:a}}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[a]:a}}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "symbol leaves reverse order",
+      "steps": [
+        {
+          "source": "const a=Symbol(\"x\"),b=Symbol(\"x\");String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[a]:a,[b]:b}}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[b]:b,[a]:a}}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection identity Symbol.for(\"registered\")",
+      "steps": [
+        {
+          "source": "const k=Symbol.for(\"registered\");const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[k]:[1,2]}}});const x=Reflect.getReflection(T).metadata.brand;String(Reflect.ownKeys(x)[0]===k)+\"/\"+String(x[k][1])+\"/\"+String(Reflect.makeType(Reflect.getReflection(T))===T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/2/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection identity Symbol.iterator",
+      "steps": [
+        {
+          "source": "const k=Symbol.iterator;const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[k]:[1,2]}}});const x=Reflect.getReflection(T).metadata.brand;String(Reflect.ownKeys(x)[0]===k)+\"/\"+String(x[k][1])+\"/\"+String(Reflect.makeType(Reflect.getReflection(T))===T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/2/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection identity Symbol()",
+      "steps": [
+        {
+          "source": "const k=Symbol();const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[k]:[1,2]}}});const x=Reflect.getReflection(T).metadata.brand;String(Reflect.ownKeys(x)[0]===k)+\"/\"+String(x[k][1])+\"/\"+String(Reflect.makeType(Reflect.getReflection(T))===T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/2/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "registered keys share identity",
+      "steps": [
+        {
+          "source": "const a=Symbol.for(\"x\"),b=Symbol.for(\"x\");String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[a]:1}}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[b]:1}}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "symbol getter order",
+      "steps": [
+        {
+          "source": "const k=Symbol();let order=\"\";const x={get [k](){order+=\"s\";return {get z(){order+=\"z\";return 1;}};},get a(){order+=\"a\";return 2;}};Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:x}});order;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "asz"
+          }
+        }
+      ]
+    },
+    {
+      "name": "symbol getter once",
+      "steps": [
+        {
+          "source": "const k=Symbol();let n=0;Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{get [k](){return ++n;}}}});String(n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nonenumerable symbol ignored",
+      "steps": [
+        {
+          "source": "const k=Symbol();const x={};Object.defineProperty(x,k,{get(){throw new Error(\"read\");}});String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:x}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{}}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inherited symbol ignored",
+      "steps": [
+        {
+          "source": "const k=Symbol();const x=Object.create({[k]:()=>0});String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:x}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{}}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "array symbol property ignored",
+      "steps": [
+        {
+          "source": "const k=Symbol();const x=[1];x[k]=()=>0;String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:x}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:[1]}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "deleted symbol descriptor skipped",
+      "steps": [
+        {
+          "source": "const k=Symbol();const x={get a(){delete this[k];return 1;},[k]:2};String(Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:x}})===Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{a:1}}}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "symbol rejects function",
+      "steps": [
+        {
+          "source": "const k=Symbol();Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[k]:()=>0}}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "symbol rejects undefined",
+      "steps": [
+        {
+          "source": "const k=Symbol();Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[k]:undefined}}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "symbol rejects type object",
+      "steps": [
+        {
+          "source": "const k=Symbol();Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[k]:uint8}}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "symbol rejects map",
+      "steps": [
+        {
+          "source": "const k=Symbol();Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[k]:new Map()}}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "symbol cycle rejected",
+      "steps": [
+        {
+          "source": "const k=Symbol();const x={};x[k]=x;Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:x}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "symbol failure retains effects",
+      "steps": [
+        {
+          "source": "const k=Symbol();let n=0;let refused=false;try{Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{get [k](){n++;return ()=>0;}}}});}catch(e){refused=e instanceof TypeError;}String(refused)+\"/\"+String(n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unclaimed k",
+      "steps": [
+        {
+          "source": "const k=Symbol();Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{[k]:1}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "base hook waiver k",
+      "steps": [
+        {
+          "source": "const k=Symbol();meta uint8 {default={};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{[k]:1}});String(Reflect.getReflection(T).metadata[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unclaimed \"unclaimed\"",
+      "steps": [
+        {
+          "source": "const k=Symbol();Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{[\"unclaimed\"]:1}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "base hook waiver \"unclaimed\"",
+      "steps": [
+        {
+          "source": "const k=Symbol();meta uint8 {default={};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{[\"unclaimed\"]:1}});String(Reflect.getReflection(T).metadata[\"unclaimed\"]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "claimed symbol default and validation",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}validate(v,c){return c[k]===1;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{[k]:1}});String(7:=T)+\"/\"+String(Reflect.getReflection(T).metadata[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "claimed default completes portion",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}primitive uint<const W><const D:M>{operator *(rhs:string):string{return String(D[k])+\"/\"+String(D is M);}}(2:=uint8)*\"read\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "claimed capture preserves key",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}primitive uint<const W><const D:M>{operator *(rhs:string):string{return String(D[k])+\"/\"+String(D is M);}}(2:=uint8.<{[k]:1}>)*\"read\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic default capture preserves key",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}function f<float32.<const D:M>>():number{return D[k];}String(f.<float32>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested written key",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type T=uint8.<{brand:{[k]:1}}> ;String(Reflect.getReflection(T).metadata.brand[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric origins number",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}function build():M{return {[k]:1};}type A=uint8.<{[k]:1}>;type B=uint8.<build()>;const C=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{[k]:1}});String(A===B)+\"/\"+String(A===C)+\"/\"+String(Reflect.makeType(Reflect.getReflection(A))===A);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric origins int32",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:int32};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}function build():M{return {[k]:1};}type A=uint8.<{[k]:1}>;type B=uint8.<build()>;const C=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{[k]:1}});String(A===B)+\"/\"+String(A===C)+\"/\"+String(Reflect.makeType(Reflect.getReflection(A))===A);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric origins int64",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:int64};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}function build():M{return {[k]:1};}type A=uint8.<{[k]:1}>;type B=uint8.<build()>;const C=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{[k]:1}});String(A===B)+\"/\"+String(A===C)+\"/\"+String(Reflect.makeType(Reflect.getReflection(A))===A);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric origins uint64",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:uint64};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}function build():M{return {[k]:1};}type A=uint8.<{[k]:1}>;type B=uint8.<build()>;const C=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{[k]:1}});String(A===B)+\"/\"+String(A===C)+\"/\"+String(Reflect.makeType(Reflect.getReflection(A))===A);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric origins float32",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:float32};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}function build():M{return {[k]:1};}type A=uint8.<{[k]:1}>;type B=uint8.<build()>;const C=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{[k]:1}});String(A===B)+\"/\"+String(A===C)+\"/\"+String(Reflect.makeType(Reflect.getReflection(A))===A);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric origins float64",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:float64};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}function build():M{return {[k]:1};}type A=uint8.<{[k]:1}>;type B=uint8.<build()>;const C=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{[k]:1}});String(A===B)+\"/\"+String(A===C)+\"/\"+String(Reflect.makeType(Reflect.getReflection(A))===A);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric origins rational64",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:rational64};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}function build():M{return {[k]:1};}type A=uint8.<{[k]:1}>;type B=uint8.<build()>;const C=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{[k]:1}});String(A===B)+\"/\"+String(A===C)+\"/\"+String(Reflect.makeType(Reflect.getReflection(A))===A);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric origins decimal128",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:decimal128};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}function build():M{return {[k]:1};}type A=uint8.<{[k]:1}>;type B=uint8.<build()>;const C=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{[k]:1}});String(A===B)+\"/\"+String(A===C)+\"/\"+String(Reflect.makeType(Reflect.getReflection(A))===A);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong claimed shape",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:uint8};meta M{default={[k]:0};subtype(a,b){return true;}}Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{[k]:256}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same description distinct claims",
+      "steps": [
+        {
+          "source": "const a=Symbol(\"x\"),b=Symbol(\"x\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type A={[a]:number};type B={[b]:number};meta A{default={[a]:0};subtype(x,y){return true;}}meta B{default={[b]:0};subtype(x,y){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{[a]:1,[b]:2}});const r=Reflect.getReflection(T).metadata;String(r[a])+\"/\"+String(r[b]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed symbol default releases owner",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]?:any};meta M{default={[k]:()=>0};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{default={};subtype(a,b){return true;}}const T=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{[k]:1}});String(Reflect.getReflection(T).metadata[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed operator result retains symbol",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}function mul(a:M,b:M):M{return {[k]:a[k]+b[k]};}primitive float32<const D:M>{operator *.<R:M>(rhs:float32.<R>):float32.<mul(D,R)>;}const v=(2:=float32.<{[k]:1}>)*(3:=float32.<{[k]:2}>);String(v)+\"/\"+String(Reflect.getReflection(Reflect.typeOf(v)).metadata[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "6/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "canonical union permutation",
+      "steps": [
+        {
+          "source": "const a=Symbol(\"x\"),b=Symbol(\"x\");const A=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[a]:1}}});const B=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[b]:1}}});String(Reflect.makeType({kind:\"union\",members:[A,B]})===Reflect.makeType({kind:\"union\",members:[B,A]}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "canonical intersection permutation",
+      "steps": [
+        {
+          "source": "const a=Symbol(\"x\"),b=Symbol(\"x\");const A=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[a]:1}}});const B=Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{brand:{[b]:1}}});String(Reflect.makeType({kind:\"intersection\",members:[A,B]})===Reflect.makeType({kind:\"intersection\",members:[B,A]}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

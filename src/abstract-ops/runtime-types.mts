@@ -1,3 +1,4 @@
+import { MetadataStorageKey, MetadataKey, MetadataKeys, MetadataEntries } from '../type-system/metadata-keys.mts';
 import type { CapturedTypeContext } from '../type-system/runtime.mts';
 import { RawOperatorResultType } from '../type-system/operator-result.mts';
 import { publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, type StructuralStorageAdmission } from '../type-system/runtime.mts';
@@ -349,7 +350,7 @@ function* requireMembership(value: Value, t: TypeRecord, storage?: StructuralSto
  * holds is, so acquiring the type is exactly the check that it already was.
  */
 export function* StampTypedCollection(value: ObjectValue, args: readonly (TypeRecord | number)[]): PlainEvaluator<void> {
-  const slots = value as unknown as Record<string, unknown>;
+  const slots = value as unknown as Record<string | symbol, unknown>;
   const key = args[0];
   const second = args[1];
   const entries = (slots.MapData ?? slots.WeakMapData) as
@@ -3132,7 +3133,7 @@ export function LookupTypeDefault(typeObject: object): Value | undefined {
 export function* SnapshotMetadataValue(value: Value): PlainEvaluator<Value> {
   type Store = (snapshot: unknown) => void;
   type Task = { kind: 'value'; value: Value; store: Store }
-    | { kind: 'record'; value: ObjectValue; out: Record<string, unknown>; keys: readonly (JSStringValue | SymbolValue)[]; index: number; store: Store }
+    | { kind: 'record'; value: ObjectValue; out: Record<string | symbol, unknown>; keys: readonly (JSStringValue | SymbolValue)[]; index: number; store: Store }
     | { kind: 'list'; value: ObjectValue; out: unknown[]; length: number; index: number; store: Store };
   let result: unknown;
   const tasks: Task[] = [{ kind: 'value', value, store: (snapshot) => {
@@ -3163,13 +3164,11 @@ export function* SnapshotMetadataValue(value: Value): PlainEvaluator<Value> {
           } });
         } else {
           const key = task.keys[index]!;
-          // Symbol-keyed record projection is a separate retained boundary.
-          if (!(key instanceof JSStringValue)) continue;
           const desc = Q(yield* task.value.GetOwnProperty(key));
           if (!desc || desc.Enumerable !== Value.true) continue;
           const child = Q(yield* Get(task.value, key));
           tasks.push({ kind: 'value', value: child, store: (snapshot) => {
-            task.out[key.stringValue()] = snapshot;
+            task.out[MetadataStorageKey(key instanceof JSStringValue ? key.stringValue() : key)] = snapshot;
           } });
         }
         continue;
@@ -3290,12 +3289,12 @@ export function NormalizeMetadataRecord(value: unknown, shape?: TypeRecord, base
     return Object.freeze(value.map((v, i) => NormalizeMetadataRecord(v,
       shape?.Kind === 'tuple' ? shape.Elements[i]?.Type : shape?.Kind === 'array' ? shape.Element : undefined, base, false))) as unknown as MetadataRecord;
   }
-  const out: Record<string, unknown> = Object.create(null);
-  for (const [key, leaf] of Object.entries(value)) {
-    const owner = shape === undefined && claimed ? MetaTypeClaiming(key) : undefined;
+  const out: Record<string | symbol, unknown> = Object.create(null);
+  for (const [key, leaf] of MetadataEntries(value)) {
+    const owner = shape === undefined && claimed ? MetaTypeClaiming(MetadataKey(key)) : undefined;
     let domain = shape ?? (owner ? MetadataShape(owner, base) : undefined);
     if (domain?.Kind === 'nominal') domain = domain.Structure ?? domain;
-    out[key] = NormalizeMetadataRecord(leaf, domain?.Kind === 'object' ? domain.Properties.find((p) => p.key === key)?.type : undefined, base, false);
+    out[key] = NormalizeMetadataRecord(leaf, domain?.Kind === 'object' ? domain.Properties.find((p) => p.key === MetadataKey(key))?.type : undefined, base, false);
   }
   return Object.freeze(out) as unknown as MetadataRecord;
 }
@@ -3303,7 +3302,11 @@ export function NormalizeMetadataRecord(value: unknown, shape?: TypeRecord, base
 /** A construction boundary validates the completed, normalized claimed shape. */
 export function* CheckMetadataRecord(metadata: MetadataRecord, base: TypeRecord): PlainEvaluator<MetadataRecord> {
   const normalized = NormalizeMetadataRecord(metadata, undefined, base);
-  for (const owner of GoverningMetaTypes(normalized).types) {
+  const governing = GoverningMetaTypes(normalized);
+  if (governing.unclaimed.length > 0 && !HasMetaHooks(GetTypeObject(base))) {
+    return Throw.TypeError('$1 is not claimed by any meta type', propertyKeyValue(governing.unclaimed[0]));
+  }
+  for (const owner of governing.types) {
     const shape = MetadataShape(owner, base);
     if (shape?.Kind !== 'object') continue;
     const portion = NormalizeMetadataRecord(MetadataPortion(normalized, owner), shape, base);
@@ -3483,17 +3486,17 @@ const EMPTY_METADATA = Object.freeze(Object.create(null) as Record<string, never
  * no meta type claims is reported by the caller, since the specification places
  * that error at the parameterization rather than here.
  */
-export function GoverningMetaTypes(metadata: MetadataRecord): { types: object[], unclaimed: string[] } {
+export function GoverningMetaTypes(metadata: MetadataRecord): { types: object[], unclaimed: (string | SymbolValue)[] } {
   const types: object[] = [];
-  const unclaimed: string[] = [];
+  const unclaimed: (string | SymbolValue)[] = [];
   if (!metadata || typeof metadata !== 'object') {
     return { types, unclaimed };
   }
   const claims = claimsForAgent();
-  for (const key of Object.keys(metadata as unknown as Record<string, unknown>)) {
-    const claimant = claims.get(key);
+  for (const key of MetadataKeys(metadata)) {
+    const claimant = claims.get(MetadataKey(key));
     if (claimant === undefined) {
-      unclaimed.push(key);
+      unclaimed.push(MetadataKey(key));
     } else if (!types.includes(claimant)) {
       types.push(claimant);
     }
@@ -3518,16 +3521,16 @@ export function MetadataPortion(metadata: MetadataRecord, metaType: object): Met
   // the right verdict for the wrong reason. A meta type with no snapshot
   // (declared over a non-object shape, or never declared) starts empty, the
   // old behaviour, right for a type that claims no keys.
-  const portion: Record<string, unknown> = Object.create(null);
+  const portion: Record<string | symbol, unknown> = Object.create(null);
   const snapshot = metaDefaultSnapshots.get(metaType);
   if (snapshot && typeof snapshot === 'object') {
-    for (const [key, v] of Object.entries(snapshot as unknown as Record<string, unknown>)) {
+    for (const [key, v] of MetadataEntries(snapshot)) {
       portion[key] = v;
     }
   }
   if (metadata && typeof metadata === 'object') {
-    for (const [key, v] of Object.entries(metadata as unknown as Record<string, unknown>)) {
-      if (MetaTypeClaiming(key) === metaType) {
+    for (const [key, v] of MetadataEntries(metadata)) {
+      if (MetaTypeClaiming(MetadataKey(key)) === metaType) {
         portion[key] = v;
       }
     }
@@ -4263,9 +4266,9 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
   // the comparison, which is exactly the check it looks like.
   let targetMetadata: MetadataRecord = to.Metadata;
   {
-    const carriedOver: Record<string, unknown> = Object.create(null);
-    const source = to.Metadata as unknown as Record<string, unknown>;
-    for (const key of Object.keys(source)) {
+    const carriedOver: Record<string | symbol, unknown> = Object.create(null);
+    const source = to.Metadata as unknown as Record<string | symbol, unknown>;
+    for (const key of MetadataKeys(source)) {
       carriedOver[key] = source[key];
     }
     let carriedAny = false;
@@ -4280,14 +4283,14 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
         MetadataPortion(from.Metadata, metaType), factorValue,
       ], to.Base));
       if (rescaled === undefined) return Throw.TypeError('a required rescale hook produced no result');
-      const portion = NormalizeMetadataRecord(Q(yield* SnapshotMetadataValue(rescaled)), (metaType as { TypeRecord?: TypeRecord }).TypeRecord) as unknown as Record<string, unknown>;
+      const portion = NormalizeMetadataRecord(Q(yield* SnapshotMetadataValue(rescaled)), (metaType as { TypeRecord?: TypeRecord }).TypeRecord) as unknown as Record<string | symbol, unknown>;
       const shape = (metaType as { TypeRecord?: TypeRecord }).TypeRecord;
       if (shape) {
         const valid = Q(yield* IsOfType(MetadataAsObject(portion as MetadataRecord), shape));
         if (!valid) return Throw.TypeError('$1', `${LookupMetaTypeName(metaType) ?? 'a meta type'}'s rescale hook must return its metadata shape`);
       }
       if (portion && typeof portion === 'object') {
-        for (const key of Object.keys(portion)) {
+        for (const key of MetadataKeys(portion)) {
           carriedOver[key] = portion[key];
           carriedAny = true;
         }
@@ -4410,8 +4413,8 @@ export function MetadataAsObject(metadata: Value | MetadataRecord): Value {
     return arr;
   }
   const obj = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Object.prototype%']);
-  for (const [key, v] of Object.entries(metadata as unknown as Record<string, Value>)) {
-    X(CreateDataPropertyOrThrow(obj, Value(key), MetadataAsObject(v)));
+  for (const [key, v] of MetadataEntries<Value>(metadata)) {
+    X(CreateDataPropertyOrThrow(obj, propertyKeyValue(MetadataKey(key)), MetadataAsObject(v)));
   }
   return obj;
 }
@@ -4861,9 +4864,9 @@ function annotationMentionsName(node: unknown, name: string): boolean {
   if ((n.type === 'TypeReference' && n.TypeName?.IdentifierReference?.name === name) || (n.type === 'IdentifierReference' && n.name === name)) {
     return true;
   }
-  return Object.keys(n).some((key) => key !== 'parent' && key !== 'location' && (Array.isArray((n as Record<string, unknown>)[key])
+  return Object.keys(n).some((key) => key !== 'parent' && key !== 'location' && (Array.isArray((n as Record<string | symbol, unknown>)[key])
     ? ((n as Record<string, unknown[]>)[key]).some((c) => annotationMentionsName(c, name))
-    : annotationMentionsName((n as Record<string, unknown>)[key], name)));
+    : annotationMentionsName((n as Record<string | symbol, unknown>)[key], name)));
 }
 
 /** Converts each annotated parameter's bound value in place at entry. */
@@ -5898,7 +5901,7 @@ export function MergeOperatorResultMetadata(
   contributed: readonly { metaType: object, portion: MetadataRecord }[],
   governing: readonly object[],
 ): MetadataRecord | ThrowCompletion {
-  const merged: Record<string, unknown> = Object.create(null);
+  const merged: Record<string | symbol, unknown> = Object.create(null);
   const said = new Map<object, MetadataRecord>();
   for (const { metaType, portion } of contributed) {
     const completed = MetadataPortion(portion, metaType);
@@ -5908,8 +5911,8 @@ export function MergeOperatorResultMetadata(
     }
     said.set(metaType, completed);
     if (completed && typeof completed === 'object') {
-      for (const key of Object.keys(completed as unknown as Record<string, unknown>)) {
-        merged[key] = (completed as unknown as Record<string, unknown>)[key];
+      for (const key of MetadataKeys(completed)) {
+        merged[key] = (completed as unknown as Record<string | symbol, unknown>)[key];
       }
     }
   }
@@ -5919,8 +5922,8 @@ export function MergeOperatorResultMetadata(
     }
     const dflt = LookupMetaDefaultSnapshot(metaType);
     if (dflt && typeof dflt === 'object') {
-      for (const key of Object.keys(dflt as unknown as Record<string, unknown>)) {
-        merged[key] = (dflt as unknown as Record<string, unknown>)[key];
+      for (const key of MetadataKeys(dflt)) {
+        merged[key] = (dflt as unknown as Record<string | symbol, unknown>)[key];
       }
     }
   }
