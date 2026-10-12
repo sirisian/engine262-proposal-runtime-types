@@ -5945,12 +5945,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
         }
       }
-      // The element follows the ordinary rules, so a literal endpoint that fits
-      // the annotated element type is admitted as it is anywhere else.
+      // Concrete domains are invariant. The RangeBounds interface instead
+      // checks endpoint admission, without changing the concrete specialization.
       const se = source.Arguments[0];
       const te = target.Arguments[0];
-      if (typeof se !== 'number' && typeof te !== 'number' && se && te && !IsAssignable(se, te)
-          && !literalFitsNumericType(se, te) && !SameType(se, te)) {
+      if (typeof se !== 'number' && typeof te !== 'number' && se && te
+          && te.Kind !== 'any' && se.Kind !== 'any'
+          && !(target.LibraryName === 'RangeBounds' ? IsAssignable(se, te) : SameType(se, te))) {
         report(source, target, at);
       }
       return;
@@ -15100,6 +15101,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   /** Range literals already judged by the element-fit rule, reported once each. */
   const rangeElementFitReported = new WeakSet<ParseNode>();
+  // An iteration consumer asks about produced values, not stored endpoints.
+  let rangeIterationContext: { node: ParseNode, element: TypeRecord } | undefined;
+  const rangeIterationElements = new WeakMap<ParseNode, TypeRecord>();
 
   const constExactValue = (name: string): bigint | null => {
     for (let i = frames.length - 1; i >= 0; i -= 1) {
@@ -15586,6 +15590,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // as a `for`-`of` head does for a literal - passes that type, so the
     // element is derived by this one implementation rather than a second.
     const source = typedSource !== undefined ? typedSource : staticType(expr);
+    let rangeNode = expr;
+    while (rangeNode.type === 'ParenthesizedExpression') rangeNode = rangeNode.Expression;
+    const rangeElement = rangeIterationElements.get(rangeNode);
+    if (rangeNode.type === 'RangeExpression' && rangeElement) return rangeElement;
     if (!source) {
       return null;
     }
@@ -15944,86 +15952,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (node.type === 'RangeExpression') {
       const r = node as ParseNode.RangeExpression;
-      const contextualElement = contextual && contextual.Kind === 'nominal'
+      const iterationContext = rangeIterationContext?.node === node ? rangeIterationContext.element : undefined;
+      const contextualElement = !iterationContext && contextual && contextual.Kind === 'nominal'
         && isRangeFamilyName(contextual.LibraryName)
         && typeof contextual.Arguments[0] !== 'number'
         ? (contextual.Arguments[0] as TypeRecord | undefined) ?? null
         : null;
-      // Each endpoint is READ at that element, so a literal endpoint takes the
-      // element's type. Whether the range FITS the element is a separate
-      // question, answered below by the elements it produces - not here by the
-      // endpoints, since a half-open range's end is never produced.
+      // Construction context checks stored endpoints. Iteration context is
+      // attached only to its direct literal, and never propagates into them.
       const fromEndpoint = (n: ParseNode | null): TypeRecord | null => {
         const t = staticTypeIn(n as ParseNode | null, contextualElement);
+        if (t && contextualElement && n) requireAssignable(t, contextualElement, n);
         return t && t.Kind === 'literal' ? t.Base : t;
       };
       const start = fromEndpoint(r.RangeStart as ParseNode | null);
       const end = fromEndpoint(r.RangeEnd as ParseNode | null);
-      // A TYPED endpoint decides the element type over a literal one, whichever
-      // side it is on.
-      //
-      // This read `start ?? end`, so the FIRST endpoint won outright and a
-      // literal there carried its `number` base past a typed endpoint opposite:
-      // `0..<a.length` over a typed array, whose `length` is a `uint.<64>`, was
-      // a range of `number`. That is the loop #sec-range-literals holds up as
-      // "the loop written without thinking rather than one short", and its
-      // index came out untyped.
-      //
-      // A literal adapts to its position everywhere else in this system, and
-      // the opposite endpoint is the position here: with both endpoints typed
-      // the range already takes their type, so a literal beside a typed one
-      // should reach the same answer rather than a different one.
+      // A typed endpoint can guide iteration independently of the interval's
+      // actual (possibly mixed) endpoint domain.
       const literalBased = (t: TypeRecord | null) => !!t && t.Kind === 'primitive' && t.Name === 'number';
       const typedEndpoint = !literalBased(start) ? start : (!literalBased(end) ? end : null);
-      const element = contextualElement ?? typedEndpoint ?? start ?? end ?? anyTypeRecord;
-      // RULE 1: A RANGE READ AT AN ELEMENT TYPE FITS BY ITS ELEMENTS.
-      //
-      // A range read at an element type - at an annotated binding, a parameter,
-      // a return, an assignment target, or a `for`-`of` head - claims that every
-      // value it produces is a value of that type. Nothing checked the claim:
-      // `let r: ClosedRange.<uint8> = 0..=256` was accepted, and the element 256
-      // flowed out typed `number` from a range whose type said `uint8`, caught
-      // only where it happened to reach a typed store.
-      //
-      // The check is on the FIRST AND LAST ELEMENT, not the endpoints. A
-      // half-open range's end is the stop and is never produced: `0..<256`
-      // yields 0 through 255, every byte, and must fit `uint8` although 256
-      // does not. An endpoint rule would refuse the most natural byte loop
-      // there is. So an open start moves the first element up by one, an open
-      // end moves the last down by one, and the four forms are:
-      //
-      //   a..=b  first a,     last b        a<..=b  first a + 1, last b
-      //   a..<b  first a,     last b - 1    a<..<b  first a + 1, last b - 1
-      //
-      // An EMPTY range fits any type - a descending `10..<0` and a `5..<5` hold
-      // nothing, per ranges.md - and an UNBOUNDED or infinite end, `0..` or
-      // `0..<Infinity`, fits no bounded type, producing values without limit.
-      //
-      // WHERE THE ELEMENT TYPE COMES FROM. From context, or - where there is
-      // none - from a TYPED ENDPOINT: `s..<300` with `s: uint8` is a range of
-      // `uint8`, and nothing checked it though it produces 256 through 299. An
-      // endpoint that does not fold to a constant is still bounded by its own
-      // type: `s` is some value from 0 to 255. So the rule judges the widest the
-      // range could reach - its lowest possible first element, its highest
-      // possible last - which decides every case soundly without knowing `s`.
-      // A literal start is judged by the first element, a literal end by the
-      // last, and a range that bound makes empty for every value of the typed
-      // endpoint, `300..=e` with `e: uint8`, fits as any empty range does.
-      //
-      // FLOAT ELEMENT TYPES. A range with whole-integer endpoints iterates by 1
-      // whatever its element type, and it yields the integer it steps to - it
-      // rounds nothing. So a `float16` range reaching 2049 yields 2049, which
-      // `float16` cannot hold (it holds integers exactly only to 2**11). The
-      // rule is the same - every element a value of the type - and for a float
-      // it means EXACTLY a value. A range with a non-integer endpoint is an
-      // interval with no implicit step; it has no elements to judge, and only
-      // an endpoint that overflows the type is refused.
-      //
-      // Not decided here: an endpoint known only at run time beyond its type
-      // (`0..<n` for an untyped `n`), and a typed FLOAT endpoint, where whether
-      // the range iterates at all turns on whether its run-time value is whole.
-      // `number` and `bigint` have no limit to exceed.
-      const fitElement = contextualElement ?? typedEndpoint;
+      const endpointDomain = start && end ? joinTypes(start, end) : start ?? end ?? anyTypeRecord;
+      const element = contextualElement ?? endpointDomain;
+      const iterationElement = iterationContext ?? contextualElement ?? typedEndpoint ?? element;
+      rangeIterationElements.set(node, iterationElement);
+      // A consumer checks produced values, including excluded stops and empty
+      // intervals. Formation alone makes no promise about implicit iteration.
+      // Integer endpoints known only by type contribute their entire bounds;
+      // whole-integer floating iteration requires exact representability.
+      const fitElement = iterationContext;
       const fitName = fitElement && fitElement.Kind === 'primitive' ? (fitElement as { Name: string }).Name : null;
       const fitIsInteger = !!fitElement && isIntegerValueType(fitElement);
       const fitIsFloat = fitName !== null && isFloatTypeName(fitName);
@@ -20974,22 +20930,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * of an unknown type, so it stops both judgments rather than being guessed
    * at - the alternative is reporting an arity the program does not have.
    */
-  /**
-   * #sec-range-literals: "A range literal read at an element type _T_, where a
-   * contextual type gives it one, is a type error unless every element it
-   * produces is a value of _T_." The judgment lives where a range meets a
-   * `Range`-family contextual type, which a `for`-`of` head and an annotation
-   * supply. An array literal's spread, a spread argument into a typed rest, and
-   * a collection's seed give a range an element type too, and did not consult
-   * it: `[...0..=256]` at `[].<uint8>` failed only when 256 reached the store.
-   * Each now reads the range at a `Range.<T>` of its element type, which is the
-   * same judgment and reports once per range.
-   */
+  /** Check a literal consumer's produced values without constructing it at T. */
   const checkRangeAtElement = (expr: ParseNode | null | undefined, element: Known | number | undefined): void => {
     let x = expr;
     while (x && x.type === 'ParenthesizedExpression') x = (x as unknown as { Expression?: ParseNode }).Expression;
     if (x?.type !== 'RangeExpression' || !element || typeof element === 'number') return;
-    staticTypeIn(x, libraryTypeRecord('Range', [element as TypeRecord, 0, 0]) as Known);
+    const prior = rangeIterationContext;
+    rangeIterationContext = { node: x, element: element as TypeRecord };
+    try {
+      staticTypeIn(x, null);
+    } finally {
+      rangeIterationContext = prior;
+    }
   };
 
   const checkArrayLiteralAgainst = (node: ParseNode.ArrayLiteral, target: TypeRecord & { Kind: 'array' }) => {
@@ -34850,30 +34802,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
       const loopType = declaredLoopType ?? inferredLoopType;
-      // RULE 2: A LITERAL ITERABLE IN THE HEAD TAKES THE BINDING'S ANNOTATION.
-      //
-      // #sec-contextual-types gives the `Initializer` of an annotated binding
-      // the annotated type, and an array literal's elements the element type of
-      // a known array. A `for`-`of` binding "takes the same annotation" but has
-      // no initializer - its value comes from iterating - so the table reached
-      // no row and the iterable was typed with nothing. `for (const b: uint8 of
-      // 0..<256)` read the range as a range of `number` and was refused with
-      // "number is not assignable to uint.<8>", naming a type the author never
-      // wrote, though `let r: ClosedOpenRange.<uint8> = 0..<256` is accepted.
-      // The loop head was the one place a literal sat beside an annotation and
-      // ignored it.
-      //
-      // So a range or array literal WRITTEN DIRECTLY in the head is read with
-      // the annotation as its element type: a range through the very arm an
-      // annotated binding uses - so the two cannot disagree, and Rule 1 decides
-      // whether it fits - and an array literal as `[].<T>`, whose elements the
-      // element row then types.
-      //
-      // Nothing else is retyped. An iterable that is a call or a binding keeps
-      // the type it was given where it was produced - "a contextual type does
-      // not reach INTO a call" - and the annotation checks its elements below,
-      // as before. A plain `for`-`of` only: `for await` would need its element
-      // wrapped, and `for`-`in` enumerates keys.
+      // A direct literal receives the loop's iteration context. A range
+      // retains its endpoint domain; an array constructs its elements at T.
+      // Existing iterables keep the type they were produced with.
       let contextuallyTyped: Known | undefined;
       if (loopType && source && (node as ParseNode).type === 'ForOfStatement') {
         let literal: ParseNode | null | undefined = source;
@@ -34881,7 +34812,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           literal = (literal as unknown as { Expression?: ParseNode }).Expression;
         }
         if (literal?.type === 'RangeExpression') {
-          contextuallyTyped = staticTypeIn(source, libraryTypeRecord('Range', [loopType as TypeRecord, 0, 0]) as Known);
+          const prior = rangeIterationContext;
+          rangeIterationContext = { node: literal, element: loopType as TypeRecord };
+          try {
+            contextuallyTyped = staticTypeIn(literal, null);
+          } finally {
+            rangeIterationContext = prior;
+          }
         } else if (literal?.type === 'ArrayLiteral') {
           contextuallyTyped = staticTypeIn(source,
             { Kind: 'array', Element: loopType, Extent: 'dynamic' } as unknown as Known);
@@ -34892,6 +34829,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const element = (node as ParseNode).type === 'ForAwaitStatement' && source
         ? AsyncIterationContribution(staticType(source), structureOf, awaitedType,
           (type) => iteratedElementType(source, type)).element : iterated;
+      if (source && element) checkRangeAtElement(source, element);
       walk(source);
       // The annotation wins as the binding's type - it is declared, where the
       // element type is inferred - and the element type must be assignable to

@@ -167,7 +167,7 @@ test('sec-ranges: the four pairs are the four intervals and nothing further is e
   // "_S_ and _E_ are values of `Bound` ... so the four intervals of a
   //  two-endpoint range, the closed, the two half-open, and the open, are the
   //  four pairs and nothing further is expressible."
-  const of = (r: string, s: string, e: string) => `String((${r}) is Range.<uint8, Range.Bound.${s}, Range.Bound.${e}>);`;
+  const of = (r: string, s: string, e: string) => `String((${r}) is Range.<number, Range.Bound.${s}, Range.Bound.${e}>);`;
   expect(evaluated(of('0..<10', 'Closed', 'Open'))).toBe('true');
   expect(evaluated(of('0..=10', 'Closed', 'Closed'))).toBe('true');
   expect(evaluated(of('0<..<10', 'Open', 'Open'))).toBe('true');
@@ -182,13 +182,13 @@ test('sec-ranges: each of the four shapes is its own type, and each implements R
   // shapes share one dynamic representation and an absent endpoint is how it
   // says which shape it has.
   expect(evaluated('String((0..<10) is Range.<number>) + "," + String((5..) is Range.<number>);')).toBe('true,false');
-  expect(evaluated('String((5..) is RangeFrom.<number>) + "," + String((..<5) is RangeTo.<number>) + "," + String((..) is RangeFull.<number>);')).toBe('true,true,true');
+  expect(evaluated('String((5..) is RangeFrom.<number>) + "," + String((..<5) is RangeTo.<number>) + "," + String((..) is RangeFull.<any>);')).toBe('true,true,true');
   // "Each implements `RangeBounds.<T>`, which is the interface a consumer of an
   //  arbitrary range is written against."
   expect(evaluated('String((0..<10) is RangeBounds.<any>) + "," + String((5..) is RangeBounds.<any>) + "," + String((..) is RangeBounds.<any>);')).toBe('true,true,true');
   expect(evaluated('String(5 is RangeBounds.<any>);')).toBe('false');
   // A bound named on a one-ended shape constrains that shape's own endpoint.
-  expect(evaluated('String((5..) is RangeFrom.<uint8, Range.Bound.Closed>) + "," + String((5<..) is RangeFrom.<uint8, Range.Bound.Closed>);')).toBe('true,false');
+  expect(evaluated('String((5..) is RangeFrom.<number, Range.Bound.Closed>) + "," + String((5<..) is RangeFrom.<number, Range.Bound.Closed>);')).toBe('true,false');
 });
 
 test('sec-ranges: an annotation naming an interval admits only that interval', () => {
@@ -204,12 +204,12 @@ test('the four aliases name the four intervals', () => {
   // "the aliases, so no annotation is forced through the three-argument
   //  spelling", each sharing the `Interval` enum's names so the language has one
   //  vocabulary for the four intervals rather than two.
-  expect(evaluated('String((0..=10) is ClosedRange.<uint8>);')).toBe('true');
-  expect(evaluated('String((0..<10) is ClosedOpenRange.<uint8>);')).toBe('true');
-  expect(evaluated('String((0<..=10) is OpenClosedRange.<uint8>);')).toBe('true');
-  expect(evaluated('String((0<..<10) is OpenRange.<uint8>);')).toBe('true');
+  expect(evaluated('String((0..=10) is ClosedRange.<number>);')).toBe('true');
+  expect(evaluated('String((0..<10) is ClosedOpenRange.<number>);')).toBe('true');
+  expect(evaluated('String((0<..=10) is OpenClosedRange.<number>);')).toBe('true');
+  expect(evaluated('String((0<..<10) is OpenRange.<number>);')).toBe('true');
   // An alias IS its expansion, so it admits only its own interval.
-  expect(evaluated('String((0..<10) is ClosedRange.<uint8>);')).toBe('false');
+  expect(evaluated('String((0..<10) is ClosedRange.<number>);')).toBe('false');
   expect(evaluated('let r: ClosedOpenRange.<uint8> = 0..<10; "ok";')).toBe('ok');
   expectThrown('let r: ClosedRange.<uint8> = 0..<10; "ok";');
 });

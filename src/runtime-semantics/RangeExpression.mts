@@ -1,12 +1,14 @@
 import { NumberValue, BigIntValue, ObjectValue, isTypedNumber } from '../value.mts';
 import { R } from '../abstract-ops/all.mts';
-import { LookupClassOperator } from '../abstract-ops/runtime-types.mts';
+import { LookupClassOperator, RequireType } from '../abstract-ops/runtime-types.mts';
 import { type RangeEndpoint } from '../intrinsics/Range.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { Q } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { CreateRangeObject } from '../intrinsics/Range.mts';
+import { contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
+import { isRangeShapeName } from '../type-system/range-bounds-match.mts';
 import { GetValue, surroundingAgent, Throw } from '#self';
 
 /**
@@ -16,9 +18,11 @@ import { GetValue, surroundingAgent, Throw } from '#self';
  * core; the design's ordering-based generalization to the other ordered types is
  * part of the extension's deferred remainder.
  */
-export function* Evaluate_RangeExpression({
-  RangeStart, RangeEnd, RangeStartBound, RangeEndBound,
-}: ParseNode.RangeExpression): ValueEvaluator {
+export function* Evaluate_RangeExpression(node: ParseNode.RangeExpression): ValueEvaluator {
+  const { RangeStart, RangeEnd, RangeStartBound, RangeEndBound } = node;
+  const context = contextualTypeFor(node);
+  const argument = context?.Kind === 'nominal' && isRangeShapeName(context.LibraryName ?? '') ? context.Arguments[0] : undefined;
+  const element = typeof argument === 'number' ? undefined : argument;
   // #sec-ranges: "A range is a value type class over an ORDERED element type."
   // bigint is ordered, and its endpoints reach the value model through the same
   // `R` that Number's do, so the ordering operations are polymorphic already.
@@ -38,7 +42,14 @@ export function* Evaluate_RangeExpression({
   // one place an endpoint enters, is what keeps every ordering operation
   // downstream coherent without any of them testing for it.
   const endpoint = function* endpoint(node: never): PlainEvaluator<RangeEndpoint> {
-    const value = Q(yield* GetValue(Q(yield* Evaluate(node))));
+    let value;
+    pushContextualType(element ?? null, node);
+    try {
+      value = Q(yield* GetValue(Q(yield* Evaluate(node))));
+      if (element) value = Q(yield* RequireType(value, element));
+    } finally {
+      popContextualType();
+    }
     if (value instanceof BigIntValue) {
       return value;
     }
@@ -78,5 +89,5 @@ export function* Evaluate_RangeExpression({
   }
   // The parser's bound pair passes straight through: the node and the value model
   // carry the same shape-independent endpoint view.
-  return CreateRangeObject(start, end, RangeStartBound ?? undefined, RangeEndBound ?? undefined, surroundingAgent.currentRealmRecord);
+  return CreateRangeObject(start, end, RangeStartBound ?? undefined, RangeEndBound ?? undefined, surroundingAgent.currentRealmRecord, element);
 }

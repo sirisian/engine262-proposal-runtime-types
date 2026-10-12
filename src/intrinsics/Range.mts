@@ -5,6 +5,7 @@ import {
 import { type ValueEvaluator } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { LookupClassOperator, ScaleMetadataValue } from '../abstract-ops/runtime-types.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { exactNumericValue } from '../abstract-ops/testing-comparison.mts';
 import { type Mutable } from '../utils/language.mts';
@@ -60,6 +61,7 @@ export type RangeEndpoint = NumberValue | BigIntValue | TypedNumberValue | Objec
 export type RangeBound = 'closed' | 'open';
 
 export interface RangeObject extends OrdinaryObject {
+  RangeElementType?: TypeRecord;
   RangeStart: RangeEndpoint | undefined;
   RangeEnd: RangeEndpoint | undefined;
   RangeStartBound: RangeBound | undefined;
@@ -70,9 +72,10 @@ export function isRangeObject(value: Value): value is RangeObject {
   return value instanceof ObjectValue && 'RangeStartBound' in value;
 }
 
-export function CreateRangeObject(start: RangeEndpoint | undefined, end: RangeEndpoint | undefined, startBound: RangeBound | undefined, endBound: RangeBound | undefined, realmRec: Realm): RangeObject {
+export function CreateRangeObject(start: RangeEndpoint | undefined, end: RangeEndpoint | undefined, startBound: RangeBound | undefined, endBound: RangeBound | undefined, realmRec: Realm, elementType?: TypeRecord): RangeObject {
   const proto = realmRec.Intrinsics['%Range.prototype%'];
-  const obj = OrdinaryObjectCreate(proto, ['RangeStart', 'RangeEnd', 'RangeStartBound', 'RangeEndBound']) as Mutable<RangeObject>;
+  const obj = OrdinaryObjectCreate(proto, ['RangeStart', 'RangeEnd', 'RangeStartBound', 'RangeEndBound', 'RangeElementType']) as Mutable<RangeObject>;
+  obj.RangeElementType = elementType;
   obj.RangeStart = start;
   obj.RangeEnd = end;
   obj.RangeStartBound = startBound;

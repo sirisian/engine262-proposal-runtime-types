@@ -2421,40 +2421,23 @@ export function RuntimeTypeOf(value: Value): TypeRecord {
       return stamped;
     }
   }
-  // proposal-runtime-types #sec-ranges: a range is "a value type class over an
-  // ordered element type and a bound at each endpoint it has", so its type is
-  // `Range.<T, S, E>` and not the shape of the object carrying it. This fell
-  // through to the shape branches below and reported the literal type of an
-  // object with no own properties - `Reflect.typeOf(0..<5)` answered `{}` while
-  // `(0..<5) is Range.<uint8>` answered *true*, the two answers disagreeing that
-  // #sec-instanceof-for-type-objects exists to prevent.
-  //
-  // Unlike a collection this needs no stamp: the element type is the type of an
-  // endpoint, and the bounds are the ordinals of `Range.Bound` the object
-  // already carries. A one-ended range recovers T from its one endpoint too.
-  // An endpoint-free range retains the existing contextual representation;
-  // this does not invent an element type for an uncontextualized full range.
+  // Endpoint-domain reflection uses both endpoints. Contextual construction
+  // retains its chosen domain, including for a full range with no endpoints.
   if (isRangeObject(value)) {
-    const r = value as unknown as {
-      RangeStart?: Value, RangeEnd?: Value,
-      RangeStartBound?: 'closed' | 'open', RangeEndBound?: 'closed' | 'open',
-    };
-    if (r.RangeStart !== undefined && r.RangeEnd !== undefined
-        && r.RangeStartBound !== undefined && r.RangeEndBound !== undefined) {
-      const element = RuntimeTypeOf(r.RangeStart);
-      const record = libraryTypeRecord('Range', [
-        element,
-        r.RangeStartBound === 'open' ? 1 : 0,
-        r.RangeEndBound === 'open' ? 1 : 0,
-      ]);
-      if (record) {
-        return record;
-      }
-    } else if (r.RangeStart !== undefined && r.RangeStartBound !== undefined) {
-      return libraryTypeRecord('RangeFrom', [RuntimeTypeOf(r.RangeStart), r.RangeStartBound === 'open' ? 1 : 0])!;
-    } else if (r.RangeEnd !== undefined && r.RangeEndBound !== undefined) {
-      return libraryTypeRecord('RangeTo', [RuntimeTypeOf(r.RangeEnd), r.RangeEndBound === 'open' ? 1 : 0])!;
+    const r = value;
+    const element = r.RangeElementType ?? (r.RangeStart !== undefined
+      ? (r.RangeEnd !== undefined ? joinTypes(RuntimeTypeOf(r.RangeStart), RuntimeTypeOf(r.RangeEnd)) : RuntimeTypeOf(r.RangeStart))
+      : r.RangeEnd !== undefined ? RuntimeTypeOf(r.RangeEnd) : anyType);
+    if (r.RangeStart !== undefined && r.RangeEnd !== undefined) {
+      return libraryTypeRecord('Range', [element, r.RangeStartBound === 'open' ? 1 : 0, r.RangeEndBound === 'open' ? 1 : 0])!;
     }
+    if (r.RangeStart !== undefined) {
+      return libraryTypeRecord('RangeFrom', [element, r.RangeStartBound === 'open' ? 1 : 0])!;
+    }
+    if (r.RangeEnd !== undefined) {
+      return libraryTypeRecord('RangeTo', [element, r.RangeEndBound === 'open' ? 1 : 0])!;
+    }
+    return libraryTypeRecord('RangeFull', [element])!;
   }
   if (value instanceof ObjectValue) {
     // proposal-runtime-types #sec-keyed-collections and typeobjects.md: a TYPED
@@ -4433,8 +4416,24 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         // every `Range.<...>`, and two spellings that name different intervals
         // were the same type.
         if (isRangeShapeName(t.LibraryName)) {
-          return rangeShapeMatches(value, t.LibraryName)
-            && rangeMatchesBoundArguments(value, t.LibraryName, t.Arguments);
+          if (!rangeShapeMatches(value, t.LibraryName)
+              || !rangeMatchesBoundArguments(value, t.LibraryName, t.Arguments)) return false;
+          const element = t.Arguments[0];
+          if (element === undefined || typeof element === 'number' || element.Kind === 'any'
+              || element.Kind === 'parameter') return true;
+          const range = value as import('../intrinsics/Range.mts').RangeObject;
+          // RangeBounds is an endpoint-reading interface. A concrete shape
+          // additionally retains the invariant domain of its specialization.
+          if (t.LibraryName !== 'RangeBounds') {
+            const actual = RuntimeTypeOf(value) as Extract<TypeRecord, { Kind: 'nominal' }>;
+            const domain = actual.Arguments[0];
+            if (typeof domain === 'number' || !domain || !SameType(domain, element)) return false;
+          }
+          for (const endpoint of [range.RangeStart, range.RangeEnd]) {
+            if (endpoint === undefined) continue;
+            if (!Q(yield* IsOfType(endpoint, element))) return false;
+          }
+          return true;
         }
         // #sec-span-type: a window's membership is NOT a prototype-chain
         // question — there is no `Span` global and no window prototype, a

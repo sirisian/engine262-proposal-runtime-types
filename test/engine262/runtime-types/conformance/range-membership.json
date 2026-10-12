@@ -1,0 +1,807 @@
+{
+  "cases": [
+    {
+      "name": "Range rejects unrelated uint8",
+      "steps": [
+        {
+          "source": "String((0..<5) is Range.<uint8>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Range rejects unrelated string",
+      "steps": [
+        {
+          "source": "String((0..<5) is Range.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Range rejects unrelated bigint",
+      "steps": [
+        {
+          "source": "String((0..<5) is Range.<bigint>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Range reflects and admits number",
+      "steps": [
+        {
+          "source": "const r=(0..<5);String(r is Range.<number>) + \";\" + String(Reflect.typeOf(r)===(type Range.<number>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Range checked fresh uint8 endpoints",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=(0..<5);String(Reflect.typeOf(r)===(type Range.<uint8>)) + \";\" + String(r is RangeBounds.<uint8>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom rejects unrelated uint8",
+      "steps": [
+        {
+          "source": "String((0..) is RangeFrom.<uint8>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom rejects unrelated string",
+      "steps": [
+        {
+          "source": "String((0..) is RangeFrom.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom rejects unrelated bigint",
+      "steps": [
+        {
+          "source": "String((0..) is RangeFrom.<bigint>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom reflects and admits number",
+      "steps": [
+        {
+          "source": "const r=(0..);String(r is RangeFrom.<number>) + \";\" + String(Reflect.typeOf(r)===(type RangeFrom.<number>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom checked fresh uint8 endpoints",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint8>=(0..);String(Reflect.typeOf(r)===(type RangeFrom.<uint8>)) + \";\" + String(r is RangeBounds.<uint8>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo rejects unrelated uint8",
+      "steps": [
+        {
+          "source": "String((..<5) is RangeTo.<uint8>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo rejects unrelated string",
+      "steps": [
+        {
+          "source": "String((..<5) is RangeTo.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo rejects unrelated bigint",
+      "steps": [
+        {
+          "source": "String((..<5) is RangeTo.<bigint>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo reflects and admits number",
+      "steps": [
+        {
+          "source": "const r=(..<5);String(r is RangeTo.<number>) + \";\" + String(Reflect.typeOf(r)===(type RangeTo.<number>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo checked fresh uint8 endpoints",
+      "steps": [
+        {
+          "source": "const r:RangeTo.<uint8>=(..<5);String(Reflect.typeOf(r)===(type RangeTo.<uint8>)) + \";\" + String(r is RangeBounds.<uint8>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange bounds retained",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=(0..=5);String(r is ClosedRange.<uint8>)+\";\"+String(r is ClosedOpenRange.<uint8>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenRange bounds retained",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<uint8>=(0<..<5);String(r is OpenRange.<uint8>)+\";\"+String(r is ClosedOpenRange.<uint8>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenClosedRange bounds retained",
+      "steps": [
+        {
+          "source": "const r:OpenClosedRange.<uint8>=(0<..=5);String(r is OpenClosedRange.<uint8>)+\";\"+String(r is ClosedOpenRange.<uint8>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "excluded or empty stored endpoint 0..<256",
+      "steps": [
+        {
+          "source": "function unused(){const r:Range.<uint8>=0..<256;}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "static",
+              "rule": "rt-assignability"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "excluded or empty stored endpoint 300..<0",
+      "steps": [
+        {
+          "source": "function unused(){const r:Range.<uint8>=300..<0;}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "static",
+              "rule": "rt-assignability"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "excluded or empty stored endpoint -1<..<5",
+      "steps": [
+        {
+          "source": "function unused(){const r:Range.<uint8,Range.Bound.Open,Range.Bound.Open>=-1<..<5;}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "pre-evaluation",
+              "rule": "rt-numeric-range"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "excluded or empty stored endpoint ..<256",
+      "steps": [
+        {
+          "source": "function unused(){const r:RangeTo.<uint8>=..<256;}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "static",
+              "rule": "rt-assignability"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed endpoint identity is invariant",
+      "steps": [
+        {
+          "source": "let a:uint8=0;let b:uint8=5;const r=a..<b;`${r is Range.<uint8>};${r is Range.<uint16>};${r is Range.<number>};${r is Range.<any>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false;false;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "both mixed endpoint domains survive reflection",
+      "steps": [
+        {
+          "source": "let a:uint8=0;let b:uint16=5;const r=a..<b;String(Reflect.typeOf(r)===(type Range.<uint8|uint16>))+\";\"+String(r is Range.<uint8>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal next to typed end has honest reflection",
+      "steps": [
+        {
+          "source": "const e:uint8=5;const r=0..<e;String(Reflect.typeOf(r)===(type Range.<number|uint8>))+\";\"+String(r is RangeBounds.<uint8>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mixed membership checks the end as well",
+      "steps": [
+        {
+          "source": "let a:uint8=0;let b:uint16=5;const r=a..<b;`${r is RangeBounds.<uint8>};${r is RangeBounds.<uint8|uint16>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit union domain remains invariant",
+      "steps": [
+        {
+          "source": "const r:Range.<number|uint8>=0..<5;`${Reflect.typeOf(r)===(type Range.<number|uint8>)};${r is Range.<number>};${r is RangeBounds.<number>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uncontextualized full range is typed without specialization",
+      "steps": [
+        {
+          "source": "const r=(..);`${Reflect.typeOf(r)===(type RangeFull.<any>)};${r is RangeFull.<uint8>};${r is RangeBounds.<uint8>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contextual full range retains its domain",
+      "steps": [
+        {
+          "source": "const r:RangeFull.<uint8>=(..);`${Reflect.typeOf(r)===(type RangeFull.<uint8>)};${r is RangeFull.<number>};${r is RangeBounds.<number>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "one full range does not acquire query domain",
+      "steps": [
+        {
+          "source": "const r=(..); r is RangeFull.<uint8>;String(Reflect.typeOf(r)===(type RangeFull.<any>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "boundless interface fresh context",
+      "steps": [
+        {
+          "source": "const r:RangeBounds.<uint8>=(..);String(Reflect.typeOf(r)===(type RangeFull.<uint8>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function argument constructs endpoint domain",
+      "steps": [
+        {
+          "source": "function f(r:Range.<uint8>){return r.end is uint8;}String(f(0..<5));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function return constructs endpoint domain",
+      "steps": [
+        {
+          "source": "function f():Range.<uint8>{return 0..<5;} const r=f();String(r.start is uint8)+\";\"+String(Reflect.typeOf(r)===(type Range.<uint8>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "assignment constructs new range without retagging old",
+      "steps": [
+        {
+          "source": "let r:Range.<uint8>=0..<3;const old=r;r=1..<5;`${r.end is uint8};${old.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested object literal range context",
+      "steps": [
+        {
+          "source": "const o:{r:Range.<uint8>}={r:0..<5};String(o.r.end is uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "array literal range context",
+      "steps": [
+        {
+          "source": "const a:[1].<Range.<uint8>>=[0..<5];String(a[0].end is uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "conditional range construction context",
+      "steps": [
+        {
+          "source": "let b=true;const r:Range.<uint8>=b?0..<5:1..<4;String(r.end is uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic stored range is not reinterpreted",
+      "steps": [
+        {
+          "source": "let r:any=0..<5;function f(x:Range.<uint8>){return x.end;}f(r);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic boundary rejection preserves source",
+      "steps": [
+        {
+          "source": "let r:any=0..<5;let failed=false;try{let x:Range.<uint8>=r;}catch(e){failed=true;} `${failed};${Reflect.typeOf(r)===(type Range.<number>)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint order and conversion once",
+      "steps": [
+        {
+          "source": "let log=\"\";function e(x){log+=String(x);return x;}const r:Range.<uint8>=e(1)..<e(3);`${log};${r.start is uint8};${r.end is uint8}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "13;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed first endpoint does not evaluate second",
+      "steps": [
+        {
+          "source": "let log=\"\";function e(x){log+=String(x);return x;}try{const r:Range.<uint8>=e(256)..<e(3);}catch(e){} log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "256"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed second endpoint restores construction context",
+      "steps": [
+        {
+          "source": "let log=\"\";function e(x){log+=String(x);return x;}try{const r:Range.<uint8>=e(1)..<e(256);}catch(e){} const r=0..<3;`${log};${Reflect.typeOf(r)===(type Range.<number>)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1256;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide integer source digits are retained",
+      "steps": [
+        {
+          "source": "const r:Range.<uint64>=9007199254740993..<9007199254740995;`${r.start};${r.end};${r.end is uint64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "9007199254740993;9007199254740995;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float endpoint construction rounds and types",
+      "steps": [
+        {
+          "source": "const r:Range.<float32>=0.1..<0.9;`${r.start is float32};${r.end is float32}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class endpoints retain class domain without invoking order",
+      "steps": [
+        {
+          "source": "let calls=0;class P{constructor(v){this.v=v;}operator<(o){calls++;return this.v<o.v;}}const r=new P(0)..<new P(5);`${r is Range.<P>};${r is Range.<number>};${calls}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prototype and public getters cannot spoof a range",
+      "steps": [
+        {
+          "source": "let hits=0;const r={get start(){hits++;return 0;},get end(){hits++;return 5;}};`${r is Range.<number>};${hits}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint is not a Number range",
+      "steps": [
+        {
+          "source": "const r=0n..<5n;`${r is Range.<bigint>};${r is Range.<number>};${r is RangeBounds.<number>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty intervals keep domains",
+      "steps": [
+        {
+          "source": "const r=300..<0;`${r.isEmpty};${r is Range.<uint8>};${r is RangeFull.<any>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct byte loop keeps excluded sentinel",
+      "steps": [
+        {
+          "source": "let count=0;for(const x:uint8 of 0..<256)count++;String(count);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "256"
+          }
+        }
+      ]
+    },
+    {
+      "name": "byte array spread keeps excluded sentinel",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[...0..<256];`${a.length};${a[255]}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "256;255"
+          }
+        }
+      ]
+    },
+    {
+      "name": "byte rest spread keeps excluded sentinel",
+      "steps": [
+        {
+          "source": "function f(...xs:[].<uint8>){return xs.length;}String(f(...0..<256));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "256"
+          }
+        }
+      ]
+    },
+    {
+      "name": "byte collection seed keeps excluded sentinel",
+      "steps": [
+        {
+          "source": "String(new Set.<uint8>(0..<256).size);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "256"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed endpoint directs iteration separately",
+      "steps": [
+        {
+          "source": "function f(e:uint8){let count=0;for(const x of 0..<e)count++;return count;}String(f(3));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iteration still rejects 0..=256",
+      "steps": [
+        {
+          "source": "function f(){for(const x:uint8 of 0..=256){}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "static",
+              "rule": "rt-range-value"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "iteration still rejects 0..<257",
+      "steps": [
+        {
+          "source": "function f(){for(const x:uint8 of 0..<257){}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "static",
+              "rule": "rt-range-value"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "iteration still rejects 0..",
+      "steps": [
+        {
+          "source": "function f(){for(const x:uint8 of 0..){}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "static",
+              "rule": "rt-range-value"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "unbounded interval formation does not iterate",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint8>=0..;`${r.start is uint8};${Reflect.typeOf(r)===(type RangeFrom.<uint8>)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic full contexts are activation-specific",
+      "steps": [
+        {
+          "source": "function f<T: type>():RangeFull.<T>{return (..);}const a=f.<uint8>();const b=f.<number>();`${Reflect.typeOf(a)===(type RangeFull.<uint8>)};${Reflect.typeOf(b)===(type RangeFull.<number>)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "next Script after failed endpoint check",
+      "steps": [
+        {
+          "source": "let n=256;const failed:Range.<uint8>=0..<n;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        },
+        {
+          "source": "const next=0..<5;String(Reflect.typeOf(next)===(type Range.<number>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

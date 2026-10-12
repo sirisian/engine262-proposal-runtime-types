@@ -98,6 +98,6 @@ test('a range reports its own type, not the shape of the object carrying it', ()
   // - the runtime answer for a plain Number, not the narrower type a literal
   // takes statically.
   expect(evaluated('`${Reflect.typeOf(0..<5)}`;')).toBe('ClosedOpenRange.<number>');
-  // Membership agreed all along and still does.
-  expect(evaluated('`${(0..<5) is Range.<uint8>}`;')).toBe('true');
+  // A membership query does not contextually convert the range.
+  expect(evaluated('`${(0..<5) is Range.<uint8>}`;')).toBe('false');
 });
