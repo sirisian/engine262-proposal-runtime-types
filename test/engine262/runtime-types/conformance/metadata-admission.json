@@ -1,0 +1,622 @@
+{
+  "cases": [
+    {
+      "name": "scalar computed consumer 3",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}\nprimitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}const a:float32.<{m:1}>=3;const b:float32.<{m:2}>=4;const c:float32.<{m:3}>=a*b;String(c);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "12"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uncalled scalar result 3",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}\nprimitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}function f(a:float32.<{m:1}>,b:float32.<{m:2}>):float32.<{m:3}>{return a*b;}\"declared\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "declared"
+          }
+        }
+      ]
+    },
+    {
+      "name": "vector computed consumer 3",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}\nprimitive vector<float32.<const D:Dim>,const N:uint32>{operator *.<D2:Dim>(rhs:float32.<D2>):vector.<float32.<mul(D,D2)>,N>;}type A=vector.<float32.<{m:1}>,4>;const a=A(1,2,3,4);const b:float32.<{m:2}>=10;const c:vector.<float32.<{m:3}>,4>=a*b;String(c);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "(10, 20, 30, 40)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scalar computed consumer 1",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}\nprimitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}const a:float32.<{m:1}>=3;const b:float32.<{m:2}>=4;const c:float32.<{m:1}>=a*b;String(c);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "uncalled scalar result 1",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}\nprimitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}function f(a:float32.<{m:1}>,b:float32.<{m:2}>):float32.<{m:1}>{return a*b;}\"declared\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "vector computed consumer 1",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}\nprimitive vector<float32.<const D:Dim>,const N:uint32>{operator *.<D2:Dim>(rhs:float32.<D2>):vector.<float32.<mul(D,D2)>,N>;}type A=vector.<float32.<{m:1}>,4>;const a=A(1,2,3,4);const b:float32.<{m:2}>=10;const c:vector.<float32.<{m:1}>,4>=a*b;String(c);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "vector computed lane count",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}\nprimitive vector<float32.<const D:Dim>,const N:uint32>{operator *.<D2:Dim>(rhs:float32.<D2>):vector.<float32.<mul(D,D2)>,N>;}type A=vector.<float32.<{m:1}>,4>;const a=A(1,2,3,4);const b:float32.<{m:2}>=10;const c:vector.<float32.<{m:3}>,2>=a*b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "dependent scalar expression 5",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}\nprimitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}const a:float32.<{m:1}>=3;const b:float32.<{m:2}>=4;const c:float32.<{m:5}>=(a*b)*b;String(c);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "48"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dependent scalar binding 5",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}\nprimitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}const a:float32.<{m:1}>=3;const b:float32.<{m:2}>=4;const mid=a*b;const c:float32.<{m:5}>=mid*b;String(c);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "48"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dependent scalar expression 1",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}\nprimitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}const a:float32.<{m:1}>=3;const b:float32.<{m:2}>=4;const c:float32.<{m:1}>=(a*b)*b;String(c);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "dependent scalar binding 1",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}\nprimitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}const a:float32.<{m:1}>=3;const b:float32.<{m:2}>=4;const mid=a*b;const c:float32.<{m:1}>=mid*b;String(c);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed scalar bad argument",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}\nprimitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}const a:float32.<{m:1}>=3;const b:float32.<{m:2}>=4;function take(c:float32.<{m:1}>){return c;}take(a*b);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed scalar good argument",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}\nprimitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}const a:float32.<{m:1}>=3;const b:float32.<{m:2}>=4;function take(c:float32.<{m:3}>){return c;}String(take(a*b));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "12"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed reference store 1",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}\nprimitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}const a:float32.<{m:1}>=3;const b:float32.<{m:2}>=4;let c:float32.<{m:1}>=1;c=a*b;String(c);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed reference store 3",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}\nprimitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}const a:float32.<{m:1}>=3;const b:float32.<{m:2}>=4;let c:float32.<{m:3}>=1;c=a*b;String(c);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "12"
+          }
+        }
+      ]
+    },
+    {
+      "name": "separate result sites preserve captures",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}\nprimitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}const a:float32.<{m:1}>=3;const b:float32.<{m:2}>=4;const c:float32.<{m:3}>=a*b;const d:float32.<{m:4}>=b*b;String(c)+\":\"+String(d);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "12:16"
+          }
+        }
+      ]
+    },
+    {
+      "name": "separate result sites refuse a reused capture",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}\nprimitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}const a:float32.<{m:1}>=3;const b:float32.<{m:2}>=4;const c:float32.<{m:3}>=a*b;const d:float32.<{m:3}>=b*b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed failure prevents effects",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{throw \"builder failed\";}\nprimitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}const a:float32.<{m:1}>=3;const b:float32.<{m:2}>=4;globalThis.entered=true;const c=a*b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-type-evaluation",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "String(globalThis.entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unused operator builder is not evaluated",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{throw \"unused\";}\nprimitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}\"declared\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "declared"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unselected value body result is not evaluated",
+      "steps": [
+        {
+          "source": "function fail(w:uint32):type{throw \"unused\";}primitive uint<const W>{operator +(n:any):fail(W){return globalThis.raw;}operator +(n:string):uint8{return 7;}}function f(a:uint16,b:string):uint8{return a+b;}String(f((1:=uint16),\"x\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected value body computed result checks consumer",
+      "steps": [
+        {
+          "source": "function output(w:uint32):type{return type uint8;}primitive uint<const W>{operator +(n:string):output(W){return 7;}}function f(a:uint16,b:string):string{return a+b;}\"declared\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected value body computed result admits consumer",
+      "steps": [
+        {
+          "source": "function output(w:uint32):type{return type uint8;}primitive uint<const W>{operator +(n:string):output(W){return 7;}}function f(a:uint16,b:string):uint8{return a+b;}String(f((1:=uint16),\"x\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic declaration unbounded hooks False",
+      "steps": [
+        {
+          "source": "interface Ordered<T:type>{v:T;}type NB<T:type>={nonZero?:boolean};meta NB<T:type>{default={};subtype(a,b){return true;}}\"declared\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "declared"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic declaration unbounded hooks True",
+      "steps": [
+        {
+          "source": "interface Ordered<T:type>{v:T;}type NB<T:type>={nonZero?:boolean};meta NB<T:type>{default={};subtype(a:NB.<T>,b:NB.<T>):boolean{return true;}}\"declared\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "declared"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic declaration  extends Ordered.<T> hooks False",
+      "steps": [
+        {
+          "source": "interface Ordered<T:type>{v:T;}type NB<T:type extends Ordered.<T>>={nonZero?:boolean};meta NB<T:type extends Ordered.<T>>{default={};subtype(a,b){return true;}}\"declared\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "declared"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic declaration  extends Ordered.<T> hooks True",
+      "steps": [
+        {
+          "source": "interface Ordered<T:type>{v:T;}type NB<T:type extends Ordered.<T>>={nonZero?:boolean};meta NB<T:type extends Ordered.<T>>{default={};subtype(a:NB.<T>,b:NB.<T>):boolean{return true;}}\"declared\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "declared"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary invalid generic application remains invalid",
+      "steps": [
+        {
+          "source": "type NB<T:type extends string>={nonZero?:boolean};meta NB<T:type extends string>{default={};subtype(a,b){return true;}}type Bad=NB.<uint8>;\"declared\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic optional field keeps open parameter",
+      "steps": [
+        {
+          "source": "type NB<T:type>={slot?:T};meta NB<T:type>{default={};subtype(a,b){return true;}}\"declared\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "declared"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic alias keeps enclosing capture",
+      "steps": [
+        {
+          "source": "function make<U:type>(){type NB<T:type>={slot?:U};meta NB<T:type>{default={};subtype(a,b){return true;}}return \"declared\";}make.<uint8>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "declared"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written literal user",
+      "steps": [
+        {
+          "source": "function suffix():type{return type string.<{pattern:/^.*Id$/}>;}type T=string.<{pattern:/^.*Id$/}>;function f(){let v:T=\"user\";}\"declared\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "written literal userId",
+      "steps": [
+        {
+          "source": "function suffix():type{return type string.<{pattern:/^.*Id$/}>;}type T=string.<{pattern:/^.*Id$/}>;function f(){let v:T=\"userId\";}\"declared\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "declared"
+          }
+        }
+      ]
+    },
+    {
+      "name": "hoisted builder literal user",
+      "steps": [
+        {
+          "source": "function suffix():type{return type string.<{pattern:/^.*Id$/}>;}type T=suffix();function f(){let v:T=\"user\";}\"declared\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "hoisted builder literal userId",
+      "steps": [
+        {
+          "source": "function suffix():type{return type string.<{pattern:/^.*Id$/}>;}type T=suffix();function f(){let v:T=\"userId\";}\"declared\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "declared"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same source helper retains declaration scope",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}\nprimitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}const a:float32.<{m:1}>=3;const b:float32.<{m:2}>=4;function f(){function mul(a:Dim,b:Dim):Dim{throw \"wrong helper\";}return a*b;}String(f());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "12"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same source helper failure retains declaration scope",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}\nprimitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}const a:float32.<{m:1}>=3;const b:float32.<{m:2}>=4;function f():float32.<{m:1}>{function mul(a:Dim,b:Dim):Dim{return {m:1};}return a*b;}\"declared\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "unavailable operand metadata does not run builder",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{throw \"unknown\";}\nprimitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}function f(a:float32,b:float32){return a*b;}\"declared\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "declared"
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal IIFE builder initialized by earlier source",
+      "steps": [
+        {
+          "source": "const std=(()=>{function suffix():type{return type string.<{pattern:/^.*Id$/}>;}return {suffix};})();const {suffix}=std;\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type T=suffix();function f(){let v:T=\"user\";}\"declared\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "three dependent computed results close before entry",
+      "steps": [
+        {
+          "source": "type Dim={m:int32};meta Dim{default={m:0};subtype(a:Dim,b:Dim):boolean{return a.m===b.m;}}\nprimitive float32<const X:Dim>{operator float32.<X>(){return this;}}\nfunction mul(a:Dim,b:Dim):Dim{return {m:a.m+b.m};}\nprimitive float32<const X:Dim>{operator *.<Y:Dim>(rhs:float32.<Y>):float32.<mul(X,Y)>;}const a:float32.<{m:1}>=3;const b:float32.<{m:2}>=4;const one=a*b;const two=one*b;const three:float32.<{m:1}>=two*b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-assignability",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

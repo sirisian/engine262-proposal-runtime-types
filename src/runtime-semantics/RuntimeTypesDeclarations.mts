@@ -39,7 +39,7 @@ import { beginResolvingAlias, endResolvingAlias, tieAliasKnot, recordResolvedAli
 import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin, RecordDeclaredMemberOrigins } from '../type-system/provenance.mts';
 import { BindTypeParameterTyped, toNumericArgument,
-  InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord, spreadElementsOf,
+  GenericAliasDeclarationShape, InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord, spreadElementsOf,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
 import { currentTypeParameterFrame, BindTypeArgumentsInto, MetadataObjectFromType } from '../type-system/runtime.mts';
 import { InferGenericBindings, TakePendingCalleeContext, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
@@ -1583,14 +1583,7 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration): Plai
     );
   }
   const claimShape = aliasDeclaration?.type === 'TypeAliasDeclaration' && aliasDeclaration.TypeParameters
-    ? Q(yield* InstantiateGenericAlias(
-      aliasDeclaration,
-      (aliasDeclaration.TypeParameters.TypeParameterList ?? []).map((param) => ({
-        Kind: 'parameter' as const,
-        Name: (param as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name ?? 'T',
-      })) as unknown as readonly TypeRecord[],
-      shape,
-    ))
+    ? Q(yield* GenericAliasDeclarationShape(aliasDeclaration, shape!))
     : shape;
   if (claimShape && claimShape.Kind === 'object') {
     RegisterMetaShape(typeObject as object, claimShape);

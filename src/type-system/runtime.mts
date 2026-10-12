@@ -1125,6 +1125,35 @@ function mentionsThis(clauses: readonly ParseNode.WhereClause[]): boolean {
   return false;
 }
 
+/** A meta declaration claims its keys before any base is supplied. */
+export function* GenericAliasDeclarationShape(
+  declaration: ParseNode.TypeAliasDeclaration, descriptor: TypeRecord,
+): PlainEvaluator<TypeRecord> {
+  const captured = GenericAliasContextOf(descriptor);
+  const context = surroundingAgent.runningExecutionContext;
+  const parameters = new Map<string, TypeRecord>();
+  for (const parameter of declaration.TypeParameters?.TypeParameterList ?? []) {
+    const name = parameter.BindingIdentifier.name;
+    Q(yield* BindTypeParameterTyped(parameters, name,
+      { Kind: 'parameter', Name: name, Declaration: parameter } as TypeRecord, parameter));
+  }
+  // These are binders, not supplied arguments. In particular, an F-bound
+  // such as Ordered.<T> cannot be tested as a closed application here.
+  // Actual applications still use InstantiateGenericAlias and its admission.
+  BeginTypeEvaluation();
+  try {
+    ConsumeEvaluationSteps(1);
+    if (IsBudgetExhausted()) return Throw.TypeError('the type evaluation budget was exhausted at $1', Value(declaration.BindingIdentifier.name));
+    return yield* TypeNodeToTypeRecordInContext(declaration.Type, {
+      Environment: captured?.Environment ?? context.LexicalEnvironment,
+      PrivateEnvironment: context.PrivateEnvironment,
+      TypeParameterFrame: captured?.Bindings,
+    }, parameters);
+  } finally {
+    EndTypeEvaluation();
+  }
+}
+
 export function* InstantiateGenericAlias(
   declaration: ParseNode.TypeAliasDeclaration,
   argRecords: readonly TypeRecord[],

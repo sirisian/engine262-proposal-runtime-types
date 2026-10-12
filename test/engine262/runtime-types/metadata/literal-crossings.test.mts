@@ -1,6 +1,7 @@
 import { test, expect } from 'vitest';
 import { kit, evaluateBuilder } from '../corpus/type-challenges/harness.mts';
 import { evaluated, expectStaticTypeError, ok } from '../harness.mts';
+import { STD_TYPES_SOURCE } from '../../../../src/type-system/std-types.mts';
 
 /**
  * Spec: #sec-primitive-operator-blocks with #sec-type-errors.
@@ -25,10 +26,14 @@ function run(program: string): string {
 }
 
 test('a literal the metadata refuses is rejected before the source runs', () => {
-  // The case that escaped: the binding is never reached, so nothing ran the
-  // crossing and nothing was reported.
-  expect(run("type T = suffixed('Id'); function f() { let v: T = 'user'; } 'declared';")).toBe('refused');
-  expect(run("type T = prefixed('get'); function f() { let v: T = 'setName'; } 'declared';")).toBe('refused');
+  // These standard builders must be available at the checking boundary.
+  // kit() instead publishes them through an ordinary IIFE and destructuring;
+  // running that source prelude is not part of checking an uncalled function.
+  const builders = STD_TYPES_SOURCE.match(/^export function (?:suffixed|prefixed)\([\s\S]*?^\}/gm)!;
+  expect(builders).toHaveLength(2);
+  const declarations = builders.join('\n').replace(/^export /gm, '');
+  expectStaticTypeError(`${declarations} type T = suffixed('Id'); function f() { let v: T = 'user'; } 'declared';`);
+  expectStaticTypeError(`${declarations} type T = prefixed('get'); function f() { let v: T = 'setName'; } 'declared';`);
 });
 
 test('a literal the metadata admits still crosses', () => {

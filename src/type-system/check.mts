@@ -2707,9 +2707,9 @@ export interface DeferredTypeCheck {
 }
 const deferredTypeChecks = new WeakMap<object, Map<object, DeferredTypeCheck>>();
 const evaluatedTypeNodes = new WeakMap<object, TypeRecord>();
-const registeredOperatorQueries = new WeakMap<object, { entry: PrimitiveOperatorEntry, bindings: ReadonlyMap<string, number | TypeRecord>, key: object }[]>();
-function RegisteredOperatorQuery(site: object, entry: PrimitiveOperatorEntry, bindings: ReadonlyMap<string, number | TypeRecord>): object {
-  const queries = registeredOperatorQueries.get(site) ?? [];
+const operatorResultQueries = new WeakMap<object, { entry: object, bindings: ReadonlyMap<string, number | TypeRecord>, key: object }[]>();
+function OperatorResultQuery(site: object, entry: object, bindings: ReadonlyMap<string, number | TypeRecord>): object {
+  const queries = operatorResultQueries.get(site) ?? [];
   const query = queries.find((q) => q.entry === entry && q.bindings.size === bindings.size
     && [...bindings].every(([name, value]) => {
       const prior = q.bindings.get(name);
@@ -2719,7 +2719,7 @@ function RegisteredOperatorQuery(site: object, entry: PrimitiveOperatorEntry, bi
   if (query) return query.key;
   const key = {};
   queries.push({ entry, bindings: new Map(bindings), key });
-  registeredOperatorQueries.set(site, queries);
+  operatorResultQueries.set(site, queries);
   return key;
 }
 
@@ -12021,6 +12021,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // evaluates it. Re-entry supplies no completed type or cycle diagnostic;
   // the requiring application retains its ordinary evaluation obligation.
   const describingGenericDefaults = new Set<ParseNode.Type>();
+  const deferredTypeCheck = (node: ParseNode.Type): DeferredTypeCheck => {
+    const aliases = new Map<string, TypeRecord>();
+    for (const frame of frames) {
+      for (const name of frame.declaredNames) aliases.delete(name);
+      for (const [name, type] of frame.aliases) aliases.set(name, type);
+    }
+    return { node, constants: new Map(deferredConstants), aliases };
+  };
+
   const resolveType = (node: ParseNode.Type): Known => {
     const isDefault = node.parent?.type === 'TypeParameter' && node.parent.TypeParameterDefault === node;
     if (!isDefault) return resolveTypeInContext(node);
@@ -12175,17 +12184,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     examine(node);
     if (open) unresolvedTypes.delete(node);
     if (!open && !defaultSource && ['TypeReference', 'ComputedType', 'ArrayType', 'KeyOfType', 'IndexedAccessType', 'ParameterizedType'].includes(node.type)) {
-      const constants = new Map(deferredConstants);
-      const aliases = new Map<string, TypeRecord>();
-      for (const frame of frames) {
-        for (const name of frame.declaredNames) {
-          aliases.delete(name);
-        }
-        for (const [name, type] of frame.aliases) {
-          aliases.set(name, type);
-        }
-      }
-      unresolvedTypes.set(node, { node, constants, aliases });
+      unresolvedTypes.set(node, deferredTypeCheck(node));
     }
     return result;
   };
@@ -34032,7 +34031,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (registered && !registered.returnType && def.TypeAnnotation && registered.context
           && (!returns || containsComputedType(def.TypeAnnotation.Type))) {
           if (site && ![...admitted.values()].some(IsUnknownMetadataCapture)) {
-            const key = RegisteredOperatorQuery(site, registered, admitted);
+            const key = OperatorResultQuery(site, registered, admitted);
             const evaluated = evaluatedTypeNodes.get(key);
             if (evaluated) returns = evaluated;
             else {
@@ -34042,37 +34041,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
         }
-        // A return computed by a builder - `float32.<mul(X, Y)>` - is known
-        // only when the builder runs; the definition applies, its type is
-        // left unknown rather than guessed.
-        if (!registered && def.TypeAnnotation && containsComputedType(def.TypeAnnotation.Type)
-            && !(returns && typeof returns === 'object' && returns.Kind === 'parameterized')) {
-          // The builder runs in the pass before evaluation, with the captures
-          // bound to the operands' static metadata; the recheck then types
-          // the site with the result. A copy detached from the block resolves
-          // as a closed annotation - the captures are bound by the pass, not
-          // open parameters - and carries every function and alias in view.
+        // Closed captures make this application evaluable, even though the
+        // declaration's return is open. Retain its lexical node; detaching the
+        // outer node cannot erase the children's declaration dependencies.
+        if (!registered && def.TypeAnnotation && containsComputedType(def.TypeAnnotation.Type)) {
           if ([...admitted.values()].some(IsUnknownMetadataCapture)) {
             const widened = resolveType(def.TypeAnnotation.Type);
             (def.FunctionBody ? bodies : found).push(widened?.Kind === 'parameterized' ? widened.Base : widened ?? base);
             continue;
           }
-          const evaluatedHere = site ? evaluatedTypeNodes.get(site) : undefined;
-          if (evaluatedHere) {
-            found.push(evaluatedHere);
-            continue;
-          }
           if (site) {
-            const detached = { ...(def.TypeAnnotation.Type as object), parent: undefined } as unknown as ParseNode.Type;
-            resolveType(detached);
-            const obligation = unresolvedTypes.get(detached);
-            if (obligation) {
-              unresolvedTypes.delete(detached);
-              unresolvedTypes.set(site, { ...obligation, computedAt: { site, bindings: admitted } });
+            const key = OperatorResultQuery(site, def, admitted);
+            const evaluated = evaluatedTypeNodes.get(key);
+            if (evaluated) returns = evaluated;
+            else {
+              returns = null;
+              resultQuery = { key, obligation: { ...deferredTypeCheck(def.TypeAnnotation.Type),
+                computedAt: { site: key, bindings: admitted } } };
             }
           }
-          unknownContribution = true;
-          continue;
         }
         // A definition with a body computes the value, so its return type is
         // the result's - for a unary operator, where no mixing rule decides it.

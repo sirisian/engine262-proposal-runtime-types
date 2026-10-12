@@ -592,6 +592,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   // where it can be used - but that walk only runs when narrowing recorded
   // something, so an alias-annotated binding never reached it.
   let computedAliasResolved = false;
+  let operatorInputsPrepared = false;
   for (const item of items ?? []) {
     if (item.type === 'TypeAliasDeclaration' || item.type === 'InterfaceDeclaration') {
       const attempt = EnsureCompletion(yield* Evaluate_RuntimeTypesBindingDeclaration(item));
@@ -622,13 +623,22 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       const attempt = EnsureCompletion(yield* Evaluate_PrimitiveOperatorDeclaration(item));
       if (attempt.Type === 'normal') {
         preEvaluatedTypeDeclarations.add(item);
+        operatorInputsPrepared = true;
       }
     } else if (item.type === 'MetaDeclaration') {
       const attempt = EnsureCompletion(yield* Evaluate_MetaDeclaration(item));
       if (attempt.Type === 'normal') {
         preEvaluatedTypeDeclarations.add(item);
+        operatorInputsPrepared = true;
       }
     }
+  }
+  // Operator applicability can depend on a meta declaration's claimed shape
+  // and hooks. The parse-time walk ran before those inputs existed; discover
+  // its now-closed result obligations before taking the evaluation worklist.
+  if (operatorInputsPrepared) {
+    const errors = RecheckAfterTypeEvaluation(root);
+    if (errors.length > 0) return Throw(errors[0]!);
   }
   // #sec-bindtypearguments: a default can read earlier bindings. Evaluate
   // closed defaults per application, then publish the instantiated signature.
@@ -878,7 +888,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   // become resolvable: the first walk read it as ~any~, and this one reads what
   // it denotes. Gated on that rather than run always, so a text with no such
   // alias pays nothing - the same discipline the narrowing gate applies.
-  const obligations = DeferredTypeChecksOf(root);
+  let obligations = DeferredTypeChecksOf(root);
   // Closed enums supply values needed by later type expressions, notably
   // `keyof Reflect.typeOf(E)`. Run only declarations whose initializer reads
   // are available here; class instances and ordinary value bindings are still
@@ -958,103 +968,117 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       }
     }
   }
-  for (const obligation of obligations) {
-    const context = surroundingAgent.runningExecutionContext;
-    const outer = context.LexicalEnvironment;
-    if (obligation.operatorContext) {
-      const bindings = new Map<string, TypeRecord>();
-      for (const [name, value] of obligation.computedAt?.bindings ?? []) {
-        bindings.set(name, typeof value === 'number'
-          ? markValueParameterBinding({ Kind: 'literal', Value: Value(value), Base: builtinTypeRecord('number', []) } as TypeRecord)
-          : value.Kind === 'object' ? markValueParameterBinding(value) : value);
-      }
-      BeginFragmentEvaluation();
-      let result;
-      try {
-        result = EnsureCompletion(yield* TypeNodeToTypeRecordInContext(obligation.node, obligation.operatorContext, bindings));
-      } finally {
-        EndFragmentEvaluation();
-      }
-      if (result.Type !== 'normal') return CreateTypeDiagnostic('rt-type-evaluation', obligation.node, 'pre-evaluation',
-        'a registered operator result could not be evaluated to a type: $1', Value(inspect(result.Value)));
-      SetEvaluatedTypeNode(obligation.computedAt!.site, result.Value);
-      continue;
-    }
-    const prepared = EnsureCompletion(yield* prepareDeferredTypeEnvironment(obligation));
-    if (prepared.Type !== 'normal') {
-      return CreateTypeDiagnostic('rt-type-evaluation', obligation.node, 'pre-evaluation', 'a closed type annotation could not be evaluated to a type: $1', Value(inspect(prepared.Value)));
-    }
-    if (!prepared.Value) continue;
-    const scope = prepared.Value;
-    // A computed operator result's captures are bound in a type-parameter
-    // frame around its evaluation, as dispatch binds them: a count as a
-    // literal value parameter, which a type position - `vector.<..., N>` -
-    // reads as the count and an expression as the number; a metadata portion
-    // as an object value parameter, which a builder reads as its metadata
-    // object. Bound lexically instead, a count was "not a type".
-    const computedFrame = new Map<string, TypeRecord>();
-    for (const [name, bound] of obligation.computedAt?.bindings ?? []) {
-      computedFrame.set(name, typeof bound === 'number'
-        ? markValueParameterBinding({ Kind: 'literal', Value: Value(bound), Base: builtinTypeRecord('number', []) } as unknown as TypeRecord)
-        : bound.Kind === 'object' ? markValueParameterBinding(bound) : bound);
-    }
-    context.LexicalEnvironment = scope;
-    try {
-      BeginFragmentEvaluation();
-      if (obligation.trial) {
-        // #sec-trial-specialization, run here over the arguments' Static Types
-        // with the run time's own trial, ceiling and messages: a trial that
-        // binds none, several, or more than the ceiling allows is a type error
-        // asking for explicit arguments.
-        const declaration = obligation.trial.declaration as unknown as {
-          TypeParameters: { TypeParameterList: readonly ParseNode.TypeParameter[] }, FormalParameters: readonly ParseNode[],
-        };
-        let trialed;
+  // A completed result can close the captures of a containing operation.
+  // Drain those dependencies before checking crossings, in the same budget.
+  const completed = new Set<object>();
+  for (;;) {
+    if (IsBudgetExhausted()) return undefined;
+    const before = completed.size;
+    for (const obligation of obligations) {
+      const key = obligation.computedAt?.site ?? obligation.node;
+      if (completed.has(key)) continue;
+      const context = surroundingAgent.runningExecutionContext;
+      const outer = context.LexicalEnvironment;
+      if (obligation.operatorContext) {
+        const bindings = new Map<string, TypeRecord>();
+        for (const [name, value] of obligation.computedAt?.bindings ?? []) {
+          bindings.set(name, typeof value === 'number'
+            ? markValueParameterBinding({ Kind: 'literal', Value: Value(value), Base: builtinTypeRecord('number', []) } as TypeRecord)
+            : value.Kind === 'object' ? markValueParameterBinding(value) : value);
+        }
+        BeginFragmentEvaluation();
+        let result;
         try {
-          trialed = EnsureCompletion(yield* InferGenericBindingsFrom(
-            declaration.TypeParameters.TypeParameterList, declaration.FormalParameters, staticArguments(obligation.trial.argumentTypes),
-          ));
+          result = EnsureCompletion(yield* TypeNodeToTypeRecordInContext(obligation.node, obligation.operatorContext, bindings));
         } finally {
           EndFragmentEvaluation();
         }
-        if (trialed.Type !== 'normal') {
-          const thrown = trialed.Value;
-          const message = thrown instanceof ObjectValue
-            ? EnsureCompletion(yield* Get(thrown, Value('message')))
-            : undefined;
-          const raw = message && message.Type === 'normal' && message.Value instanceof JSStringValue
-            ? message.Value.stringValue() : inspect(thrown);
-          // The run time's message is itself a quoted value; quote it once.
-          const text = raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1) : raw;
-          return CreateTypeDiagnostic('rt-specialization', obligation.node, 'pre-evaluation', 'the call cannot be specialized: $1', Value(text));
-        }
+        if (result.Type !== 'normal') return CreateTypeDiagnostic('rt-type-evaluation', obligation.node, 'pre-evaluation',
+          'a registered operator result could not be evaluated to a type: $1', Value(inspect(result.Value)));
+        SetEvaluatedTypeNode(obligation.computedAt!.site, result.Value);
+        completed.add(key);
         continue;
       }
-      let result;
-      if (computedFrame.size > 0) {
-        pushTypeParameterFrame(computedFrame);
+      const prepared = EnsureCompletion(yield* prepareDeferredTypeEnvironment(obligation));
+      if (prepared.Type !== 'normal') {
+        return CreateTypeDiagnostic('rt-type-evaluation', obligation.node, 'pre-evaluation', 'a closed type annotation could not be evaluated to a type: $1', Value(inspect(prepared.Value)));
       }
+      if (!prepared.Value) continue;
+      const scope = prepared.Value;
+      // A computed operator result's captures are bound in a type-parameter
+      // frame around its evaluation, as dispatch binds them: a count as a
+      // literal value parameter, which a type position - `vector.<..., N>` -
+      // reads as the count and an expression as the number; a metadata portion
+      // as an object value parameter, which a builder reads as its metadata
+      // object. Bound lexically instead, a count was "not a type".
+      const computedFrame = new Map<string, TypeRecord>();
+      for (const [name, bound] of obligation.computedAt?.bindings ?? []) {
+        computedFrame.set(name, typeof bound === 'number'
+          ? markValueParameterBinding({ Kind: 'literal', Value: Value(bound), Base: builtinTypeRecord('number', []) } as unknown as TypeRecord)
+          : bound.Kind === 'object' ? markValueParameterBinding(bound) : bound);
+      }
+      context.LexicalEnvironment = scope;
       try {
-        result = EnsureCompletion(yield* TypeNodeToTypeRecord((MetadataApplicationOf(obligation.node) ?? obligation.node) as typeof obligation.node));
-      } finally {
-        if (computedFrame.size > 0) {
-          popTypeParameterFrame();
+        BeginFragmentEvaluation();
+        if (obligation.trial) {
+          // #sec-trial-specialization, run here over the arguments' Static Types
+          // with the run time's own trial, ceiling and messages: a trial that
+          // binds none, several, or more than the ceiling allows is a type error
+          // asking for explicit arguments.
+          const declaration = obligation.trial.declaration as unknown as {
+            TypeParameters: { TypeParameterList: readonly ParseNode.TypeParameter[] }, FormalParameters: readonly ParseNode[],
+          };
+          let trialed;
+          try {
+            trialed = EnsureCompletion(yield* InferGenericBindingsFrom(
+              declaration.TypeParameters.TypeParameterList, declaration.FormalParameters, staticArguments(obligation.trial.argumentTypes),
+            ));
+          } finally {
+            EndFragmentEvaluation();
+          }
+          if (trialed.Type !== 'normal') {
+            const thrown = trialed.Value;
+            const message = thrown instanceof ObjectValue
+              ? EnsureCompletion(yield* Get(thrown, Value('message')))
+              : undefined;
+            const raw = message && message.Type === 'normal' && message.Value instanceof JSStringValue
+              ? message.Value.stringValue() : inspect(thrown);
+            // The run time's message is itself a quoted value; quote it once.
+            const text = raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1) : raw;
+            return CreateTypeDiagnostic('rt-specialization', obligation.node, 'pre-evaluation', 'the call cannot be specialized: $1', Value(text));
+          }
+          completed.add(key);
+          continue;
         }
-        EndFragmentEvaluation();
+        let result;
+        if (computedFrame.size > 0) {
+          pushTypeParameterFrame(computedFrame);
+        }
+        try {
+          result = EnsureCompletion(yield* TypeNodeToTypeRecord((MetadataApplicationOf(obligation.node) ?? obligation.node) as typeof obligation.node));
+        } finally {
+          if (computedFrame.size > 0) {
+            popTypeParameterFrame();
+          }
+          EndFragmentEvaluation();
+        }
+        if (result.Type !== 'normal') {
+          return CreateTypeDiagnostic('rt-type-evaluation', obligation.node, 'pre-evaluation', 'a closed type annotation could not be evaluated to a type: $1', Value(inspect(result.Value)));
+        }
+        SetEvaluatedTypeNode(key, result.Value);
+        completed.add(key);
+      } finally {
+        context.LexicalEnvironment = outer;
       }
-      if (result.Type !== 'normal') {
-        return CreateTypeDiagnostic('rt-type-evaluation', obligation.node, 'pre-evaluation', 'a closed type annotation could not be evaluated to a type: $1', Value(inspect(result.Value)));
-      }
-      SetEvaluatedTypeNode(obligation.computedAt?.site ?? obligation.node, result.Value);
-    } finally {
-      context.LexicalEnvironment = outer;
     }
-  }
-  if (requests.length > 0 || computedAliasResolved || HasDeferredGuardChecks(root) || obligations.length > 0) {
-    const errors = RecheckAfterTypeEvaluation(root);
-    if (errors.length > 0) {
-      return Throw(errors[0]!);
+    if (requests.length > 0 || computedAliasResolved || HasDeferredGuardChecks(root) || obligations.length > 0) {
+      const errors = RecheckAfterTypeEvaluation(root);
+      if (errors.length > 0) return Throw(errors[0]!);
     }
+    const pending = DeferredTypeChecksOf(root).filter((o) => !completed.has(o.computedAt?.site ?? o.node));
+    const attempted = new Set(obligations.map((o) => o.computedAt?.site ?? o.node));
+    if (pending.length === 0 || (completed.size === before && pending.every((o) => attempted.has(o.computedAt?.site ?? o.node)))) break;
+    obligations = pending;
   }
   let recordedAMeet = false;
   // #table-meta-hooks `meet`: what two constraints have in common, or a PROOF
