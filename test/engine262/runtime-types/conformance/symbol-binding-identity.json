@@ -1,0 +1,830 @@
+{
+  "cases": [
+    {
+      "name": "earlier source capture fresh",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type A=float32.<{[k]:1}>;function f<float32.<const D:M>>():number{return D[k];}String(f.<A>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same source reflection fresh",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type T=uint8.<{[k]:1}>;String(Reflect.getReflection(T).metadata[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same source capture fresh",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type A=float32.<{[k]:1}>;function f<float32.<const D:M>>():number{return D[k];}String(f.<A>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier source capture registered",
+      "steps": [
+        {
+          "source": "const k=Symbol.for(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type A=float32.<{[k]:1}>;function f<float32.<const D:M>>():number{return D[k];}String(f.<A>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same source reflection registered",
+      "steps": [
+        {
+          "source": "const k=Symbol.for(\"key\");type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type T=uint8.<{[k]:1}>;String(Reflect.getReflection(T).metadata[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same source capture registered",
+      "steps": [
+        {
+          "source": "const k=Symbol.for(\"key\");type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type A=float32.<{[k]:1}>;function f<float32.<const D:M>>():number{return D[k];}String(f.<A>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier source capture well known",
+      "steps": [
+        {
+          "source": "const k=Symbol.iterator;\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type A=float32.<{[k]:1}>;function f<float32.<const D:M>>():number{return D[k];}String(f.<A>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same source reflection well known",
+      "steps": [
+        {
+          "source": "const k=Symbol.iterator;type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type T=uint8.<{[k]:1}>;String(Reflect.getReflection(T).metadata[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same source capture well known",
+      "steps": [
+        {
+          "source": "const k=Symbol.iterator;type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type A=float32.<{[k]:1}>;function f<float32.<const D:M>>():number{return D[k];}String(f.<A>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "original plain default capture",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}function f<float32.<const D:M>>():number{return D[k];}String(f.<float32>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "original string capture",
+      "steps": [
+        {
+          "source": "type M={n:number};meta M{default={n:0};subtype(a,b){return a.n===b.n;}}type A=float32.<{n:1}>;function f<float32.<const D:M>>():number{return D.n;}String(f.<A>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured domain int32",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:int32};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type A=float32.<{[k]:1}>;function f<float32.<const D:M>>():string{return String(D[k])+\"/\"+String(D is M);}f.<A>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured domain int64",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:int64};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type A=float32.<{[k]:1}>;function f<float32.<const D:M>>():string{return String(D[k])+\"/\"+String(D is M);}f.<A>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured domain uint64",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:uint64};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type A=float32.<{[k]:1}>;function f<float32.<const D:M>>():string{return String(D[k])+\"/\"+String(D is M);}f.<A>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured domain float32",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:float32};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type A=float32.<{[k]:1}>;function f<float32.<const D:M>>():string{return String(D[k])+\"/\"+String(D is M);}f.<A>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured domain float64",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:float64};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type A=float32.<{[k]:1}>;function f<float32.<const D:M>>():string{return String(D[k])+\"/\"+String(D is M);}f.<A>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured domain rational64",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:rational64};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type A=float32.<{[k]:1}>;function f<float32.<const D:M>>():string{return String(D[k])+\"/\"+String(D is M);}f.<A>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured domain decimal128",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:decimal128};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type A=float32.<{[k]:1}>;function f<float32.<const D:M>>():string{return String(D[k])+\"/\"+String(D is M);}f.<A>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "alias copies actual symbol",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "const alias=k;type M={[alias]:number};meta M{default={[alias]:0};subtype(a,b){return a[alias]===b[alias];}}type A=float32.<{[k]:1}>;function f<float32.<const D:M>>():number{return D[k];}String(f.<A>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same source alias copies symbolic key",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");const alias=k;type M={[alias]:number};meta M{default={[alias]:0};subtype(a,b){return a[alias]===b[alias];}}type T=uint8.<{[k]:1}>;String(Reflect.getReflection(T).metadata[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "separate descriptions remain distinct",
+      "steps": [
+        {
+          "source": "const a=Symbol(\"key\"),b=Symbol(\"key\");type M={[a]:number};type N={[b]:number};meta M{default={[a]:0};subtype(x,y){return x[a]===y[a];}}meta N{default={[b]:0};subtype(x,y){return x[b]===y[b];}}type A=uint8.<{[a]:1}>;type B=uint8.<{[b]:1}>;String(A===B);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unclaimed fresh key is still early",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");type T=uint8.<{[k]:1}>;String(Reflect.getReflection(T).metadata[k]);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-unclaimed-metadata",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "unclaimed earlier key is still early",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type T=uint8.<{[k]:1}>;String(Reflect.getReflection(T).metadata[k]);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-unclaimed-metadata",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "another symbol owner cannot claim key",
+      "steps": [
+        {
+          "source": "const a=Symbol(\"key\");type M={[a]:number};meta M{default={[a]:0};subtype(x,y){return true;}}const k=Symbol(\"key\");type T=uint8.<{[k]:1}>;String(Reflect.getReflection(T).metadata[k]);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-unclaimed-metadata",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending duplicate key without consumer",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");type M={[k]:number};type N={[k]:string};meta M{default={[k]:0};subtype(a,b){return true;}}meta N{default={[k]:\"\"};subtype(a,b){return true;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "\"recovered\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "recovered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending duplicate key with consumer",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");type M={[k]:number};type N={[k]:string};meta M{default={[k]:0};subtype(a,b){return true;}}meta N{default={[k]:\"\"};subtype(a,b){return true;}}type T=uint8.<{[k]:1}>;String(Reflect.getReflection(T).metadata[k]);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "pending string default has source ownership",
+      "steps": [
+        {
+          "source": "type M={mark:number};const n=0;meta M{default={mark:n};subtype(a,b){return a.mark===b.mark;}}type T=uint8.<{mark:1}>;String(Reflect.getReflection(T).metadata.mark);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "completed symbol default failure remains early",
+      "steps": [
+        {
+          "source": "const k=Symbol();\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:number};meta M{default={[k]:\"bad\"};subtype(a,b){return true;}}type T=uint8.<{[k]:1}>;String(Reflect.getReflection(T).metadata[k]);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-meta-declaration",
+              "phase": "pre-evaluation"
+            }
+          }
+        },
+        {
+          "source": "meta M{default={[k]:0};subtype(a,b){return true;}}type Recovered=uint8.<{[k]:1}>;String(Reflect.getReflection(Recovered).metadata[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "actual symbol retains identity across sources",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type T=uint8.<{[k]:1}>;String(Reflect.getReflection(T).metadata[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        },
+        {
+          "source": "function f<float32.<const D:M>>():number{return D[k];}type A=float32.<{[k]:2}>;String(f.<A>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same source identity is runtime identity",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type T=uint8.<{[k]:1}>;String(Reflect.ownKeys(Reflect.getReflection(T).metadata)[0]===k);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "initialized alias key in subsequent source",
+      "steps": [
+        {
+          "source": "const original=Symbol(\"key\");const k=original;\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type A=float32.<{[k]:1}>;function f<float32.<const D:M>>():number{return D[k];}String(f.<A>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "annotated immutable symbol key",
+      "steps": [
+        {
+          "source": "const k:symbol=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type A=float32.<{[k]:1}>;function f<float32.<const D:M>>():number{return D[k];}String(f.<A>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "immutable any holds known symbol key",
+      "steps": [
+        {
+          "source": "const k:any=Symbol(\"key\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return a[k]===b[k];}}type A=float32.<{[k]:1}>;function f<float32.<const D:M>>():number{return D[k];}String(f.<A>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "string metadata remains admitted",
+      "steps": [
+        {
+          "source": "type M={mark:number};meta M{default={mark:0};subtype(a,b){return a.mark===b.mark;}}type T=uint8.<{mark:1}>;String(Reflect.getReflection(T).metadata.mark);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unclaimed string remains early",
+      "steps": [
+        {
+          "source": "type T=uint8.<{missing:1}>;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-unclaimed-metadata",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "base form exemption remains admitted",
+      "steps": [
+        {
+          "source": "meta uint8{default={};subtype(a,b){return true;}}const k=Symbol();type T=uint8.<{[k]:1}>;String(Reflect.getReflection(T).metadata[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shadowing key does not alias outer",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"key\");type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return true;}}{const k=Symbol(\"key\");type T=uint8.<{[k]:1}>;}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-unclaimed-metadata",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown computed key does not invent identity",
+      "steps": [
+        {
+          "source": "function unused(k:symbol){const obj:{[k]:number}={[k]:1};} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ref binding is not a published immutable key",
+      "steps": [
+        {
+          "source": "let storage:symbol=Symbol();const ref k=storage;\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        },
+        {
+          "source": "type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return true;}}type T=uint8.<{[k]:1}>;String(Reflect.getReflection(T).metadata[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown local Symbol function is not intrinsic",
+      "steps": [
+        {
+          "source": "function Symbol(){return \"key\";}const k=Symbol();type M={[k]:number};meta M{default={[k]:0};subtype(a,b){return true;}}type T=uint8.<{[k]:1}>;String(Reflect.getReflection(T).metadata[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary nongeneric function still rejects type arguments",
+      "steps": [
+        {
+          "source": "function f():number{return 1;}f.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-generic-argument",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed specialization mismatch still rejects",
+      "steps": [
+        {
+          "source": "function f<float32>():number{return 1;}f.<string>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "rule": "rt-parameter-kind",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 import { DeclarativeEnvironmentRecord, GlobalEnvironmentRecord, RefBindingHolder, type EnvironmentRecord } from '../execution-context/Environment.mts';
 import type { AbstractModuleRecord } from '../modules.mts';
-import { Value, type JSStringValue } from '../value.mts';
+import { Value, SymbolValue, type JSStringValue } from '../value.mts';
 import type { TypeRecord } from './records.mts';
 
 // Literal-name evidence and a binding's enforced contract are distinct. Neither
@@ -19,6 +19,7 @@ interface ConstantEvidence {
   contract?: TypeRecord;
   literal?: TypeRecord;
   stringValue?: TypeRecord;
+  symbolKey?: SymbolValue;
 }
 
 function evidence(environment: EnvironmentRecord, name: JSStringValue): ConstantEvidence {
@@ -37,8 +38,11 @@ function evidence(environment: EnvironmentRecord, name: JSStringValue): Constant
     }
     if (binding.mutable !== false) return {};
     const value = literals.get(binding);
+    // Key identity is available from an initialized immutable binding slot.
+    // Do not infer an object shape, invoke a getter, or read through a ref.
     return { contract: binding.declaredType as TypeRecord | undefined,
-      literal: value?.namesLiteral ? value.type : undefined, stringValue: value?.type };
+      literal: value?.namesLiteral ? value.type : undefined, stringValue: value?.type,
+      symbolKey: binding.value instanceof SymbolValue ? binding.value : undefined };
   }
   return {};
 }

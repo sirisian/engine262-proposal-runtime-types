@@ -12,7 +12,7 @@ import {
 } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { Evaluate_PrimitiveOperatorDeclaration } from '../runtime-semantics/PrimitiveOperatorDeclaration.mts';
 import { classConstructorOfNode } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
-import { JSStringValue, ObjectValue, Value } from '../value.mts';
+import { JSStringValue, ObjectValue, Value, type SymbolValue } from '../value.mts';
 import { CreateTypeDiagnostic, TypeDiagnosticApplies, TypeDiagnosticOf } from './diagnostics.mts';
 import type { TypeRecord } from './records.mts';
 import {
@@ -27,6 +27,7 @@ import { isIntegerTypeName, isFloatTypeName } from './numeric-signatures.mts';
 import {
   RecheckAfterTypeEvaluation, HasDeferredGuardChecks, DeferredTypeChecksOf, SetEvaluatedTypeNode, SetEvaluatedEnum,
   TakeDeferredMetadataChecks, TakeDeferredCrossingChecks, TakeDeferredMeetChecks, TakeUnclaimedKeyChecks, TakeNarrowingRequests, SetNarrowingResolutions,
+  SourceMetaClaimKeysOf,
   TakeDefaultRequirements, GenericWhereChecksOf, DefaultConversionChecksOf, GenericDefaultChecksOf, SetEvaluatedGenericDefault,
   type DeferredTypeCheck, type DeferredMetadataCheck, type NarrowingRequest, type NarrowingResolution, type GenericDefaultCheck,
 } from './check.mts';
@@ -600,6 +601,7 @@ function* prepareDeferredTypeEnvironment(obligation: DeferredTypeCheck): PlainEv
 function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Module): PlainEvaluator {
   const items = sourcePreparationItems(root);
   const metaClaims: MetaDeclarationClaims = { owners: new Map(), keys: new Map() };
+  const pendingMetaDeclarations = new Set<ParseNode.MetaDeclaration>();
   // A |ComputedType| alias -
   // `type G = makeG();` - resolves by EVALUATING, so the walk that runs at
   // PARSE time cannot know what it denotes: nothing has evaluated yet, the
@@ -652,6 +654,8 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         // unavailable input. Imported TDZ reads retain their module boundary.
         return CreateTypeDiagnostic('rt-meta-declaration', item, 'pre-evaluation',
           'the meta declaration could not be completed: $1', Value(inspect(attempt.Value)));
+      } else {
+        pendingMetaDeclarations.add(item);
       }
     }
   }
@@ -845,6 +849,18 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   // Adjudicated BEFORE the pairwise judgment below, so a deferred pair riding
   // only on unclaimed keys is rejected earlier and for the right reason, which
   // closes the vacuous-admit case.
+  const pendingClaimants = new Map<string | SymbolValue, ParseNode.MetaDeclaration>();
+  for (const [declaration, keys] of SourceMetaClaimKeysOf(root)) {
+    if (!pendingMetaDeclarations.has(declaration)) continue;
+    for (const key of keys) {
+      const prior = pendingClaimants.get(key);
+      if (prior !== undefined && prior !== declaration) {
+        return CreateTypeDiagnostic('rt-meta-declaration', declaration, 'pre-evaluation',
+          '$1 is already claimed by another meta type', propertyKeyValue(key));
+      }
+      pendingClaimants.set(key, declaration);
+    }
+  }
   for (const check of TakeUnclaimedKeyChecks(root)) {
     if (HasMetaHooks(GetTypeObject(check.base) as unknown as object)) {
       // The base-form waiver: a meta
@@ -856,6 +872,10 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     }
     for (const key of check.keys) {
       if (MetaTypeClaiming(key) === undefined) {
+        // A same-source Symbol initializer can be unavailable while its
+        // declaration-bound key already establishes a pending owner's shape.
+        // This evidence neither publishes hooks nor skips runtime admission.
+        if (pendingClaimants.has(key)) continue;
         return CreateTypeDiagnostic('rt-unclaimed-metadata', check.node, 'pre-evaluation', '$1 is not claimed by any meta type, in $2', propertyKeyValue(key), Value(check.display));
       }
     }

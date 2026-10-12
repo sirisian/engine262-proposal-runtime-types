@@ -701,6 +701,14 @@ export interface UnclaimedKeyCheck {
 
 const unclaimedKeyChecks = new WeakMap<object, readonly UnclaimedKeyCheck[]>();
 
+// Source-local claim evidence is not a published metadata protocol. A pending
+// declaration can establish key ownership without an available default value.
+const sourceMetaClaimKeys = new WeakMap<object, ReadonlyMap<ParseNode.MetaDeclaration, readonly (string | SymbolValue)[]>>();
+
+export function SourceMetaClaimKeysOf(root: object): ReadonlyMap<ParseNode.MetaDeclaration, readonly (string | SymbolValue)[]> {
+  return sourceMetaClaimKeys.get(root) ?? new Map();
+}
+
 export function TakeUnclaimedKeyChecks(root: object): readonly UnclaimedKeyCheck[] {
   return unclaimedKeyChecks.get(root) ?? [];
 }
@@ -2743,12 +2751,17 @@ export function RecheckAfterTypeEvaluation(root: ParseNode.Script | ParseNode.Mo
     return CheckScript(root, true);
   }
   const session = CreateCheckSession();
+  const environment = surroundingAgent.runningExecutionContext.LexicalEnvironment;
+  checkingEnvironments.set(root, environment);
+  const constants = PublishedConstantBindings(environment);
   const inputs = moduleCheckInputs.get(root);
   for (const [name, type] of inputs?.imported ?? []) {
     session.frame.bindings.set(name, type as TypeRecord);
     session.frame.aliases.set(name, type as TypeRecord);
     session.frame.declaredNames.add(name);
     session.frame.immutableNames.add(name);
+    const symbolKey = constants.get(name)?.symbolKey;
+    if (symbolKey) session.frame.constPropertyKeys.set(name, symbolKey);
   }
   const outer = importedBuilderNodes;
   importedBuilderNodes = inputs?.builders;
@@ -2835,17 +2848,22 @@ export function CheckScriptInSession(script: ParseNode.Script, session: CheckSes
   // Refresh String facts from actual bindings, including after an abrupt body.
   for (const name of next.frame.constStringValues.keys()) next.frame.constOperandLiterals.delete(name);
   next.frame.constStringValues.clear();
+  for (const [name, key] of next.frame.constPropertyKeys) {
+    if (key instanceof SymbolValue) next.frame.constPropertyKeys.delete(name);
+  }
   const newNames = new Set([...LexicallyDeclaredNames(script), ...VarDeclaredNames(script)].map((name) => name.stringValue()));
   for (const [name, evidence] of PublishedConstantBindings(environment)) {
     if (!next.frame.declaredNames.has(name) || newNames.has(name)) continue;
     if (evidence.stringValue) next.frame.constStringValues.set(name, evidence.stringValue);
     if (evidence.literal) next.frame.constOperandLiterals.set(name, evidence.literal);
+    if (evidence.symbolKey) next.frame.constPropertyKeys.set(name, evidence.symbolKey);
   }
   const errors = checkCompletedDeclarations(script.ScriptBody?.StatementList ?? null, script, next);
   return { errors, next };
 }
 
-interface ReferenceSyntaxIdentities {
+interface CheckingSyntaxIdentities {
+  symbolKeys: WeakMap<ParseNode, SymbolValue>;
   nodes: WeakMap<ParseNode, ParseNode>;
   alternatives: WeakMap<object, { type: Known, nodes: WeakMap<ParseNode, ParseNode> }[]>;
 }
@@ -2910,7 +2928,7 @@ function checkCompletedDeclarations(statementList: readonly ParseNode[] | null, 
     }
     return errors;
   };
-  const identities: ReferenceSyntaxIdentities = { nodes: new WeakMap(), alternatives: new WeakMap() };
+  const identities: CheckingSyntaxIdentities = { nodes: new WeakMap(), alternatives: new WeakMap(), symbolKeys: new WeakMap() };
   const initialErrors = CheckStatementList(statementList, root, session, afterTypeEvaluation, undefined, undefined, identities, undefined, inferenceResources);
   if (inferenceResources.exhausted) return finish(initialErrors);
   if (initialErrors.some((error) => TypeDiagnosticOf(error)?.rule === 'rt-layout'
@@ -3102,7 +3120,7 @@ export function CheckModuleWithImports(module: ParseNode.Module, imported: Reado
 
 function CheckStatementList(statementList: readonly ParseNode[] | null, root: ParseNode, session?: CheckSession, afterTypeEvaluation = false,
   referenceStoreTargets?: ReadonlyMap<ParseNode, readonly TypeRecord[]>, collectedReferenceStores?: Map<ParseNode, TypeRecord[]>,
-  referenceSyntax: ReferenceSyntaxIdentities = { nodes: new WeakMap(), alternatives: new WeakMap() },
+  referenceSyntax: CheckingSyntaxIdentities = { nodes: new WeakMap(), alternatives: new WeakMap(), symbolKeys: new WeakMap() },
   bindingContracts?: BindingContractPass, inferenceResources = new InferenceResources()): ObjectValue[] {
   const unresolvedTypes = new Map<object, DeferredTypeCheck>();
   const deferredConstants = new Map<ParseNode, Value>();
@@ -3145,6 +3163,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const meets: DeferredMeetCheck[] = [];
 
   const unclaimed: UnclaimedKeyCheck[] = [];
+  const metaClaimKeys = new Map<ParseNode.MetaDeclaration, readonly (string | SymbolValue)[]>();
 
   /** Declarations the pass must answer for. */
   const defaultsNeeded: DefaultRequirement[] = [];
@@ -3619,7 +3638,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (evidence.contract) outerConstants.bindings.set(name, evidence.contract);
     if (evidence.literal) outerConstants.constOperandLiterals.set(name, evidence.literal);
     if (evidence.stringValue) outerConstants.constStringValues.set(name, evidence.stringValue);
-    if (evidence.contract || evidence.stringValue) outerConstants.immutableNames.add(name);
+    if (evidence.symbolKey) outerConstants.constPropertyKeys.set(name, evidence.symbolKey);
+    if (evidence.contract || evidence.stringValue || evidence.symbolKey) outerConstants.immutableNames.add(name);
   }
   const sourceFrame = session ? session.frame : emptyFrame();
   const frames: Frame[] = [outerConstants, sourceFrame];
@@ -6101,6 +6121,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     const type = staticType(expression);
+    if (type?.Kind === 'literal' && type.Value instanceof SymbolValue) return type.Value;
     if (type?.Kind === 'literal' && type.Value instanceof JSStringValue) {
       return type.Value.stringValue();
     }
@@ -6758,7 +6779,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * and compare unequal, one const named twice resolves to one symbol and
    * compares equal, which is exactly the rule read where no value exists.
    */
-  const symbolKeys = new Map<ParseNode, SymbolValue>();
+  const symbolKeys = referenceSyntax.symbolKeys;
 
   /**
    * The description the DECLARATION gives, where it gives one: `const s =
@@ -7086,6 +7107,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const settled = shape && shape.Kind !== 'any' && !mentionsTypeParameter(shape)
       && (shape.Kind === 'primitive' || shape.Kind === 'parameterized'
         || ((structureOf(shape) as { Properties?: readonly unknown[] } | null)?.Properties?.length ?? 0) > 0);
+    const claimShape = shape && structureOf(shape);
+    if (claimShape?.Kind === 'object') {
+      metaClaimKeys.set(declaration, claimShape.Properties.map((property) => property.key));
+    }
     if (settled) {
       // SameType AND the same printed shape. During the pre-scan a member type
       // an alias names may not have resolved yet (`RangeBounds` in a shape
@@ -18488,9 +18513,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         if (base?.Kind !== 'function') return base;
         if (base.Signatures.every((signature) => !signature.TypeParameters?.length)) {
+          // A specialization pattern is still generic when its inputs are pending;
+          // its flattened signature need not have ordinary type parameters.
           // Library applications and type constructors have their own resolver.
           const named = bare?.type === 'IdentifierReference' ? bare.name : null;
-          if (!named || lookup(named) !== null) reportType('rt-generic-argument', node, 'type arguments require a generic function');
+          if ((!bare || !caseGroupOfCallee(node, bare)) && (!named || lookup(named) !== null)) {
+            reportType('rt-generic-argument', node, 'type arguments require a generic function');
+          }
           return base;
         }
         let parent = node.parent;
@@ -38321,6 +38350,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     narrowingRequests.set(root, narrowingRequestsHere);
   }
   unclaimedKeyChecks.set(root, unclaimed);
+  sourceMetaClaimKeys.set(root, metaClaimKeys);
   defaultRequirements.set(root, defaultsNeeded);
   defaultConversionChecks.set(root, defaultConversions);
   genericDefaultChecks.set(root, genericDefaults);
