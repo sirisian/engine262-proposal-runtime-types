@@ -4,20 +4,15 @@ import { Throw } from '../host-defined/error-messages.mts';
 import {
   isRangeObject, CreateRangeObject, endpointOf, type RangeObject, type RangeBound,
 } from '../intrinsics/Range.mts';
+import { NumericRangeAdd } from './range-addition.mts';
 import {
   F, surroundingAgent, type BigIntValue, type Realm,
 } from '#self';
 
 /**
- * proposal-runtime-types (ranges.md "Types", #sec-ranges): the operations
- * `RangeBounds` carries, and the interval arithmetic on top of them.
- *
- * Everything here works on an EDGE PAIR rather than on the four shapes, because
- * every one of these operations is a statement about a point set and an absent
- * endpoint is just an infinite one. A shape falls out of the result instead of
- * being chosen: intersecting a from-range with a to-range yields a two-endpoint
- * range, and negating a from-range yields a to-range, which is why each of these
- * returns a range rather than a range of some particular shape.
+ * Binary interval dispatch. Addition/subtraction use the exact, typed path in
+ * range-addition.mts. Multiplication/division below still use the legacy Number
+ * edge algebra and require their own domain and enclosure audit.
  */
 
 /** One end of an interval: a value, or ~undefined~ for an infinite side. */
@@ -93,22 +88,6 @@ function combine(x: Edge, y: Edge, f: (p: number, q: number) => number): Edge {
   }
   return { v: f(x.v, y.v), open: x.open || y.open };
 }
-
-function add(a: Interval, b: Interval): Interval {
-  return {
-    lo: combine(a.lo, b.lo, (p, q) => p + q),
-    hi: combine(a.hi, b.hi, (p, q) => p + q),
-  };
-}
-
-/** The endpoints cross: the result's low is the left's low minus the right's HIGH. */
-function subtract(a: Interval, b: Interval): Interval {
-  return {
-    lo: combine(a.lo, b.hi, (p, q) => p - q),
-    hi: combine(a.hi, b.lo, (p, q) => p - q),
-  };
-}
-
 
 /**
  * The four products of the endpoints, the least and the greatest being the
@@ -189,13 +168,10 @@ export function* rangeBinaryOperator(lval: Value, op: RangeBinaryOperator, rval:
     // scalar case is `scale`, which is a method rather than an operator.
     return Throw.TypeError('interval arithmetic needs two ranges');
   }
+  if (op === '+' || op === '-') return yield* NumericRangeAdd(lval, rval, op === '-', realmRec);
   const a = toInterval(lval);
   const b = toInterval(rval);
   switch (op) {
-    case '+':
-      return fromInterval(add(a, b), realmRec);
-    case '-':
-      return fromInterval(subtract(a, b), realmRec);
     case '*':
       return fromInterval(multiply(a, b), realmRec);
     default:

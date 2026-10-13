@@ -1,0 +1,3067 @@
+{
+  "cases": [
+    {
+      "name": "domain number +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<number>=1..=3;const b:ClosedRange.<number>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is number};${c.end is number};${c is ClosedRange.<number>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain number -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<number>=4..=6;const b:ClosedRange.<number>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is number};${c.end is number};${c is ClosedRange.<number>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left number+",
+      "steps": [
+        {
+          "source": "const a:Range.<number>=3..<1;const b:ClosedRange.<number>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left number-",
+      "steps": [
+        {
+          "source": "const a:Range.<number>=3..<1;const b:ClosedRange.<number>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain bigint +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<bigint>=1..=3;const b:ClosedRange.<bigint>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is bigint};${c.end is bigint};${c is ClosedRange.<bigint>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain bigint -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<bigint>=4..=6;const b:ClosedRange.<bigint>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is bigint};${c.end is bigint};${c is ClosedRange.<bigint>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left bigint+",
+      "steps": [
+        {
+          "source": "const a:Range.<bigint>=3..<1;const b:ClosedRange.<bigint>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left bigint-",
+      "steps": [
+        {
+          "source": "const a:Range.<bigint>=3..<1;const b:ClosedRange.<bigint>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain int8 +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<int8>=1..=3;const b:ClosedRange.<int8>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is int8};${c.end is int8};${c is ClosedRange.<int8>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain int8 -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<int8>=4..=6;const b:ClosedRange.<int8>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is int8};${c.end is int8};${c is ClosedRange.<int8>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left int8+",
+      "steps": [
+        {
+          "source": "const a:Range.<int8>=3..<1;const b:ClosedRange.<int8>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left int8-",
+      "steps": [
+        {
+          "source": "const a:Range.<int8>=3..<1;const b:ClosedRange.<int8>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain uint8 +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=3;const b:ClosedRange.<uint8>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is uint8};${c.end is uint8};${c is ClosedRange.<uint8>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain uint8 -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=4..=6;const b:ClosedRange.<uint8>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is uint8};${c.end is uint8};${c is ClosedRange.<uint8>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left uint8+",
+      "steps": [
+        {
+          "source": "const a:Range.<uint8>=3..<1;const b:ClosedRange.<uint8>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left uint8-",
+      "steps": [
+        {
+          "source": "const a:Range.<uint8>=3..<1;const b:ClosedRange.<uint8>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain int16 +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<int16>=1..=3;const b:ClosedRange.<int16>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is int16};${c.end is int16};${c is ClosedRange.<int16>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain int16 -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<int16>=4..=6;const b:ClosedRange.<int16>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is int16};${c.end is int16};${c is ClosedRange.<int16>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left int16+",
+      "steps": [
+        {
+          "source": "const a:Range.<int16>=3..<1;const b:ClosedRange.<int16>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left int16-",
+      "steps": [
+        {
+          "source": "const a:Range.<int16>=3..<1;const b:ClosedRange.<int16>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain uint16 +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint16>=1..=3;const b:ClosedRange.<uint16>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is uint16};${c.end is uint16};${c is ClosedRange.<uint16>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain uint16 -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint16>=4..=6;const b:ClosedRange.<uint16>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is uint16};${c.end is uint16};${c is ClosedRange.<uint16>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left uint16+",
+      "steps": [
+        {
+          "source": "const a:Range.<uint16>=3..<1;const b:ClosedRange.<uint16>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left uint16-",
+      "steps": [
+        {
+          "source": "const a:Range.<uint16>=3..<1;const b:ClosedRange.<uint16>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain int32 +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<int32>=1..=3;const b:ClosedRange.<int32>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is int32};${c.end is int32};${c is ClosedRange.<int32>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain int32 -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<int32>=4..=6;const b:ClosedRange.<int32>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is int32};${c.end is int32};${c is ClosedRange.<int32>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left int32+",
+      "steps": [
+        {
+          "source": "const a:Range.<int32>=3..<1;const b:ClosedRange.<int32>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left int32-",
+      "steps": [
+        {
+          "source": "const a:Range.<int32>=3..<1;const b:ClosedRange.<int32>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain uint32 +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint32>=1..=3;const b:ClosedRange.<uint32>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is uint32};${c.end is uint32};${c is ClosedRange.<uint32>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain uint32 -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint32>=4..=6;const b:ClosedRange.<uint32>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is uint32};${c.end is uint32};${c is ClosedRange.<uint32>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left uint32+",
+      "steps": [
+        {
+          "source": "const a:Range.<uint32>=3..<1;const b:ClosedRange.<uint32>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left uint32-",
+      "steps": [
+        {
+          "source": "const a:Range.<uint32>=3..<1;const b:ClosedRange.<uint32>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain int64 +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<int64>=1..=3;const b:ClosedRange.<int64>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is int64};${c.end is int64};${c is ClosedRange.<int64>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain int64 -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<int64>=4..=6;const b:ClosedRange.<int64>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is int64};${c.end is int64};${c is ClosedRange.<int64>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left int64+",
+      "steps": [
+        {
+          "source": "const a:Range.<int64>=3..<1;const b:ClosedRange.<int64>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left int64-",
+      "steps": [
+        {
+          "source": "const a:Range.<int64>=3..<1;const b:ClosedRange.<int64>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain uint64 +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint64>=1..=3;const b:ClosedRange.<uint64>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is uint64};${c.end is uint64};${c is ClosedRange.<uint64>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain uint64 -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint64>=4..=6;const b:ClosedRange.<uint64>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is uint64};${c.end is uint64};${c is ClosedRange.<uint64>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left uint64+",
+      "steps": [
+        {
+          "source": "const a:Range.<uint64>=3..<1;const b:ClosedRange.<uint64>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left uint64-",
+      "steps": [
+        {
+          "source": "const a:Range.<uint64>=3..<1;const b:ClosedRange.<uint64>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain int128 +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<int128>=1..=3;const b:ClosedRange.<int128>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is int128};${c.end is int128};${c is ClosedRange.<int128>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain int128 -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<int128>=4..=6;const b:ClosedRange.<int128>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is int128};${c.end is int128};${c is ClosedRange.<int128>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left int128+",
+      "steps": [
+        {
+          "source": "const a:Range.<int128>=3..<1;const b:ClosedRange.<int128>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left int128-",
+      "steps": [
+        {
+          "source": "const a:Range.<int128>=3..<1;const b:ClosedRange.<int128>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain uint128 +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint128>=1..=3;const b:ClosedRange.<uint128>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is uint128};${c.end is uint128};${c is ClosedRange.<uint128>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain uint128 -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint128>=4..=6;const b:ClosedRange.<uint128>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is uint128};${c.end is uint128};${c is ClosedRange.<uint128>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left uint128+",
+      "steps": [
+        {
+          "source": "const a:Range.<uint128>=3..<1;const b:ClosedRange.<uint128>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left uint128-",
+      "steps": [
+        {
+          "source": "const a:Range.<uint128>=3..<1;const b:ClosedRange.<uint128>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain float16 +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float16>=1..=3;const b:ClosedRange.<float16>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is float16};${c.end is float16};${c is ClosedRange.<float16>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain float16 -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float16>=4..=6;const b:ClosedRange.<float16>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is float16};${c.end is float16};${c is ClosedRange.<float16>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left float16+",
+      "steps": [
+        {
+          "source": "const a:Range.<float16>=3..<1;const b:ClosedRange.<float16>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left float16-",
+      "steps": [
+        {
+          "source": "const a:Range.<float16>=3..<1;const b:ClosedRange.<float16>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain float32 +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float32>=1..=3;const b:ClosedRange.<float32>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is float32};${c.end is float32};${c is ClosedRange.<float32>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain float32 -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float32>=4..=6;const b:ClosedRange.<float32>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is float32};${c.end is float32};${c is ClosedRange.<float32>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left float32+",
+      "steps": [
+        {
+          "source": "const a:Range.<float32>=3..<1;const b:ClosedRange.<float32>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left float32-",
+      "steps": [
+        {
+          "source": "const a:Range.<float32>=3..<1;const b:ClosedRange.<float32>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain float64 +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float64>=1..=3;const b:ClosedRange.<float64>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is float64};${c.end is float64};${c is ClosedRange.<float64>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain float64 -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float64>=4..=6;const b:ClosedRange.<float64>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is float64};${c.end is float64};${c is ClosedRange.<float64>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left float64+",
+      "steps": [
+        {
+          "source": "const a:Range.<float64>=3..<1;const b:ClosedRange.<float64>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left float64-",
+      "steps": [
+        {
+          "source": "const a:Range.<float64>=3..<1;const b:ClosedRange.<float64>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain float128 +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float128>=1..=3;const b:ClosedRange.<float128>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is float128};${c.end is float128};${c is ClosedRange.<float128>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain float128 -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float128>=4..=6;const b:ClosedRange.<float128>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is float128};${c.end is float128};${c is ClosedRange.<float128>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left float128+",
+      "steps": [
+        {
+          "source": "const a:Range.<float128>=3..<1;const b:ClosedRange.<float128>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left float128-",
+      "steps": [
+        {
+          "source": "const a:Range.<float128>=3..<1;const b:ClosedRange.<float128>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain decimal32 +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<decimal32>=1..=3;const b:ClosedRange.<decimal32>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is decimal32};${c.end is decimal32};${c is ClosedRange.<decimal32>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain decimal32 -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<decimal32>=4..=6;const b:ClosedRange.<decimal32>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is decimal32};${c.end is decimal32};${c is ClosedRange.<decimal32>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left decimal32+",
+      "steps": [
+        {
+          "source": "const a:Range.<decimal32>=3..<1;const b:ClosedRange.<decimal32>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left decimal32-",
+      "steps": [
+        {
+          "source": "const a:Range.<decimal32>=3..<1;const b:ClosedRange.<decimal32>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain decimal64 +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<decimal64>=1..=3;const b:ClosedRange.<decimal64>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is decimal64};${c.end is decimal64};${c is ClosedRange.<decimal64>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain decimal64 -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<decimal64>=4..=6;const b:ClosedRange.<decimal64>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is decimal64};${c.end is decimal64};${c is ClosedRange.<decimal64>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left decimal64+",
+      "steps": [
+        {
+          "source": "const a:Range.<decimal64>=3..<1;const b:ClosedRange.<decimal64>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left decimal64-",
+      "steps": [
+        {
+          "source": "const a:Range.<decimal64>=3..<1;const b:ClosedRange.<decimal64>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain decimal128 +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<decimal128>=1..=3;const b:ClosedRange.<decimal128>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is decimal128};${c.end is decimal128};${c is ClosedRange.<decimal128>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain decimal128 -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<decimal128>=4..=6;const b:ClosedRange.<decimal128>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is decimal128};${c.end is decimal128};${c is ClosedRange.<decimal128>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left decimal128+",
+      "steps": [
+        {
+          "source": "const a:Range.<decimal128>=3..<1;const b:ClosedRange.<decimal128>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left decimal128-",
+      "steps": [
+        {
+          "source": "const a:Range.<decimal128>=3..<1;const b:ClosedRange.<decimal128>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain rational64 +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<rational64>=1..=3;const b:ClosedRange.<rational64>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is rational64};${c.end is rational64};${c is ClosedRange.<rational64>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain rational64 -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<rational64>=4..=6;const b:ClosedRange.<rational64>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is rational64};${c.end is rational64};${c is ClosedRange.<rational64>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left rational64+",
+      "steps": [
+        {
+          "source": "const a:Range.<rational64>=3..<1;const b:ClosedRange.<rational64>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left rational64-",
+      "steps": [
+        {
+          "source": "const a:Range.<rational64>=3..<1;const b:ClosedRange.<rational64>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain rational.<bigint> +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<rational.<bigint>>=1..=3;const b:ClosedRange.<rational.<bigint>>=4..=6;const c=a+b;`${c.start};${c.end};${c.start is rational.<bigint>};${c.end is rational.<bigint>};${c is ClosedRange.<rational.<bigint>>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;9;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "domain rational.<bigint> -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<rational.<bigint>>=4..=6;const b:ClosedRange.<rational.<bigint>>=1..=3;const c=a-b;`${c.start};${c.end};${c.start is rational.<bigint>};${c.end is rational.<bigint>};${c is ClosedRange.<rational.<bigint>>}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;5;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left rational.<bigint>+",
+      "steps": [
+        {
+          "source": "const a:Range.<rational.<bigint>>=3..<1;const b:ClosedRange.<rational.<bigint>>=1..=3;const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty left rational.<bigint>-",
+      "steps": [
+        {
+          "source": "const a:Range.<rational.<bigint>>=3..<1;const b:ClosedRange.<rational.<bigint>>=1..=3;const c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end};${Reflect.typeOf(c)===Reflect.typeOf(a)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds ..=+..=",
+      "steps": [
+        {
+          "source": "const a=4..=6,b=1..=3,c=a+b;`${c.startBound===Range.Bound.Closed};${c.endBound===Range.Bound.Closed};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;5;9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds ..=+..<",
+      "steps": [
+        {
+          "source": "const a=4..=6,b=1..<3,c=a+b;`${c.startBound===Range.Bound.Closed};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;5;9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds ..=+<..=",
+      "steps": [
+        {
+          "source": "const a=4..=6,b=1<..=3,c=a+b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Closed};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;5;9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds ..=+<..<",
+      "steps": [
+        {
+          "source": "const a=4..=6,b=1<..<3,c=a+b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;5;9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds ..<+..=",
+      "steps": [
+        {
+          "source": "const a=4..<6,b=1..=3,c=a+b;`${c.startBound===Range.Bound.Closed};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;5;9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds ..<+..<",
+      "steps": [
+        {
+          "source": "const a=4..<6,b=1..<3,c=a+b;`${c.startBound===Range.Bound.Closed};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;5;9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds ..<+<..=",
+      "steps": [
+        {
+          "source": "const a=4..<6,b=1<..=3,c=a+b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;5;9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds ..<+<..<",
+      "steps": [
+        {
+          "source": "const a=4..<6,b=1<..<3,c=a+b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;5;9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds <..=+..=",
+      "steps": [
+        {
+          "source": "const a=4<..=6,b=1..=3,c=a+b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Closed};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;5;9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds <..=+..<",
+      "steps": [
+        {
+          "source": "const a=4<..=6,b=1..<3,c=a+b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;5;9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds <..=+<..=",
+      "steps": [
+        {
+          "source": "const a=4<..=6,b=1<..=3,c=a+b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Closed};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;5;9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds <..=+<..<",
+      "steps": [
+        {
+          "source": "const a=4<..=6,b=1<..<3,c=a+b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;5;9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds <..<+..=",
+      "steps": [
+        {
+          "source": "const a=4<..<6,b=1..=3,c=a+b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;5;9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds <..<+..<",
+      "steps": [
+        {
+          "source": "const a=4<..<6,b=1..<3,c=a+b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;5;9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds <..<+<..=",
+      "steps": [
+        {
+          "source": "const a=4<..<6,b=1<..=3,c=a+b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;5;9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds <..<+<..<",
+      "steps": [
+        {
+          "source": "const a=4<..<6,b=1<..<3,c=a+b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;5;9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds ..=-..=",
+      "steps": [
+        {
+          "source": "const a=4..=6,b=1..=3,c=a-b;`${c.startBound===Range.Bound.Closed};${c.endBound===Range.Bound.Closed};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1;5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds ..=-..<",
+      "steps": [
+        {
+          "source": "const a=4..=6,b=1..<3,c=a-b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Closed};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1;5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds ..=-<..=",
+      "steps": [
+        {
+          "source": "const a=4..=6,b=1<..=3,c=a-b;`${c.startBound===Range.Bound.Closed};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1;5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds ..=-<..<",
+      "steps": [
+        {
+          "source": "const a=4..=6,b=1<..<3,c=a-b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1;5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds ..<-..=",
+      "steps": [
+        {
+          "source": "const a=4..<6,b=1..=3,c=a-b;`${c.startBound===Range.Bound.Closed};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1;5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds ..<-..<",
+      "steps": [
+        {
+          "source": "const a=4..<6,b=1..<3,c=a-b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1;5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds ..<-<..=",
+      "steps": [
+        {
+          "source": "const a=4..<6,b=1<..=3,c=a-b;`${c.startBound===Range.Bound.Closed};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1;5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds ..<-<..<",
+      "steps": [
+        {
+          "source": "const a=4..<6,b=1<..<3,c=a-b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1;5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds <..=-..=",
+      "steps": [
+        {
+          "source": "const a=4<..=6,b=1..=3,c=a-b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Closed};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1;5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds <..=-..<",
+      "steps": [
+        {
+          "source": "const a=4<..=6,b=1..<3,c=a-b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Closed};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1;5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds <..=-<..=",
+      "steps": [
+        {
+          "source": "const a=4<..=6,b=1<..=3,c=a-b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1;5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds <..=-<..<",
+      "steps": [
+        {
+          "source": "const a=4<..=6,b=1<..<3,c=a-b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1;5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds <..<-..=",
+      "steps": [
+        {
+          "source": "const a=4<..<6,b=1..=3,c=a-b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1;5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds <..<-..<",
+      "steps": [
+        {
+          "source": "const a=4<..<6,b=1..<3,c=a-b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1;5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds <..<-<..=",
+      "steps": [
+        {
+          "source": "const a=4<..<6,b=1<..=3,c=a-b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1;5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bounds <..<-<..<",
+      "steps": [
+        {
+          "source": "const a=4<..<6,b=1<..<3,c=a-b;`${c.startBound===Range.Bound.Open};${c.endBound===Range.Bound.Open};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1;5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide uint64+",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint64>=9007199254740993..=9007199254740995;const b:ClosedRange.<uint64>=1..=1;const c=a+b;`${c.start};${c.end};${c.start is uint64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "9007199254740994;9007199254740996;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide uint64-",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint64>=9007199254740993..=9007199254740995;const b:ClosedRange.<uint64>=1..=1;const c=a-b;`${c.start};${c.end};${c.start is uint64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "9007199254740992;9007199254740994;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide int64+",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<int64>=-9007199254740995..=-9007199254740993;const b:ClosedRange.<int64>=1..=1;const c=a+b;`${c.start};${c.end};${c.start is int64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-9007199254740994;-9007199254740992;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide int64-",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<int64>=-9007199254740995..=-9007199254740993;const b:ClosedRange.<int64>=1..=1;const c=a-b;`${c.start};${c.end};${c.start is int64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-9007199254740996;-9007199254740994;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide uint128+",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint128>=1267650600228229401496703205377..=1267650600228229401496703205379;const b:ClosedRange.<uint128>=1..=1;const c=a+b;`${c.start};${c.end};${c.start is uint128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1267650600228229401496703205378;1267650600228229401496703205380;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide uint128-",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint128>=1267650600228229401496703205377..=1267650600228229401496703205379;const b:ClosedRange.<uint128>=1..=1;const c=a-b;`${c.start};${c.end};${c.start is uint128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1267650600228229401496703205376;1267650600228229401496703205378;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide int128+",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<int128>=-1267650600228229401496703205379..=-1267650600228229401496703205377;const b:ClosedRange.<int128>=1..=1;const c=a+b;`${c.start};${c.end};${c.start is int128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-1267650600228229401496703205378;-1267650600228229401496703205376;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide int128-",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<int128>=-1267650600228229401496703205379..=-1267650600228229401496703205377;const b:ClosedRange.<int128>=1..=1;const c=a-b;`${c.start};${c.end};${c.start is int128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-1267650600228229401496703205380;-1267650600228229401496703205378;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overflow uint8",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=255..=255;const b:ClosedRange.<uint8>=1..=1;a+b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overflow int8",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<int8>=127..=127;const b:ClosedRange.<int8>=1..=1;a+b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overflow uint64",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint64>=18446744073709551615..=18446744073709551615;const b:ClosedRange.<uint64>=1..=1;a+b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overflow uint128",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint128>=340282366920938463463374607431768211455..=340282366920938463463374607431768211455;const b:ClosedRange.<uint128>=1..=1;a+b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unsigned subtraction underflow",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=0..=1;const b:ClosedRange.<uint8>=2..=3;a-b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "signed subtraction underflow",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<int8>=(-128)..=(-127);const b:ClosedRange.<int8>=1..=1;a-b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outward number+",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<number>=9007199254740992..=9007199254740992;const b:ClosedRange.<number>=1..=1;const c=a+b;`${c.contains(9007199254740993n)};${c.start===c.end};${c.start is number};${c.end is number}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outward number-",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<number>=9007199254740992..=9007199254740992;const b:ClosedRange.<number>=(-1)..=(-1);const c=a-b;`${c.contains(9007199254740993n)};${c.start===c.end};${c.start is number};${c.end is number}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rounding closes open number",
+      "steps": [
+        {
+          "source": "const a:OpenRange.<number>=9007199254740992<..<9007199254740996;const b:ClosedRange.<number>=1..=1;const c=a+b;`${c.startBound===Range.Bound.Closed};${c.endBound===Range.Bound.Closed};${c.contains(9007199254740993n)};${c.contains(9007199254740997n)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outward float16+",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float16>=2048..=2048;const b:ClosedRange.<float16>=1..=1;const c=a+b;`${c.contains(2049n)};${c.start===c.end};${c.start is float16};${c.end is float16}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outward float16-",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float16>=2048..=2048;const b:ClosedRange.<float16>=(-1)..=(-1);const c=a-b;`${c.contains(2049n)};${c.start===c.end};${c.start is float16};${c.end is float16}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rounding closes open float16",
+      "steps": [
+        {
+          "source": "const a:OpenRange.<float16>=2048<..<2052;const b:ClosedRange.<float16>=1..=1;const c=a+b;`${c.startBound===Range.Bound.Closed};${c.endBound===Range.Bound.Closed};${c.contains(2049n)};${c.contains(2053n)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outward float32+",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float32>=16777216..=16777216;const b:ClosedRange.<float32>=1..=1;const c=a+b;`${c.contains(16777217n)};${c.start===c.end};${c.start is float32};${c.end is float32}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outward float32-",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float32>=16777216..=16777216;const b:ClosedRange.<float32>=(-1)..=(-1);const c=a-b;`${c.contains(16777217n)};${c.start===c.end};${c.start is float32};${c.end is float32}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rounding closes open float32",
+      "steps": [
+        {
+          "source": "const a:OpenRange.<float32>=16777216<..<16777220;const b:ClosedRange.<float32>=1..=1;const c=a+b;`${c.startBound===Range.Bound.Closed};${c.endBound===Range.Bound.Closed};${c.contains(16777217n)};${c.contains(16777221n)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outward float64+",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float64>=9007199254740992..=9007199254740992;const b:ClosedRange.<float64>=1..=1;const c=a+b;`${c.contains(9007199254740993n)};${c.start===c.end};${c.start is float64};${c.end is float64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outward float64-",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float64>=9007199254740992..=9007199254740992;const b:ClosedRange.<float64>=(-1)..=(-1);const c=a-b;`${c.contains(9007199254740993n)};${c.start===c.end};${c.start is float64};${c.end is float64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rounding closes open float64",
+      "steps": [
+        {
+          "source": "const a:OpenRange.<float64>=9007199254740992<..<9007199254740996;const b:ClosedRange.<float64>=1..=1;const c=a+b;`${c.startBound===Range.Bound.Closed};${c.endBound===Range.Bound.Closed};${c.contains(9007199254740993n)};${c.contains(9007199254740997n)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outward float128+",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float128>=10384593717069655257060992658440192..=10384593717069655257060992658440192;const b:ClosedRange.<float128>=1..=1;const c=a+b;`${c.contains(10384593717069655257060992658440193n)};${c.start===c.end};${c.start is float128};${c.end is float128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outward float128-",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float128>=10384593717069655257060992658440192..=10384593717069655257060992658440192;const b:ClosedRange.<float128>=(-1)..=(-1);const c=a-b;`${c.contains(10384593717069655257060992658440193n)};${c.start===c.end};${c.start is float128};${c.end is float128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rounding closes open float128",
+      "steps": [
+        {
+          "source": "const a:OpenRange.<float128>=10384593717069655257060992658440192<..<10384593717069655257060992658440196;const b:ClosedRange.<float128>=1..=1;const c=a+b;`${c.startBound===Range.Bound.Closed};${c.endBound===Range.Bound.Closed};${c.contains(10384593717069655257060992658440193n)};${c.contains(10384593717069655257060992658440197n)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal outward decimal32",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<decimal32>=1000000..=1000000;const b:ClosedRange.<decimal32>=0.1..=0.1;const c=a+b;`${c.contains(rational.<bigint>(10000001n,10n))};${c.start===c.end};${c.start is decimal32}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal outward decimal64",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<decimal64>=1000000000000000..=1000000000000000;const b:ClosedRange.<decimal64>=0.1..=0.1;const c=a+b;`${c.contains(rational.<bigint>(10000000000000001n,10n))};${c.start===c.end};${c.start is decimal64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal outward decimal128",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<decimal128>=1000000000000000000000000000000000..=1000000000000000000000000000000000;const b:ClosedRange.<decimal128>=0.1..=0.1;const c=a+b;`${c.contains(rational.<bigint>(10000000000000000000000000000000001n,10n))};${c.start===c.end};${c.start is decimal128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;false;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal binary operations reduce cohort",
+      "steps": [
+        {
+          "source": "const a=decimal64.parse(\"1.50\")..=decimal64.parse(\"2.00\");const b=decimal64.parse(\"0.00\")..=decimal64.parse(\"0.00\");const c=a+b;`${c.start};${c.end};${a.start};${a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1.5;2;1.50;2.00"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational exact sums",
+      "steps": [
+        {
+          "source": "const a=rational64(1,3)..=rational64(2,3);const b=rational64(1,6)..=rational64(1,6);const c=a+b,d=a-b;`${c.start};${c.end};${d.start};${d.end};${c.start is rational64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1/2;5/6;1/6;1/2;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational normalized width overflow",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<rational8>=127..=127;const b:ClosedRange.<rational8>=1..=1;a+b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "floating finite overflow float16",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float16>=65504..=65504;a+a;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "floating finite overflow float32",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float32>=3.4028234663852886e38..=3.4028234663852886e38;a+a;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "floating finite overflow float64",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float64>=1.7976931348623157e308..=1.7976931348623157e308;a+a;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "floating finite overflow decimal32",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<decimal32>=9.999999e96..=9.999999e96;a+a;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign number+-0-0",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<number>=(-0)..=(-0);const b:ClosedRange.<number>=(-0)..=(-0);const c=a+b;`${Object.is(c.start,(-0:=number))};${Object.is(c.end,(-0:=number))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign number+-00",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<number>=(-0)..=(-0);const b:ClosedRange.<number>=(0)..=(0);const c=a+b;`${Object.is(c.start,(0:=number))};${Object.is(c.end,(0:=number))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign number--00",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<number>=(-0)..=(-0);const b:ClosedRange.<number>=(0)..=(0);const c=a-b;`${Object.is(c.start,(-0:=number))};${Object.is(c.end,(-0:=number))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign number--0-0",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<number>=(-0)..=(-0);const b:ClosedRange.<number>=(-0)..=(-0);const c=a-b;`${Object.is(c.start,(0:=number))};${Object.is(c.end,(0:=number))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign float16+-0-0",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float16>=(-0)..=(-0);const b:ClosedRange.<float16>=(-0)..=(-0);const c=a+b;`${Object.is(c.start,(-0:=float16))};${Object.is(c.end,(-0:=float16))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign float16+-00",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float16>=(-0)..=(-0);const b:ClosedRange.<float16>=(0)..=(0);const c=a+b;`${Object.is(c.start,(0:=float16))};${Object.is(c.end,(0:=float16))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign float16--00",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float16>=(-0)..=(-0);const b:ClosedRange.<float16>=(0)..=(0);const c=a-b;`${Object.is(c.start,(-0:=float16))};${Object.is(c.end,(-0:=float16))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign float16--0-0",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float16>=(-0)..=(-0);const b:ClosedRange.<float16>=(-0)..=(-0);const c=a-b;`${Object.is(c.start,(0:=float16))};${Object.is(c.end,(0:=float16))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign float32+-0-0",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float32>=(-0)..=(-0);const b:ClosedRange.<float32>=(-0)..=(-0);const c=a+b;`${Object.is(c.start,(-0:=float32))};${Object.is(c.end,(-0:=float32))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign float32+-00",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float32>=(-0)..=(-0);const b:ClosedRange.<float32>=(0)..=(0);const c=a+b;`${Object.is(c.start,(0:=float32))};${Object.is(c.end,(0:=float32))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign float32--00",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float32>=(-0)..=(-0);const b:ClosedRange.<float32>=(0)..=(0);const c=a-b;`${Object.is(c.start,(-0:=float32))};${Object.is(c.end,(-0:=float32))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign float32--0-0",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float32>=(-0)..=(-0);const b:ClosedRange.<float32>=(-0)..=(-0);const c=a-b;`${Object.is(c.start,(0:=float32))};${Object.is(c.end,(0:=float32))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign float64+-0-0",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float64>=(-0)..=(-0);const b:ClosedRange.<float64>=(-0)..=(-0);const c=a+b;`${Object.is(c.start,(-0:=float64))};${Object.is(c.end,(-0:=float64))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign float64+-00",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float64>=(-0)..=(-0);const b:ClosedRange.<float64>=(0)..=(0);const c=a+b;`${Object.is(c.start,(0:=float64))};${Object.is(c.end,(0:=float64))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign float64--00",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float64>=(-0)..=(-0);const b:ClosedRange.<float64>=(0)..=(0);const c=a-b;`${Object.is(c.start,(-0:=float64))};${Object.is(c.end,(-0:=float64))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign float64--0-0",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float64>=(-0)..=(-0);const b:ClosedRange.<float64>=(-0)..=(-0);const c=a-b;`${Object.is(c.start,(0:=float64))};${Object.is(c.end,(0:=float64))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign float128+-0-0",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float128>=(-0)..=(-0);const b:ClosedRange.<float128>=(-0)..=(-0);const c=a+b;`${Object.is(c.start,(-0:=float128))};${Object.is(c.end,(-0:=float128))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign float128+-00",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float128>=(-0)..=(-0);const b:ClosedRange.<float128>=(0)..=(0);const c=a+b;`${Object.is(c.start,(0:=float128))};${Object.is(c.end,(0:=float128))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign float128--00",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float128>=(-0)..=(-0);const b:ClosedRange.<float128>=(0)..=(0);const c=a-b;`${Object.is(c.start,(-0:=float128))};${Object.is(c.end,(-0:=float128))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign float128--0-0",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float128>=(-0)..=(-0);const b:ClosedRange.<float128>=(-0)..=(-0);const c=a-b;`${Object.is(c.start,(0:=float128))};${Object.is(c.end,(0:=float128))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal difference exponent underflow",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<decimal32>=1.000001e-95..=1.000001e-95;const b:ClosedRange.<decimal32>=1e-95..=1e-95;a-b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "cancellation gives positive zero",
+      "steps": [
+        {
+          "source": "const c=(1..=1)-(1..=1);`${Object.is(c.start,0)};${Object.is(c.end,0)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty right +",
+      "steps": [
+        {
+          "source": "const a=1..=3,b=8<..=8,c=a+b;`${c.isEmpty};${c.start===b.start};${c.endBound===b.endBound}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "both empty select left +",
+      "steps": [
+        {
+          "source": "const a=3..<1,b=8<..=8,c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty avoids irrelevant arithmetic +",
+      "steps": [
+        {
+          "source": "const a:Range.<uint8>=255..<0;const b:ClosedRange.<uint8>=255..=255;const c=a+b;`${c.start};${c.end};${c.isEmpty}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "255;0;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty right -",
+      "steps": [
+        {
+          "source": "const a=1..=3,b=8<..=8,c=a-b;`${c.isEmpty};${c.start===b.start};${c.endBound===b.endBound}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "both empty select left -",
+      "steps": [
+        {
+          "source": "const a=3..<1,b=8<..=8,c=a-b;`${c.isEmpty};${c.start===a.start};${c.end===a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty avoids irrelevant arithmetic -",
+      "steps": [
+        {
+          "source": "const a:Range.<uint8>=255..<0;const b:ClosedRange.<uint8>=255..=255;const c=a-b;`${c.start};${c.end};${c.isEmpty}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "255;0;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "one ended sum",
+      "steps": [
+        {
+          "source": "const a:RangeFrom.<uint64>=9007199254740993..;const b:RangeFrom.<uint64>=2..;const c=a+b;`${c.start};${c.start is uint64};${c.end};${c.endBound}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "9007199254740995;true;undefined;undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "one ended difference cross",
+      "steps": [
+        {
+          "source": "const a:RangeFrom.<int16>=5..;const b:RangeTo.<int16> = ..<3;const c=a-b;`${c.start};${c.startBound===Range.Bound.Open};${c.end};${c is RangeFrom.<int16,Range.Bound.Open>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2;true;undefined;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "opposed one ended sum full",
+      "steps": [
+        {
+          "source": "const a:RangeFrom.<int16>=5..;const b:RangeTo.<int16> = ..<3;const c=a+b;String(c is RangeFull.<int16>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "full any domain neutral +",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=3;const c=a+(..),d=(..)+a;`${c is RangeFull.<uint8>};${d is RangeFull.<uint8>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two full any remain erased +",
+      "steps": [
+        {
+          "source": "const c=(..)+(..);String(c is RangeFull.<any>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed full retains carrier +",
+      "steps": [
+        {
+          "source": "const a:RangeFull.<decimal64>=..;const c=a+a;String(c is RangeFull.<decimal64>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty mismatched domains still reject +",
+      "steps": [
+        {
+          "source": "const a:Range.<uint8>=3..<1;const b:Range.<uint16>=3..<1;a+b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "full any domain neutral -",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=3;const c=a-(..),d=(..)-a;`${c is RangeFull.<uint8>};${d is RangeFull.<uint8>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two full any remain erased -",
+      "steps": [
+        {
+          "source": "const c=(..)-(..);String(c is RangeFull.<any>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed full retains carrier -",
+      "steps": [
+        {
+          "source": "const a:RangeFull.<decimal64>=..;const c=a-a;String(c is RangeFull.<decimal64>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty mismatched domains still reject -",
+      "steps": [
+        {
+          "source": "const a:Range.<uint8>=3..<1;const b:Range.<uint16>=3..<1;a-b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mismatched carrier uint8 uint16",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=2;const b:ClosedRange.<uint16>=1..=2;a+b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mismatched carrier uint8 number",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=2;const b:ClosedRange.<number>=1..=2;a+b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mismatched carrier uint8 bigint",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=2;const b:ClosedRange.<bigint>=1..=2;a+b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mismatched carrier uint8 float32",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=2;const b:ClosedRange.<float32>=1..=2;a+b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mismatched carrier uint8 decimal64",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=2;const b:ClosedRange.<decimal64>=1..=2;a+b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mismatched carrier uint8 rational64",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=2;const b:ClosedRange.<rational64>=1..=2;a+b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored union rejects",
+      "steps": [
+        {
+          "source": "const a:Range.<uint8|uint16>=(1:=uint8)..<(3:=uint8);a+a;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mixed endpoint union rejects",
+      "steps": [
+        {
+          "source": "const a=(1:=uint8)..<(3:=uint16);a+a;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "full union rejects before empty",
+      "steps": [
+        {
+          "source": "const a:RangeFull.<uint8|uint16>=..;a+(3..<1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "full nonnumeric domain rejects",
+      "steps": [
+        {
+          "source": "const a:RangeFull.<string>=..;a+(..);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased endpoint values select carrier",
+      "steps": [
+        {
+          "source": "const a:Range.<any>=(1:=uint8)..<(3:=uint8);const b:Range.<uint8>=1..<3;const c=a+b;`${c is Range.<uint8>};${c.start is uint8};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;6"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased mixed endpoints reject",
+      "steps": [
+        {
+          "source": "const a:Range.<any>=(1:=uint8)..<(3:=uint16);a+a;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit infinity remains present number",
+      "steps": [
+        {
+          "source": "const a:Range.<number>=1..<(Infinity:=number);const b:ClosedRange.<number>=2..=3;const c=a+b;`${c.start};${c.end is number};${c.endBound===Range.Bound.Open};${c.end===a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "opposed infinity addition number",
+      "steps": [
+        {
+          "source": "const a=((Infinity:=number)..);const b=((-Infinity:=number)..);a+b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same infinity subtraction number",
+      "steps": [
+        {
+          "source": "const a=((Infinity:=number)..=(Infinity:=number));a-a;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "open extreme empty absorbs number",
+      "steps": [
+        {
+          "source": "const a=((Infinity:=number)<..);const b=((-Infinity:=number)..);const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit infinity remains present float128",
+      "steps": [
+        {
+          "source": "const a:Range.<float128>=1..<(Infinity:=float128);const b:ClosedRange.<float128>=2..=3;const c=a+b;`${c.start};${c.end is float128};${c.endBound===Range.Bound.Open};${c.end===a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "opposed infinity addition float128",
+      "steps": [
+        {
+          "source": "const a=((Infinity:=float128)..);const b=((-Infinity:=float128)..);a+b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same infinity subtraction float128",
+      "steps": [
+        {
+          "source": "const a=((Infinity:=float128)..=(Infinity:=float128));a-a;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "open extreme empty absorbs float128",
+      "steps": [
+        {
+          "source": "const a=((Infinity:=float128)<..);const b=((-Infinity:=float128)..);const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit infinity remains present decimal64",
+      "steps": [
+        {
+          "source": "const a:Range.<decimal64>=1..<(Infinity:=decimal64);const b:ClosedRange.<decimal64>=2..=3;const c=a+b;`${c.start};${c.end is decimal64};${c.endBound===Range.Bound.Open};${c.end===a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "opposed infinity addition decimal64",
+      "steps": [
+        {
+          "source": "const a=((Infinity:=decimal64)..);const b=((-Infinity:=decimal64)..);a+b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same infinity subtraction decimal64",
+      "steps": [
+        {
+          "source": "const a=((Infinity:=decimal64)..=(Infinity:=decimal64));a-a;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "open extreme empty absorbs decimal64",
+      "steps": [
+        {
+          "source": "const a=((Infinity:=decimal64)<..);const b=((-Infinity:=decimal64)..);const c=a+b;`${c.isEmpty};${c.start===a.start};${c.end===a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "absent propagation avoids invented infinity",
+      "steps": [
+        {
+          "source": "const a=(-Infinity..),b=(..);const c=a+b;`${c.isFull};${c.start};${c.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;undefined;undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "opposite infinity subtraction well defined",
+      "steps": [
+        {
+          "source": "const c=(Infinity..=Infinity)-(-Infinity..=-Infinity);`${c.start};${c.end};${c.isEmpty}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "Infinity;Infinity;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric validation does not coerce or compare classes",
+      "steps": [
+        {
+          "source": "let calls=0;class P{operator<(x){calls++;return false;}valueOf(){calls++;return 1;}}const a=new P()..<new P();let ok=false;try{a+a;}catch(e){ok=e instanceof TypeError;}`${ok};${calls}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "public endpoint getters unused",
+      "steps": [
+        {
+          "source": "const a:Range.<uint8>=1..<3;for(const k of [\"start\",\"end\",\"startBound\",\"endBound\"])Object.defineProperty(a,k,{get(){throw new Error(\"getter\");}});const b=a+a;`${b.start};${b.end};${b.start is uint8}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2;6;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source remains reusable after overflow",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=100..=200;let ok=false;try{a+a;}catch(e){ok=e instanceof RangeError;}const z:ClosedRange.<uint8>=0..=0;`${ok};${a.start};${a.end};${(a+z).end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;100;200;200"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata lower before upper addition",
+      "steps": [
+        {
+          "source": "type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=int16.<{flag:true}>;let log=\"\";let recording=false;const a:ClosedRange.<T>=(1:=T)..=(3:=T);recording=true;const b=a+a;`${log};${b.start};${b.end};${b is ClosedRange.<T>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2,6,;2;6;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata lower before upper subtraction",
+      "steps": [
+        {
+          "source": "type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=int16.<{flag:true}>;let log=\"\";let recording=false;const a:ClosedRange.<T>=(1:=T)..=(3:=T);recording=true;const b=a-a;`${log};${b.start};${b.end};${b is ClosedRange.<T>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-2,2,;-2;2;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata zero addition still admits",
+      "steps": [
+        {
+          "source": "type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=int16.<{flag:true}>;let log=\"\";let recording=false;const a:ClosedRange.<T>=(1:=T)..=(3:=T);const z:ClosedRange.<T>=(0:=T)..=(0:=T);recording=true;const b=a+z;`${log};${b.start};${b.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,3,;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata failure stops before upper",
+      "steps": [
+        {
+          "source": "let recording=false,log=\"\";type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return true;}validate(v,m){if(recording){log+=String(v)+\",\";throw new Error(\"stop\");}return true;}}type T=int16.<{flag:true}>;const a:ClosedRange.<T>=(1:=T)..=(3:=T);recording=true;let result=\"old\";try{result=a+a;}catch(e){}recording=false;`${log};${result};${a.start};${(a+a).end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2,;old;1;6"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata upper failure leaves lower effects",
+      "steps": [
+        {
+          "source": "let recording=false,log=\"\";type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return true;}validate(v,m){if(recording){log+=String(v)+\",\";if(v>4)throw new Error(\"stop\");}return true;}}type T=int16.<{flag:true}>;const a:ClosedRange.<T>=(1:=T)..=(3:=T);recording=true;let result=\"old\";try{result=a+a;}catch(e){}recording=false;`${log};${result};${a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2,6,;old;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata empty copy no revalidation",
+      "steps": [
+        {
+          "source": "type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=int16.<{flag:true}>;let log=\"\";let recording=false;const a:ClosedRange.<T>=(1:=T)..=(3:=T);const empty:Range.<T>=(3:=T)..<(1:=T);recording=true;const b=empty+a;`${log};${b.isEmpty};${b.start===empty.start}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata domains must match",
+      "steps": [
+        {
+          "source": "type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return true;}}type A=int16.<{flag:true}>;type B=int16.<{flag:false}>;const a:ClosedRange.<A>=(1:=A)..=(3:=A);const b:ClosedRange.<B>=(1:=B)..=(3:=B);a+b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata may not rescale computed bound",
+      "steps": [
+        {
+          "source": "type M={tag:string};meta M{default={tag:\"\"};subtype(a,b){return a.tag===b.tag;}}primitive uint8{operator uint8.<M>(){return this+(1:=uint8);}}type T=uint8.<{tag:\"T\"}>;const a:RangeFrom.<T>=(1:=T)..;let ok=false;try{a+a;}catch(e){ok=e instanceof RangeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range addition does not revive reference",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];let ref x=a[0];const r:Range.<uint64>=0..<a.length;const s=r+r;a.length=0;let ok=false;try{x;}catch(e){ok=e instanceof TypeError;}`${ok};${s.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "operand evaluation precedes domain validation",
+      "steps": [
+        {
+          "source": "let log=\"\";function a(){log+=\"a\";return ((1:=uint8)..<(3:=uint8));}function b(){log+=\"b\";return ((1:=uint16)..<(3:=uint16));}let ok=false;try{a()+b();}catch(e){ok=e instanceof TypeError;}`${ok};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic additive factory",
+      "steps": [
+        {
+          "source": "function add<T:type>(a:T,b:T){return (a..=b)+(a..=b);}const a=add.<uint8>(1,3),b=add.<decimal64>(1,3);`${a.start is uint8};${b.end is decimal64};${a.start};${b.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;2;6"
+          }
+        }
+      ]
+    },
+    {
+      "name": "cross Script recovery",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=100..=200;a+a;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        },
+        {
+          "source": "const z:ClosedRange.<uint8>=0..=0;`${a.start};${a.end};${(a+z).end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "100;200;200"
+          }
+        }
+      ]
+    }
+  ]
+}
