@@ -749,21 +749,21 @@ test('iterator helpers: `take` and `drop` stay in the family, because they are C
   // The first n values of a contiguous range are a contiguous range, and so are
   // the rest - the same test `intersect` passes and `step` fails. So these two
   // return a `Range` where `map` returns an `Iterator`: closure, not uniformity.
-  expect(evaluated('const t = (0..<10).take(3); String(t is Range.<number>) + "/" + String(t.start) + "/" + String(t.end);')).toBe('true/0/3');
-  expect(evaluated('const d = (0..<10).drop(7); String(d is Range.<number>) + "/" + String(d.start) + "/" + String(d.end);')).toBe('true/7/10');
+  expect(evaluated('const t = (0..<10).take(3); String(t is ClosedRange.<number>) + "/" + String(t.start) + "/" + String(t.end);')).toBe('true/0/2');
+  expect(evaluated('const d = (0..<10).drop(7); String(d is OpenRange.<number>) + "/" + String(d.start) + "/" + String(d.end);')).toBe('true/6/10');
   // An open start shifts which values are taken, as it shifts the first index.
-  // The result normalizes to CLOSED-OPEN: `1..<4`, not `0<..=3`, both being {1,2,3}.
-  expect(evaluated('const t = (0<..<10).take(3); String(t.start) + "/" + String(t.end) + "/" + t.toArray().join("");')).toBe('1/4/123');
+  // Preserve the open start and close at the last selected member: `0<..=3`.
+  expect(evaluated('const t = (0<..<10).take(3); String(t.start) + "/" + String(t.end) + "/" + t.toArray().join("");')).toBe('0/3/123');
   // Unbounded, over-take, over-drop, and zero.
-  expect(evaluated('const t = (0..).take(3); String(t.start) + "/" + String(t.end);')).toBe('0/3');
-  expect(evaluated('const d = (0..).drop(3); String(d.start) + "/" + String(d.end);')).toBe('3/undefined');
+  expect(evaluated('const t = (0..).take(3); String(t.start) + "/" + String(t.end);')).toBe('0/2');
+  expect(evaluated('const d = (0..).drop(3); String(d.start) + "/" + String(d.end);')).toBe('2/undefined');
   expect(evaluated('const t = (0..<3).take(10); t.toArray().join("");')).toBe('012');
   expect(evaluated('String((0..<3).drop(10).isEmpty);')).toBe('true');
   expect(evaluated('String((0..<5).take(0).isEmpty);')).toBe('true');
   // Closure is the point: the result is still a range, so it still intersects.
-  expect(evaluated('const r = (0..<10).take(5).intersect(3..<8); String(r.start) + "/" + String(r.end);')).toBe('3/5');
+  expect(evaluated('const r = (0..<10).take(5).intersect(3..<8); String(r.start) + "/" + String(r.end);')).toBe('3/4');
   expect(evaluated('String((0..<10).take(3).contains(1)) + "/" + String((0..<10).take(3).contains(5));')).toBe('true/false');
-  // The element type's arithmetic, so a bigint range takes in bigint.
+  // Exact boundary arithmetic retains BigInt endpoints.
   expect(evaluated('const t = (0n..<10n).take(3); t.toArray().join("");')).toBe('012');
   // Where there is no implicit step, or no first value to count from, they
   // refuse with the message iteration gives.

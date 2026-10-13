@@ -32,18 +32,18 @@ interface NumericCursor {
 const cursors = new WeakMap<ObjectValue, NumericCursor>();
 const numberType: NumericType = { Kind: 'primitive', Name: 'number', Arguments: [] };
 
-function numericBase(type: TypeRecord | undefined): NumericType | undefined {
-  if (type?.Kind === 'parameterized') return numericBase(type.Base);
+export function NumericRangeBase(type: TypeRecord | undefined): NumericType | undefined {
+  if (type?.Kind === 'parameterized') return NumericRangeBase(type.Base);
   if (type?.Kind === 'primitive' && ['number', 'bigint', 'int', 'uint', 'float16', 'float32', 'float64'].includes(type.Name)) return type;
   return undefined;
 }
 
 /** This reader never treats an unsupported present endpoint as an absent one. */
-function numericValue(value: Value | undefined): Numeric | undefined {
+export function NumericRangeValue(value: Value | undefined): Numeric | undefined {
   // R deliberately erases negative zero; a cursor retains its stored origin.
   if (value instanceof NumberValue) return value.numberValue(); // eslint-disable-line @engine262/mathematical-value
   if (value instanceof BigIntValue) return R(value);
-  if (value && isTypedNumber(value) && numericBase(RuntimeTypeOf(value))) return value.value;
+  if (value && isTypedNumber(value) && NumericRangeBase(RuntimeTypeOf(value))) return value.value;
   return undefined;
 }
 
@@ -57,8 +57,8 @@ function typedEndpoint(value: RangeEndpoint | undefined): TypeRecord | undefined
 }
 
 /** Iterator items and endpoint-domain reflection are distinct judgments. */
-function itemDomain(range: RangeObject): TypeRecord {
-  if (numericBase(range.RangeElementType)) return range.RangeElementType!;
+export function NumericRangeItemDomain(range: RangeObject): TypeRecord {
+  if (NumericRangeBase(range.RangeElementType)) return range.RangeElementType!;
   return typedEndpoint(range.RangeStart) ?? typedEndpoint(range.RangeEnd) ?? numberType;
 }
 
@@ -73,8 +73,8 @@ export function* CreateNumericRangeIterator(range: RangeObject, realm: Realm, re
   const origin = reverse ? range.RangeEnd : range.RangeStart;
   const stop = reverse ? range.RangeStart : range.RangeEnd;
   if (origin === undefined) return Throw.TypeError('a range without a traversal origin cannot be iterated');
-  const start = numericValue(origin);
-  const end = numericValue(stop);
+  const start = NumericRangeValue(origin);
+  const end = NumericRangeValue(stop);
   if (start === undefined || (stop !== undefined && end === undefined)) {
     return Throw.TypeError('range iteration requires numeric endpoints');
   }
@@ -82,12 +82,12 @@ export function* CreateNumericRangeIterator(range: RangeObject, realm: Realm, re
     return Throw.TypeError('range iteration requires a finite origin');
   }
   if (typeof end === 'number' && Number.isNaN(end)) return Throw.TypeError('range iteration requires ordered endpoints');
-  const domain = itemDomain(range);
-  const base = numericBase(domain);
+  const domain = NumericRangeItemDomain(range);
+  const base = NumericRangeBase(domain);
   if (!base) return Throw.TypeError('range iteration requires a numeric item type');
   let step: Numeric = 1n;
   if (by !== undefined) {
-    const supplied = numericValue(by);
+    const supplied = NumericRangeValue(by);
     if (supplied === undefined || supplied <= 0 || (typeof supplied === 'number' && !Number.isFinite(supplied))) {
       return Throw.TypeError('a range step must be a positive finite numeric value');
     }
@@ -165,7 +165,7 @@ export function* NumericRangeIteratorNext(value: Value): ValueEvaluator {
     }
     if (cursor.domain !== cursor.base) {
       result = Q(yield* RequireType(result, cursor.domain));
-      const admitted = numericValue(result);
+      const admitted = NumericRangeValue(result);
       if (admitted === undefined || admitted < item || admitted > item
           || (typeof admitted === 'number' && Number.isNaN(admitted))
           || (item === 0 && !Object.is(admitted, item))) {

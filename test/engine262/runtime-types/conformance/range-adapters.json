@@ -1,0 +1,2368 @@
+{
+  "cases": [
+    {
+      "name": "adapter carrier number",
+      "steps": [
+        {
+          "source": "const r:Range.<number>=0..<5;const a=r.take(2),b=r.drop(2);`${a.start};${a.end};${b.start};${b.end};${a.end is number};${b.start is number};${String([...a])};${String([...b])};${a is ClosedRange.<number>};${b is OpenRange.<number>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;1;1;5;true;true;0,1;2,3,4;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "count carrier number",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<number>=0..=3;`${r.length};${typeof r.length};${r.length===4n}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;bigint;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "adapter carrier bigint",
+      "steps": [
+        {
+          "source": "const r:Range.<bigint>=0..<5;const a=r.take(2),b=r.drop(2);`${a.start};${a.end};${b.start};${b.end};${a.end is bigint};${b.start is bigint};${String([...a])};${String([...b])};${a is ClosedRange.<bigint>};${b is OpenRange.<bigint>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;1;1;5;true;true;0,1;2,3,4;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "count carrier bigint",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<bigint>=0..=3;`${r.length};${typeof r.length};${r.length===4n}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;bigint;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "adapter carrier uint8",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<5;const a=r.take(2),b=r.drop(2);`${a.start};${a.end};${b.start};${b.end};${a.end is uint8};${b.start is uint8};${String([...a])};${String([...b])};${a is ClosedRange.<uint8>};${b is OpenRange.<uint8>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;1;1;5;true;true;0,1;2,3,4;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "count carrier uint8",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=0..=3;`${r.length};${typeof r.length};${r.length===4n}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;bigint;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "adapter carrier int8",
+      "steps": [
+        {
+          "source": "const r:Range.<int8>=0..<5;const a=r.take(2),b=r.drop(2);`${a.start};${a.end};${b.start};${b.end};${a.end is int8};${b.start is int8};${String([...a])};${String([...b])};${a is ClosedRange.<int8>};${b is OpenRange.<int8>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;1;1;5;true;true;0,1;2,3,4;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "count carrier int8",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int8>=0..=3;`${r.length};${typeof r.length};${r.length===4n}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;bigint;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "adapter carrier uint16",
+      "steps": [
+        {
+          "source": "const r:Range.<uint16>=0..<5;const a=r.take(2),b=r.drop(2);`${a.start};${a.end};${b.start};${b.end};${a.end is uint16};${b.start is uint16};${String([...a])};${String([...b])};${a is ClosedRange.<uint16>};${b is OpenRange.<uint16>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;1;1;5;true;true;0,1;2,3,4;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "count carrier uint16",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint16>=0..=3;`${r.length};${typeof r.length};${r.length===4n}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;bigint;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "adapter carrier int16",
+      "steps": [
+        {
+          "source": "const r:Range.<int16>=0..<5;const a=r.take(2),b=r.drop(2);`${a.start};${a.end};${b.start};${b.end};${a.end is int16};${b.start is int16};${String([...a])};${String([...b])};${a is ClosedRange.<int16>};${b is OpenRange.<int16>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;1;1;5;true;true;0,1;2,3,4;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "count carrier int16",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int16>=0..=3;`${r.length};${typeof r.length};${r.length===4n}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;bigint;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "adapter carrier uint32",
+      "steps": [
+        {
+          "source": "const r:Range.<uint32>=0..<5;const a=r.take(2),b=r.drop(2);`${a.start};${a.end};${b.start};${b.end};${a.end is uint32};${b.start is uint32};${String([...a])};${String([...b])};${a is ClosedRange.<uint32>};${b is OpenRange.<uint32>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;1;1;5;true;true;0,1;2,3,4;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "count carrier uint32",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint32>=0..=3;`${r.length};${typeof r.length};${r.length===4n}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;bigint;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "adapter carrier int32",
+      "steps": [
+        {
+          "source": "const r:Range.<int32>=0..<5;const a=r.take(2),b=r.drop(2);`${a.start};${a.end};${b.start};${b.end};${a.end is int32};${b.start is int32};${String([...a])};${String([...b])};${a is ClosedRange.<int32>};${b is OpenRange.<int32>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;1;1;5;true;true;0,1;2,3,4;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "count carrier int32",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int32>=0..=3;`${r.length};${typeof r.length};${r.length===4n}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;bigint;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "adapter carrier uint64",
+      "steps": [
+        {
+          "source": "const r:Range.<uint64>=0..<5;const a=r.take(2),b=r.drop(2);`${a.start};${a.end};${b.start};${b.end};${a.end is uint64};${b.start is uint64};${String([...a])};${String([...b])};${a is ClosedRange.<uint64>};${b is OpenRange.<uint64>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;1;1;5;true;true;0,1;2,3,4;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "count carrier uint64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint64>=0..=3;`${r.length};${typeof r.length};${r.length===4n}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;bigint;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "adapter carrier int64",
+      "steps": [
+        {
+          "source": "const r:Range.<int64>=0..<5;const a=r.take(2),b=r.drop(2);`${a.start};${a.end};${b.start};${b.end};${a.end is int64};${b.start is int64};${String([...a])};${String([...b])};${a is ClosedRange.<int64>};${b is OpenRange.<int64>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;1;1;5;true;true;0,1;2,3,4;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "count carrier int64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int64>=0..=3;`${r.length};${typeof r.length};${r.length===4n}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;bigint;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "adapter carrier uint128",
+      "steps": [
+        {
+          "source": "const r:Range.<uint128>=0..<5;const a=r.take(2),b=r.drop(2);`${a.start};${a.end};${b.start};${b.end};${a.end is uint128};${b.start is uint128};${String([...a])};${String([...b])};${a is ClosedRange.<uint128>};${b is OpenRange.<uint128>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;1;1;5;true;true;0,1;2,3,4;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "count carrier uint128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint128>=0..=3;`${r.length};${typeof r.length};${r.length===4n}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;bigint;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "adapter carrier int128",
+      "steps": [
+        {
+          "source": "const r:Range.<int128>=0..<5;const a=r.take(2),b=r.drop(2);`${a.start};${a.end};${b.start};${b.end};${a.end is int128};${b.start is int128};${String([...a])};${String([...b])};${a is ClosedRange.<int128>};${b is OpenRange.<int128>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;1;1;5;true;true;0,1;2,3,4;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "count carrier int128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int128>=0..=3;`${r.length};${typeof r.length};${r.length===4n}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;bigint;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "adapter carrier float16",
+      "steps": [
+        {
+          "source": "const r:Range.<float16>=0..<5;const a=r.take(2),b=r.drop(2);`${a.start};${a.end};${b.start};${b.end};${a.end is float16};${b.start is float16};${String([...a])};${String([...b])};${a is ClosedRange.<float16>};${b is OpenRange.<float16>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;1;1;5;true;true;0,1;2,3,4;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "count carrier float16",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float16>=0..=3;`${r.length};${typeof r.length};${r.length===4n}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;bigint;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "adapter carrier float32",
+      "steps": [
+        {
+          "source": "const r:Range.<float32>=0..<5;const a=r.take(2),b=r.drop(2);`${a.start};${a.end};${b.start};${b.end};${a.end is float32};${b.start is float32};${String([...a])};${String([...b])};${a is ClosedRange.<float32>};${b is OpenRange.<float32>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;1;1;5;true;true;0,1;2,3,4;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "count carrier float32",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float32>=0..=3;`${r.length};${typeof r.length};${r.length===4n}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;bigint;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "adapter carrier float64",
+      "steps": [
+        {
+          "source": "const r:Range.<float64>=0..<5;const a=r.take(2),b=r.drop(2);`${a.start};${a.end};${b.start};${b.end};${a.end is float64};${b.start is float64};${String([...a])};${String([...b])};${a is ClosedRange.<float64>};${b is OpenRange.<float64>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;1;1;5;true;true;0,1;2,3,4;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "count carrier float64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float64>=0..=3;`${r.length};${typeof r.length};${r.length===4n}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;bigint;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange take 0",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=0..=3;const t=r.take(0n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";0;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange drop 0",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=0..=3;const t=r.drop(0n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,1,2,3;4;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange take 1",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=0..=3;const t=r.take(1n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;1;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange drop 1",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=0..=3;const t=r.drop(1n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,3;3;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange take 2",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=0..=3;const t=r.take(2n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,1;2;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange drop 2",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=0..=3;const t=r.drop(2n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2,3;2;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange take 3",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=0..=3;const t=r.take(3n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,1,2;3;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange drop 3",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=0..=3;const t=r.drop(3n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;1;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange take 6",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=0..=3;const t=r.take(6n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,1,2,3;4;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange drop 6",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=0..=3;const t=r.drop(6n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";0;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Range take 0",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<3;const t=r.take(0n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";0;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Range drop 0",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<3;const t=r.drop(0n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,1,2;3;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Range take 1",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<3;const t=r.take(1n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;1;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Range drop 1",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<3;const t=r.drop(1n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2;2;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Range take 2",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<3;const t=r.take(2n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,1;2;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Range drop 2",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<3;const t=r.drop(2n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2;1;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Range take 3",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<3;const t=r.take(3n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,1,2;3;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Range drop 3",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<3;const t=r.drop(3n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";0;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Range take 6",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<3;const t=r.take(6n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,1,2;3;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Range drop 6",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<3;const t=r.drop(6n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";0;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenClosedRange take 0",
+      "steps": [
+        {
+          "source": "const r:OpenClosedRange.<uint8>=0<..=3;const t=r.take(0n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";0;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenClosedRange drop 0",
+      "steps": [
+        {
+          "source": "const r:OpenClosedRange.<uint8>=0<..=3;const t=r.drop(0n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,3;3;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenClosedRange take 1",
+      "steps": [
+        {
+          "source": "const r:OpenClosedRange.<uint8>=0<..=3;const t=r.take(1n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;1;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenClosedRange drop 1",
+      "steps": [
+        {
+          "source": "const r:OpenClosedRange.<uint8>=0<..=3;const t=r.drop(1n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2,3;2;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenClosedRange take 2",
+      "steps": [
+        {
+          "source": "const r:OpenClosedRange.<uint8>=0<..=3;const t=r.take(2n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2;2;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenClosedRange drop 2",
+      "steps": [
+        {
+          "source": "const r:OpenClosedRange.<uint8>=0<..=3;const t=r.drop(2n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;1;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenClosedRange take 3",
+      "steps": [
+        {
+          "source": "const r:OpenClosedRange.<uint8>=0<..=3;const t=r.take(3n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,3;3;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenClosedRange drop 3",
+      "steps": [
+        {
+          "source": "const r:OpenClosedRange.<uint8>=0<..=3;const t=r.drop(3n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";0;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenClosedRange take 6",
+      "steps": [
+        {
+          "source": "const r:OpenClosedRange.<uint8>=0<..=3;const t=r.take(6n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,3;3;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenClosedRange drop 6",
+      "steps": [
+        {
+          "source": "const r:OpenClosedRange.<uint8>=0<..=3;const t=r.drop(6n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";0;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenRange take 0",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<uint8>=0<..<3;const t=r.take(0n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";0;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenRange drop 0",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<uint8>=0<..<3;const t=r.drop(0n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2;2;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenRange take 1",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<uint8>=0<..<3;const t=r.take(1n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;1;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenRange drop 1",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<uint8>=0<..<3;const t=r.drop(1n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2;1;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenRange take 2",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<uint8>=0<..<3;const t=r.take(2n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2;2;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenRange drop 2",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<uint8>=0<..<3;const t=r.drop(2n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";0;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenRange take 3",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<uint8>=0<..<3;const t=r.take(3n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2;2;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenRange drop 3",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<uint8>=0<..<3;const t=r.drop(3n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";0;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenRange take 6",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<uint8>=0<..<3;const t=r.take(6n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2;2;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OpenRange drop 6",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<uint8>=0<..<3;const t=r.drop(6n);`${String([...t])};${t.length};${t.start is uint8};${t.end is uint8};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";0;true;true;0;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide exact adapters uint64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint64>=9007199254740993..=9007199254740995;const a=r.take(2),b=r.drop(1);`${r.length};${a.end};${a.end is uint64};${b.start};${String([...b])}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;9007199254740994;true;9007199254740993;9007199254740994,9007199254740995"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide exact adapters int64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int64>=-9007199254740995..=-9007199254740993;const a=r.take(2),b=r.drop(1);`${r.length};${a.end};${a.end is int64};${b.start};${String([...b])}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;-9007199254740994;true;-9007199254740995;-9007199254740994,-9007199254740993"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide exact adapters uint128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint128>=1267650600228229401496703205377..=1267650600228229401496703205379;const a=r.take(2),b=r.drop(1);`${r.length};${a.end};${a.end is uint128};${b.start};${String([...b])}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;1267650600228229401496703205378;true;1267650600228229401496703205377;1267650600228229401496703205378,1267650600228229401496703205379"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide exact adapters int128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int128>=-1267650600228229401496703205379..=-1267650600228229401496703205377;const a=r.take(2),b=r.drop(1);`${r.length};${a.end};${a.end is int128};${b.start};${String([...b])}`; ",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;-1267650600228229401496703205378;true;-1267650600228229401496703205379;-1267650600228229401496703205378,-1267650600228229401496703205377"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed maximum uint8",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=254..=255;`${String([...r.take(2)])};${r.drop(2).length};${r.take(0).length};${r.drop(1).start is uint8};${String([...r.drop(1)])}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "254,255;0;0;true;255"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unbounded maximum prefix uint8",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint8>=255..;const t=r.take(1);`${String([...t])};${t.end is uint8}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "255;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unbounded boundary overflow uint8",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint8>=255..;r.take(2);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed maximum int8",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int8>=126..=127;`${String([...r.take(2)])};${r.drop(2).length};${r.take(0).length};${r.drop(1).start is int8};${String([...r.drop(1)])}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "126,127;0;0;true;127"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unbounded maximum prefix int8",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<int8>=127..;const t=r.take(1);`${String([...t])};${t.end is int8}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "127;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unbounded boundary overflow int8",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<int8>=127..;r.take(2);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed maximum uint64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint64>=18446744073709551614..=18446744073709551615;`${String([...r.take(2)])};${r.drop(2).length};${r.take(0).length};${r.drop(1).start is uint64};${String([...r.drop(1)])}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "18446744073709551614,18446744073709551615;0;0;true;18446744073709551615"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unbounded maximum prefix uint64",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint64>=18446744073709551615..;const t=r.take(1);`${String([...t])};${t.end is uint64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "18446744073709551615;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unbounded boundary overflow uint64",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint64>=18446744073709551615..;r.take(2);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed maximum uint128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint128>=340282366920938463463374607431768211454..=340282366920938463463374607431768211455;`${String([...r.take(2)])};${r.drop(2).length};${r.take(0).length};${r.drop(1).start is uint128};${String([...r.drop(1)])}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "340282366920938463463374607431768211454,340282366920938463463374607431768211455;0;0;true;340282366920938463463374607431768211455"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unbounded maximum prefix uint128",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint128>=340282366920938463463374607431768211455..;const t=r.take(1);`${String([...t])};${t.end is uint128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "340282366920938463463374607431768211455;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unbounded boundary overflow uint128",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint128>=340282366920938463463374607431768211455..;r.take(2);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "full uint128 lattice cardinality",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint128>=0..=340282366920938463463374607431768211455;String(r.length);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "340282366920938463463374607431768211456"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Number count above precision",
+      "steps": [
+        {
+          "source": "String((0..=9007199254740992).length);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "9007199254740993"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mixed typed endpoint length",
+      "steps": [
+        {
+          "source": "`${((0:=uint64)..<(3:=uint8)).length};${(0..<(3:=uint64)).length}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "descending adapters ..=",
+      "steps": [
+        {
+          "source": "const r=(5..=1);`${r.take(2).length};${r.drop(2).length};${String([...r.take(2)])};${String([...r.drop(2)])}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;0;;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "descending adapters ..<",
+      "steps": [
+        {
+          "source": "const r=(5..<1);`${r.take(2).length};${r.drop(2).length};${String([...r.take(2)])};${String([...r.drop(2)])}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;0;;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "descending adapters <..=",
+      "steps": [
+        {
+          "source": "const r=(5<..=1);`${r.take(2).length};${r.drop(2).length};${String([...r.take(2)])};${String([...r.drop(2)])}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;0;;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "descending adapters <..<",
+      "steps": [
+        {
+          "source": "const r=(5<..<1);`${r.take(2).length};${r.drop(2).length};${String([...r.take(2)])};${String([...r.drop(2)])}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;0;;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take rejects invalid -1",
+      "steps": [
+        {
+          "source": "(0..<3).take(-1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop rejects invalid -1",
+      "steps": [
+        {
+          "source": "(0..<3).drop(-1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take rejects invalid -1n",
+      "steps": [
+        {
+          "source": "(0..<3).take(-1n);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop rejects invalid -1n",
+      "steps": [
+        {
+          "source": "(0..<3).drop(-1n);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take rejects invalid 0.5",
+      "steps": [
+        {
+          "source": "(0..<3).take(0.5);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop rejects invalid 0.5",
+      "steps": [
+        {
+          "source": "(0..<3).drop(0.5);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take rejects invalid NaN",
+      "steps": [
+        {
+          "source": "(0..<3).take(NaN);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop rejects invalid NaN",
+      "steps": [
+        {
+          "source": "(0..<3).drop(NaN);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take rejects invalid Infinity",
+      "steps": [
+        {
+          "source": "(0..<3).take(Infinity);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop rejects invalid Infinity",
+      "steps": [
+        {
+          "source": "(0..<3).drop(Infinity);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take rejects invalid -Infinity",
+      "steps": [
+        {
+          "source": "(0..<3).take(-Infinity);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop rejects invalid -Infinity",
+      "steps": [
+        {
+          "source": "(0..<3).drop(-Infinity);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take rejects invalid (0.5:=float32)",
+      "steps": [
+        {
+          "source": "(0..<3).take((0.5:=float32));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop rejects invalid (0.5:=float32)",
+      "steps": [
+        {
+          "source": "(0..<3).drop((0.5:=float32));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take rejects kind undefined",
+      "steps": [
+        {
+          "source": "(0..<3).take(undefined);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop rejects kind undefined",
+      "steps": [
+        {
+          "source": "(0..<3).drop(undefined);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take rejects kind null",
+      "steps": [
+        {
+          "source": "(0..<3).take(null);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop rejects kind null",
+      "steps": [
+        {
+          "source": "(0..<3).drop(null);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take rejects kind \"2\"",
+      "steps": [
+        {
+          "source": "(0..<3).take(\"2\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop rejects kind \"2\"",
+      "steps": [
+        {
+          "source": "(0..<3).drop(\"2\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take rejects kind true",
+      "steps": [
+        {
+          "source": "(0..<3).take(true);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop rejects kind true",
+      "steps": [
+        {
+          "source": "(0..<3).drop(true);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take rejects kind {}",
+      "steps": [
+        {
+          "source": "(0..<3).take({});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop rejects kind {}",
+      "steps": [
+        {
+          "source": "(0..<3).drop({});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take rejects kind Symbol()",
+      "steps": [
+        {
+          "source": "(0..<3).take(Symbol());",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop rejects kind Symbol()",
+      "steps": [
+        {
+          "source": "(0..<3).drop(Symbol());",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric count 2",
+      "steps": [
+        {
+          "source": "String([...(0..<4).take(2)]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric count 2n",
+      "steps": [
+        {
+          "source": "String([...(0..<4).take(2n)]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric count (2:=uint8)",
+      "steps": [
+        {
+          "source": "String([...(0..<4).take((2:=uint8))]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric count (2:=uint128)",
+      "steps": [
+        {
+          "source": "String([...(0..<4).take((2:=uint128))]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric count (2:=float32)",
+      "steps": [
+        {
+          "source": "String([...(0..<4).take((2:=float32))]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "large count clamps before admission",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=254..=255;`${String([...r.take(2n**100n)])};${r.drop(2n**100n).length}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "254,255;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero signed count",
+      "steps": [
+        {
+          "source": "`${(0..<2).take(-0).length};${String([...(0..<2).drop(-0)])}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;0,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "0.5..<3 invalid take(0)",
+      "steps": [
+        {
+          "source": "(0.5..<3).take(0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "0.5..<3 invalid drop(0)",
+      "steps": [
+        {
+          "source": "(0.5..<3).drop(0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "0.5..<3 invalid length",
+      "steps": [
+        {
+          "source": "(0.5..<3).length;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "0..<3.5 invalid take(0)",
+      "steps": [
+        {
+          "source": "(0..<3.5).take(0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "0..<3.5 invalid drop(0)",
+      "steps": [
+        {
+          "source": "(0..<3.5).drop(0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "0..<3.5 invalid length",
+      "steps": [
+        {
+          "source": "(0..<3.5).length;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "..<3 invalid take(0)",
+      "steps": [
+        {
+          "source": "(..<3).take(0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "..<3 invalid drop(0)",
+      "steps": [
+        {
+          "source": "(..<3).drop(0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "..<3 invalid length",
+      "steps": [
+        {
+          "source": "(..<3).length;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": ".. invalid take(0)",
+      "steps": [
+        {
+          "source": "(..).take(0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": ".. invalid drop(0)",
+      "steps": [
+        {
+          "source": "(..).drop(0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": ".. invalid length",
+      "steps": [
+        {
+          "source": "(..).length;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Infinity.. invalid take(0)",
+      "steps": [
+        {
+          "source": "(Infinity..).take(0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Infinity.. invalid drop(0)",
+      "steps": [
+        {
+          "source": "(Infinity..).drop(0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Infinity.. invalid length",
+      "steps": [
+        {
+          "source": "(Infinity..).length;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "-Infinity..<3 invalid take(0)",
+      "steps": [
+        {
+          "source": "(-Infinity..<3).take(0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "-Infinity..<3 invalid drop(0)",
+      "steps": [
+        {
+          "source": "(-Infinity..<3).drop(0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "-Infinity..<3 invalid length",
+      "steps": [
+        {
+          "source": "(-Infinity..<3).length;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "0..<Infinity has no length",
+      "steps": [
+        {
+          "source": "(0..<Infinity).length;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "0..<-Infinity has no length",
+      "steps": [
+        {
+          "source": "(0..<-Infinity).length;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "0.. has no length",
+      "steps": [
+        {
+          "source": "(0..).length;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "positive infinite endpoint preserved",
+      "steps": [
+        {
+          "source": "const r=(0..<Infinity);const d=r.drop(3);`${d.start};${d.end};${d.endBound};${String([...r.take(3)])}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2;Infinity;1;0,1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negative infinite endpoint stays empty",
+      "steps": [
+        {
+          "source": "const r=(0..<-Infinity);`${String([...r.take(3)])};${r.drop(3)[Symbol.iterator]().next().done};${r.drop(3).end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";true;-Infinity"
+          }
+        }
+      ]
+    },
+    {
+      "name": "absent end has absent bound",
+      "steps": [
+        {
+          "source": "const d=(0..).drop(2);`${d.start};${d.end};${d.endBound};${String([...d.take(2)])}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;undefined;undefined;2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mixed endpoint domain preserved",
+      "steps": [
+        {
+          "source": "let end:uint8=5;const r=(0..<end),t=r.take(2);`${t.end is uint8};${t.start is number};${t is ClosedRange.<number|uint8>};${t[Symbol.iterator]().next().value is uint8}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored union survives replaced end",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8|uint16>=(0:=uint8)..<(5:=uint16);const t=r.take(2);`${t is ClosedRange.<uint8|uint16>};${t.end is uint8}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negative zero retained",
+      "steps": [
+        {
+          "source": "const r=((-0)..<3);const a=r.take(1),b=r.drop(1),z=r.take(0);`${Object.is(a.start,-0)};${Object.is(a.end,-0)};${Object.is(b.start,-0)};${Object.is(z.end,-0)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "adapters are algebraic not enumerating",
+      "steps": [
+        {
+          "source": "const r=(9007199254740992..);const d=r.drop(3n);`${d.start};${r.take(1).end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "9007199254740994;9007199254740992"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inexact Number cut fails",
+      "steps": [
+        {
+          "source": "(9007199254740992..).take(2);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inexact float16 cut fails",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<float16>=2048..;r.drop(2);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "exact length does not run iteration",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float16>=2048..=2050;String(r.length);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "public properties unused",
+      "steps": [
+        {
+          "source": "const r=(0..<5);for(const k of [\"start\",\"end\",\"startBound\",\"endBound\"])Object.defineProperty(r,k,{get(){throw new Error(\"getter\");}});`${r.length};${String([...r.take(2)])};${String([...r.drop(2)])}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5;0,1;2,3,4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "no count coercion",
+      "steps": [
+        {
+          "source": "let calls=0;let ok=false;try{(0..<3).take({valueOf(){calls++;return 2;}});}catch(e){ok=e instanceof TypeError;}`${ok};${calls}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failure source reusable",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint8>=254..;let ok=false;try{r.take(3);}catch(e){ok=e instanceof RangeError;}`${ok};${r.start};${String([...r.take(2)])}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;254;254,255"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic adapters preserve specializations",
+      "steps": [
+        {
+          "source": "function cut<T:type>(a:T,b:T){return (a..<b).take(2);}const a=cut.<uint8>(0,4),b=cut.<float32>(0,4);`${a.end is uint8};${b.end is float32};${a.length};${b.length}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;2;2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata successful cut",
+      "steps": [
+        {
+          "source": "type Bounds={min:number,max:number};meta Bounds{default={min:0,max:0};subtype(a,b){return true;}validate(v,m){return Number(v)>=m.min&&Number(v)<=m.max;}}type Small=uint8.<{min:0,max:2}>;const r:RangeFrom.<Small>=(1:=Small)..;const a=r.take(2);`${a.end};${a.end is Small};${a is ClosedRange.<Small>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata invalid cut",
+      "steps": [
+        {
+          "source": "type Bounds={min:number,max:number};meta Bounds{default={min:0,max:0};subtype(a,b){return true;}validate(v,m){return Number(v)>=m.min&&Number(v)<=m.max;}}type Small=uint8.<{min:0,max:2}>;const r:RangeFrom.<Small>=(1:=Small)..;r.take(3);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata failure source reusable",
+      "steps": [
+        {
+          "source": "type Bounds={min:number,max:number};meta Bounds{default={min:0,max:0};subtype(a,b){return true;}validate(v,m){return Number(v)>=m.min&&Number(v)<=m.max;}}type Small=uint8.<{min:0,max:2}>;const r:RangeFrom.<Small>=(1:=Small)..;let ok=false;try{r.drop(3);}catch(e){ok=e instanceof TypeError;}`${ok};${r.start};${r.take(2).end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;1;2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "adapters preserve reference liveness",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];let ref r=a[0];const t=(0..<a.length).take(1);a.length=0;let ok=false;try{r;}catch(e){ok=e instanceof TypeError;}`${t.length};${ok}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "cross Script recovery",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint8>=254..;r.take(3);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        },
+        {
+          "source": "`${r.start};${String([...r.take(2)])}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "254;254,255"
+          }
+        }
+      ]
+    },
+    {
+      "name": "one-item mixed take retains carrier",
+      "steps": [
+        {
+          "source": "let end:uint8=3;const a=(0..<end).take(1);`${a.end is uint8};${a[Symbol.iterator]().next().value is uint8};${a is ClosedRange.<number|uint8>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed count returned to adapter",
+      "steps": [
+        {
+          "source": "const r=(0..<4);`${String([...r.take(r.length)])};${r.drop(r.length).length}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,1,2,3;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static BigInt length dot",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<3;let x:string=r.length;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "static BigInt length key",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<3;let x:string=r[\"length\"];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "static BigInt length generic",
+      "steps": [
+        {
+          "source": "function f<T:type>(r:Range.<T>){let x:string=r.length;}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "BigInt typed length consumer",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<3;let x:bigint=r.length;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "abrupt metadata adapter recovery",
+      "steps": [
+        {
+          "source": "let fail=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return true;}validate(v,m){if(fail)throw new Error(\"admission\");return true;}}type T=uint8.<{flag:true}>;const r:RangeFrom.<T>=(0:=T)..;fail=true;let ok=false;try{r.take(2);}catch(e){ok=e instanceof Error;}fail=false;`${ok};${r.start};${r.take(2).end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;0;1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unchanged endpoint skips admission",
+      "steps": [
+        {
+          "source": "let fail=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return true;}validate(v,m){if(fail)throw new Error(\"admission\");return true;}}type T=uint8.<{flag:true}>;const r:RangeFrom.<T>=(0:=T)..;fail=true;`${r.take(1).end};${r.take(0).length};${r.drop(0).start}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata cannot rescale cut",
+      "steps": [
+        {
+          "source": "type Tag={tag:string};meta Tag{default={tag:\"\"};subtype(a,b){return a.tag===b.tag;}}primitive uint8{operator uint8.<Tag>(){return this+(1:=uint8);}}type U=uint8.<{tag:\"U\"}>;const r:RangeFrom.<U>=(0:=U)..;let ok=false;try{r.take(2);}catch(e){ok=e instanceof RangeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint error precedes invalid count",
+      "steps": [
+        {
+          "source": "let ok=false;try{(0.5..<3).take(-1);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid count on empty lattice",
+      "steps": [
+        {
+          "source": "(3..<0).take(-1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid count on empty lattice drop",
+      "steps": [
+        {
+          "source": "(3..<0).drop(\"1\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "destructuring assignment BigInt length",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<3;let x:string;({length:x}=r);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "destructuring assignment BigInt length accepted",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<3;let x:bigint;({length:x}=r);String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    }
+  ]
+}

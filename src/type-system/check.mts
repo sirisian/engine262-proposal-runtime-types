@@ -6164,6 +6164,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // Library members have the same contract for dot and known String keys.
   // This describes the typed view, not the identity of the runtime method.
   const collectionMemberType = (receiver: Known, key: string | SymbolValue): Known => {
+    // Numeric range cardinality has one exact, item-independent result type.
+    if (key === 'length' && receiver?.Kind === 'nominal' && isRangeFamilyName(receiver.LibraryName)) return makePrimitive('bigint');
     // Checked before the String-key and type-argument gates: the absence is a
     // fact of WeakMap and WeakSet themselves, and `@@iterator` is in the table.
     if (weakCollectionRefusesRead(receiver, key)) {
@@ -6180,6 +6182,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // returns only value contracts and emits no missing-key/bounds diagnostics.
   const sequencePropertyContribution = (receiver: Known, key: string | SymbolValue): Known => {
     if (typeof key !== 'string' || !receiver) return null;
+    if (key === 'length' && receiver.Kind === 'nominal' && isRangeFamilyName(receiver.LibraryName)) return makePrimitive('bigint');
     if (receiver.Kind === 'array') {
       if (key === 'length' || key === 'capacity') return indexTypeRecord();
       if (!/^(0|[1-9][0-9]*)$/.test(key)) return null;
@@ -19393,6 +19396,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           const receiver = staticType(m.MemberExpression);
+          if (m.IdentifierName.name === 'length' && receiver?.Kind === 'nominal'
+              && isRangeFamilyName(receiver.LibraryName)) return makePrimitive('bigint');
           // A PROMISE receiver: its two arguments are the resolution and the
           // rejection type, and a handler's parameter is one of them.
           // Placed beside `receiver` rather than inside the ARRAY arm below,

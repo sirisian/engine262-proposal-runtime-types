@@ -190,7 +190,7 @@ describe('the family, its removed forms, and its edges', () => {
   test('precedence: ShortCircuit operands, member access, spread, pipeline', () => {
     expect(evaluated('const a = null, b = 1; ((a ?? b)..<3).start;')).toBe('1');
     expect(evaluated('const arr = [1, 2, 3]; (0..<arr.length).end;')).toBe('3');
-    expect(evaluated('(0..<10).length;')).toBe('10');
+    expect(evaluated('String((0..<10).length);')).toBe('10');
     expect(evaluated('const a = [...0..<3]; a.join(",");')).toBe('0,1,2');
   });
 

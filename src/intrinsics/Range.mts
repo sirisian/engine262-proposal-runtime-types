@@ -10,9 +10,10 @@ import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { exactNumericValue } from '../abstract-ops/testing-comparison.mts';
 import { type Mutable } from '../utils/language.mts';
 import { CreateNumericRangeIterator, NumericRangeIteratorNext } from '../type-system/range-iteration.mts';
+import { NumericRangeLength, NumericRangeTakeOrDrop } from '../type-system/range-adapters.mts';
 import { RangeEndpointCompare, RangeIsEmpty, rangeContainsRange, rangeIntersect } from '../type-system/range-selection.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
-import { surroundingAgent, Throw, Q, Get, Call, IsCallable, ToIntegerOrInfinity } from '#self';
+import { surroundingAgent, Throw, Q, Get, Call, IsCallable } from '#self';
 import { boundValue, intervalValue } from './RangeEnums.mts';
 import {
   rangeScale, scaleFactor,
@@ -20,7 +21,7 @@ import {
 import {
 
   OrdinaryObjectCreate,
-  F, R,
+  R,
   type OrdinaryObject,
   Realm,
 } from '#self';
@@ -119,45 +120,7 @@ function* RangeProto_lengthGetter(_args: Arguments, { thisValue }: FunctionCallC
   if (!self) {
     return Throw.TypeError('$1 is not a range', thisValue);
   }
-  if (self.RangeStart === undefined || self.RangeEnd === undefined) {
-    return Throw.TypeError('a range without both endpoints has no length');
-  }
-  const start = (endpointOf(self.RangeStart) as number | bigint);
-  const end = (endpointOf(self.RangeEnd) as number | bigint);
-  // A bigint endpoint is an integer by construction; the test is the Number one.
-  if (typeof start === 'number' && (!Number.isInteger(start) || !Number.isInteger(end as number))) {
-    return Throw.TypeError('a range with a non-integer endpoint has no length');
-  }
-  // The count of members, one adjustment per open endpoint: [a,b] holds
-  // b - a + 1, [a,b) and (a,b] hold b - a, and (a,b) holds b - a - 1.
-  //
-  // FEEDBACK: #sec-ranges gives no length rule for the open forms, having been
-  // written when only the closed and half-open ones had literals.
-  // #sec-ranges: the count is "one more than the difference of its endpoints
-  // less one for each endpoint whose bound excludes its own value". The
-  // arithmetic is the ELEMENT TYPE's, so a bigint range counts in bigint and
-  // answers a BigInt - a count that a Number could not always hold.
-  if (typeof start === 'bigint' && typeof end === 'bigint') {
-    let bigSpan = end - start + 1n;
-    if (self.RangeStartBound === 'open') {
-      bigSpan -= 1n;
-    }
-    if (self.RangeEndBound === 'open') {
-      bigSpan -= 1n;
-    }
-    return Value(bigSpan > 0n ? bigSpan : 0n);
-  }
-  if (typeof start !== 'number' || typeof end !== 'number') {
-    return Throw.TypeError('a range with a non-integer endpoint has no implicit step; use step(by)');
-  }
-  let span = end - start + 1;
-  if (self.RangeStartBound === 'open') {
-    span -= 1;
-  }
-  if (self.RangeEndBound === 'open') {
-    span -= 1;
-  }
-  return F(span > 0 ? span : 0);
+  return yield* NumericRangeLength(self);
 }
 
 /** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
@@ -182,7 +145,7 @@ function* RangeProto_isFullGetter(_args: Arguments, { thisValue }: FunctionCallC
 }
 
 /**
- * Legacy arithmetic endpoint reader for length and range-returning take/drop.
+ * Legacy endpoint reader for arithmetic, random, and static range analysis.
  * Numeric cursors use range-iteration.mts's exact reader; ordering operations
  * use range-selection.mts. This reader does not certify those other arithmetic
  * consumers for wide typed integers or custom ordered domains.
@@ -406,66 +369,11 @@ function* RangeProto_find(args: Arguments, { thisValue }: FunctionCallContext): 
   return yield* delegateToIterator('find', args, thisValue);
 }
 
-/**
- * ranges.md: `take` and `drop` stay in the FAMILY, where the other nine leave it.
- *
- * They are CLOSED over an integer range: the first n values of a contiguous
- * range are a contiguous range, and so are the rest after the first n. That is
- * the same test `intersect` passes and `step` fails, and it is why these two
- * return a `Range` where `map` and `filter` return an `Iterator` - closure, not
- * uniformity. `(0..<10).take(3).contains(1)` therefore still answers.
- *
- * The result is always CLOSED-OPEN, which normalizes an open start away:
- * `(0<..<10).take(3)` is `1..<4`, not `0<..=3`. Both denote {1, 2, 3}; the
- * closed-open spelling is the one that names the values it actually holds.
- */
+/** Range adapters compute exact unit-lattice boundaries without enumeration. */
 function* takeOrDrop(which: 'take' | 'drop', args: Arguments, thisValue: Value): ValueEvaluator {
   const self = thisRange(thisValue);
-  if (!self) {
-    return Throw.TypeError('$1 is not a range', thisValue);
-  }
-  const rawStart = endpointOf(self.RangeStart);
-  if (rawStart === undefined) {
-    // No first value to count from, which is why a range with no start does not
-    // iterate either.
-    return Throw.TypeError('a range with a non-integer or missing endpoint has no implicit step; use step(by)');
-  }
-  const rawEnd = endpointOf(self.RangeEnd);
-  const big = typeof rawStart === 'bigint';
-  if (!big && (!Number.isInteger(rawStart) || (typeof rawEnd === 'number' && Number.isFinite(rawEnd) && !Number.isInteger(rawEnd)))) {
-    return Throw.TypeError('a range with a non-integer or missing endpoint has no implicit step; use step(by)');
-  }
-  const limitValue = Q(yield* ToIntegerOrInfinity(args[0] ?? Value.undefined));
-  if (limitValue < 0) {
-    return Throw.RangeError('$1 is out of range for $2', args[0] ?? Value.undefined, Value('take'));
-  }
-  // The first value the range yields: its start, or one step in where the start
-  // is open - the same rule the iterator's first index follows.
-  const one = big ? 1n : 1;
-  const first = self.RangeStartBound === 'open'
-    ? (rawStart as number) + (one as number)
-    : rawStart;
-  // The exclusive end, so the clamp below is one comparison rather than two.
-  const endExclusive = rawEnd === undefined || (typeof rawEnd === 'number' && !Number.isFinite(rawEnd))
-    ? undefined
-    : (self.RangeEndBound === 'open' ? rawEnd : (rawEnd as number) + (one as number));
-  const limit = big ? BigInt(limitValue) : limitValue;
-  const shifted = (first as number) + (limit as number);
-  const clamp = (v: number | bigint) => (endExclusive === undefined ? v : (v < endExclusive ? v : endExclusive));
-  const realmRec = surroundingAgent.currentRealmRecord;
-  const asValue = (v: number | bigint) => (typeof v === 'bigint' ? Value(v) : F(v));
-  if (which === 'take') {
-    const end = clamp(shifted);
-    return CreateRangeObject(asValue(first), asValue(end), 'closed', 'open', realmRec);
-  }
-  const newFirst = clamp(shifted);
-  return CreateRangeObject(
-    asValue(newFirst),
-    endExclusive === undefined ? undefined : asValue(endExclusive),
-    'closed',
-    'open',
-    realmRec,
-  );
+  if (!self) return Throw.TypeError('$1 is not a range', thisValue);
+  return yield* NumericRangeTakeOrDrop(self, which, args[0] ?? Value.undefined, surroundingAgent.currentRealmRecord);
 }
 
 /** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
