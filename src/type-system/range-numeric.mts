@@ -4,14 +4,15 @@ import { Q } from '../completion.mts';
 import { Throw } from '../host-defined/error-messages.mts';
 import { RequireType } from '../abstract-ops/runtime-types.mts';
 import { exactNumericValue, exactNumericEquals } from '../abstract-ops/testing-comparison.mts';
-import { type RangeEndpoint } from '../intrinsics/Range.mts';
+import { type RangeEndpoint, type RangeObject } from '../intrinsics/Range.mts';
 import { CreateRationalValue } from '../intrinsics/Rational.mts';
 import { CreateFloat128Value, isFloat128Object } from '../intrinsics/Float128.mts';
 import { CreateDecimalValue, CreateDecimalSpecial, DecimalPrecision, DecimalExponentRange, ReduceDecimal, isDecimalObject } from '../intrinsics/Decimal.mts';
 import type { Realm } from '../execution-context/Realm.mts';
 import type { TypeRecord } from './records.mts';
-import { fitsNumericType } from './runtime.mts';
+import { fitsNumericType, RuntimeTypeOf } from './runtime.mts';
 import { wrapToType } from './arithmetic.mts';
+import { SameType } from './relations.mts';
 
 type NumericBase = Extract<TypeRecord, { Kind: 'primitive' }>;
 export type Fraction = { n: bigint; d: bigint };
@@ -19,6 +20,31 @@ export type Fraction = { n: bigint; d: bigint };
 export function numericBase(type: TypeRecord | undefined): NumericBase | undefined {
   if (type?.Kind === 'parameterized') return numericBase(type.Base);
   return type?.Kind === 'primitive' && ['number', 'bigint', 'int', 'uint', 'float16', 'float32', 'float64', 'float128', 'decimal32', 'decimal64', 'decimal128', 'rational'].includes(type.Name) ? type : undefined;
+}
+
+/** One common concrete coordinate domain, independent of the endpoints selected
+ * by the operator. An erased any contributes its actual endpoint types; a full
+ * any contributes no carrier. Unions never pick a member by value or position.
+ */
+export function* NumericRangeDomain(a: RangeObject, b: RangeObject): PlainEvaluator<TypeRecord> {
+  let carrier: TypeRecord | undefined;
+  for (const range of [a, b]) {
+    const domain = (RuntimeTypeOf(range) as Extract<TypeRecord, { Kind: 'nominal' }>).Arguments[0] as TypeRecord;
+    if (domain.Kind !== 'any' && !numericBase(domain)) return Throw.TypeError('interval arithmetic requires one concrete numeric endpoint domain');
+    const types: TypeRecord[] = domain.Kind === 'any' ? [] : [domain];
+    for (const endpoint of [range.RangeStart, range.RangeEnd]) {
+      if (endpoint === undefined) continue;
+      const value = exactNumericValue(endpoint);
+      const type = RuntimeTypeOf(endpoint);
+      if (!numericBase(type) || !value || (value.kind !== 'finite' && value.kind !== 'infinity')) return Throw.TypeError('interval arithmetic requires ordered numeric endpoints');
+      types.push(type);
+    }
+    for (const type of types) {
+      if (carrier && !SameType(carrier, type)) return Throw.TypeError('interval arithmetic requires matching numeric endpoint types');
+      carrier = type;
+    }
+  }
+  return carrier ?? { Kind: 'any' };
 }
 
 export function numericDomain(type: TypeRecord): boolean {

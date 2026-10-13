@@ -5,37 +5,10 @@ import { exactNumericValue } from '../abstract-ops/testing-comparison.mts';
 import { CreateRangeObject, type RangeObject, type RangeEndpoint, type RangeBound } from '../intrinsics/Range.mts';
 import type { Realm } from '../execution-context/Realm.mts';
 import type { TypeRecord } from './records.mts';
-import { RuntimeTypeOf } from './runtime.mts';
-import { SameType } from './relations.mts';
 import { RangeIsEmpty } from './range-selection.mts';
-import { numericBase, negativeZero, numericRangeValue, numericRangeInfinity } from './range-numeric.mts';
+import { NumericRangeDomain, negativeZero, numericRangeValue, numericRangeInfinity } from './range-numeric.mts';
 
 type Edge = { value: RangeEndpoint | undefined; bound: RangeBound | undefined };
-
-/** One common concrete coordinate domain, independent of the endpoints selected
- * by the operator. An erased any contributes its actual endpoint types; a full
- * any contributes no carrier. Unions never pick a member by value or position.
- */
-function* commonDomain(a: RangeObject, b: RangeObject): PlainEvaluator<TypeRecord> {
-  let carrier: TypeRecord | undefined;
-  for (const range of [a, b]) {
-    const domain = (RuntimeTypeOf(range) as Extract<TypeRecord, { Kind: 'nominal' }>).Arguments[0] as TypeRecord;
-    if (domain.Kind !== 'any' && !numericBase(domain)) return Throw.TypeError('interval addition requires one concrete numeric endpoint domain');
-    const types: TypeRecord[] = domain.Kind === 'any' ? [] : [domain];
-    for (const endpoint of [range.RangeStart, range.RangeEnd]) {
-      if (endpoint === undefined) continue;
-      const value = exactNumericValue(endpoint);
-      const type = RuntimeTypeOf(endpoint);
-      if (!numericBase(type) || !value || (value.kind !== 'finite' && value.kind !== 'infinity')) return Throw.TypeError('interval addition requires ordered numeric endpoints');
-      types.push(type);
-    }
-    for (const type of types) {
-      if (carrier && !SameType(carrier, type)) return Throw.TypeError('interval addition requires matching numeric endpoint types');
-      carrier = type;
-    }
-  }
-  return carrier ?? { Kind: 'any' };
-}
 
 /** Lower result first, including admission, then upper result. Absent inputs
  * supply no bound. Indeterminate explicit infinity arithmetic is a failure,
@@ -66,7 +39,7 @@ function* combine(x: Edge, y: Edge, subtract: boolean, upper: boolean, domain: T
 
 /** sec-additive-range-arithmetic: validate, empty image, lower/upper, publish. */
 export function* NumericRangeAdd(a: RangeObject, b: RangeObject, subtract: boolean, realm: Realm): ValueEvaluator {
-  const domain = Q(yield* commonDomain(a, b));
+  const domain = Q(yield* NumericRangeDomain(a, b));
   for (const range of [a, b]) {
     if (Q(yield* RangeIsEmpty(range))) return CreateRangeObject(range.RangeStart, range.RangeEnd, range.RangeStartBound, range.RangeEndBound, realm, domain);
   }

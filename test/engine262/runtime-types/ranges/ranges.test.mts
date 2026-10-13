@@ -264,9 +264,8 @@ test('a product bound is exclusive only where EVERY attaining product is', () =>
   // The greatest is two, attained only by `1 * 2`, and 2 is never reached, so the high bound is
   // open and the result is `0..<2`.
   //
-  // Unspecified: the specification states no arithmetic over ranges (`+`, `-`, unary `-`, `*`, `/`).
-  // These tests pin the engine's, which computes the point-set result: a result bound is exclusive
-  // only where every product attaining it involves an exclusive source bound.
+  // sec-multiplicative-range-arithmetic also accounts for interior attainment
+  // of constant zero/infinity images; this case has a closed zero corner.
   expect(evaluated('String((0..=1) * (0..<2) |> %.endBound === Range.Bound.Open);')).toBe('true');
   expect(evaluated('const r = (0..=1) * (0..<2); r.start + "," + r.end;')).toBe('0,2');
 });
