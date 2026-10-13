@@ -1,4 +1,5 @@
 import { MetadataStorageKey, MetadataKey, MetadataKeys, MetadataEntries } from '../type-system/metadata-keys.mts';
+import { isRegExpObject } from '../intrinsics/RegExp.mts';
 import type { CapturedTypeContext } from '../type-system/runtime.mts';
 import { RawOperatorResultType } from '../type-system/operator-result.mts';
 import { publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, type StructuralStorageAdmission } from '../type-system/runtime.mts';
@@ -200,7 +201,7 @@ function StructuralStorageEstablished(value: Value, type: TypeRecord): boolean {
     const own = value.properties.get(propertyKeyValue(property.key));
     const backing = typed?.get(property.key)?.TypeRecord;
     if (!backing) {
-      if (property.optional && !own && value.Prototype === Value.null) continue;
+      if (property.optional && !own && 'Prototype' in value && value.Prototype === Value.null) continue;
       return false;
     }
     if (!IsSubtype(backing, property.type, [])) return false;
@@ -3177,7 +3178,7 @@ export function* SnapshotMetadataValue(value: Value, recordRoot = false, recordD
         } else {
           const key = task.keys[index]!;
           const desc = Q(yield* task.value.GetOwnProperty(key));
-          if (!desc || desc.Enumerable !== Value.true) continue;
+          if (!(desc instanceof Descriptor) || desc.Enumerable !== Value.true) continue;
           const child = Q(yield* Get(task.value, key));
           tasks.push({ kind: 'value', value: child, store: (snapshot) => {
             task.out[MetadataStorageKey(key instanceof JSStringValue ? key.stringValue() : key)] = snapshot;
@@ -3189,7 +3190,7 @@ export function* SnapshotMetadataValue(value: Value, recordRoot = false, recordD
       if (recordRoot && current === value && active.size === 0
           && (!(current instanceof ObjectValue) || isRationalObject(current) || isDecimalObject(current)
             || isFloat128Object(current) || isComplexObject(current) || isRangeObject(current)
-            || current.OriginalSource !== undefined || Q(IsArray(current)) === Value.true)) {
+            || isRegExpObject(current) || Q(IsArray(current)) === Value.true)) {
         return Throw.TypeError('$1 must be a record', Value(recordDescription));
       }
       if (task.endpoint && !IsMetadataAtom(current)) {
@@ -3213,14 +3214,14 @@ export function* SnapshotMetadataValue(value: Value, recordRoot = false, recordD
         if (current.RangeStart !== undefined) tasks.push({ kind: 'value', value: current.RangeStart, endpoint: true, store: (snapshot) => {
           marker.start = snapshot;
         } });
-      } else if (current.OriginalSource !== undefined && current.OriginalFlags !== undefined) {
+      } else if (isRegExpObject(current)) {
         task.store(Object.freeze(Object.assign(Object.create(null), { __pattern: true,
           source: current.OriginalSource.stringValue(), flags: current.OriginalFlags.stringValue() })));
       } else {
         // No user property, prototype traversal, coercion or Proxy trap decides
         // whether an unsupported object can impersonate a record or an atom.
         if (IsComposite(current) || ArraySpanBackingOf(current) !== undefined || ArrayViewBackingOf(current) !== undefined
-            || IsCallable(current) === Value.true || current.ConstructedBy.length > 0 || current.PrivateElements.length > 0
+            || IsCallable(current) || current.ConstructedBy.length > 0 || current.PrivateElements.length > 0
             || current.internalSlotsList.some((slot) => slot !== 'Prototype' && slot !== 'Extensible')
             || current.Get !== ObjectValue.prototype.Get || current.GetOwnProperty !== ObjectValue.prototype.GetOwnProperty
             || current.OwnPropertyKeys !== ObjectValue.prototype.OwnPropertyKeys) {
@@ -5596,7 +5597,7 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, optio
       ? { TypeParameters: typeParameterRecordsOf(genericTypeParameters).map((r) => ({ ...r,
         Constraint: (genericFrame?.get(r.Name) as { Constraint?: TypeRecord } | undefined)?.Constraint ?? r.Constraint,
         Captures: r.Captures?.map((capture) => ({ ...capture,
-          Type: instantiateGenericCapture(capture, capturedFrame) })),
+          Type: instantiateGenericCapture(capture, capturedFrame ?? undefined) })),
         Parameter: genericFrame?.get(r.Name) })) }
       : {}),
   };

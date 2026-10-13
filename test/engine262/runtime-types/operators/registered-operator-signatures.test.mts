@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
-import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, ObjectValue, TypeDiagnosticOf } from '#self';
+import { nativeErrorClass, errorPrototypeOf } from '../error-observer.mts';
+import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf } from '#self';
 
 const corpus = JSON.parse(readFileSync(new URL('../conformance/registered-operator-signatures.json', import.meta.url), 'utf8')) as {
   cases: { name: string; steps: { source: string; expected: Record<string, unknown>; messageIncludes?: string }[] }[];
@@ -22,9 +23,7 @@ for (const { name, steps } of corpus.cases) {
         };
         const completion = EnsureCompletion(realm.evaluateScriptSkipDebugger(source));
         const diagnostic = TypeDiagnosticOf(completion.Value);
-        const errorClass = completion.Type === 'throw' && completion.Value instanceof ObjectValue
-          ? ['Error', 'SyntaxError', 'TypeError', 'RangeError', 'ReferenceError', 'StaticTypeError'].find((kind) =>
-            completion.Value.Prototype === realm.Intrinsics[`%${kind}.prototype%`]) : undefined;
+        const errorClass = completion.Type === 'throw' ? nativeErrorClass(completion.Value, realm) : undefined;
         expect({ completion: completion.Type, bodyEntered, scriptBodies, errorClass, diagnostic,
           value: completion.Type === 'normal' ? (completion.Value as { stringValue?: () => string })?.stringValue?.() : undefined }).toMatchObject(expected);
         if (messageIncludes) expect((completion.Value as { HostDefinedMessageString?: string }).HostDefinedMessageString).toContain(messageIncludes);
@@ -55,7 +54,7 @@ for (const { name, seed, body, phase } of seeds) {
     const result = EnsureCompletion(realm.evaluateScriptSkipDebugger(`Function(${JSON.stringify(body)})();`));
     expect(result.Type).toBe(phase ? 'throw' : 'normal');
     if (phase) {
-      expect((result.Value as ObjectValue).Prototype).toBe(realm.Intrinsics['%StaticTypeError.prototype%']);
+      expect(errorPrototypeOf(result.Value)).toBe(realm.Intrinsics['%StaticTypeError.prototype%']);
       expect(TypeDiagnosticOf(result.Value)).toMatchObject({ rule: 'rt-assignability', phase });
     }
   });
@@ -72,7 +71,7 @@ for (const { name, seed, body, phase } of seeds) {
       const compiled = realm.compileModule(body);
       if (compiled.Type === 'throw') {
         expect(phase).toBe('static');
-        expect((compiled.Value as ObjectValue).Prototype).toBe(realm.Intrinsics['%StaticTypeError.prototype%']);
+        expect(errorPrototypeOf(compiled.Value)).toBe(realm.Intrinsics['%StaticTypeError.prototype%']);
         expect(TypeDiagnosticOf(compiled.Value)).toMatchObject({ rule: 'rt-assignability', phase });
         expect(entered).toBe(false);
         return;
@@ -83,10 +82,9 @@ for (const { name, seed, body, phase } of seeds) {
           clearTimeout(timer);
           try {
             const completion = EnsureCompletion(value);
-            const promise = completion.Value as ObjectValue;
-            const status = completion.Type === 'throw' ? 'rejected' : promise.PromiseState;
-            const error = completion.Type === 'throw' ? completion.Value : promise.PromiseResult;
-            resolve({ status, diagnostic: TypeDiagnosticOf(error), errorClass: error instanceof ObjectValue ? error.Prototype : undefined });
+            const status = completion.Type === 'throw' ? 'rejected' : completion.Value.PromiseState;
+            const error = completion.Type === 'throw' ? completion.Value : completion.Value.PromiseResult;
+            resolve({ status, diagnostic: TypeDiagnosticOf(error), errorClass: errorPrototypeOf(error) });
           } catch (error) {
             reject(error);
           }

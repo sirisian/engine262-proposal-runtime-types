@@ -27,11 +27,11 @@ function evidence(environment: EnvironmentRecord, name: JSStringValue): Constant
   let key = name;
   const seen = new Set<object>();
   while (at) {
-    const binding = RefBindingHolder(at, key)?.bindings.get(key);
+    const binding: ReturnType<DeclarativeEnvironmentRecord['bindings']['get']> = RefBindingHolder(at, key)?.bindings.get(key);
     if (!binding || !binding.initialized || binding.refLocation || seen.has(binding)) return {};
     seen.add(binding);
     if (binding.indirect) {
-      const [module, target] = (binding as unknown as { target: [AbstractModuleRecord, JSStringValue] }).target;
+      const [module, target]: [AbstractModuleRecord, JSStringValue] = (binding as unknown as { target: [AbstractModuleRecord, JSStringValue] }).target;
       at = module.Environment;
       key = target;
       continue;

@@ -1611,7 +1611,7 @@ export function* Evaluate_MetaDeclaration(node: ParseNode.MetaDeclaration, claim
   // leave an owner, any subset of its keys, or callable protocol hooks behind.
   const hooks = new Map<string, Value>();
   let defaultSnapshot: Value | undefined;
-  function* evaluateDefault(expression: ParseNode.AssignmentExpression): PlainEvaluator<Value | undefined> {
+  function* evaluateDefault(expression: ParseNode.AssignmentExpressionOrHigher): PlainEvaluator<Value | undefined> {
     const v = Q(yield* GetValue(Q(yield* Evaluate(expression))));
     if (claimShape?.Kind !== 'object') return undefined;
     if (!(v instanceof ObjectValue)) {

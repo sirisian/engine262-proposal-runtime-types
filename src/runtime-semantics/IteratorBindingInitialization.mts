@@ -19,7 +19,7 @@ import { EnforceAnnotation, IsOfTypeNode, CheckedConvertValue } from '../abstrac
 import { CreateListIteratorRecord } from '../abstract-ops/iterator-operations.mts';
 import { TypeNodeToTypeRecord, RuntimeTypeOf } from '../type-system/runtime.mts';
 import { SameType } from '../type-system/relations.mts';
-import { restElementType, displayType } from '../type-system/records.mts';
+import { displayType } from '../type-system/records.mts';
 import { AssignRuntimeArguments } from '../abstract-ops/argument-distribution.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';

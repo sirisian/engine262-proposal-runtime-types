@@ -1,6 +1,6 @@
 import {
   Value, Descriptor, ObjectValue, JSStringValue, wellKnownSymbols, type Arguments,
-  ReferenceValue, ReferenceRunValue,
+  ReferenceValue, ReferenceRunValue, UndefinedValue,
 } from '../value.mts';
 import { Evaluate, type PlainEvaluator } from '../evaluator.mts';
 import { Q, X } from '../completion.mts';
@@ -364,13 +364,13 @@ export function* ArgumentListEvaluationItems(args: ParseNode.Arguments): PlainEv
         for (const key of keys) {
           if (!(key instanceof JSStringValue)) continue;
           const desc = Q(yield* spreadObj.GetOwnProperty(key));
-          if (desc === Value.undefined || desc.Enumerable !== Value.true) continue;
+          if (!(desc instanceof Descriptor) || desc.Enumerable !== Value.true) continue;
           const value = Q(yield* Get(spreadObj, key));
           placeNamed(key.stringValue(), value);
         }
       } else {
         let iteratorRecord;
-        if (method === Value.undefined) iteratorRecord = Q(yield* GetIterator(spreadObj, 'sync'));
+        if (method instanceof UndefinedValue) iteratorRecord = Q(yield* GetIterator(spreadObj, 'sync'));
         else iteratorRecord = Q(yield* GetIteratorFromMethod(spreadObj, method));
         while (true) {
           const next = Q(yield* IteratorStepValue(iteratorRecord));

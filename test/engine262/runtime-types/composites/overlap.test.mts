@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
+import { nativeErrorClass } from '../error-observer.mts';
 import type { TypeRecord } from '../../../../src/type-system/records.mts';
 import { observeModuleGraph } from '../module-observer.mts';
-import { AreDisjoint, Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, ObjectValue, TypeDiagnosticOf } from '#self';
+import { AreDisjoint, Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf } from '#self';
 
 const corpus = JSON.parse(readFileSync(new URL('../conformance/composite-overlap.json', import.meta.url), 'utf8')) as {
   cases: { name: string; steps: { source: string; expected: Record<string, unknown>; messageIncludes?: string }[] }[];
@@ -24,9 +25,7 @@ for (const { name, steps } of corpus.cases) {
         };
         const completion = EnsureCompletion(realm.evaluateScriptSkipDebugger(source));
         const diagnostic = TypeDiagnosticOf(completion.Value);
-        const errorClass = completion.Type === 'throw' && completion.Value instanceof ObjectValue
-          ? ['Error', 'SyntaxError', 'TypeError', 'ReferenceError', 'StaticTypeError'].find((kind) =>
-            completion.Value.Prototype === realm.Intrinsics[`%${kind}.prototype%`]) : undefined;
+        const errorClass = completion.Type === 'throw' ? nativeErrorClass(completion.Value, realm) : undefined;
         expect({ completion: completion.Type, bodyEntered, scriptBodies, errorClass, diagnostic,
           value: completion.Type === 'normal' ? (completion.Value as { stringValue?: () => string })?.stringValue?.() : undefined }).toMatchObject(expected);
         if (messageIncludes) expect((completion.Value as { HostDefinedMessageString?: string }).HostDefinedMessageString).toContain(messageIncludes);
@@ -102,14 +101,16 @@ test('finite Composite overlap agrees with independently enumerated values', () 
 });
 
 test('recursive shapes terminate without losing a later established conflict', () => {
-  const left = composite(object([]));
-  const right = composite(object([]));
-  const shape = (t: TypeRecord) => (t as { Arguments: TypeRecord[] }).Arguments[0] as { Properties: unknown[] };
-  shape(left).Properties.push({ key: 'next', type: { Kind: 'union', Members: [left, scalar('undefined')] }, optional: false, readonly: true });
-  shape(right).Properties.push({ key: 'next', type: { Kind: 'union', Members: [right, scalar('undefined')] }, optional: false, readonly: true });
+  type Property = Extract<TypeRecord, { Kind: 'object' }>['Properties'][number];
+  const leftProperties: Property[] = [];
+  const rightProperties: Property[] = [];
+  const left = composite({ Kind: 'object', Properties: leftProperties, IndexSignatures: [] });
+  const right = composite({ Kind: 'object', Properties: rightProperties, IndexSignatures: [] });
+  leftProperties.push({ key: 'next', type: { Kind: 'union', Members: [left, scalar('undefined')] }, optional: false, readonly: true });
+  rightProperties.push({ key: 'next', type: { Kind: 'union', Members: [right, scalar('undefined')] }, optional: false, readonly: true });
   expect(AreDisjoint(left, right)).toBe(false);
-  shape(left).Properties.push({ key: 'tag', type: number, optional: false, readonly: true });
-  shape(right).Properties.push({ key: 'tag', type: string, optional: false, readonly: true });
+  leftProperties.push({ key: 'tag', type: number, optional: false, readonly: true });
+  rightProperties.push({ key: 'tag', type: string, optional: false, readonly: true });
   expect(AreDisjoint(left, right)).toBe(true);
   expect(AreDisjoint(right, left)).toBe(true);
 });

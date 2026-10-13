@@ -13,7 +13,7 @@ import { GetValue } from '../abstract-ops/reference-operations.mts';
 import { DeclaredReferenceLocationType } from '../abstract-ops/argument-distribution.mts';
 import { isTemplateArgumentType, templateArgumentTypeOf } from './template-argument.mts';
 import type { ParameterRecord, TypeRecord, NarrowingRecord } from './records.mts';
-import { anyType, restElementType, mentionsTypeParameter } from './records.mts';
+import { anyType, mentionsTypeParameter } from './records.mts';
 import { slotReceiving } from './sequence-assignment.mts';
 import { PlanReferenceArguments } from './reference-rest.mts';
 import { BindNamedArguments, PositionalReferenceRuns, ReferenceRunsAdmitted, type ArgumentItem } from './named-arguments.mts';

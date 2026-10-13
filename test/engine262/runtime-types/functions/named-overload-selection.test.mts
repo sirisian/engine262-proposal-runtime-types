@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
+import { nativeErrorClass } from '../error-observer.mts';
 import { observeModuleGraph } from '../module-observer.mts';
-import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, ObjectValue, TypeDiagnosticOf } from '#self';
+import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf } from '#self';
 
 const corpus = JSON.parse(readFileSync(new URL('../conformance/named-overload-selection.json', import.meta.url), 'utf8')) as {
   cases: { name: string; steps: { source: string; expected: Record<string, unknown>; messageIncludes?: string }[] }[];
@@ -23,9 +24,7 @@ for (const { name, steps } of corpus.cases) {
         };
         const completion = EnsureCompletion(realm.evaluateScriptSkipDebugger(source));
         const diagnostic = TypeDiagnosticOf(completion.Value);
-        const errorClass = completion.Type === 'throw' && completion.Value instanceof ObjectValue
-          ? ['Error', 'SyntaxError', 'TypeError', 'ReferenceError', 'StaticTypeError'].find((kind) =>
-            completion.Value.Prototype === realm.Intrinsics[`%${kind}.prototype%`]) : undefined;
+        const errorClass = completion.Type === 'throw' ? nativeErrorClass(completion.Value, realm) : undefined;
         expect({ completion: completion.Type, bodyEntered, scriptBodies, errorClass, diagnostic,
           value: completion.Type === 'normal' ? (completion.Value as { stringValue?: () => string })?.stringValue?.() : undefined }).toMatchObject(expected);
         if (messageIncludes) expect((completion.Value as { HostDefinedMessageString?: string }).HostDefinedMessageString).toContain(messageIncludes);

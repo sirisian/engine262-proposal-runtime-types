@@ -20,7 +20,7 @@ import { firstUnreadableControl, readClassControls, readFieldControls } from '..
 import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
 import { isRangeObject, endpointOf, type RangeObject } from '../intrinsics/Range.mts';
 import type { EnvironmentRecord } from '../execution-context/Environment.mts';
-import { MetadataKeys, MetadataEntries, MetadataKey, MetadataStorageKey } from './metadata-keys.mts';
+import { MetadataKeys, MetadataEntries, MetadataKey } from './metadata-keys.mts';
 import { RawOperatorResultType } from './operator-result.mts';
 import { TypeDiagnosticOf, CreateTypeDiagnostic, ReportTypeDiagnostic } from './diagnostics.mts';
 import type { TypeDiagnosticRule } from './diagnostic-catalog.mts';
@@ -32946,7 +32946,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         chosen.Parameters.forEach((parameter, slot) => {
           if (!parameter.Rest || !parameter.Ref) return;
           const type = bindings.size ? substituteTypeParameters(parameter.Type, bindings) : parameter.Type;
-          if (mentionsTypeParameter(type)) return;
+          if (!type || mentionsTypeParameter(type)) return;
           const entries = mapped.entries.filter((entry) => entry.slot === slot);
           const counts = PlanReferenceArguments([{ ...parameter, Type: type }]).assign(entries.length, (i, wanted) => {
             const arg = entries[i].node;

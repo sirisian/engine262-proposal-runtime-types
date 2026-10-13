@@ -63,7 +63,7 @@ export function* EvaluateCall(func: Value, ref: ReferenceRecord | Value, args: P
   // 3. Let argList be ? ArgumentListEvaluation of arguments.
   // The declared view supplies names/defaults after argument evaluation. Spread
   // mode is selected from each value, never from its expression's syntax.
-  let signature;
+  let signature: ReturnType<typeof signaturesInView> | undefined;
   if (surroundingAgent.feature('runtime-types') && Array.isArray(args) && ref instanceof ReferenceRecord) {
     // A typed property can carry the same callable view as a lexical binding.
     // Read its declared storage contract without another property Get.
