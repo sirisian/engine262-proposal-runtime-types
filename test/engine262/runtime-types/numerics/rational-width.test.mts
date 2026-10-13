@@ -263,7 +263,10 @@ test('rational.<bigint>: conversions in are exact; out, exact or a RangeError', 
 
 test('rational.<bigint>: a type of its own, with bigint parts and no layout', () => {
   for (const n of [8, 64, 128]) {
-    expect(outcome(`${B}(1, 2) === ${T(n)}.parse('1/2')`)).toBe('false');
+    // sec-narrowfrom rejects disjoint typed strict comparisons before the body;
+    // an untyped parameter query keeps runtime identity independently covered.
+    expectStaticTypeError(`${B}(1, 2) === ${T(n)}.parse('1/2');`);
+    expect(evaluated(`function equal(a,b){return a===b;} String(equal(${B}(1,2),${T(n)}.parse('1/2')));`)).toBe('false');
     expect(outcome(`Object.is(${B}(1, 2), ${T(n)}.parse('1/2'))`)).toBe('false');
     expect(outcome(`${B}(1, 2) == ${T(n)}.parse('1/2')`)).toBe('true');
     // through ~any~, a rational.<bigint> is refused at a width: the boundary

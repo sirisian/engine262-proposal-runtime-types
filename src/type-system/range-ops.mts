@@ -5,7 +5,7 @@ import {
   isRangeObject, CreateRangeObject, endpointOf, type RangeObject, type RangeBound,
 } from '../intrinsics/Range.mts';
 import {
-  F, R, surroundingAgent, type BigIntValue, type Realm,
+  F, surroundingAgent, type BigIntValue, type Realm,
 } from '#self';
 
 /**
@@ -84,42 +84,6 @@ function fromInterval(iv: Interval, realmRec: Realm): RangeObject {
 
 const FULL: Interval = { lo: { v: undefined, open: false }, hi: { v: undefined, open: false } };
 
-/** Descending is empty; at equal endpoints an open bound makes it empty. */
-function intervalIsEmpty(iv: Interval): boolean {
-  if (iv.lo.v === undefined || iv.hi.v === undefined) {
-    return false;
-  }
-  return (iv.lo.open || iv.hi.open) ? iv.lo.v >= iv.hi.v : iv.lo.v > iv.hi.v;
-}
-
-// -- scaling -------------------------------------------------------------------
-
-/**
- * Multiply both endpoints by a scalar.
- *
- * A negative factor reflects, so the endpoints exchange places AND carry their
- * bounds with them: the image of [a, b) under negation is (-b, -a]. That
- * exchange also swaps the one-ended shapes, a from-range scaling to a to-range.
- *
- * A zero factor is the case the obvious rule gets wrong: multiplying both
- * endpoints of `0..<10` gives the empty `0..<0`, where the image of a nonempty
- * range under multiplication by zero is the single point zero.
- */
-export function rangeScale(a: RangeObject, factor: number, realmRec: Realm): RangeObject {
-  const iv = toInterval(a);
-  if (factor === 0) {
-    if (intervalIsEmpty(iv)) {
-      return fromInterval(iv, realmRec);
-    }
-    return fromInterval({ lo: { v: 0, open: false }, hi: { v: 0, open: false } }, realmRec);
-  }
-  const scaled = (e: Edge): Edge => ({ v: e.v === undefined ? undefined : e.v * factor, open: e.open });
-  if (factor > 0) {
-    return fromInterval({ lo: scaled(iv.lo), hi: scaled(iv.hi) }, realmRec);
-  }
-  return fromInterval({ lo: scaled(iv.hi), hi: scaled(iv.lo) }, realmRec);
-}
-
 // -- interval arithmetic -------------------------------------------------------
 
 /** An edge is exclusive where either contributing edge is. */
@@ -145,10 +109,6 @@ function subtract(a: Interval, b: Interval): Interval {
   };
 }
 
-function negate(a: Interval): Interval {
-  const flip = (e: Edge): Edge => ({ v: e.v === undefined ? undefined : -e.v, open: e.open });
-  return { lo: flip(a.hi), hi: flip(a.lo) };
-}
 
 /**
  * The four products of the endpoints, the least and the greatest being the
@@ -241,13 +201,4 @@ export function* rangeBinaryOperator(lval: Value, op: RangeBinaryOperator, rval:
     default:
       return fromInterval(divide(a, b), realmRec);
   }
-}
-
-export function rangeNegate(a: RangeObject, realmRec: Realm): RangeObject {
-  return fromInterval(negate(toInterval(a)), realmRec);
-}
-
-/** `scale`'s factor, or null where the argument is not a usable scalar. */
-export function scaleFactor(value: Value): number | null {
-  return value instanceof NumberValue ? R(value) : null;
 }

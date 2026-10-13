@@ -1,5 +1,5 @@
-import { NumberValue, BigIntValue, ObjectValue, isTypedNumber } from '../value.mts';
-import { R } from '../abstract-ops/all.mts';
+import { BigIntValue, ObjectValue } from '../value.mts';
+import { exactNumericValue } from '../abstract-ops/testing-comparison.mts';
 import { LookupClassOperator, RequireType } from '../abstract-ops/runtime-types.mts';
 import { type RangeEndpoint } from '../intrinsics/Range.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
@@ -14,9 +14,9 @@ import { GetValue, surroundingAgent, Throw } from '#self';
 /**
  * proposal-runtime-types (ranges.md): a range expression evaluates its present
  * endpoints and constructs a Range value. An omitted endpoint (the from, to, and
- * full forms) is left undefined on the value. The endpoints are numbers in this
- * core; the design's ordering-based generalization to the other ordered types is
- * part of the extension's deferred remainder.
+ * full forms) is left undefined on the value. Real numeric endpoints use their
+ * intrinsic exact order, including object-backed float128, decimal and rational
+ * values; other ordered endpoints declare operator<.
  */
 export function* Evaluate_RangeExpression(node: ParseNode.RangeExpression): ValueEvaluator {
   const { RangeStart, RangeEnd, RangeStartBound, RangeEndBound } = node;
@@ -50,15 +50,10 @@ export function* Evaluate_RangeExpression(node: ParseNode.RangeExpression): Valu
     } finally {
       popContextualType();
     }
-    if (value instanceof BigIntValue) {
-      return value;
-    }
-    if (value instanceof NumberValue || isTypedNumber(value)) {
-      const numeric = value instanceof NumberValue ? R(value) : Number(value.numberValue());
-      if (Number.isNaN(numeric)) {
-        return Throw.TypeError('a range endpoint must be ordered, and NaN is not');
-      }
-      return value;
+    const numeric = exactNumericValue(value);
+    if (numeric) {
+      if (numeric.kind === 'finite' || numeric.kind === 'infinity') return value as RangeEndpoint;
+      return Throw.TypeError('a range endpoint must be ordered, and NaN or complex values are not');
     }
     // #sec-ranges: "a value type class over an ORDERED element type", which
     // ranges.md constrains as `RangeBounds<T: Ordered.<T>>`. The check tested
@@ -84,7 +79,8 @@ export function* Evaluate_RangeExpression(node: ParseNode.RangeExpression): Valu
   // Both endpoints of ONE element type: comparing across two would ask
   // `operator<` a question its declaration does not answer.
   if (start !== undefined && end !== undefined
-      && (start instanceof ObjectValue) !== (end instanceof ObjectValue)) {
+      && (start instanceof ObjectValue) !== (end instanceof ObjectValue)
+      && !(exactNumericValue(start) && exactNumericValue(end))) {
     return Throw.TypeError('a range endpoint must be ordered: a number, a bigint, or a type declaring operator<');
   }
   // The parser's bound pair passes straight through: the node and the value model

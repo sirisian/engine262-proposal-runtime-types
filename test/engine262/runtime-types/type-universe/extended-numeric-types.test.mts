@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { evaluated, ok, bool, expectThrown, expectThrownKind } from '../harness.mts';
+import { evaluated, ok, bool, expectThrown, expectThrownKind, expectStaticTypeError } from '../harness.mts';
 
 /**
  * Spec: #sec-value-types (Value Types), #sec-decimal-floating-point-types, #sec-rational-types.
@@ -137,7 +137,10 @@ test('numeric types: a typed value is never strictly equal to a plain number of 
   // nor to a value of another numeric type.
   expect(evaluated('let n = 5; String((5 := uint8) === n);')).toBe('false');
   expect(evaluated('function anyv() { return 5; } String((5 := uint8) === anyv());')).toBe('false');
-  expect(evaluated('String((5 := uint8) === (5 := uint16));')).toBe('false');
+  // sec-narrowfrom: disjoint participating types reject even in a value query.
+  // Untyped parameter queries still observe the underlying runtime identity.
+  expectStaticTypeError('String((5 := uint8) === (5 := uint16));');
+  expect(evaluated('function equal(a,b){return a===b;} String(equal((5:=uint8),(5:=uint16)));')).toBe('false');
   expect(evaluated('String((5 := uint8) === (5 := uint8));')).toBe('true');
   expect(evaluated('String(Number((5 := uint8)) === 5);')).toBe('true');
   expect(evaluated('String(Number((0 := uint8)) === 0);')).toBe('true');
@@ -157,7 +160,8 @@ test('numeric types: an immutable binding with a constant initializer is a liter
   // nothing
   expect(evaluated('let n = 5; String((5 := uint8) === n);')).toBe('false');
   expect(evaluated('var n = 5; String((5 := uint8) === n);')).toBe('false');
-  expect(evaluated('const n: number = 5; String((5 := uint8) === n);')).toBe('false');
+  expectStaticTypeError('const n: number = 5; String((5 := uint8) === n);');
+  expect(evaluated('function equal(a,b){return a===b;} const n:number=5; String(equal((5:=uint8),n));')).toBe('false');
   expect(evaluated('function f(n) { return (5 := uint8) === n; } String(f(5));')).toBe('false');
 });
 

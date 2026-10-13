@@ -39,7 +39,15 @@ export function* RangeEndpointCompare(a: Value, b: Value): PlainEvaluator<-1 | 0
 }
 
 export function* RangeIsEmpty(range: RangeObject): PlainEvaluator<boolean> {
-  if (range.RangeStart === undefined || range.RangeEnd === undefined) return false;
+  if (range.RangeStart === undefined || range.RangeEnd === undefined) {
+    const endpoint = range.RangeStart ?? range.RangeEnd;
+    const numeric = endpoint === undefined ? undefined : exactNumericValue(endpoint);
+    // In the extended numeric order, nothing is strictly beyond an extremal
+    // infinity. A closed extremal infinity still denotes its singleton.
+    return numeric?.kind === 'infinity' && (range.RangeStart !== undefined
+      ? numeric.sign === 1 && range.RangeStartBound === 'open'
+      : numeric.sign === -1 && range.RangeEndBound === 'open');
+  }
   const order = Q(yield* RangeEndpointCompare(range.RangeStart, range.RangeEnd));
   return order > 0 || (order === 0 && (range.RangeStartBound === 'open' || range.RangeEndBound === 'open'));
 }

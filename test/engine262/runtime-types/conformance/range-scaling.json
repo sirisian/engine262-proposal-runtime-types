@@ -1,0 +1,2768 @@
+{
+  "cases": [
+    {
+      "name": "scale preserves number",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<number>=1..=3;const t=r.scale(2);`${t.start is number};${t.end is number};${t is ClosedRange.<number>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves number",
+      "steps": [
+        {
+          "source": "const r:Range.<number>=1..<3;const t=r.scale(0);`${t.start is number};${t.end is number};${t is ClosedRange.<number>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves number",
+      "steps": [
+        {
+          "source": "const r:Range.<number>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves bigint",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<bigint>=1..=3;const t=r.scale(2);`${t.start is bigint};${t.end is bigint};${t is ClosedRange.<bigint>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves bigint",
+      "steps": [
+        {
+          "source": "const r:Range.<bigint>=1..<3;const t=r.scale(0);`${t.start is bigint};${t.end is bigint};${t is ClosedRange.<bigint>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves bigint",
+      "steps": [
+        {
+          "source": "const r:Range.<bigint>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves uint8",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;const t=r.scale(2);`${t.start is uint8};${t.end is uint8};${t is ClosedRange.<uint8>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves uint8",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=1..<3;const t=r.scale(0);`${t.start is uint8};${t.end is uint8};${t is ClosedRange.<uint8>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves uint8",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves int8",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int8>=1..=3;const t=r.scale(2);`${t.start is int8};${t.end is int8};${t is ClosedRange.<int8>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves int8",
+      "steps": [
+        {
+          "source": "const r:Range.<int8>=1..<3;const t=r.scale(0);`${t.start is int8};${t.end is int8};${t is ClosedRange.<int8>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves int8",
+      "steps": [
+        {
+          "source": "const r:Range.<int8>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves uint16",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint16>=1..=3;const t=r.scale(2);`${t.start is uint16};${t.end is uint16};${t is ClosedRange.<uint16>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves uint16",
+      "steps": [
+        {
+          "source": "const r:Range.<uint16>=1..<3;const t=r.scale(0);`${t.start is uint16};${t.end is uint16};${t is ClosedRange.<uint16>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves uint16",
+      "steps": [
+        {
+          "source": "const r:Range.<uint16>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves int16",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int16>=1..=3;const t=r.scale(2);`${t.start is int16};${t.end is int16};${t is ClosedRange.<int16>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves int16",
+      "steps": [
+        {
+          "source": "const r:Range.<int16>=1..<3;const t=r.scale(0);`${t.start is int16};${t.end is int16};${t is ClosedRange.<int16>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves int16",
+      "steps": [
+        {
+          "source": "const r:Range.<int16>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves uint32",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint32>=1..=3;const t=r.scale(2);`${t.start is uint32};${t.end is uint32};${t is ClosedRange.<uint32>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves uint32",
+      "steps": [
+        {
+          "source": "const r:Range.<uint32>=1..<3;const t=r.scale(0);`${t.start is uint32};${t.end is uint32};${t is ClosedRange.<uint32>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves uint32",
+      "steps": [
+        {
+          "source": "const r:Range.<uint32>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves int32",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int32>=1..=3;const t=r.scale(2);`${t.start is int32};${t.end is int32};${t is ClosedRange.<int32>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves int32",
+      "steps": [
+        {
+          "source": "const r:Range.<int32>=1..<3;const t=r.scale(0);`${t.start is int32};${t.end is int32};${t is ClosedRange.<int32>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves int32",
+      "steps": [
+        {
+          "source": "const r:Range.<int32>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves uint64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint64>=1..=3;const t=r.scale(2);`${t.start is uint64};${t.end is uint64};${t is ClosedRange.<uint64>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves uint64",
+      "steps": [
+        {
+          "source": "const r:Range.<uint64>=1..<3;const t=r.scale(0);`${t.start is uint64};${t.end is uint64};${t is ClosedRange.<uint64>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves uint64",
+      "steps": [
+        {
+          "source": "const r:Range.<uint64>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves int64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int64>=1..=3;const t=r.scale(2);`${t.start is int64};${t.end is int64};${t is ClosedRange.<int64>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves int64",
+      "steps": [
+        {
+          "source": "const r:Range.<int64>=1..<3;const t=r.scale(0);`${t.start is int64};${t.end is int64};${t is ClosedRange.<int64>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves int64",
+      "steps": [
+        {
+          "source": "const r:Range.<int64>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves uint128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint128>=1..=3;const t=r.scale(2);`${t.start is uint128};${t.end is uint128};${t is ClosedRange.<uint128>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves uint128",
+      "steps": [
+        {
+          "source": "const r:Range.<uint128>=1..<3;const t=r.scale(0);`${t.start is uint128};${t.end is uint128};${t is ClosedRange.<uint128>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves uint128",
+      "steps": [
+        {
+          "source": "const r:Range.<uint128>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves int128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int128>=1..=3;const t=r.scale(2);`${t.start is int128};${t.end is int128};${t is ClosedRange.<int128>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves int128",
+      "steps": [
+        {
+          "source": "const r:Range.<int128>=1..<3;const t=r.scale(0);`${t.start is int128};${t.end is int128};${t is ClosedRange.<int128>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves int128",
+      "steps": [
+        {
+          "source": "const r:Range.<int128>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves float16",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float16>=1..=3;const t=r.scale(2);`${t.start is float16};${t.end is float16};${t is ClosedRange.<float16>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves float16",
+      "steps": [
+        {
+          "source": "const r:Range.<float16>=1..<3;const t=r.scale(0);`${t.start is float16};${t.end is float16};${t is ClosedRange.<float16>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves float16",
+      "steps": [
+        {
+          "source": "const r:Range.<float16>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves float32",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float32>=1..=3;const t=r.scale(2);`${t.start is float32};${t.end is float32};${t is ClosedRange.<float32>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves float32",
+      "steps": [
+        {
+          "source": "const r:Range.<float32>=1..<3;const t=r.scale(0);`${t.start is float32};${t.end is float32};${t is ClosedRange.<float32>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves float32",
+      "steps": [
+        {
+          "source": "const r:Range.<float32>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves float64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float64>=1..=3;const t=r.scale(2);`${t.start is float64};${t.end is float64};${t is ClosedRange.<float64>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves float64",
+      "steps": [
+        {
+          "source": "const r:Range.<float64>=1..<3;const t=r.scale(0);`${t.start is float64};${t.end is float64};${t is ClosedRange.<float64>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves float64",
+      "steps": [
+        {
+          "source": "const r:Range.<float64>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves float128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float128>=1..=3;const t=r.scale(2);`${t.start is float128};${t.end is float128};${t is ClosedRange.<float128>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves float128",
+      "steps": [
+        {
+          "source": "const r:Range.<float128>=1..<3;const t=r.scale(0);`${t.start is float128};${t.end is float128};${t is ClosedRange.<float128>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves float128",
+      "steps": [
+        {
+          "source": "const r:Range.<float128>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves decimal32",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<decimal32>=1..=3;const t=r.scale(2);`${t.start is decimal32};${t.end is decimal32};${t is ClosedRange.<decimal32>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves decimal32",
+      "steps": [
+        {
+          "source": "const r:Range.<decimal32>=1..<3;const t=r.scale(0);`${t.start is decimal32};${t.end is decimal32};${t is ClosedRange.<decimal32>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves decimal32",
+      "steps": [
+        {
+          "source": "const r:Range.<decimal32>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves decimal64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<decimal64>=1..=3;const t=r.scale(2);`${t.start is decimal64};${t.end is decimal64};${t is ClosedRange.<decimal64>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves decimal64",
+      "steps": [
+        {
+          "source": "const r:Range.<decimal64>=1..<3;const t=r.scale(0);`${t.start is decimal64};${t.end is decimal64};${t is ClosedRange.<decimal64>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves decimal64",
+      "steps": [
+        {
+          "source": "const r:Range.<decimal64>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves decimal128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<decimal128>=1..=3;const t=r.scale(2);`${t.start is decimal128};${t.end is decimal128};${t is ClosedRange.<decimal128>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves decimal128",
+      "steps": [
+        {
+          "source": "const r:Range.<decimal128>=1..<3;const t=r.scale(0);`${t.start is decimal128};${t.end is decimal128};${t is ClosedRange.<decimal128>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves decimal128",
+      "steps": [
+        {
+          "source": "const r:Range.<decimal128>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves rational64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<rational64>=1..=3;const t=r.scale(2);`${t.start is rational64};${t.end is rational64};${t is ClosedRange.<rational64>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves rational64",
+      "steps": [
+        {
+          "source": "const r:Range.<rational64>=1..<3;const t=r.scale(0);`${t.start is rational64};${t.end is rational64};${t is ClosedRange.<rational64>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves rational64",
+      "steps": [
+        {
+          "source": "const r:Range.<rational64>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves rational.<bigint>",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<rational.<bigint>>=1..=3;const t=r.scale(2);`${t.start is rational.<bigint>};${t.end is rational.<bigint>};${t is ClosedRange.<rational.<bigint>>};${t.contains(2)};${t.contains(6)};${r.start};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero preserves rational.<bigint>",
+      "steps": [
+        {
+          "source": "const r:Range.<rational.<bigint>>=1..<3;const t=r.scale(0);`${t.start is rational.<bigint>};${t.end is rational.<bigint>};${t is ClosedRange.<rational.<bigint>>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity preserves rational.<bigint>",
+      "steps": [
+        {
+          "source": "const r:Range.<rational.<bigint>>=1..<3;const t=r.scale(1n);`${t.start===r.start};${t.end===r.end};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negation preserves number",
+      "steps": [
+        {
+          "source": "const r:Range.<number>=1..<3;const a=-r,b=r.scale(-1);`${a.start is number};${a.end is number};${a is OpenClosedRange.<number>};${a.start===b.start};${a.end===b.end};${a.start};${a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;-3;-1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negation preserves bigint",
+      "steps": [
+        {
+          "source": "const r:Range.<bigint>=1..<3;const a=-r,b=r.scale(-1);`${a.start is bigint};${a.end is bigint};${a is OpenClosedRange.<bigint>};${a.start===b.start};${a.end===b.end};${a.start};${a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;-3;-1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negation preserves int8",
+      "steps": [
+        {
+          "source": "const r:Range.<int8>=1..<3;const a=-r,b=r.scale(-1);`${a.start is int8};${a.end is int8};${a is OpenClosedRange.<int8>};${a.start===b.start};${a.end===b.end};${a.start};${a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;-3;-1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negation preserves int64",
+      "steps": [
+        {
+          "source": "const r:Range.<int64>=1..<3;const a=-r,b=r.scale(-1);`${a.start is int64};${a.end is int64};${a is OpenClosedRange.<int64>};${a.start===b.start};${a.end===b.end};${a.start};${a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;-3;-1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negation preserves int128",
+      "steps": [
+        {
+          "source": "const r:Range.<int128>=1..<3;const a=-r,b=r.scale(-1);`${a.start is int128};${a.end is int128};${a is OpenClosedRange.<int128>};${a.start===b.start};${a.end===b.end};${a.start};${a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;-3;-1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negation preserves float16",
+      "steps": [
+        {
+          "source": "const r:Range.<float16>=1..<3;const a=-r,b=r.scale(-1);`${a.start is float16};${a.end is float16};${a is OpenClosedRange.<float16>};${a.start===b.start};${a.end===b.end};${a.start};${a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;-3;-1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negation preserves float32",
+      "steps": [
+        {
+          "source": "const r:Range.<float32>=1..<3;const a=-r,b=r.scale(-1);`${a.start is float32};${a.end is float32};${a is OpenClosedRange.<float32>};${a.start===b.start};${a.end===b.end};${a.start};${a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;-3;-1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negation preserves float64",
+      "steps": [
+        {
+          "source": "const r:Range.<float64>=1..<3;const a=-r,b=r.scale(-1);`${a.start is float64};${a.end is float64};${a is OpenClosedRange.<float64>};${a.start===b.start};${a.end===b.end};${a.start};${a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;-3;-1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negation preserves float128",
+      "steps": [
+        {
+          "source": "const r:Range.<float128>=1..<3;const a=-r,b=r.scale(-1);`${a.start is float128};${a.end is float128};${a is OpenClosedRange.<float128>};${a.start===b.start};${a.end===b.end};${a.start};${a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;-3;-1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negation preserves decimal32",
+      "steps": [
+        {
+          "source": "const r:Range.<decimal32>=1..<3;const a=-r,b=r.scale(-1);`${a.start is decimal32};${a.end is decimal32};${a is OpenClosedRange.<decimal32>};${a.start===b.start};${a.end===b.end};${a.start};${a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;-3;-1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negation preserves decimal64",
+      "steps": [
+        {
+          "source": "const r:Range.<decimal64>=1..<3;const a=-r,b=r.scale(-1);`${a.start is decimal64};${a.end is decimal64};${a is OpenClosedRange.<decimal64>};${a.start===b.start};${a.end===b.end};${a.start};${a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;-3;-1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negation preserves decimal128",
+      "steps": [
+        {
+          "source": "const r:Range.<decimal128>=1..<3;const a=-r,b=r.scale(-1);`${a.start is decimal128};${a.end is decimal128};${a is OpenClosedRange.<decimal128>};${a.start===b.start};${a.end===b.end};${a.start};${a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;-3;-1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negation preserves rational64",
+      "steps": [
+        {
+          "source": "const r:Range.<rational64>=1..<3;const a=-r,b=r.scale(-1);`${a.start is rational64};${a.end is rational64};${a is OpenClosedRange.<rational64>};${a.start===b.start};${a.end===b.end};${a.start};${a.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true;-3;-1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unsigned negation checked uint8",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=1..<3;-r;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unsigned negative scaling checked uint8",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=1..<3;r.scale(-1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unsigned negation checked uint64",
+      "steps": [
+        {
+          "source": "const r:Range.<uint64>=1..<3;-r;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unsigned negative scaling checked uint64",
+      "steps": [
+        {
+          "source": "const r:Range.<uint64>=1..<3;r.scale(-1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unsigned negation checked uint128",
+      "steps": [
+        {
+          "source": "const r:Range.<uint128>=1..<3;-r;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unsigned negative scaling checked uint128",
+      "steps": [
+        {
+          "source": "const r:Range.<uint128>=1..<3;r.scale(-1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "exact bounds ClosedRange",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int16>=1..=3;const a=r.scale(2),b=r.scale(-2);`${a.startBound===r.startBound};${a.endBound===r.endBound};${b.startBound===r.endBound};${b.endBound===r.startBound};${a.start};${a.end};${b.start};${b.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;2;6;-6;-2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty scale ClosedRange",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int8>=3..=1;const t=r.scale(1000);`${t.start===r.start};${t.end===r.end};${t.isEmpty};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "exact bounds Range",
+      "steps": [
+        {
+          "source": "const r:Range.<int16>=1..<3;const a=r.scale(2),b=r.scale(-2);`${a.startBound===r.startBound};${a.endBound===r.endBound};${b.startBound===r.endBound};${b.endBound===r.startBound};${a.start};${a.end};${b.start};${b.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;2;6;-6;-2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty scale Range",
+      "steps": [
+        {
+          "source": "const r:Range.<int8>=3..<1;const t=r.scale(1000);`${t.start===r.start};${t.end===r.end};${t.isEmpty};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "exact bounds OpenClosedRange",
+      "steps": [
+        {
+          "source": "const r:OpenClosedRange.<int16>=1<..=3;const a=r.scale(2),b=r.scale(-2);`${a.startBound===r.startBound};${a.endBound===r.endBound};${b.startBound===r.endBound};${b.endBound===r.startBound};${a.start};${a.end};${b.start};${b.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;2;6;-6;-2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty scale OpenClosedRange",
+      "steps": [
+        {
+          "source": "const r:OpenClosedRange.<int8>=3<..=1;const t=r.scale(1000);`${t.start===r.start};${t.end===r.end};${t.isEmpty};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "exact bounds OpenRange",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<int16>=1<..<3;const a=r.scale(2),b=r.scale(-2);`${a.startBound===r.startBound};${a.endBound===r.endBound};${b.startBound===r.endBound};${b.endBound===r.startBound};${a.start};${a.end};${b.start};${b.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;2;6;-6;-2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty scale OpenRange",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<int8>=3<..<1;const t=r.scale(1000);`${t.start===r.start};${t.end===r.end};${t.isEmpty};${Reflect.typeOf(t)===Reflect.typeOf(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "exact factor representation 2",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint64>=9007199254740993..=9007199254740995;const t=r.scale(2);`${t.start};${t.end};${t.start is uint64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "18014398509481986;18014398509481990;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "exact factor representation 2n",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint64>=9007199254740993..=9007199254740995;const t=r.scale(2n);`${t.start};${t.end};${t.start is uint64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "18014398509481986;18014398509481990;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "exact factor representation (2:=uint8)",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint64>=9007199254740993..=9007199254740995;const t=r.scale((2:=uint8));`${t.start};${t.end};${t.start is uint64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "18014398509481986;18014398509481990;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "exact factor representation (2:=float16)",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint64>=9007199254740993..=9007199254740995;const t=r.scale((2:=float16));`${t.start};${t.end};${t.start is uint64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "18014398509481986;18014398509481990;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "exact factor representation (2:=float128)",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint64>=9007199254740993..=9007199254740995;const t=r.scale((2:=float128));`${t.start};${t.end};${t.start is uint64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "18014398509481986;18014398509481990;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "exact factor representation (2:=decimal32)",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint64>=9007199254740993..=9007199254740995;const t=r.scale((2:=decimal32));`${t.start};${t.end};${t.start is uint64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "18014398509481986;18014398509481990;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "exact factor representation rational64(2,1)",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint64>=9007199254740993..=9007199254740995;const t=r.scale(rational64(2,1));`${t.start};${t.end};${t.start is uint64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "18014398509481986;18014398509481990;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide scale uint64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint64>=9007199254740993..=9007199254740995;const t=r.scale(2);`${t.start};${t.end};${t.start is uint64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "18014398509481986;18014398509481990;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide scale int64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int64>=-9007199254740995..=-9007199254740993;const t=r.scale(2);`${t.start};${t.end};${t.start is int64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-18014398509481990;-18014398509481986;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide scale uint128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint128>=1267650600228229401496703205377..=1267650600228229401496703205379;const t=r.scale(2);`${t.start};${t.end};${t.start is uint128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2535301200456458802993406410754;2535301200456458802993406410758;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide scale int128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int128>=-1267650600228229401496703205379..=-1267650600228229401496703205377;const t=r.scale(2);`${t.start};${t.end};${t.start is int128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-2535301200456458802993406410758;-2535301200456458802993406410754;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "integer overflow uint8",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=255..=255;r.scale(2);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "integer overflow int8",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int8>=127..=127;r.scale(2);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "integer overflow uint64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint64>=18446744073709551615..=18446744073709551615;r.scale(2);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "integer overflow uint128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint128>=340282366920938463463374607431768211455..=340282366920938463463374607431768211455;r.scale(2);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "integer fraction rejected bigint",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<bigint>=1..=3;r.scale(rational64(1,2));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "integer exact fractional factor bigint",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<bigint>=2..=4;const t=r.scale(rational64(1,2));`${t.start};${t.end};${t.start is bigint}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "integer fraction rejected uint8",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;r.scale(rational64(1,2));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "integer exact fractional factor uint8",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=2..=4;const t=r.scale(rational64(1,2));`${t.start};${t.end};${t.start is uint8}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "integer fraction rejected int64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int64>=1..=3;r.scale(rational64(1,2));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "integer exact fractional factor int64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int64>=2..=4;const t=r.scale(rational64(1,2));`${t.start};${t.end};${t.start is int64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "integer fraction rejected uint128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint128>=1..=3;r.scale(rational64(1,2));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "integer exact fractional factor uint128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint128>=2..=4;const t=r.scale(rational64(1,2));`${t.start};${t.end};${t.start is uint128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "signed minimum negation checked",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int8>=(-128)..=(-128);-r;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outward enclosure number",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<number>=1..=1;const t=r.scale(rational64(1,3));`${t.contains(rational64(1,3))};${t.start is number};${t.end is number};${t.start===t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negative outward enclosure number",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<number>=1..=1;const t=r.scale(rational64(-1,3));`${t.contains(rational64(-1,3))};${t.start is number};${t.end is number};${t.start===t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rounded bounds close number",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<number>=1<..<2;const t=r.scale(rational64(1,3));`${t.startBound===Range.Bound.Closed};${t.endBound===Range.Bound.Closed};${t.contains(rational64(1,3))};${t.contains(rational64(2,3))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outward enclosure float16",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float16>=1..=1;const t=r.scale(rational64(1,3));`${t.contains(rational64(1,3))};${t.start is float16};${t.end is float16};${t.start===t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negative outward enclosure float16",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float16>=1..=1;const t=r.scale(rational64(-1,3));`${t.contains(rational64(-1,3))};${t.start is float16};${t.end is float16};${t.start===t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rounded bounds close float16",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<float16>=1<..<2;const t=r.scale(rational64(1,3));`${t.startBound===Range.Bound.Closed};${t.endBound===Range.Bound.Closed};${t.contains(rational64(1,3))};${t.contains(rational64(2,3))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outward enclosure float32",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float32>=1..=1;const t=r.scale(rational64(1,3));`${t.contains(rational64(1,3))};${t.start is float32};${t.end is float32};${t.start===t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negative outward enclosure float32",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float32>=1..=1;const t=r.scale(rational64(-1,3));`${t.contains(rational64(-1,3))};${t.start is float32};${t.end is float32};${t.start===t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rounded bounds close float32",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<float32>=1<..<2;const t=r.scale(rational64(1,3));`${t.startBound===Range.Bound.Closed};${t.endBound===Range.Bound.Closed};${t.contains(rational64(1,3))};${t.contains(rational64(2,3))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outward enclosure float64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float64>=1..=1;const t=r.scale(rational64(1,3));`${t.contains(rational64(1,3))};${t.start is float64};${t.end is float64};${t.start===t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negative outward enclosure float64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float64>=1..=1;const t=r.scale(rational64(-1,3));`${t.contains(rational64(-1,3))};${t.start is float64};${t.end is float64};${t.start===t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rounded bounds close float64",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<float64>=1<..<2;const t=r.scale(rational64(1,3));`${t.startBound===Range.Bound.Closed};${t.endBound===Range.Bound.Closed};${t.contains(rational64(1,3))};${t.contains(rational64(2,3))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outward enclosure float128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float128>=1..=1;const t=r.scale(rational64(1,3));`${t.contains(rational64(1,3))};${t.start is float128};${t.end is float128};${t.start===t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negative outward enclosure float128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float128>=1..=1;const t=r.scale(rational64(-1,3));`${t.contains(rational64(-1,3))};${t.start is float128};${t.end is float128};${t.start===t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rounded bounds close float128",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<float128>=1<..<2;const t=r.scale(rational64(1,3));`${t.startBound===Range.Bound.Closed};${t.endBound===Range.Bound.Closed};${t.contains(rational64(1,3))};${t.contains(rational64(2,3))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outward enclosure decimal32",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<decimal32>=1..=1;const t=r.scale(rational64(1,3));`${t.contains(rational64(1,3))};${t.start is decimal32};${t.end is decimal32};${t.start===t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negative outward enclosure decimal32",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<decimal32>=1..=1;const t=r.scale(rational64(-1,3));`${t.contains(rational64(-1,3))};${t.start is decimal32};${t.end is decimal32};${t.start===t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rounded bounds close decimal32",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<decimal32>=1<..<2;const t=r.scale(rational64(1,3));`${t.startBound===Range.Bound.Closed};${t.endBound===Range.Bound.Closed};${t.contains(rational64(1,3))};${t.contains(rational64(2,3))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outward enclosure decimal64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<decimal64>=1..=1;const t=r.scale(rational64(1,3));`${t.contains(rational64(1,3))};${t.start is decimal64};${t.end is decimal64};${t.start===t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negative outward enclosure decimal64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<decimal64>=1..=1;const t=r.scale(rational64(-1,3));`${t.contains(rational64(-1,3))};${t.start is decimal64};${t.end is decimal64};${t.start===t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rounded bounds close decimal64",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<decimal64>=1<..<2;const t=r.scale(rational64(1,3));`${t.startBound===Range.Bound.Closed};${t.endBound===Range.Bound.Closed};${t.contains(rational64(1,3))};${t.contains(rational64(2,3))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outward enclosure decimal128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<decimal128>=1..=1;const t=r.scale(rational64(1,3));`${t.contains(rational64(1,3))};${t.start is decimal128};${t.end is decimal128};${t.start===t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negative outward enclosure decimal128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<decimal128>=1..=1;const t=r.scale(rational64(-1,3));`${t.contains(rational64(-1,3))};${t.start is decimal128};${t.end is decimal128};${t.start===t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rounded bounds close decimal128",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<decimal128>=1<..<2;const t=r.scale(rational64(1,3));`${t.startBound===Range.Bound.Closed};${t.endBound===Range.Bound.Closed};${t.contains(rational64(1,3))};${t.contains(rational64(2,3))}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float16 directed endpoints",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float16>=1..=1;const t=r.scale(rational64(1,10));`${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0.0999755859375;0.10003662109375"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Number directed endpoints",
+      "steps": [
+        {
+          "source": "const t=(1..=1).scale(rational64(1,10));`${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0.09999999999999999;0.1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal32 directed endpoints",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<decimal32>=1..=1;const t=r.scale(rational64(1,3));`${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0.3333333;0.3333334"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary subnormal enclosure",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float16>=0.000000059604644775390625..=0.000000059604644775390625;const t=r.scale(0.5);`${t.start};${t.end};${t.isEmpty};${t.startBound===Range.Bound.Closed};${t.endBound===Range.Bound.Closed}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;5.960464477539063e-8;false;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negative binary subnormal enclosure",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float16>=(-0.000000059604644775390625)..=(-0.000000059604644775390625);const t=r.scale(0.5);`${t.start};${Object.is(Number(t.end),-0)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-5.960464477539063e-8;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fractional integer result not double rounded",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint64>=9007199254740994..=9007199254740996;const t=r.scale(rational64(1,2));`${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4503599627370497;4503599627370498"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational endpoints stay exact",
+      "steps": [
+        {
+          "source": "const r=rational64(1,3)..=rational64(2,3);const t=r.scale(3);`${t.start===rational64(1,1)};${t.end===rational64(2,1)};${t.start is rational64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal reflection preserves cohort",
+      "steps": [
+        {
+          "source": "const r=(decimal64.parse(\"1.50\")..<decimal64.parse(\"2.00\"));const t=-r;`${t.start};${t.end};${Object.is(t.start,-r.end)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-2.00;-1.50;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "factor rejected undefined",
+      "steps": [
+        {
+          "source": "(1..=3).scale(undefined);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "factor rejected null",
+      "steps": [
+        {
+          "source": "(1..=3).scale(null);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "factor rejected \"2\"",
+      "steps": [
+        {
+          "source": "(1..=3).scale(\"2\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "factor rejected true",
+      "steps": [
+        {
+          "source": "(1..=3).scale(true);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "factor rejected {}",
+      "steps": [
+        {
+          "source": "(1..=3).scale({});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "factor rejected Symbol()",
+      "steps": [
+        {
+          "source": "(1..=3).scale(Symbol());",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "factor rejected NaN",
+      "steps": [
+        {
+          "source": "(1..=3).scale(NaN);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "factor rejected Infinity",
+      "steps": [
+        {
+          "source": "(1..=3).scale(Infinity);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "factor rejected -Infinity",
+      "steps": [
+        {
+          "source": "(1..=3).scale(-Infinity);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "factor rejected complex(1,0)",
+      "steps": [
+        {
+          "source": "(1..=3).scale(complex(1,0));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "factor not coerced",
+      "steps": [
+        {
+          "source": "let calls=0;let ok=false;try{(1..=3).scale({valueOf(){calls++;return 2;}});}catch(e){ok=e instanceof TypeError;}`${ok};${calls}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid factor even for empty source",
+      "steps": [
+        {
+          "source": "(3..<1).scale(Infinity);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unsupported ordered endpoints even identity",
+      "steps": [
+        {
+          "source": "class P{operator<(x){return false;}}(new P()..<new P()).scale(1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "public endpoint accessors unused",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=1..<3;for(const k of [\"start\",\"end\",\"startBound\",\"endBound\"])Object.defineProperty(r,k,{get(){throw new Error(\"public\");}});const t=r.scale(2);`${t.start};${t.end};${t.start is uint8}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2;6;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "one-ended reflection",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<int16>=3..;const t=r.scale(-2);`${t.start};${t.startBound};${t.end};${t.end is int16};${t.endBound===Range.Bound.Closed}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined;undefined;-6;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "to range reflects",
+      "steps": [
+        {
+          "source": "const r=(..<(3:=int16));const t=-r;`${t.start};${t.start is int16};${t.startBound===Range.Bound.Open};${t.end};${t.endBound}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-3;true;true;undefined;undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed full range retains domain",
+      "steps": [
+        {
+          "source": "const r:RangeFull.<uint8>=..;const t=r.scale(2),z=r.scale(0);`${t is RangeFull.<uint8>};${z is ClosedRange.<uint8>};${z.start is uint8}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "full any zero uses Number",
+      "steps": [
+        {
+          "source": "const t=(..).scale(0);`${t.start};${t.end};${t.start is number};${t is ClosedRange.<any>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;0;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "full nonnumeric domain rejected",
+      "steps": [
+        {
+          "source": "const r:RangeFull.<string>=..;r.scale(0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "full union zero has no carrier",
+      "steps": [
+        {
+          "source": "const r:RangeFull.<uint8|uint16>=..;r.scale(0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "full union nonzero preserves domain",
+      "steps": [
+        {
+          "source": "const r:RangeFull.<uint8|uint16>=..;String(r.scale(2) is RangeFull.<uint8|uint16>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mixed endpoint domains retained",
+      "steps": [
+        {
+          "source": "const r=(1:=uint8)..<(3:=uint16);const t=r.scale(2);`${t.start is uint8};${t.end is uint16};${t is Range.<uint8|uint16>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored union retained",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8|uint16>=(1:=uint8)..<(3:=uint8);const t=r.scale(2);`${t.start is uint8};${t.end is uint8};${t is Range.<uint8|uint16>}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero prefers stored numeric carrier",
+      "steps": [
+        {
+          "source": "const r:RangeFull.<float32>=..;String(r.scale(-0).start is float32);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign reflected number",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<number>=(-0)..=0;const t=-r;`${Object.is(Number(t.start),-0)};${Object.is(Number(t.end),0)};${Object.is(Number(r.scale(2).start),-0)};${Object.is(Number(r.scale(-0).start),0)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign reflected float16",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float16>=(-0)..=0;const t=-r;`${Object.is(Number(t.start),-0)};${Object.is(Number(t.end),0)};${Object.is(Number(r.scale(2).start),-0)};${Object.is(Number(r.scale(-0).start),0)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign reflected float32",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float32>=(-0)..=0;const t=-r;`${Object.is(Number(t.start),-0)};${Object.is(Number(t.end),0)};${Object.is(Number(r.scale(2).start),-0)};${Object.is(Number(r.scale(-0).start),0)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero sign reflected float64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float64>=(-0)..=0;const t=-r;`${Object.is(Number(t.start),-0)};${Object.is(Number(t.end),0)};${Object.is(Number(r.scale(2).start),-0)};${Object.is(Number(r.scale(-0).start),0)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "infinite endpoints preserve signs and bounds",
+      "steps": [
+        {
+          "source": "const t=(-Infinity..<3).scale(-2);`${t.start};${t.end};${t.startBound===Range.Bound.Open};${t.endBound===Range.Bound.Closed}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-6;Infinity;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit infinity remains present",
+      "steps": [
+        {
+          "source": "const t=(3..<Infinity).scale(2);`${t.end};${t.endBound===Range.Bound.Open};${t.interval===Range.Interval.ClosedOpen}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "Infinity;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "infinite singleton zero",
+      "steps": [
+        {
+          "source": "const t=(Infinity..=Infinity).scale(0);`${t.start};${t.end};${t.isEmpty}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;0;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite endpoint overflow float16",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float16>=65504..=65504;r.scale(2);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite endpoint overflow float32",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float32>=3.4028234663852886e38..=3.4028234663852886e38;r.scale(2);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite endpoint overflow float64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float64>=1.7976931348623157e308..=1.7976931348623157e308;r.scale(2);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite endpoint overflow decimal32",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<decimal32>=9.999999e96..=9.999999e96;r.scale(2);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal exponent underflow",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<decimal32>=1e-95..=1e-95;r.scale(0.1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source reusable after overflow",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=100..<200;let ok=false;try{r.scale(2);}catch(e){ok=e instanceof RangeError;}`${ok};${r.start};${r.end};${r.scale(1).end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;100;200;200"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic factory preserves contexts",
+      "steps": [
+        {
+          "source": "function scale<T:type>(a:T,b:T){return (a..<b).scale(2);}const a=scale.<uint8>(1,3),b=scale.<float32>(1,3);`${a.start is uint8};${b.end is float32};${a.start};${b.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;2;6"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata endpoint admitted",
+      "steps": [
+        {
+          "source": "type Bounds={min:number,max:number};meta Bounds{default={min:0,max:0};subtype(a,b){return true;}validate(v,m){return Number(v)>=m.min&&Number(v)<=m.max;}}type Small=uint8.<{min:0,max:5}>;const r:ClosedRange.<Small>=(1:=Small)..=(2:=Small);const t=r.scale(2);`${t.start is Small};${t.end is Small};${t is ClosedRange.<Small>};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;2;4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata endpoint rejected",
+      "steps": [
+        {
+          "source": "type Bounds={min:number,max:number};meta Bounds{default={min:0,max:0};subtype(a,b){return true;}validate(v,m){return Number(v)>=m.min&&Number(v)<=m.max;}}type Small=uint8.<{min:0,max:5}>;const r:ClosedRange.<Small>=(1:=Small)..=(2:=Small);r.scale(3);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata failure reusable",
+      "steps": [
+        {
+          "source": "type Bounds={min:number,max:number};meta Bounds{default={min:0,max:0};subtype(a,b){return true;}validate(v,m){return Number(v)>=m.min&&Number(v)<=m.max;}}type Small=uint8.<{min:0,max:5}>;const r:ClosedRange.<Small>=(1:=Small)..=(2:=Small);let ok=false;try{r.scale(3);}catch(e){ok=e instanceof TypeError;}`${ok};${r.end};${r.scale(2).end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;2;4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata cannot rescale endpoint",
+      "steps": [
+        {
+          "source": "type Tag={tag:string};meta Tag{default={tag:\"\"};subtype(a,b){return a.tag===b.tag;}}primitive uint8{operator uint8.<Tag>(){return this+(1:=uint8);}}type U=uint8.<{tag:\"U\"}>;const r:RangeFrom.<U>=(1:=U)..;let ok=false;try{r.scale(2);}catch(e){ok=e instanceof RangeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity skips metadata admission",
+      "steps": [
+        {
+          "source": "let fail=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return true;}validate(v,m){if(fail)throw new Error(\"admission\");return true;}}type T=uint8.<{flag:true}>;const r:RangeFrom.<T>=(1:=T)..;fail=true;String(r.scale(1).start);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "no result published on metadata failure",
+      "steps": [
+        {
+          "source": "let fail=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return true;}validate(v,m){if(fail)throw new Error(\"admission\");return true;}}type T=uint8.<{flag:true}>;const r:RangeFrom.<T>=(1:=T)..;let result=\"old\";fail=true;try{result=r.scale(2);}catch(e){}fail=false;`${result};${r.start};${r.scale(2).start}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "old;1;2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scaling does not restore a dead reference",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1];let ref x=a[0];const r=(0..<a.length).scale(2);a.length=0;let ok=false;try{x;}catch(e){ok=e instanceof TypeError;}`${ok};${r.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "excluded extremal infinity number<..",
+      "steps": [
+        {
+          "source": "const r=((Infinity:=number)<..);const z=r.scale(0);`${r.isEmpty};${z.isEmpty};${z.start===r.start};${z.end===r.end};${(1..=2).contains(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "excluded extremal infinity number..<",
+      "steps": [
+        {
+          "source": "const r=(..<(-Infinity:=number));const z=r.scale(0);`${r.isEmpty};${z.isEmpty};${z.start===r.start};${z.end===r.end};${(1..=2).contains(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed extremal infinity number",
+      "steps": [
+        {
+          "source": "const r=((Infinity:=number)..);const z=r.scale(0);`${r.isEmpty};${z.isEmpty};${z.start};${z.start is number}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false;false;0;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "excluded extremal infinity float128<..",
+      "steps": [
+        {
+          "source": "const r=((Infinity:=float128)<..);const z=r.scale(0);`${r.isEmpty};${z.isEmpty};${z.start===r.start};${z.end===r.end};${(1..=2).contains(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "excluded extremal infinity float128..<",
+      "steps": [
+        {
+          "source": "const r=(..<(-Infinity:=float128));const z=r.scale(0);`${r.isEmpty};${z.isEmpty};${z.start===r.start};${z.end===r.end};${(1..=2).contains(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed extremal infinity float128",
+      "steps": [
+        {
+          "source": "const r=((Infinity:=float128)..);const z=r.scale(0);`${r.isEmpty};${z.isEmpty};${z.start};${z.start is float128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false;false;0;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "excluded extremal infinity decimal64<..",
+      "steps": [
+        {
+          "source": "const r=((Infinity:=decimal64)<..);const z=r.scale(0);`${r.isEmpty};${z.isEmpty};${z.start===r.start};${z.end===r.end};${(1..=2).contains(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "excluded extremal infinity decimal64..<",
+      "steps": [
+        {
+          "source": "const r=(..<(-Infinity:=decimal64));const z=r.scale(0);`${r.isEmpty};${z.isEmpty};${z.start===r.start};${z.end===r.end};${(1..=2).contains(r)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed extremal infinity decimal64",
+      "steps": [
+        {
+          "source": "const r=((Infinity:=decimal64)..);const z=r.scale(0);`${r.isEmpty};${z.isEmpty};${z.start};${z.start is decimal64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false;false;0;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "real numeric constructor order float128",
+      "steps": [
+        {
+          "source": "const r:Range.<float128>=1..<3;`${r.isEmpty};${r.contains(2)};${r.contains(3)};${r.intersect(2..=4).start}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false;true;false;2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "real numeric constructor order decimal32",
+      "steps": [
+        {
+          "source": "const r:Range.<decimal32>=1..<3;`${r.isEmpty};${r.contains(2)};${r.contains(3)};${r.intersect(2..=4).start}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false;true;false;2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "real numeric constructor order decimal64",
+      "steps": [
+        {
+          "source": "const r:Range.<decimal64>=1..<3;`${r.isEmpty};${r.contains(2)};${r.contains(3)};${r.intersect(2..=4).start}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false;true;false;2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "real numeric constructor order decimal128",
+      "steps": [
+        {
+          "source": "const r:Range.<decimal128>=1..<3;`${r.isEmpty};${r.contains(2)};${r.contains(3)};${r.intersect(2..=4).start}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false;true;false;2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "real numeric constructor order rational64",
+      "steps": [
+        {
+          "source": "const r:Range.<rational64>=1..<3;`${r.isEmpty};${r.contains(2)};${r.contains(3)};${r.intersect(2..=4).start}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false;true;false;2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "extended NaN constructor rejects float128",
+      "steps": [
+        {
+          "source": "const r=((NaN:=float128)..);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "extended NaN constructor rejects decimal64",
+      "steps": [
+        {
+          "source": "const r=((NaN:=decimal64)..);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex constructor rejects",
+      "steps": [
+        {
+          "source": "const r=(complex(1,0)..);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mixed Number and extended real constructor",
+      "steps": [
+        {
+          "source": "const r=1..<(3:=decimal64);const s=r.scale(2);`${s.start is number};${s.end is decimal64};${s.contains(5)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata admission source order on reflection",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return true;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=int16.<{flag:true}>;const r:Range.<T>=(1:=T)..<(3:=T);recording=true;const t=r.scale(-2);`${log};${t.start};${t.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-2,-6,;-6;-2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "factor precedes emptiness and conversion",
+      "steps": [
+        {
+          "source": "let calls=0;class P{operator<(x){calls++;return false;}}const r=new P()..<new P();let ok=false;try{r.scale({valueOf(){calls++;return 1;}});}catch(e){ok=e instanceof TypeError;}`${ok};${calls}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "cross Script recovery after scale failure",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=100..=200;r.scale(2);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        },
+        {
+          "source": "`${r.start};${r.end};${r.scale(1).end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "100;200;200"
+          }
+        }
+      ]
+    }
+  ]
+}

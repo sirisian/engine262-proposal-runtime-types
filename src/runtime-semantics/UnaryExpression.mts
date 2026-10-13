@@ -17,7 +17,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { isFloat128Object, Float128ToBinary128, Binary128ToFloat128 } from '../intrinsics/Float128.mts';
 import { negate as float128Negate } from '../intrinsics/Float128Arithmetic.mts';
 import { isRangeObject } from '../intrinsics/Range.mts';
-import { rangeNegate } from '../type-system/range-ops.mts';
+import { NumericRangeScale } from '../type-system/range-scaling.mts';
 import { isDecimalObject, decimalNegate, DecimalFromResult } from '../intrinsics/Decimal.mts';
 import { isComplexObject, complexNegate } from '../intrinsics/Complex.mts';
 import { isRationalObject, rationalNegate } from '../intrinsics/Rational.mts';
@@ -387,7 +387,7 @@ function* ApplyUnaryMinus(rawValue: Value): ValueEvaluator {
   // the endpoints exchange places and carry their bounds with them - the image of
   // [a, b) under negation is (-b, -a] - and a from-range becomes a to-range.
   if (surroundingAgent.feature('runtime-types') && isRangeObject(rawValue)) {
-    return rangeNegate(rawValue, surroundingAgent.currentRealmRecord);
+    return yield* NumericRangeScale(rawValue, Value(-1), surroundingAgent.currentRealmRecord);
   }
   // proposal-runtime-types (operatoroverloading.md): a class unary operator.
   const unaryOp = findUnaryClassOperator(rawValue, '-');

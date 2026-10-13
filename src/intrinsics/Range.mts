@@ -3,21 +3,16 @@ import {
   type Arguments, type FunctionCallContext,
 } from '../value.mts';
 import { type ValueEvaluator } from '../completion.mts';
-import type { PlainEvaluator } from '../evaluator.mts';
-import { ScaleMetadataValue } from '../abstract-ops/runtime-types.mts';
 import type { TypeRecord } from '../type-system/records.mts';
-import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { exactNumericValue } from '../abstract-ops/testing-comparison.mts';
 import { type Mutable } from '../utils/language.mts';
 import { CreateNumericRangeIterator, NumericRangeIteratorNext } from '../type-system/range-iteration.mts';
 import { NumericRangeLength, NumericRangeTakeOrDrop } from '../type-system/range-adapters.mts';
 import { RangeEndpointCompare, RangeIsEmpty, rangeContainsRange, rangeIntersect } from '../type-system/range-selection.mts';
+import { NumericRangeScale } from '../type-system/range-scaling.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { surroundingAgent, Throw, Q, Get, Call, IsCallable } from '#self';
 import { boundValue, intervalValue } from './RangeEnums.mts';
-import {
-  rangeScale, scaleFactor,
-} from '../type-system/range-ops.mts';
 import {
 
   OrdinaryObjectCreate,
@@ -30,7 +25,8 @@ import {
  * What a range endpoint may be. proposal-runtime-types #sec-ranges makes a range
  * "a value type class over an ORDERED element type", which ranges.md constrains
  * as `RangeBounds<T: Ordered.<T>>` - an interface of one operator. So an
- * endpoint is a number, a bigint, or a value of a type declaring `operator<`.
+ * endpoint is an intrinsically ordered real numeric value (including the
+ * object-backed numeric families), or a value of a type declaring `operator<`.
  */
 export type RangeEndpoint = NumberValue | BigIntValue | TypedNumberValue | ObjectValue;
 
@@ -255,25 +251,7 @@ function* RangeProto_scale([factor = Value.undefined]: Arguments, { thisValue }:
   if (!self) {
     return Throw.TypeError('$1 is not a range', thisValue);
   }
-  const exact = exactNumericValue(factor);
-  if (exact?.kind === 'finite' && !(factor instanceof NumberValue)) {
-    if (exact.n === 0n) return rangeScale(self, 0, surroundingAgent.currentRealmRecord);
-    const scale = function* (endpoint: RangeEndpoint | undefined): PlainEvaluator<RangeEndpoint | undefined> {
-      if (endpoint === undefined) return undefined;
-      const type = RuntimeTypeOf(endpoint);
-      return Q(yield* ScaleMetadataValue(endpoint, exact.n, exact.d, type.Kind === 'parameterized' ? type.Base : type)) as RangeEndpoint;
-    };
-    const start = Q(yield* scale(self.RangeStart));
-    const end = Q(yield* scale(self.RangeEnd));
-    return exact.n < 0n
-      ? CreateRangeObject(end, start, self.RangeEndBound, self.RangeStartBound, surroundingAgent.currentRealmRecord)
-      : CreateRangeObject(start, end, self.RangeStartBound, self.RangeEndBound, surroundingAgent.currentRealmRecord);
-  }
-  const f = scaleFactor(factor);
-  if (f === null || Number.isNaN(f)) {
-    return Throw.TypeError('a range scale factor must be a number');
-  }
-  return rangeScale(self, f, surroundingAgent.currentRealmRecord);
+  return yield* NumericRangeScale(self, factor, surroundingAgent.currentRealmRecord);
 }
 
 /**
