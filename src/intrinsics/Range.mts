@@ -9,6 +9,7 @@ import type { TypeRecord } from '../type-system/records.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { exactNumericValue } from '../abstract-ops/testing-comparison.mts';
 import { type Mutable } from '../utils/language.mts';
+import { CreateNumericRangeIterator, NumericRangeIteratorNext } from '../type-system/range-iteration.mts';
 import { RangeEndpointCompare, RangeIsEmpty, rangeContainsRange, rangeIntersect } from '../type-system/range-selection.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { surroundingAgent, Throw, Q, Get, Call, IsCallable, ToIntegerOrInfinity } from '#self';
@@ -19,7 +20,6 @@ import {
 import {
 
   OrdinaryObjectCreate,
-  CreateIteratorResultObject,
   F, R,
   type OrdinaryObject,
   Realm,
@@ -84,75 +84,9 @@ export function CreateRangeObject(start: RangeEndpoint | undefined, end: RangeEn
   return obj;
 }
 
-interface RangeIteratorObject extends OrdinaryObject {
-  IteratedStart: number | bigint;
-  IteratedEnd: number | bigint | undefined;
-  IteratedStep: number | bigint;
-  IteratedEndBound: RangeBound | undefined;
-  IteratedIndex: number;
-}
-
-/**
- * The index the iteration begins at. An open start excludes its own endpoint, so
- * the first value it yields is one step in: `(0<..<4)` yields 1, 2, 3, and
- * `(0<..).step(0.25)` yields 0.25 first.
- *
- * FEEDBACK: neither ranges.md "Iteration" nor #sec-ranges states this. Both fix
- * the nth value as start + n * step and were written while a closed start was
- * the only start a literal could spell, so an open start's first index is
- * unspecified. n >= 1 for an open start and n >= 0 otherwise is what this
- * implements and what the documents should say.
- */
-function firstIndex(startBound: RangeBound | undefined): number {
-  return startBound === 'open' ? 1 : 0;
-}
-
-function CreateRangeIterator(start: number | bigint, end: number | bigint | undefined, step: number | bigint, startBound: RangeBound | undefined, endBound: RangeBound | undefined, realmRec: Realm): RangeIteratorObject {
-  const proto = realmRec.Intrinsics['%RangeIteratorPrototype%'];
-  const it = OrdinaryObjectCreate(proto, [
-    'IteratedStart', 'IteratedEnd', 'IteratedStep', 'IteratedEndBound', 'IteratedIndex',
-  ]) as Mutable<RangeIteratorObject>;
-  it.IteratedStart = start;
-  it.IteratedEnd = end;
-  it.IteratedStep = step;
-  it.IteratedEndBound = endBound;
-  it.IteratedIndex = firstIndex(startBound);
-  return it;
-}
-
-// A value is past the end of a range when, iterating in the direction of the
-// step, it has reached or passed the endpoint. A range with no end never ends,
-// and a closed end admits the endpoint itself.
-function reachedEnd(value: number | bigint, end: number | bigint | undefined, step: number | bigint, endBound: RangeBound | undefined): boolean {
-  if (end === undefined) {
-    return false;
-  }
-  const inclusive = endBound === 'closed';
-  if (step >= 0) {
-    return inclusive ? value > end : value >= end;
-  }
-  return inclusive ? value < end : value <= end;
-}
-
-/** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
+/** https://sirisian.github.io/proposal-runtime-types/#sec-numeric-range-iteration */
 function* RangeIteratorPrototype_next(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
-  const O = thisValue;
-  if (!(O instanceof ObjectValue) || !('IteratedIndex' in O)) {
-    return Throw.TypeError('$1 is not a range iterator', O);
-  }
-  const it = O as Mutable<RangeIteratorObject>;
-  // The nth value is start + n * step, computed from the index rather than by
-  // repeated addition, so a fractional step does not accumulate error.
-  // The nth value is start + n * step in the ELEMENT TYPE's arithmetic: a bigint
-  // range steps by `1n` and a Number range by `1`, and the two do not mix.
-  const value = typeof it.IteratedStart === 'bigint'
-    ? it.IteratedStart + BigInt(it.IteratedIndex) * (it.IteratedStep as bigint)
-    : it.IteratedStart + it.IteratedIndex * (it.IteratedStep as number);
-  if (reachedEnd(value, it.IteratedEnd, it.IteratedStep, it.IteratedEndBound)) {
-    return CreateIteratorResultObject(Value.undefined, Value.true);
-  }
-  it.IteratedIndex += 1;
-  return CreateIteratorResultObject(typeof value === 'bigint' ? Value(value) : F(value), Value.false);
+  return yield* NumericRangeIteratorNext(thisValue);
 }
 
 function thisRange(thisValue: Value): RangeObject | undefined {
@@ -247,21 +181,11 @@ function* RangeProto_isFullGetter(_args: Arguments, { thisValue }: FunctionCallC
   return self.RangeStart === undefined && self.RangeEnd === undefined ? Value.true : Value.false;
 }
 
-// #sec-ranges: a bound is a value of `Bound`, absent where the shape has no such
-// endpoint.
 /**
- * #sec-ranges: a range is over an ORDERED element type, and the ordering
- * operations - `contains`, `isEmpty`, `intersect` - are polymorphic over Number
- * and bigint because `R` yields each one's mathematical value and JS compares
- * across them. LENGTH and ITERATION are not: they are integer arithmetic, and an
- * implicit step of one is `1` or `1n` depending on the element type. Until that
- * is threaded through, they answer only for a Number range.
- */
-/**
- * An endpoint's mathematical value. A TYPED number is ordered with Number by
- * #sec-matchrange's rule, so it is an endpoint like any other - and reading it
- * here rather than at each operation is what keeps `contains`, `isEmpty`,
- * `intersect`, and the arithmetic from each having to remember it.
+ * Legacy arithmetic endpoint reader for length and range-returning take/drop.
+ * Numeric cursors use range-iteration.mts's exact reader; ordering operations
+ * use range-selection.mts. This reader does not certify those other arithmetic
+ * consumers for wide typed integers or custom ordered domains.
  */
 export function endpointOf(v: RangeEndpoint | undefined): number | bigint | undefined {
   if (v === undefined) {
@@ -276,32 +200,6 @@ export function endpointOf(v: RangeEndpoint | undefined): number | bigint | unde
   // arithmetic that `Ordered` does not carry, which is the same reason `scale`
   // lives on the `Scalable` instantiations only.
   if (v instanceof ObjectValue) {
-    return undefined;
-  }
-  return R(v);
-}
-
-function numericEndpoint(v: RangeEndpoint | undefined): number | undefined {
-  if (v === undefined) {
-    return undefined;
-  }
-  // A TYPED number is an endpoint too, and this took only a plain Number.
-  //
-  // `undefined` here means "unbounded" to `reachedEnd`, which then answers
-  // *false* forever - so a range with a typed endpoint ITERATED WITHOUT END.
-  // `for (const i of 0..<a.length)` hung the engine for a typed array, whose
-  // `length` is a `uint.<64>`, and so did any explicit endpoint:
-  // `0..<(2 := uint8)` yielded 0, 1, 2, 3, ... The literal form `0..<3` was
-  // unaffected, which is why it stayed hidden - and that loop is the one
-  // #sec-range-literals holds up as "the loop written without thinking rather
-  // than one short".
-  //
-  // `endpointOf` beside this one already unwraps a typed number; the two read
-  // the same endpoints and disagreed about what counts as one.
-  if (isTypedNumber(v)) {
-    return Number(v.numberValue()); // eslint-disable-line @engine262/mathematical-value -- the stored value is the endpoint
-  }
-  if (!(v instanceof NumberValue)) {
     return undefined;
   }
   return R(v);
@@ -415,37 +313,6 @@ function* RangeProto_scale([factor = Value.undefined]: Arguments, { thisValue }:
   return rangeScale(self, f, surroundingAgent.currentRealmRecord);
 }
 
-// Over an integer range the step is one and implicit. A range with a non-integer
-// or missing endpoint needs an explicit step, which `.step` supplies.
-function integerIterator(self: RangeObject, realmRec: Realm): RangeIteratorObject | null {
-  if (self.RangeStart === undefined) {
-    return null;
-  }
-  const rawStart = (endpointOf(self.RangeStart) as number | bigint);
-  const rawEnd = endpointOf(self.RangeEnd);
-  const start = rawStart;
-  // An INFINITE end is not a member the iteration can stop at, so it stops the
-  // iteration nowhere - which is what an ABSENT end already does. The two
-  // spellings contain the same values, so they must iterate the same: without
-  // this, `0..` counted forever and `0..<Infinity` refused, and containment
-  // agreed while iteration disagreed.
-  const end = typeof rawEnd === 'number' && !Number.isFinite(rawEnd) ? undefined : rawEnd;
-  // A bigint endpoint is an integer by construction; the test below is the
-  // Number one.
-  if (typeof start === 'number' && (!Number.isInteger(start) || (typeof end === 'number' && !Number.isInteger(end)))) {
-    return null;
-  }
-  if (typeof rawStart === 'bigint') {
-    // The implicit step of one, in the element type's arithmetic.
-    return CreateRangeIterator(rawStart, rawEnd, 1n, self.RangeStartBound, self.RangeEndBound, realmRec);
-  }
-  const nStart = numericEndpoint(self.RangeStart);
-  if (nStart === undefined) {
-    return null;
-  }
-  return CreateRangeIterator(nStart, numericEndpoint(self.RangeEnd), 1, self.RangeStartBound, self.RangeEndBound, realmRec);
-}
-
 /**
  * ranges.md: the ITERATOR HELPERS, on a range.
  *
@@ -476,20 +343,17 @@ function* delegateToIterator(name: string, args: Arguments, thisValue: Value): V
   // terminate whenever the predicate decides. Grouping `every` with `toArray`
   // would refuse `(0..).every(v => v < 5)`, which answers false immediately.
   //
-  // An INFINITE end is an absent one here too, as it is for iteration: the two
-  // spellings contain the same values, so they must refuse the same.
+  // A positive infinite stop is endless for finite forward progression too.
+  // Negative infinity instead makes a finite-origin forward interval empty.
   if (name === 'toArray' || name === 'reduce' || name === 'forEach') {
-    const endValue = endpointOf(self.RangeEnd);
-    const endless = endValue === undefined
-      || (typeof endValue === 'number' && !Number.isFinite(endValue));
+    const endValue = self.RangeEnd === undefined ? undefined : exactNumericValue(self.RangeEnd);
+    const endless = self.RangeEnd === undefined
+      || (endValue?.kind === 'infinity' && endValue.sign === 1);
     if (endless) {
       return Throw.TypeError('a range with no end cannot be consumed entirely; bound it with take(n)');
     }
   }
-  const it = integerIterator(self, surroundingAgent.currentRealmRecord);
-  if (it === null) {
-    return Throw.TypeError('a range with a non-integer or missing endpoint has no implicit step; use step(by)');
-  }
+  const it = Q(yield* CreateNumericRangeIterator(self, surroundingAgent.currentRealmRecord));
   const fn = Q(yield* Get(it, Value(name)));
   if (!IsCallable(fn)) {
     return Throw.TypeError('$1 is not a function', fn);
@@ -619,10 +483,7 @@ function* RangeProto_iterator(_args: Arguments, { thisValue }: FunctionCallConte
   if (!self) {
     return Throw.TypeError('$1 is not a range', thisValue);
   }
-  const it = integerIterator(self, surroundingAgent.currentRealmRecord);
-  if (it === null) {
-    return Throw.TypeError('a range with a non-integer or missing endpoint has no implicit step; use step(by)');
-  }
+  const it = Q(yield* CreateNumericRangeIterator(self, surroundingAgent.currentRealmRecord));
   return it;
 }
 
@@ -637,31 +498,7 @@ function* RangeProto_reverse(_args: Arguments, { thisValue }: FunctionCallContex
   if (!self) {
     return Throw.TypeError('$1 is not a range', thisValue);
   }
-  if (self.RangeEnd === undefined) {
-    // A descending traversal has to start somewhere, and a range with no end
-    // has no last member -- the mirror of a range with no start not iterating.
-    return Throw.TypeError('a range with no end cannot be reversed');
-  }
-  const end = (endpointOf(self.RangeEnd) as number | bigint);
-  const start = endpointOf(self.RangeStart);
-  // A bigint endpoint is an integer by construction; the test is the Number one.
-  if (typeof end === 'number' && (!Number.isInteger(end) || (typeof start === 'number' && !Number.isInteger(start)))) {
-    return Throw.TypeError('a range with a non-integer endpoint has no implicit step; use step(by)');
-  }
-  // The last member is the end itself where the end's bound includes it, and one
-  // below where it does not; iteration then runs down to the start, whose own
-  // bound decides whether the start is reached.
-  if (typeof end === 'bigint') {
-    const bigFirst = self.RangeEndBound === 'closed' ? end : end - 1n;
-    const bigStop: RangeBound | undefined = self.RangeStartBound === 'open' ? 'open' : 'closed';
-    return CreateRangeIterator(bigFirst, start as bigint | undefined, -1n, undefined, bigStop, surroundingAgent.currentRealmRecord);
-  }
-  if (typeof end !== 'number' || (start !== undefined && typeof start !== 'number')) {
-    return Throw.TypeError('a range with a non-integer endpoint has no implicit step; use step(by)');
-  }
-  const first = self.RangeEndBound === 'closed' ? end : end - 1;
-  const stopBound: RangeBound | undefined = self.RangeStartBound === 'open' ? 'open' : 'closed';
-  return CreateRangeIterator(first, start, -1, undefined, stopBound, surroundingAgent.currentRealmRecord);
+  return yield* CreateNumericRangeIterator(self, surroundingAgent.currentRealmRecord, true);
 }
 
 /** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
@@ -670,22 +507,7 @@ function* RangeProto_step([by = Value.undefined]: Arguments, { thisValue }: Func
   if (!self) {
     return Throw.TypeError('$1 is not a range', thisValue);
   }
-  if (self.RangeStart === undefined) {
-    return Throw.TypeError('a range with no start cannot be iterated');
-  }
-  if (!(by instanceof NumberValue)) {
-    return Throw.TypeError('a range step must be a number');
-  }
-  const step = R(by);
-  if (step === 0 || Number.isNaN(step)) {
-    return Throw.TypeError('a range step must be a nonzero number');
-  }
-  const sStart = numericEndpoint(self.RangeStart);
-  if (sStart === undefined) {
-    return Throw.TypeError('a range with a non-integer endpoint has no implicit step; use step(by)');
-  }
-  const sEnd = numericEndpoint(self.RangeEnd);
-  return CreateRangeIterator(sStart, typeof sEnd === 'number' && !Number.isFinite(sEnd) ? undefined : sEnd, step, self.RangeStartBound, self.RangeEndBound, surroundingAgent.currentRealmRecord);
+  return yield* CreateNumericRangeIterator(self, surroundingAgent.currentRealmRecord, false, by);
 }
 
 export function bootstrapRangeIteratorPrototype(realmRec: Realm): void {

@@ -1,0 +1,1681 @@
+{
+  "cases": [
+    {
+      "name": "forward carrier number",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<number>=1..=3;const it=r[Symbol.iterator]();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is number};${c.value is number};${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;3;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reverse carrier number",
+      "steps": [
+        {
+          "source": "const r:Range.<number>=1..<4;const it=r.reverse();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is number};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;2;1;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward carrier bigint",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<bigint>=1..=3;const it=r[Symbol.iterator]();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is bigint};${c.value is bigint};${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;3;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reverse carrier bigint",
+      "steps": [
+        {
+          "source": "const r:Range.<bigint>=1..<4;const it=r.reverse();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is bigint};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;2;1;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward carrier uint8",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;const it=r[Symbol.iterator]();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is uint8};${c.value is uint8};${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;3;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reverse carrier uint8",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=1..<4;const it=r.reverse();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is uint8};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;2;1;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward carrier int8",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int8>=1..=3;const it=r[Symbol.iterator]();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is int8};${c.value is int8};${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;3;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reverse carrier int8",
+      "steps": [
+        {
+          "source": "const r:Range.<int8>=1..<4;const it=r.reverse();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is int8};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;2;1;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward carrier uint16",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint16>=1..=3;const it=r[Symbol.iterator]();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is uint16};${c.value is uint16};${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;3;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reverse carrier uint16",
+      "steps": [
+        {
+          "source": "const r:Range.<uint16>=1..<4;const it=r.reverse();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is uint16};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;2;1;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward carrier int16",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int16>=1..=3;const it=r[Symbol.iterator]();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is int16};${c.value is int16};${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;3;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reverse carrier int16",
+      "steps": [
+        {
+          "source": "const r:Range.<int16>=1..<4;const it=r.reverse();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is int16};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;2;1;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward carrier uint32",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint32>=1..=3;const it=r[Symbol.iterator]();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is uint32};${c.value is uint32};${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;3;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reverse carrier uint32",
+      "steps": [
+        {
+          "source": "const r:Range.<uint32>=1..<4;const it=r.reverse();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is uint32};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;2;1;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward carrier int32",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int32>=1..=3;const it=r[Symbol.iterator]();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is int32};${c.value is int32};${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;3;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reverse carrier int32",
+      "steps": [
+        {
+          "source": "const r:Range.<int32>=1..<4;const it=r.reverse();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is int32};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;2;1;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward carrier uint64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint64>=1..=3;const it=r[Symbol.iterator]();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is uint64};${c.value is uint64};${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;3;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reverse carrier uint64",
+      "steps": [
+        {
+          "source": "const r:Range.<uint64>=1..<4;const it=r.reverse();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is uint64};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;2;1;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward carrier int64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int64>=1..=3;const it=r[Symbol.iterator]();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is int64};${c.value is int64};${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;3;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reverse carrier int64",
+      "steps": [
+        {
+          "source": "const r:Range.<int64>=1..<4;const it=r.reverse();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is int64};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;2;1;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward carrier uint128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint128>=1..=3;const it=r[Symbol.iterator]();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is uint128};${c.value is uint128};${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;3;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reverse carrier uint128",
+      "steps": [
+        {
+          "source": "const r:Range.<uint128>=1..<4;const it=r.reverse();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is uint128};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;2;1;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward carrier int128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int128>=1..=3;const it=r[Symbol.iterator]();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is int128};${c.value is int128};${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;3;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reverse carrier int128",
+      "steps": [
+        {
+          "source": "const r:Range.<int128>=1..<4;const it=r.reverse();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is int128};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;2;1;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward carrier float16",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float16>=1..=3;const it=r[Symbol.iterator]();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is float16};${c.value is float16};${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;3;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reverse carrier float16",
+      "steps": [
+        {
+          "source": "const r:Range.<float16>=1..<4;const it=r.reverse();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is float16};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;2;1;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward carrier float32",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float32>=1..=3;const it=r[Symbol.iterator]();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is float32};${c.value is float32};${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;3;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reverse carrier float32",
+      "steps": [
+        {
+          "source": "const r:Range.<float32>=1..<4;const it=r.reverse();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is float32};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;2;1;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward carrier float64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float64>=1..=3;const it=r[Symbol.iterator]();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is float64};${c.value is float64};${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;3;true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reverse carrier float64",
+      "steps": [
+        {
+          "source": "const r:Range.<float64>=1..<4;const it=r.reverse();const a=it.next(),b=it.next(),c=it.next();`${a.value};${b.value};${c.value};${a.value is float64};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;2;1;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "untyped bounds ..=",
+      "steps": [
+        {
+          "source": "String([...(0..=2)]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "BigInt bounds ..=",
+      "steps": [
+        {
+          "source": "String([...(0n..=2n)]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "untyped bounds ..<",
+      "steps": [
+        {
+          "source": "String([...(0..<2)]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "BigInt bounds ..<",
+      "steps": [
+        {
+          "source": "String([...(0n..<2n)]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "untyped bounds <..=",
+      "steps": [
+        {
+          "source": "String([...(0<..=2)]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "BigInt bounds <..=",
+      "steps": [
+        {
+          "source": "String([...(0n<..=2n)]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "untyped bounds <..<",
+      "steps": [
+        {
+          "source": "String([...(0<..<2)]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "BigInt bounds <..<",
+      "steps": [
+        {
+          "source": "String([...(0n<..<2n)]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed end supplies items",
+      "steps": [
+        {
+          "source": "let end:uint8=3;const it=(0..<end)[Symbol.iterator]();const a=it.next();`${a.value};${a.value is uint8}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed start wins over typed end",
+      "steps": [
+        {
+          "source": "const it=((1:=uint8)..<(4:=uint16)).reverse();const a=it.next();`${a.value};${a.value is uint8};${a.value is uint16}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored number domain",
+      "steps": [
+        {
+          "source": "const r:Range.<number>=0..<3;const a=r[Symbol.iterator]().next().value;`${a};${a is number};${a is uint8}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;true;false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union endpoint domain remains reflected",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8|uint16>=(1:=uint8)..<(3:=uint16);const it=r[Symbol.iterator]();const a=it.next();`${a.value is uint8};${Reflect.typeOf(r)===(type Range.<uint8|uint16>)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide exact forward uint64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint64>=9007199254740993..=9007199254740995;const it=r[Symbol.iterator]();`${it.next().value};${it.next().value};${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "9007199254740993;9007199254740994;9007199254740995;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide exact reverse uint64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint64>=9007199254740993..=9007199254740995;const it=r.reverse();`${it.next().value};${it.next().value};${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "9007199254740995;9007199254740994;9007199254740993;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide exact forward int64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int64>=-9007199254740995..=-9007199254740993;const it=r[Symbol.iterator]();`${it.next().value};${it.next().value};${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-9007199254740995;-9007199254740994;-9007199254740993;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide exact reverse int64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int64>=-9007199254740995..=-9007199254740993;const it=r.reverse();`${it.next().value};${it.next().value};${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-9007199254740993;-9007199254740994;-9007199254740995;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide exact forward uint128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint128>=1267650600228229401496703205377..=1267650600228229401496703205379;const it=r[Symbol.iterator]();`${it.next().value};${it.next().value};${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1267650600228229401496703205377;1267650600228229401496703205378;1267650600228229401496703205379;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide exact reverse uint128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint128>=1267650600228229401496703205377..=1267650600228229401496703205379;const it=r.reverse();`${it.next().value};${it.next().value};${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1267650600228229401496703205379;1267650600228229401496703205378;1267650600228229401496703205377;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide exact forward int128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int128>=-1267650600228229401496703205379..=-1267650600228229401496703205377;const it=r[Symbol.iterator]();`${it.next().value};${it.next().value};${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-1267650600228229401496703205379;-1267650600228229401496703205378;-1267650600228229401496703205377;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide exact reverse int128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int128>=-1267650600228229401496703205379..=-1267650600228229401496703205377;const it=r.reverse();`${it.next().value};${it.next().value};${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-1267650600228229401496703205377;-1267650600228229401496703205378;-1267650600228229401496703205379;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed maximum finishes uint8",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=255..=255;const it=r[Symbol.iterator]();`${it.next().value};${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "255;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unbounded exhaustion uint8",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint8>=255..;const it=r[Symbol.iterator]();it.next();let answer=\"missing\";try{it.next();}catch(e){answer=String(e instanceof RangeError);}answer+\";\"+it.next().done+\";\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed maximum finishes int8",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int8>=127..=127;const it=r[Symbol.iterator]();`${it.next().value};${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "127;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unbounded exhaustion int8",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<int8>=127..;const it=r[Symbol.iterator]();it.next();let answer=\"missing\";try{it.next();}catch(e){answer=String(e instanceof RangeError);}answer+\";\"+it.next().done+\";\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed maximum finishes uint64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint64>=18446744073709551615..=18446744073709551615;const it=r[Symbol.iterator]();`${it.next().value};${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "18446744073709551615;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unbounded exhaustion uint64",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint64>=18446744073709551615..;const it=r[Symbol.iterator]();it.next();let answer=\"missing\";try{it.next();}catch(e){answer=String(e instanceof RangeError);}answer+\";\"+it.next().done+\";\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed maximum finishes float16",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float16>=65504..=65504;const it=r[Symbol.iterator]();`${it.next().value};${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "65504;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unbounded exhaustion float16",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<float16>=65504..;const it=r[Symbol.iterator]();it.next();let answer=\"missing\";try{it.next();}catch(e){answer=String(e instanceof RangeError);}answer+\";\"+it.next().done+\";\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed maximum finishes number",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<number>=9007199254740992..=9007199254740992;const it=r[Symbol.iterator]();`${it.next().value};${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "9007199254740992;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unbounded exhaustion number",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<number>=9007199254740992..;const it=r[Symbol.iterator]();it.next();let answer=\"missing\";try{it.next();}catch(e){answer=String(e instanceof RangeError);}answer+\";\"+it.next().done+\";\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed minimum reverse finishes uint8",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=0..=0;const it=r.reverse();`${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed minimum reverse finishes int8",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int8>=-128..=-128;const it=r.reverse();`${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-128;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed minimum reverse finishes int64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int64>=-9223372036854775808..=-9223372036854775808;const it=r.reverse();`${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-9223372036854775808;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float32 exact integer gap",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<float32>=16777216..;const it=r[Symbol.iterator]();it.next();let answer=\"missing\";try{it.next();}catch(e){answer=String(e instanceof RangeError);}answer+\";\"+it.next().done+\";\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 exact integer gap",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<float64>=9007199254740992..;const it=r[Symbol.iterator]();it.next();let answer=\"missing\";try{it.next();}catch(e){answer=String(e instanceof RangeError);}answer+\";\"+it.next().done+\";\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reverse float16 exact integer gap",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float16>=2048..=2050;const it=r.reverse();it.next();let answer=\"missing\";try{it.next();}catch(e){answer=String(e instanceof RangeError);}answer+\";\"+it.next().done+\";\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reverse unbounded uint8",
+      "steps": [
+        {
+          "source": "const r=(..=(0:=uint8));const it=r.reverse();it.next();let answer=\"missing\";try{it.next();}catch(e){answer=String(e instanceof RangeError);}answer+\";\"+it.next().done+\";\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "BigInt step 2",
+      "steps": [
+        {
+          "source": "const it=(0n..<6n).step(2);`${it.next().value};${it.next().value};${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;2;4;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed integer step 2",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<6;const it=r.step(2);const a=it.next();`${a.value is uint8};${it.next().value};${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;2;4;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "BigInt step 2n",
+      "steps": [
+        {
+          "source": "const it=(0n..<6n).step(2n);`${it.next().value};${it.next().value};${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;2;4;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed integer step 2n",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<6;const it=r.step(2n);const a=it.next();`${a.value is uint8};${it.next().value};${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;2;4;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "BigInt step (2:=uint64)",
+      "steps": [
+        {
+          "source": "const it=(0n..<6n).step((2:=uint64));`${it.next().value};${it.next().value};${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;2;4;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed integer step (2:=uint64)",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<6;const it=r.step((2:=uint64));const a=it.next();`${a.value is uint8};${it.next().value};${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;2;4;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "BigInt step (2:=float32)",
+      "steps": [
+        {
+          "source": "const it=(0n..<6n).step((2:=float32));`${it.next().value};${it.next().value};${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;2;4;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed integer step (2:=float32)",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<6;const it=r.step((2:=float32));const a=it.next();`${a.value is uint8};${it.next().value};${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;2;4;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "widened stride does not need to fit carrier",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<5;const it=r.step(1000n);`${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "open start widened stride finishes before admission",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<uint8>=0<..<5;const it=r.step(1000n);String(it.next().done);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid step 0",
+      "steps": [
+        {
+          "source": "(0..<3).step(0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid step -0",
+      "steps": [
+        {
+          "source": "(0..<3).step(-0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid step -1",
+      "steps": [
+        {
+          "source": "(0..<3).step(-1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid step 0n",
+      "steps": [
+        {
+          "source": "(0..<3).step(0n);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid step -1n",
+      "steps": [
+        {
+          "source": "(0..<3).step(-1n);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid step NaN",
+      "steps": [
+        {
+          "source": "(0..<3).step(NaN);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid step Infinity",
+      "steps": [
+        {
+          "source": "(0..<3).step(Infinity);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid step -Infinity",
+      "steps": [
+        {
+          "source": "(0..<3).step(-Infinity);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid step undefined",
+      "steps": [
+        {
+          "source": "(0..<3).step(undefined);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid step null",
+      "steps": [
+        {
+          "source": "(0..<3).step(null);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid step true",
+      "steps": [
+        {
+          "source": "(0..<3).step(true);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid step \"2\"",
+      "steps": [
+        {
+          "source": "(0..<3).step(\"2\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "step does not coerce",
+      "steps": [
+        {
+          "source": "let calls=0;let result=false;try{(0..<3).step({valueOf(){calls++;return 1;}});}catch(e){result=e instanceof TypeError;}`${result};${calls}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "integer carrier refuses fractional step",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<3;r.step(0.5);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fractional origin cannot silently truncate into integer items",
+      "steps": [
+        {
+          "source": "(0.5..<(3:=uint8)).step(1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Number fractional indexed expression",
+      "steps": [
+        {
+          "source": "const it=(0..<1).step(0.1);it.next();it.next();it.next();String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0.30000000000000004"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float32 fractional items",
+      "steps": [
+        {
+          "source": "const r:Range.<float32>=0..<1;const it=r.step(0.1);const a=it.next(),b=it.next();`${a.value is float32};${b.value is float32};${b.value}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;0.10000000149011612"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float16 fractional items",
+      "steps": [
+        {
+          "source": "const r:Range.<float16>=0..<1;const it=r.step(0.1);it.next();String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0.0999755859375"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float32 rounded open endpoint excluded",
+      "steps": [
+        {
+          "source": "const r:Range.<float32>=0..<0.3;const it=r.step(0.1);it.next();it.next();it.next();String(it.next().done);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float32 rounded closed endpoint admitted",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float32>=0..=0.7;const it=r.step(0.1);for(let i=0;i<7;i++)it.next();const a=it.next();`${a.value};${a.done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0.699999988079071;false;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fractional open start starts one step in",
+      "steps": [
+        {
+          "source": "String([...(0<..<1).step(0.25)]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0.25,0.5,0.75"
+          }
+        }
+      ]
+    },
+    {
+      "name": "floating duplicate closes cursor",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<float32>=1..;const it=r.step(2**-25);it.next();let answer=\"missing\";try{it.next();}catch(e){answer=String(e instanceof RangeError);}answer+\";\"+it.next().done+\";\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "floating open start cannot repeat excluded origin",
+      "steps": [
+        {
+          "source": "const r=((1:=float32)<..);const it=r.step(2**-25);let answer=\"missing\";try{it.next();}catch(e){answer=String(e instanceof RangeError);}answer+\";\"+it.next().done+\";\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed negative zero survives Number iteration",
+      "steps": [
+        {
+          "source": "const it=((-0)..<1)[Symbol.iterator]();String(Object.is(it.next().value,-0));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closed negative zero survives float32 iteration",
+      "steps": [
+        {
+          "source": "const r:Range.<float32>=(-0)..<1;const it=r[Symbol.iterator]();String(Object.is(Number(it.next().value),-0));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negative infinite end is empty",
+      "steps": [
+        {
+          "source": "String((0..<-Infinity)[Symbol.iterator]().next().done);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negative infinite end consuming helper finishes",
+      "steps": [
+        {
+          "source": "String((0..<-Infinity).toArray().length);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "positive infinite bound still permits a finite prefix",
+      "steps": [
+        {
+          "source": "const it=(0..<Infinity)[Symbol.iterator]();`${it.next().value};${it.next().value}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "infinite origin cannot iterate",
+      "steps": [
+        {
+          "source": "(Infinity..)[Symbol.iterator]();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "infinite end cannot reverse",
+      "steps": [
+        {
+          "source": "(0..<Infinity).reverse();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward needs a start",
+      "steps": [
+        {
+          "source": "(..<3)[Symbol.iterator]();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "implicit iteration needs integral endpoints",
+      "steps": [
+        {
+          "source": "(0.5..<3)[Symbol.iterator]();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reverse needs integral endpoints",
+      "steps": [
+        {
+          "source": "(0.5..<3).reverse();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordered objects do not impersonate unbounded numeric endpoints",
+      "steps": [
+        {
+          "source": "class P{operator<(other){return false;}}(new P()..<new P())[Symbol.iterator]();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "descending forward and reverse stay empty",
+      "steps": [
+        {
+          "source": "`${(3..<1)[Symbol.iterator]().next().done};${(3..<1).reverse().next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator cursors are independent",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<3;const a=r[Symbol.iterator](),b=r[Symbol.iterator]();a.next();`${a.next().value};${b.next().value};${r.contains(1)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;0;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "helpers retain item type",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<3;String(r.map(x=>x is uint8).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true,true,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed iterator leaves reusable source range",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint8>=255..;const it=r[Symbol.iterator]();it.next();try{it.next();}catch(e){}const fresh=r[Symbol.iterator]();`${r.start};${fresh.next().value};${r.start is uint8}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "255;255;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "borrowing still observes location liveness after iteration",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[1,2];let ref x=a[0];const it=(0..<a.length)[Symbol.iterator]();it.next();a.length=0;let result=false;try{x;}catch(e){result=e instanceof TypeError;}String(result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric metadata admission failure closes iterator",
+      "steps": [
+        {
+          "source": "type Bounds={min:number,max:number};meta Bounds{default={min:0,max:0};subtype(a,b){return true;}validate(v,m){return Number(v)>=m.min&&Number(v)<=m.max;}}type Small=uint8.<{min:0,max:2}>;const r:RangeFrom.<Small>=(1:=Small)..;const it=r[Symbol.iterator]();it.next();it.next();let answer=\"missing\";try{it.next();}catch(e){answer=String(e instanceof TypeError);}answer+\";\"+it.next().done+\";\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fractional wider integer step requires exact entry",
+      "steps": [
+        {
+          "source": "let answer=false;try{(0.5..<3).step(9007199254740993n);}catch(e){answer=e instanceof RangeError;}String(answer);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fractional exact wide stride can finish without carrier admission",
+      "steps": [
+        {
+          "source": "const it=(0.5..<3).step(9007199254740992n);`${it.next().value};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0.5;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator state cannot be forged with its prototype",
+      "steps": [
+        {
+          "source": "const it=(0..<2)[Symbol.iterator]();let answer=false;try{it.next.call(Object.create(Object.getPrototypeOf(it)));}catch(e){answer=e instanceof TypeError;}String(answer);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range public getters do not select cursor endpoints",
+      "steps": [
+        {
+          "source": "const r:Range.<uint8>=0..<3;Object.defineProperty(r,\"start\",{get(){throw new Error(\"public\");}});Object.defineProperty(r,\"end\",{get(){throw new Error(\"public\");}});String(r[Symbol.iterator]().next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata reentry",
+      "steps": [
+        {
+          "source": "let current:any;let errors=0;type Bounds={min:number,max:number};meta Bounds{default={min:0,max:0};subtype(a,b){return true;}validate(v,m){if(current!==undefined){try{current.next();}catch(e){if(e instanceof TypeError)errors++;}}return Number(v)>=m.min&&Number(v)<=m.max;}}type Small=uint8.<{min:0,max:2}>;const r:RangeFrom.<Small>=(1:=Small)..;const it=r[Symbol.iterator]();current=it;const first=it.next().value;current=undefined;`${first};${errors>0};${it.next().value}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;true;2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata rescale",
+      "steps": [
+        {
+          "source": "type Tag={tag:string};meta Tag{default={tag:\"\"};subtype(a,b){return a.tag===b.tag;}}primitive uint8{operator uint8.<Tag>(){return this+(1:=uint8);}}type U=uint8.<{tag:\"U\"}>;const r:RangeFrom.<U>=(0:=U)..;const it=r[Symbol.iterator]();let answer=\"missing\";try{it.next();}catch(e){answer=String(e instanceof RangeError);}answer+\";\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "abrupt metadata",
+      "steps": [
+        {
+          "source": "let fail=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return true;}validate(v,m){if(fail)throw new Error(\"admission\");return true;}}type T=uint8.<{flag:true}>;const r:RangeFrom.<T>=(0:=T)..;const it=r[Symbol.iterator]();fail=true;let answer=\"missing\";try{it.next();}catch(e){answer=String(e instanceof Error);}fail=false;answer+\";\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty floating interval OpenClosedRange",
+      "steps": [
+        {
+          "source": "const r:OpenClosedRange.<float32>=1<..=1;const it=r.step(2**-25);`${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty floating interval OpenRange",
+      "steps": [
+        {
+          "source": "const r:OpenRange.<float32>=1<..<1;const it=r.step(2**-25);`${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty floating interval Range",
+      "steps": [
+        {
+          "source": "const r:Range.<float32>=1..<1;const it=r.step(2**-25);`${it.next().done};${it.next().done}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid step checked even for empty interval",
+      "steps": [
+        {
+          "source": "(1..<1).step(0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stateful cursor is not a metadata record",
+      "steps": [
+        {
+          "source": "type M={mark:{}};meta M{default={mark:{}};subtype(a,b){return true;}}const it=(0..<3)[Symbol.iterator]();Reflect.makeType({kind:\"parameterized\",base:uint8,metadata:{mark:it}});\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    }
+  ]
+}
