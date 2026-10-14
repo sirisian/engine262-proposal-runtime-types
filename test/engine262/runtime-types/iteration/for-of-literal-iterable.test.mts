@@ -44,9 +44,10 @@ test('a range that does not fit is refused ONCE, naming the element', () => {
   expectThrown('for (const b: uint8 of 0..=256) {}', '256');
 });
 
-test('the loop and an annotated binding cannot disagree', () => {
-  // Both go through the same range arm, so they reach the same verdict.
-  expect(evaluated(intoBytes('let r: ClosedOpenRange.<uint8> = 0..<256; for (const b of r) s.add(b);'))).toBe('256');
+test('stored endpoint admission is distinct from loop item fit', () => {
+  // A direct loop may use 256 as an excluded sentinel; stored uint8 endpoints must fit.
+  expectThrown('let r: ClosedOpenRange.<uint8> = 0..<256;', '256');
+  expect(evaluated(intoBytes('let r: ClosedRange.<uint8> = 0..=255; for (const b of r) s.add(b);'))).toBe('256');
   expectThrown('let r: ClosedRange.<uint8> = 0..=256;', '256');
 });
 

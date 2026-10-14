@@ -1,4 +1,5 @@
 import { CanonicalizeType } from './intern.mts';
+import { rangePropertyType } from './std-signatures.mts';
 import type { TypeRecord, SignatureRecord } from './records.mts';
 import { wellKnownSymbols, Value } from '#self';
 
@@ -47,6 +48,8 @@ export function StaticFlatteningContribution(
     }
   };
   const member = (t: TypeRecord, key: string | typeof wellKnownSymbols.iterator): TypeRecord | null => {
+    const method = rangePropertyType(t, key);
+    if (method) return method;
     const shape = structureOf(t);
     return shape?.Kind === 'object' ? valueRead(shape.Properties.find((p) => p.key === key)) : null;
   };
@@ -89,6 +92,15 @@ export function StaticFlatteningContribution(
   }) };
 }
 
+/** A read-only query view, not a declaration of storage or method identity.
+ * Range member and iteration consumers share the default cursor contract.
+ */
+const iterationStructureOf = (type: TypeRecord | null, structureOf: (type: TypeRecord | null) => TypeRecord | null): TypeRecord | null => {
+  const method = rangePropertyType(type, wellKnownSymbols.iterator);
+  return method ? { Kind: 'object', Properties: [{ key: wellKnownSymbols.iterator, type: method, optional: false, readonly: false }], IndexSignatures: [] }
+    : structureOf(type);
+};
+
 /** #sec-static-iteration-contribution: infer from the iteration protocol, not indexed storage. */
 export function StaticIterationContribution(
   type: TypeRecord | null,
@@ -107,7 +119,7 @@ export function StaticIterationContribution(
   }
   // Arrays and tuples permit iterator replacement independently of storage.
   if (type.Kind === 'array' || type.Kind === 'tuple') return unknownContribution;
-  const shape = structureOf(type);
+  const shape = iterationStructureOf(type, structureOf);
   if (shape?.Kind !== 'object') return unknownContribution;
   const method = shape.Properties.find((property) => property.key === wellKnownSymbols.iterator)?.type;
   if (method?.Kind !== 'function' || method.Signatures.length !== 1) return unknownContribution;
@@ -211,7 +223,7 @@ export function StaticDelegationContribution(
   }
   // Indexed array/tuple storage does not prove a replaceable iterator's results.
   if (type.Kind === 'array' || type.Kind === 'tuple') return unknown;
-  const shape = structureOf(type);
+  const shape = iterationStructureOf(type, structureOf);
   if (shape?.Kind !== 'object') return unknown;
   const step = (result: TypeRecord | null): DelegationContribution => {
     if (!result) return unknown;

@@ -1577,7 +1577,7 @@
       "name": "metadata reentry",
       "steps": [
         {
-          "source": "let current:any;let errors=0;type Bounds={min:number,max:number};meta Bounds{default={min:0,max:0};subtype(a,b){return true;}validate(v,m){if(current!==undefined){try{current.next();}catch(e){if(e instanceof TypeError)errors++;}}return Number(v)>=m.min&&Number(v)<=m.max;}}type Small=uint8.<{min:0,max:2}>;const r:RangeFrom.<Small>=(1:=Small)..;const it=r[Symbol.iterator]();current=it;const first=it.next().value;current=undefined;`${first};${errors>0};${it.next().value}`;",
+          "source": "let current:any;let errors=0;type Bounds={min:number,max:number};meta Bounds{default={min:0,max:0};subtype(a,b){return true;}validate(v,m){if(current!==undefined){try{current.next();}catch(e){if(e instanceof TypeError)errors++;}}return Number(v)>=m.min&&Number(v)<=m.max;}}type Small=uint8.<{min:0,max:2}>;const r:RangeFrom.<Small>=(1:=Small)..;const it=r[Symbol.iterator]();current=it;const first:any=it.next().value;current=undefined;`${first};${errors>0};${it.next().value}`;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

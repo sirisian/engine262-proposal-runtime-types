@@ -226,22 +226,12 @@ test('a pipeline carries an iterator through a chain', () => {
  * `Iterable`'s parameter.
  */
 
-test('map erases the element type, as it does for arrays', () => {
-  // `map` is often described as the method that CHANGES the element type. It
-  // does not, here or for arrays: the side-table mechanism these signatures use
-  // has no way to bind a callback's return as a type parameter, so both return
-  // `any`. Asserted rather than left implied, because the expectation runs the
-  // other way and someone will check.
+test('iterator map retains its inferred callback result', () => {
   const g = 'function* g(): uint8 { yield 1; } ';
-  // The two erase it differently, which is worth pinning. An array's `map`
-  // returns bare `any`, which is assignable to anything, so a wrong annotation
-  // is ACCEPTED. An iterator's returns a carrier of `any`, so `toArray` gives
-  // `[].<any>`, and array invariance REFUSES a wrong annotation. Neither
-  // carries the callback's return type; they fail in opposite directions.
-  expect(ok(`${g}const a: [].<string> = g().map((x) => 's').toArray();`)).toBe(false);
+  expect(ok(`${g}const a: [].<string> = g().map((x) => 's').toArray();`)).toBe(true);
+  expect(ok(`${g}const a: [].<boolean> = g().map((x) => 's').toArray();`)).toBe(false);
+  // Ordinary Array mapping retains its existing gradual policy.
   expect(ok("const xs: [].<uint8> = [1]; const a: [].<string> = xs.map((x) => 's');")).toBe(true);
-  // Which is why `filter` and `take`, which KEEP the element, are the ones the
-  // chain tests above lean on.
 });
 
 test('destructuring reads a typed iterator', () => {

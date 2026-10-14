@@ -6122,7 +6122,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (expression.type === 'MemberExpression' && expression.MemberExpression.type === 'IdentifierReference'
         && expression.MemberExpression.name === 'Symbol'
         && !frames.some((frame) => frame.declaredNames.has('Symbol') || frame.bindingKinds.has('Symbol') || frame.dynamicBindings)) {
-      const name = expression.IdentifierName?.name;
+      const name = expression.IdentifierName?.name
+        ?? (expression.Expression?.type === 'StringLiteral' ? expression.Expression.value : undefined);
       if (name && Object.hasOwn(wellKnownSymbols, name)) return wellKnownSymbols[name as keyof typeof wellKnownSymbols];
     }
     if (expression.type === 'IdentifierReference') {
@@ -6176,7 +6177,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // Library members have the same contract for dot and known String keys.
   // This describes the typed view, not the identity of the runtime method.
   const collectionMemberType = (receiver: Known, key: string | SymbolValue): Known => {
-    const range = typeof key === 'string' ? rangePropertyType(receiver, key) : null;
+    const range = rangePropertyType(receiver, key);
     if (range) return range;
     // Checked before the String-key and type-argument gates: the absence is a
     // fact of WeakMap and WeakSet themselves, and `@@iterator` is in the table.
@@ -6193,9 +6194,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // Object patterns read properties, not iterator contributions. This query
   // returns only value contracts and emits no missing-key/bounds diagnostics.
   const sequencePropertyContribution = (receiver: Known, key: string | SymbolValue): Known => {
-    if (typeof key !== 'string' || !receiver) return null;
+    if (!receiver) return null;
     const range = rangePropertyType(receiver, key);
     if (range) return range;
+    if (typeof key !== 'string') return null;
     if (receiver.Kind === 'array') {
       if (key === 'length' || key === 'capacity') return indexTypeRecord();
       if (!/^(0|[1-9][0-9]*)$/.test(key)) return null;
@@ -15987,9 +15989,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // actual (possibly mixed) endpoint domain.
       const literalBased = (t: TypeRecord | null) => !!t && t.Kind === 'primitive' && t.Name === 'number';
       const typedEndpoint = !literalBased(start) ? start : (!literalBased(end) ? end : null);
-      const endpointDomain = start && end ? joinTypes(start, end) : start ?? end ?? anyTypeRecord;
+      // An unknown written endpoint can select a typed numeric carrier at
+      // runtime. A known Number endpoint alone does not prove Number items.
+      const unknownEndpoint = (r.RangeStart && (!start || start.Kind === 'any'))
+        || (r.RangeEnd && (!end || end.Kind === 'any'));
+      const endpointDomain = unknownEndpoint ? anyTypeRecord : start && end ? joinTypes(start, end) : start ?? end ?? anyTypeRecord;
       const element = contextualElement ?? endpointDomain;
-      const iterationElement = iterationContext ?? contextualElement ?? typedEndpoint ?? element;
+      const iterationElement = iterationContext ?? contextualElement ?? (unknownEndpoint ? anyTypeRecord : typedEndpoint ?? element);
       rangeIterationElements.set(node, iterationElement);
       // A consumer checks produced values, including excluded stops and empty
       // intervals. Formation alone makes no promise about implicit iteration.
@@ -20934,8 +20940,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (rest && minimumPosition >= target.Elements.length) candidates.push(restElementType(rest.Type));
         const wanted = candidates.reduce<Known>((joined, type) => joined ? joinTypes(joined, type) : type, null);
         if (spread) {
-          const contribution = StaticIterationContribution(staticType(element.AssignmentExpression), structureOf);
-          requireAssignable(contribution.element, wanted, node as ParseNode);
+          requireAssignable(spreadElementAt(element.AssignmentExpression, wanted), wanted, node as ParseNode);
           uncertain = true;
         } else {
           const fixedPosition = target.Elements[minimumPosition];
@@ -21031,6 +21036,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  // A fresh range literal has a produced-element fit judgment, distinct
+  // from its stored endpoint domain and from a stored range's cursor view.
+  // Keep that receiving context instead of comparing its broad Number
+  // protocol to a bounded numeric destination a second time.
+  const spreadElementAt = (expr: ParseNode, target: Known): Known => {
+    checkRangeAtElement(expr, target);
+    const literal = unparenthesized(expr);
+    if (literal?.type === 'RangeExpression' && target
+        && (isIntegerValueType(target) || (target.Kind === 'primitive' && isFloatTypeName(target.Name)))) return target;
+    return StaticIterationContribution(staticType(expr), structureOf).element;
+  };
+
   const checkArrayLiteralAgainst = (node: ParseNode.ArrayLiteral, target: TypeRecord & { Kind: 'array' }) => {
     const elements = expandValueSpreads((node.ElementList ?? []) as readonly ParseNode[]);
     let spread = false;
@@ -21042,9 +21059,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if ((el as ParseNode).type === 'SpreadElement') {
         spread = true;
         const operand = (el as ParseNode.SpreadElement).AssignmentExpression;
-        checkRangeAtElement(operand, target.Element);
-        const contribution = StaticIterationContribution(staticType(operand), structureOf);
-        requireAssignable(contribution.element, target.Element, node as ParseNode);
+        requireAssignable(spreadElementAt(operand, target.Element), target.Element, node as ParseNode);
         walk(el as ParseNode);
         continue;
       }
@@ -26620,7 +26635,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       let result: Known = expected;
       if (!expected) {
         const yielded = join(contributions.yielded, neverType);
-        const returned = join(contributions.returned, voidType);
+        const returned = join(contributions.returned, undefinedType);
         // A pending prerequisite is not a completed unknown answer. Record
         // completed components before wrapping unknowns as carrier `any`.
         if (!inputs.size) {
@@ -26630,7 +26645,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         if (inferenceResources.exhausted) return null;
         result = libraryTypeRecord(name, [yielded ?? anyTypeRecord,
-          returned?.Kind === 'primitive' && returned.Name === 'undefined' ? voidType : returned ?? anyTypeRecord, voidType]);
+          returned ?? anyTypeRecord, voidType]);
       }
       if (!inputs.size) {
         if (result && !mentionsTypeParameter(result)) publishedReturnTypes.set(node, result);
@@ -28723,7 +28738,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // `undefined` remains the CONTRIBUTION, so a body mixing a valueless path
       // with a value-carrying one still joins to `T | undefined`, which the
       // clause requires in the same breath.
-      if (contributions.length > 0 && contributions.every((c) => c.Kind === 'primitive' && (c as { Name?: string }).Name === 'undefined')) {
+      // Generator completion is a value carried by a done result, not an
+      // ordinary discarded function result. Preserve its undefined contract.
+      if (mode !== 'generator-return' && contributions.length > 0 && contributions.every((c) => c.Kind === 'primitive' && (c as { Name?: string }).Name === 'undefined')) {
         return voidType as Known;
       }
       const Members: TypeRecord[] = [];
@@ -32178,6 +32195,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     if (!element) return false;
     return parameters.slice(supplied.length - 1).some((p) => !p.Ref && !p.Optional && p.Initial === undefined && !p.DeclaredDefault
+      // The broad protocol of a fresh range literal does not prove that
+      // none of its actual values fits a numeric argument position. Unlike
+      // a homogeneous rest, fixed positions may have different domains.
+      && !(source?.type === 'RangeExpression' && (isIntegerValueType(p.Type)
+        || (p.Type.Kind === 'primitive' && isFloatTypeName(p.Type.Name))))
       && protocolArgumentFails(undefinedType, p.Type) && protocolArgumentFails(element, p.Type));
   };
 
@@ -32427,8 +32449,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // An open rest pack is bound by the specialization.
             if (!wanted || !mentionsTypeParameter(wanted)) {
               if (spread) {
-                checkRangeAtElement(argument.AssignmentExpression, wanted);
-                requireAssignable(StaticIterationContribution(staticType(argument.AssignmentExpression), structureOf).element, wanted, n as ParseNode);
+                requireAssignable(spreadElementAt(argument.AssignmentExpression, wanted), wanted, n as ParseNode);
               } else {
                 requireAssignable(argumentStaticType(argument, wanted), wanted, n as ParseNode);
               }

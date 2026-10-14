@@ -68,7 +68,7 @@ test('a declared number is unaffected', () => {
   expectStaticTypeError('let n: number = 5; let x: uint8 = n;');
 });
 
-test('a non-literal iterable is unaffected', () => {
-  expect(evaluated('const s = new Set.<uint32>(); for (const x of (0..<3).step(1)) s.add(x); String([...s].length);'))
-    .toBe('3');
+test('an explicit cursor keeps its established Number item', () => {
+  expectStaticTypeError('const s = new Set.<uint32>(); for (const x of (0..<3).step(1)) s.add(x);');
+  expect(evaluated('const s = new Set.<uint32>(); for (const x of (0..<3).step(1)) s.add(uint32(x)); String([...s].length);')).toBe('3');
 });

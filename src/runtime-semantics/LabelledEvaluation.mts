@@ -29,6 +29,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { CreateRefBinding } from '../execution-context/Environment.mts';
 import { TypeNodeToTypeRecord } from '../type-system/runtime.mts';
 import { RequireType } from '../abstract-ops/runtime-types.mts';
+import { EnforceInferredBinding } from '../type-system/inferred-binding.mts';
 import { InferredLoopBindingType } from '../type-system/check.mts';
 import { recordDeclaredType } from './LexicalDeclaration.mts';
 import { SoAStorageOf, SoAElementReference } from '../intrinsics/SoA.mts';
@@ -615,8 +616,17 @@ function* ForInOfBodyEvaluation(lhs: ParseNode, stmt: ParseNode.Statement, itera
     // each element converted, and the type retained for later writes.
     const inferred = !annotation && binding && surroundingAgent.feature('runtime-types')
       ? InferredLoopBindingType(binding as object) ?? null : null;
-    const declared = annotation ? Q(yield* TypeNodeToTypeRecord(annotation.Type)) : inferred;
-    const checked = declared ? Q(yield* RequireType(value, declared)) : value;
+    let declared = annotation ? Q(yield* TypeNodeToTypeRecord(annotation.Type)) : inferred;
+    let checked = declared ? Q(yield* RequireType(value, declared)) : value;
+    if (!declared && binding && surroundingAgent.feature('runtime-types')) {
+      // The checker also publishes the source protocol's inferred binding,
+      // independently of loop-body numeric-context inference. Preserve that
+      // entry boundary, including captured generic substitution, before the
+      // body can rely on it or elide a later check.
+      const admitted = Q(yield* EnforceInferredBinding(binding, checked));
+      declared = admitted.type ?? null;
+      checked = admitted.value;
+    }
     let result;
     if (initialize) {
       result = Q(yield* InitializeReferencedBinding(reference as ReferenceRecord, CopyValueClassInstance(checked)));

@@ -1,5 +1,5 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { Value, NumberValue, wellKnownSymbols } from '../value.mts';
+import { Value, NumberValue, SymbolValue, wellKnownSymbols } from '../value.mts';
 import {
   type ParameterRecord, type TypeRecord, type Known,
   anyType, neverType, substituteTypeParameters, builtinTypeRecord, libraryTypeRecord, rangeEnumRecord, makePrimitive, voidType, parameter,
@@ -237,7 +237,7 @@ export const rangeIntersectionResultType = (receiver: TypeRecord, other: Known):
  * not a new structural conversion or authority to bypass runtime boundaries.
  * It is shared by dot/computed reads and object-pattern contributions.
  */
-export const rangePropertyType = (receiver: Known, key: string): Known => {
+export const rangePropertyType = (receiver: Known, key: string | SymbolValue): Known => {
   if (receiver?.Kind !== 'nominal' || !isRangeFamilyName(receiver.LibraryName)) return null;
   const name = receiver.LibraryName;
   const args = receiver.Arguments;
@@ -309,6 +309,7 @@ export const rangePropertyType = (receiver: Known, key: string): Known => {
         Parameters: s.Parameters.map((p, i) => ({ ...p, Name: i === 0 ? 'callback' : p.Name })),
       })) };
     }
+    case wellKnownSymbols.iterator:
     case 'step':
     case 'reverse': return {
       Kind: 'function',

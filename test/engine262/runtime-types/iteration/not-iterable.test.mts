@@ -86,10 +86,10 @@ test('a UNION cannot be iterated when no member can', () => {
   expectThrown(dead('let u: uint8 | int32 = uint8(1); let [x] = u;'), 'is not iterable');
   expectThrown(dead('let u: uint8 | boolean = uint8(1); let y; [y] = u;'), 'is not iterable');
 
-  // A union with an ITERABLE member is left alone: iterating it is unsound, but
-  // narrowing is the escape, and refusing it would refuse the program that
-  // narrows first - the line the callability rule draws too.
-  expect(ok(dead('let u: uint8 | [].<uint8> = uint8(1); for (const x of u) { }'))).toBe(true);
+  // An unresolved union retains a viable iterable alternative. A known
+  // initializer first narrows to the non-iterable arm and must be refused.
+  expect(ok(dead('let u: uint8 | [].<uint8> = uint8(1); for (const x of u) { }'))).toBe(false);
+  expect(ok('function f(u:uint8|[].<uint8>){for(const x of u){}}')).toBe(true);
   expect(ok(dead('let u: uint8 | string = "x"; for (const x of u) { }'))).toBe(true);
 });
 

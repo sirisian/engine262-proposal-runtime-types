@@ -1,0 +1,1855 @@
+{
+  "cases": [
+    {
+      "name": "default ClosedRange iterator value includes item",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){const x:string=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default ClosedRange iterator value includes exhaustion",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){const x:uint8=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default ClosedRange iterator protocol return",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>):Iterator.<uint8,undefined,any>{return r[Symbol.iterator]();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default RangeFrom iterator value includes item",
+      "steps": [
+        {
+          "source": "function f(r:RangeFrom.<uint8>){const x:string=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default RangeFrom iterator value includes exhaustion",
+      "steps": [
+        {
+          "source": "function f(r:RangeFrom.<uint8>){const x:uint8=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default RangeFrom iterator protocol return",
+      "steps": [
+        {
+          "source": "function f(r:RangeFrom.<uint8>):Iterator.<uint8,undefined,any>{return r[Symbol.iterator]();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default RangeTo iterator value includes item",
+      "steps": [
+        {
+          "source": "function f(r:RangeTo.<uint8>){const x:string=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default RangeTo iterator value includes exhaustion",
+      "steps": [
+        {
+          "source": "function f(r:RangeTo.<uint8>){const x:uint8=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default RangeTo iterator protocol return",
+      "steps": [
+        {
+          "source": "function f(r:RangeTo.<uint8>):Iterator.<uint8,undefined,any>{return r[Symbol.iterator]();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default RangeFull iterator value includes item",
+      "steps": [
+        {
+          "source": "function f(r:RangeFull.<uint8>){const x:string=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default RangeFull iterator value includes exhaustion",
+      "steps": [
+        {
+          "source": "function f(r:RangeFull.<uint8>){const x:uint8=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default RangeFull iterator protocol return",
+      "steps": [
+        {
+          "source": "function f(r:RangeFull.<uint8>):Iterator.<uint8,undefined,any>{return r[Symbol.iterator]();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default RangeBounds iterator value includes item",
+      "steps": [
+        {
+          "source": "function f(r:RangeBounds.<uint8>){const x:string=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default RangeBounds iterator value includes exhaustion",
+      "steps": [
+        {
+          "source": "function f(r:RangeBounds.<uint8>){const x:uint8=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default RangeBounds iterator protocol return",
+      "steps": [
+        {
+          "source": "function f(r:RangeBounds.<uint8>):Iterator.<uint8,undefined,any>{return r[Symbol.iterator]();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default gradual receiver",
+      "steps": [
+        {
+          "source": "function f(r){const x:string=r[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default any receiver",
+      "steps": [
+        {
+          "source": "function f(r:any){const x:string=r[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default union receiver",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>|RangeBounds.<uint16>){const x:string=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default inferred cursor executes",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;const it=r[Symbol.iterator]();String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default completed cursor discriminates",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;const it=r[Symbol.iterator]();const a=it.next();if(a.done===false){const n:uint8=a.value;}const b=it.next();if(b.done===true){const z:undefined=b.value;}String(a.done)+\":\"+String(b.done)+\":\"+String(b.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false:true:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default next ignores input",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;const it=r[Symbol.iterator]();String(it.next(\"ignored\").value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default done rejects String",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){const x:string=r[Symbol.iterator]().next().done;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default self iteration preserves exhaustion",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){const x:uint8=r[Symbol.iterator]()[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default self iteration preserves identity",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;const it=r[Symbol.iterator]();String(it[Symbol.iterator]()===it);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default existing helper chain",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;String(r[Symbol.iterator]().filter(v=>v>0).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default existing helper callback rejects String input",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){r[Symbol.iterator]().forEach((v:string)=>{});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default replaced method rejects inferred initialization",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;r[Symbol.iterator]=()=>\"wrong\";let caught=false;try{const it=r[Symbol.iterator]();}catch(e){caught=e instanceof TypeError;}String(caught);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default replacement explicit any stays erased",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;r[Symbol.iterator]=()=>\"wrong\";const it:any=r[Symbol.iterator]();String(it);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "wrong"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default replaced method inferred return",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){return r[Symbol.iterator]();}const r:ClosedRange.<uint8>=1..=3;r[Symbol.iterator]=()=>\"wrong\";f(r);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default replacement bad protocol result",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){const it=r[Symbol.iterator]();return it.next();}const r:ClosedRange.<uint8>=1..=3;r[Symbol.iterator]=()=>({next(){return {value:\"wrong\",done:false};},[Symbol.iterator](){return this;}});f(r);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default no eager next during admission",
+      "steps": [
+        {
+          "source": "let calls=0;const r:ClosedRange.<uint8>=1..=3;r[Symbol.iterator]=()=>({next(){calls++;return {value:undefined,done:true};},[Symbol.iterator](){return this;}});const it=r[Symbol.iterator]();String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default failed initializer preserves effects and TDZ",
+      "steps": [
+        {
+          "source": "let effects=0;const r:ClosedRange.<uint8>=1..=3;r[Symbol.iterator]=()=>{effects++;return \"wrong\";};const rejected=r[Symbol.iterator]();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "String(effects);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        },
+        {
+          "source": "rejected;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "ReferenceError"
+          }
+        },
+        {
+          "source": "const fresh:ClosedRange.<uint8>=1..=3;const it=fresh[Symbol.iterator]();String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default number numeric item contribution",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<number>){const x:string=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default number numeric runtime type",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<number>=1..=3;const it=r[Symbol.iterator]();String(Reflect.typeOf(it.next().value)===(type number));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default bigint numeric item contribution",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<bigint>){const x:string=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default bigint numeric runtime type",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<bigint>=1..=3;const it=r[Symbol.iterator]();String(Reflect.typeOf(it.next().value)===(type bigint));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default uint8 numeric item contribution",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){const x:string=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default uint8 numeric runtime type",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;const it=r[Symbol.iterator]();String(Reflect.typeOf(it.next().value)===(type uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default int16 numeric item contribution",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<int16>){const x:string=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default int16 numeric runtime type",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int16>=1..=3;const it=r[Symbol.iterator]();String(Reflect.typeOf(it.next().value)===(type int16));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default uint128 numeric item contribution",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint128>){const x:string=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default uint128 numeric runtime type",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint128>=1..=3;const it=r[Symbol.iterator]();String(Reflect.typeOf(it.next().value)===(type uint128));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default float16 numeric item contribution",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<float16>){const x:string=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default float16 numeric runtime type",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float16>=1..=3;const it=r[Symbol.iterator]();String(Reflect.typeOf(it.next().value)===(type float16));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default float32 numeric item contribution",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<float32>){const x:string=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default float32 numeric runtime type",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float32>=1..=3;const it=r[Symbol.iterator]();String(Reflect.typeOf(it.next().value)===(type float32));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default float64 numeric item contribution",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<float64>){const x:string=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default float64 numeric runtime type",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float64>=1..=3;const it=r[Symbol.iterator]();String(Reflect.typeOf(it.next().value)===(type float64));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default literal endpoint domain widens items",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<1|3>){const x:1|3|undefined=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default literal endpoint domain includes interior",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<1|3>=1..=3;const it=r[Symbol.iterator]();String(it.next().value)+\":\"+String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1:2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default union domain preserves every carrier",
+      "steps": [
+        {
+          "source": "function f(r:RangeBounds.<uint8|uint16>){const x:uint8|undefined=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default any unresolved or unsupported domain remains gradual",
+      "steps": [
+        {
+          "source": "function f<T:type>(r:ClosedRange.<any>){const x:string=r[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default uint8|any unresolved or unsupported domain remains gradual",
+      "steps": [
+        {
+          "source": "function f<T:type>(r:ClosedRange.<uint8|any>){const x:string=r[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default uint8|string unresolved or unsupported domain remains gradual",
+      "steps": [
+        {
+          "source": "function f<T:type>(r:ClosedRange.<uint8|string>){const x:string=r[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default decimal32 unresolved or unsupported domain remains gradual",
+      "steps": [
+        {
+          "source": "function f<T:type>(r:ClosedRange.<decimal32>){const x:string=r[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default rational.<32> unresolved or unsupported domain remains gradual",
+      "steps": [
+        {
+          "source": "function f<T:type>(r:ClosedRange.<rational.<32>>){const x:string=r[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default float128 unresolved or unsupported domain remains gradual",
+      "steps": [
+        {
+          "source": "function f<T:type>(r:ClosedRange.<float128>){const x:string=r[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default T unresolved or unsupported domain remains gradual",
+      "steps": [
+        {
+          "source": "function f<T:type>(r:ClosedRange.<T>){const x:string=r[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default generic inferred iterator remains usable",
+      "steps": [
+        {
+          "source": "function f<T:type>(r:ClosedRange.<T>){return r[Symbol.iterator]();}const r:ClosedRange.<uint8>=1..=3;const it=f.<uint8>(r);String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default missing forward origin still fails",
+      "steps": [
+        {
+          "source": "const r:RangeTo.<uint8>=..<3;r[Symbol.iterator]();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default empty cursor stays exhausted",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=3..=1;const it=r[Symbol.iterator]();String(it.next().done)+\":\"+String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default cursor overflow stays fused",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint8>=255..;const it=r[Symbol.iterator]();const first=it.next();let caught=false;try{it.next();}catch(e){caught=e instanceof RangeError;}String(first.value)+\":\"+String(caught)+\":\"+String(it.next().done);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "255:true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default uint8 concrete metadata retained without eager items",
+      "steps": [
+        {
+          "source": "let count=0;type M={v:number};meta M{default={v:0};subtype(a,b){return a.v===b.v;}validate(x,m){count++;return true;}}type T=uint8.<{v:1}>;const r:ClosedRange.<T>=(1:=T)..=(3:=T);const before=count;const it=r[Symbol.iterator]();const unchanged=count===before;const v=it.next().value;String(unchanged)+\":\"+String(count>before)+\":\"+String(v is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default number concrete metadata retained without eager items",
+      "steps": [
+        {
+          "source": "let count=0;type M={v:number};meta M{default={v:0};subtype(a,b){return a.v===b.v;}validate(x,m){count++;return true;}}type T=number.<{v:1}>;const r:ClosedRange.<T>=(1:=T)..=(3:=T);const before=count;const it=r[Symbol.iterator]();const unchanged=count===before;const v=it.next().value;String(unchanged)+\":\"+String(count>before)+\":\"+String(v is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default Number metadata endpoint view remains an upper bound",
+      "steps": [
+        {
+          "source": "let count=0;type M={v:number};meta M{default={v:0};subtype(a,b){return a.v===b.v;}validate(x,m){count++;return true;}}type T=number.<{v:1}>;const a:ClosedRange.<T>=(1:=T)..=(3:=T);const r:RangeBounds.<T>=a;const it=r[Symbol.iterator]();String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default endpoint-only Number metadata view cannot promise metadata items",
+      "steps": [
+        {
+          "source": "let count=0;type M={v:number};meta M{default={v:0};subtype(a,b){return a.v===b.v;}validate(x,m){count++;return true;}}type T=number.<{v:1}>;function f(r:RangeBounds.<T>):Iterator.<T,undefined,any>{return r[Symbol.iterator]();}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default concrete Number metadata view preserves item contract",
+      "steps": [
+        {
+          "source": "let count=0;type M={v:number};meta M{default={v:0};subtype(a,b){return a.v===b.v;}validate(x,m){count++;return true;}}type T=number.<{v:1}>;function f(r:ClosedRange.<T>):Iterator.<T,undefined,any>{return r[Symbol.iterator]();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default endpoint-only typed numeric metadata preserves item contract",
+      "steps": [
+        {
+          "source": "let count=0;type M={v:number};meta M{default={v:0};subtype(a,b){return a.v===b.v;}validate(x,m){count++;return true;}}type T=uint8.<{v:1}>;function f(r:RangeBounds.<T>):Iterator.<T,undefined,any>{return r[Symbol.iterator]();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default literal endpoint union still exposes numeric completion",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<1|3>){const x:string=r.reverse().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "member r[Symbol.iterator]()",
+      "steps": [
+        {
+          "source": "function f1(r:ClosedRange.<uint8>){const f=r[Symbol.iterator];const {[Symbol.iterator]:g}=r;const x:string=r[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "member r[Symbol[\"iterator\"]]()",
+      "steps": [
+        {
+          "source": "function f1(r:ClosedRange.<uint8>){const f=r[Symbol.iterator];const {[Symbol.iterator]:g}=r;const x:string=r[Symbol[\"iterator\"]]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "member f()",
+      "steps": [
+        {
+          "source": "function f1(r:ClosedRange.<uint8>){const f=r[Symbol.iterator];const {[Symbol.iterator]:g}=r;const x:string=f().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "member g()",
+      "steps": [
+        {
+          "source": "function f1(r:ClosedRange.<uint8>){const f=r[Symbol.iterator];const {[Symbol.iterator]:g}=r;const x:string=g().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh cursors and self identity",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const a=r[Symbol.iterator]();const b=r[Symbol.iterator]();if(a===b||a[Symbol.iterator]()!==a||a.next().value!==1||a.next().value!==2||b.next().value!==1)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nullable optional short circuit",
+      "steps": [
+        {
+          "source": "let calls=0;function f(r:ClosedRange.<uint8>|null){r?.[Symbol.iterator]();}f(null);if(calls!==0)throw new Error(\"optional\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nullable optional includes item",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>|null){const x:string=r?.[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "extracted method is not bound",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;const f=r[Symbol.iterator];f();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mutable extracted replacement stays gradual",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){let g=r[Symbol.iterator];g=()=>\"text\";const x:string=g();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary same symbol contract",
+      "steps": [
+        {
+          "source": "function f(r:{[Symbol.iterator]:()=>{next:()=>{done:false,value:string}}}){const x:string=r[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "custom symbol remains gradual",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>,key:symbol){const x:string=r[key]();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shadowed Symbol does not grant builtin contract",
+      "steps": [
+        {
+          "source": "const Symbol={iterator:\"custom\"};function f(r:ClosedRange.<uint8>){const x:string=r[Symbol.iterator]();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "consumer for(const v of r){const x:string=v;}",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){for(const v of r){const x:string=v;}}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "consumer const [v]=r;const x:string=v;",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){const [v]=r;const x:string=v;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "consumer const xs:[].<string>=[...r];",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){const xs:[].<string>=[...r];}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "consumer const xs=Array.from(r);const x:string=xs[0];",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){const xs=Array.from(r);const x:string=xs[0];}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal endpoint range loop admits interior",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<1|3>=1..=3;let s=\"\";for(const v of r){s+=v;}if(s!==\"123\")throw new Error(\"interior\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal endpoints do not constrain loop items",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<1|3>){for(const v of r){const x:1|3=v;}}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal endpoint spread admits interior",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<1|3>=1..=3;const xs=[...r];if(xs[1]!==2)throw new Error(\"interior\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default helper chain sees item",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){r[Symbol.iterator]().map(v=>{const x:string=v;return x;});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "flatMap returning range sees cursor item",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){const x:string=r.flatMap(v=>r).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "flatMap returning range executes",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const xs=r.flatMap(v=>r).toArray();if(String(xs)!==\"1,2,1,2\")throw new Error(\"flatMap\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "yield star carries item",
+      "steps": [
+        {
+          "source": "function* g(r:ClosedRange.<uint8>){yield* r;}function f(r:ClosedRange.<uint8>){const x:string=g(r).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "yield star terminal is undefined",
+      "steps": [
+        {
+          "source": "function* g(r:ClosedRange.<uint8>){const x:string=yield* r;return x;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "yield star executes and returns undefined",
+      "steps": [
+        {
+          "source": "function* g(r:ClosedRange.<uint8>){return yield* r;}const r:ClosedRange.<uint8>=1..=1;const it=g(r);const a=it.next();const b=it.next();const av:any=a.value;if(av!==1||b.done!==true)throw new Error(\"yield\");const v:any=b.value;if(v!==undefined)throw new Error(\"terminal\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range iterator lookup preserves throw",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;Object.defineProperty(r,Symbol.iterator,{get(){throw new RangeError(\"getter\");}});r[Symbol.iterator]();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "query does not call hook or next",
+      "steps": [
+        {
+          "source": "let gets=0;let calls=0;const r:ClosedRange.<uint8>=1..=1;Object.defineProperty(r,Symbol.iterator,{get(){gets++;return function(){calls++;return {next(){throw new Error(\"next\");},[Symbol.iterator](){return this;}};};}});const it=r[Symbol.iterator]();if(gets!==1||calls!==1)throw new Error(\"calls\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replaced iterator wrong item fails receiving loop",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;r[Symbol.iterator]=function*(){yield \"wrong\";};for(const v of r){const n:uint8=v;}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "array indexed storage is not iterator evidence",
+      "steps": [
+        {
+          "source": "const xs:[].<uint8>=[1];xs[Symbol.iterator]=function*(){yield \"text\";};const r:ClosedRange.<uint8>=1..=1;const x:string=r.flatMap(v=>xs).next().value;if(x!==\"text\")throw new Error(\"array\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unresolved generic cursor stays gradual",
+      "steps": [
+        {
+          "source": "function f<T:type>(r:ClosedRange.<T>){const x:string=r[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional existing hook replacement is observed",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;r[Symbol.iterator]=()=>({next(){return {done:true,value:undefined};},[Symbol.iterator](){return this;}});const it=r[Symbol.iterator]();if(it.next().done!==true)throw new Error(\"replacement\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const symbol alias retains member view",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){const key=Symbol.iterator;const x:string=r[key]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary spread array keeps gradual storage",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){const xs=[...r];const x:string=xs[0];}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replaced iterator rejects before untyped body",
+      "steps": [
+        {
+          "source": "let body=0;const r:ClosedRange.<uint8>=1..=1;r[Symbol.iterator]=function*(){yield \"wrong\";};for(const v of r){body++;}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "var iteration binding receives inferred contract",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;r[Symbol.iterator]=function*(){yield \"wrong\";};for(var v of r){}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "loop admission failure closes iterator and skips body",
+      "steps": [
+        {
+          "source": "let closed=0;let body=0;const r:ClosedRange.<uint8>=1..=1;r[Symbol.iterator]=function*(){try{yield \"wrong\";}finally{closed++;}};try{for(const v of r){body++;}}catch(e){if(!(e instanceof TypeError))throw e;}if(closed!==1||body!==0)throw new Error(\"order\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit any loop binding stays gradual",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;r[Symbol.iterator]=function*(){yield \"text\";};let result=\"\";for(const v:any of r){result+=v;}if(result!==\"text\")throw new Error(\"any\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "loop binding retains inferred store type",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;const wrong:any=\"wrong\";for(let v of r){v=wrong;}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic structural loop checks captured type",
+      "steps": [
+        {
+          "source": "function f<T:type>(xs:Iterable.<T>){for(const v of xs){}}const raw:any={[Symbol.iterator]:function*(){yield \"wrong\";}};f.<uint8>(raw);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic structural loop accepts captured type",
+      "steps": [
+        {
+          "source": "function f<T:type>(xs:Iterable.<T>){for(const v of xs){}}const r:ClosedRange.<uint8>=1..=1;const raw:any=r;f.<uint8>(raw);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generator expression preserves undefined completion",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;const g=function*(r:ClosedRange.<uint8>){return yield* r;};const it=g(r);it.next();const last=it.next();if(last.done===true){const v:undefined=last.value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generator do preserves undefined completion",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;const it=do*{return yield* r;};it.next();const last=it.next();if(last.done===true){const v:undefined=last.value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct literal array spread retains element fit",
+      "steps": [
+        {
+          "source": "const xs:[].<uint8>=[...(0..<256)];String(xs.length);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "256"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty literal spread fits bounded domain",
+      "steps": [
+        {
+          "source": "const xs:[].<uint8>=[...300..<0];String(xs.length);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct literal rest spread retains element fit",
+      "steps": [
+        {
+          "source": "function f(...xs:[].<uint8>){return xs.length;}String(f(...0..<256));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "256"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple rest spread retains element fit",
+      "steps": [
+        {
+          "source": "const xs:[... [].<uint8>]=[...0..<3];String(xs.length);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal spread rejects produced sentinel",
+      "steps": [
+        {
+          "source": "const xs:[].<uint8>=[...0..=256];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RANGE_VALUE",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal spread does not adopt nonnumeric destination",
+      "steps": [
+        {
+          "source": "const xs:[].<string>=[...0..<3];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown endpoint does not prove Number loop binding",
+      "steps": [
+        {
+          "source": "let e=(3:=uint8);let n=0;for(const v of 0..<e){n++;}String(n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit gradual endpoint selects typed carrier",
+      "steps": [
+        {
+          "source": "function f(e:any){let n=0;for(const v of 0..<e){n++;}return n;}String(f(3:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "known typed endpoint retains carrier",
+      "steps": [
+        {
+          "source": "const e:uint8=3;let n=0;for(const v of 0..<e){const x:uint8=v;n++;}String(n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown stored endpoint retains cursor uncertainty",
+      "steps": [
+        {
+          "source": "function f(e:any){const r=0..<e;let n=0;for(const v of r){n++;}return n;}String(f(3:=uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiving metadata validation is outside cursor reentry guard",
+      "steps": [
+        {
+          "source": "let current:any;let errors=0;type Bounds={min:number,max:number};meta Bounds{default={min:0,max:0};subtype(a,b){return true;}validate(v,m){if(current!==undefined){try{current.next();}catch(e){if(e instanceof TypeError)errors++;}}return Number(v)>=m.min&&Number(v)<=m.max;}}type Small=uint8.<{min:0,max:2}>;const r:RangeFrom.<Small>=(1:=Small)..;const it=r[Symbol.iterator]();current=it;const first=it.next().value;current=undefined;`${first};${errors>0};${it.next().value}`;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gradual receiving binding isolates cursor reentry guard",
+      "steps": [
+        {
+          "source": "let current:any;let errors=0;type Bounds={min:number,max:number};meta Bounds{default={min:0,max:0};subtype(a,b){return true;}validate(v,m){if(current!==undefined){try{current.next();}catch(e){if(e instanceof TypeError)errors++;}}return Number(v)>=m.min&&Number(v)<=m.max;}}type Small=uint8.<{min:0,max:2}>;const r:RangeFrom.<Small>=(1:=Small)..;const it=r[Symbol.iterator]();current=it;const first:any=it.next().value;current=undefined;`${first};${errors>0};${it.next().value}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;true;2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed argument literal spread retains receiving admission",
+      "steps": [
+        {
+          "source": "function f(x:uint8){return x;}String(f(...1..=1));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed literal spread keeps distinct numeric positions",
+      "steps": [
+        {
+          "source": "function f(x:uint8,y:uint16){return y;}String(f(...255..=256));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "256"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed literal spread keeps numeric argument runtime check",
+      "steps": [
+        {
+          "source": "function f(x:uint8){return x;}f(...256..=256);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed stored range uses its established cursor domain",
+      "steps": [
+        {
+          "source": "function f(x:uint8){return x;}const r:ClosedRange.<number>=1..=1;f(...r);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_CALL_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
