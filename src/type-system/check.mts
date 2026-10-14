@@ -17232,6 +17232,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const node = argument.type === 'NamedArgument' ? argument.AssignmentExpression : argument;
     return node.type === 'RefExpression' ? callValueType(staticType(node)) : staticTypeIn(node, contextual);
   };
+  // A callback can infer an open result parameter from established input
+  // positions. Give its fresh literal those inputs before inspecting its
+  // return, without declaring the still-unsolved result as a body obligation.
+  const genericCallbackArgumentType = (argument: ParseNode, formal: Known,
+    names: ReadonlySet<string>, bindings: ReadonlyMap<string, TypeRecord>): Known => {
+    const node = patternExpression(argument.type === 'NamedArgument' ? argument.AssignmentExpression : argument)!;
+    const contextual = formal && substituteTypeParameters(formal, bindings);
+    if (isFunctionLiteral(node) && contextual?.Kind === 'function' && contextual.Signatures.length === 1) {
+      const signature = contextual.Signatures[0];
+      const result = signature.Return;
+      if (!signature.TypeParameters?.length && result?.Kind === 'parameter' && names.has(result.Name)
+        && !bindings.has(result.Name)) {
+        const unknowns = new Map([...names].filter((name) => !bindings.has(name)).map((name) => [name, anyTypeRecord]));
+        const establishedInputs = signature.Parameters.every((p) => SameType(p.Type, substituteTypeParameters(p.Type, unknowns)!));
+        if (establishedInputs) return staticTypeIn(node, { ...contextual,
+          Signatures: [{ ...signature, Return: anyTypeRecord }] });
+      }
+    }
+    return argumentStaticType(argument);
+  };
   // A call decays in value positions. Location consumers explicitly request
   // its undegraded return contract, including unions of reference returns.
   /**
@@ -19090,13 +19110,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const names = new Set(only.TypeParameters!.map((t) => t.Name));
               let parameters = (only as unknown as { Parameters?: readonly { Type?: Known }[] }).Parameters ?? [];
               const suppliedArguments = (node as { Arguments?: readonly ParseNode[] }).Arguments ?? [];
-              let passed = suppliedArguments.map((a) => argumentStaticType(a as ParseNode));
+              let passed = suppliedArguments.map((a, i) => genericCallbackArgumentType(a, parameters[i]?.Type ?? null, names, bindings));
               if (suppliedArguments.some((arg) => arg.type === 'NamedArgument')) {
                 const declaredParameters = (only as unknown as SignatureRecord).Parameters;
                 const mapped = mapCallArguments(declaredParameters, suppliedArguments);
                 parameters = declaredParameters.map((parameter) => ({ Type: parameter.Type }));
                 passed = declaredParameters.map((parameter, slot) => {
-                  const supplied = mapped.entries.filter((entry) => entry.slot === slot).map((entry) => argumentStaticType(entry.node));
+                  const supplied = mapped.entries.filter((entry) => entry.slot === slot).map((entry) => genericCallbackArgumentType(entry.node, parameter.Type, names, bindings));
                   if (!parameter.Rest) return supplied[0] ?? null;
                   if (supplied.some((type) => !type)) return null;
                   return { Kind: 'tuple', Elements: supplied.map((type) => ({ Type: type!, Rest: false, Initial: 'none' as const })) } as TypeRecord;
@@ -32644,7 +32664,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const kind = (entry.node as { type?: string }).type;
               return adaptTo && (kind === 'ObjectLiteral' || kind === 'ArrayLiteral')
                 ? staticTypeIn(entry.node, adaptTo)
-                : argumentStaticType(entry.node);
+                : genericCallbackArgumentType(entry.node, pr.Type, new Set(generic.map((tp) => tp.Name)), bindings);
             });
             if (!pr.Rest) {
               return supplied[0] ?? null;
@@ -37438,48 +37458,45 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // even a String is known to be a `T: string`.
         let bodyTypeParams = false;
         try {
-          // PUBLISHED FIRST, and deliberately outside the scope below. A
-          // published signature is what the CALL BOUNDARY reads, and a parameter
-          // annotation resolved to an opaque `T` there would refuse `id(5)`
-          // against a bare `T` - which `#sec-inference-and-function-forms` says
-          // must not happen, since the boundary sees one function for every
-          // instantiation. The scope is for the BODY only.
-          publishLiteralReturn(n as ParseNode, (n.FormalParameters ?? []).map((prm) => {
-            const ann = (prm as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-            const resolvedParam = ann ? resolveType(ann.Type) : null;
-            // #sec-type-annotations: "A rest element's annotation is the type of
-            // what it COLLECTS, an ~array~ or ~tuple~ type rather than an element
-            // type ... It is a type error if the annotation does not RESOLVE to
-            // an array or tuple type".
-            //
-            // On what it RESOLVES to, not on how it is written: a name, a type
-            // parameter and a computed type are each judged by what they denote,
-            // which is why this cannot be an Early Error. `resolveType` answers a
-            // type parameter's CONSTRAINT here, so a rest declared `...a: C` is
-            // judged by C's bound and the error lands at the declaration.
-            //
-            // Both readings were accepted before, with no rule saying which
-            // applied: `...a: [].<uint32>` collected uint32s and `...a: string`
-            // collected Strings. `sec-type-annotations` said one thing and
-            // `table-typed-statics`' `Array.of` row the other.
-            if (ann && (prm as ParseNode).type === 'BindingRestElement' && resolvedParam) {
-              // A type PARAMETER is judged by its CONSTRAINT, which is the whole
-              // reason this is a resolution-time rule rather than an Early Error:
-              // `resolveType` answers the parameter record itself, and its bound
-              // is what says whether the rest is well formed. An unconstrained
-              // parameter has none and is refused - which is the rule asking for
-              // `<C extends [].<any>>`, the form the design already writes.
-              const judged = resolvedParam.Kind === 'parameter'
-                ? (resolvedParam as { Constraint?: TypeRecord }).Constraint
-                : resolvedParam;
-              if (!judged || (judged.Kind !== 'array' && judged.Kind !== 'tuple')) {
-                report(resolvedParam as TypeRecord, { Kind: 'array', Element: anyTypeRecord, Extent: 'dynamic' } as TypeRecord);
-              }
-            }
-            return resolvedParam;
-          }));
+          // Publication and body checking resolve the same own binders.
+          // Erasing them here loses captures in returned generic functions;
+          // the runtime applies the published symbolic contract at each call.
           bodyTypeParams = pushTypeParameterScopeOf(n as ParseNode);
           try {
+            publishLiteralReturn(n as ParseNode, (n.FormalParameters ?? []).map((prm) => {
+              const ann = (prm as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
+              const resolvedParam = ann ? resolveType(ann.Type) : null;
+              // #sec-type-annotations: "A rest element's annotation is the type of
+              // what it COLLECTS, an ~array~ or ~tuple~ type rather than an element
+              // type ... It is a type error if the annotation does not RESOLVE to
+              // an array or tuple type".
+              //
+              // On what it RESOLVES to, not on how it is written: a name, a type
+              // parameter and a computed type are each judged by what they denote,
+              // which is why this cannot be an Early Error. `resolveType` answers a
+              // type parameter's CONSTRAINT here, so a rest declared `...a: C` is
+              // judged by C's bound and the error lands at the declaration.
+              //
+              // Both readings were accepted before, with no rule saying which
+              // applied: `...a: [].<uint32>` collected uint32s and `...a: string`
+              // collected Strings. `sec-type-annotations` said one thing and
+              // `table-typed-statics`' `Array.of` row the other.
+              if (ann && (prm as ParseNode).type === 'BindingRestElement' && resolvedParam) {
+                // A type PARAMETER is judged by its CONSTRAINT, which is the whole
+                // reason this is a resolution-time rule rather than an Early Error:
+                // `resolveType` answers the parameter record itself, and its bound
+                // is what says whether the rest is well formed. An unconstrained
+                // parameter has none and is refused - which is the rule asking for
+                // `<C extends [].<any>>`, the form the design already writes.
+                const judged = resolvedParam.Kind === 'parameter'
+                  ? (resolvedParam as { Constraint?: TypeRecord }).Constraint
+                  : resolvedParam;
+                if (!judged || (judged.Kind !== 'array' && judged.Kind !== 'tuple')) {
+                  report(resolvedParam as TypeRecord, { Kind: 'array', Element: anyTypeRecord, Extent: 'dynamic' } as TypeRecord);
+                }
+              }
+              return resolvedParam;
+            }));
             // As for an arrow: a function EXPRESSION in a contextual position takes the
             // target's return type. A declaration is in no such position, so it has no
             // entry here and this passes nothing for it.

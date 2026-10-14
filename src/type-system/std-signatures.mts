@@ -155,8 +155,8 @@ export const rangeIteratorItemType = (domain: TypeRecord, endpointView = false):
  * IteratorHelper is not a global constructor. Keep exhaustion undefined on
  * both next and the self-iteration protocol, independently of public defaults.
  */
-const rangeIteratorType = (element: TypeRecord, endpointView: boolean): TypeRecord => {
-  const args = [rangeIteratorItemType(element, endpointView), makePrimitive('undefined'), anyType];
+const iteratorHelperType = (element: TypeRecord): TypeRecord => {
+  const args = [element, makePrimitive('undefined'), anyType];
   const iterator = iterationInterfaceRecord('Iterator', args)! as Extract<TypeRecord, { Kind: 'object' }>;
   return {
     ...libraryTypeRecord('IteratorHelper', args)! as Extract<TypeRecord, { Kind: 'nominal' }>,
@@ -291,12 +291,14 @@ export const rangePropertyType = (receiver: Known, key: string): Known => {
     case 'isEmpty':
     case 'isFull': return makePrimitive('boolean');
     case 'length': return makePrimitive('bigint');
+    case 'map':
+    case 'filter':
     case 'toArray':
     case 'forEach':
     case 'some':
     case 'every':
     case 'find': {
-      // Forwarded terminal helpers consume the cursor's item domain, which
+      // Forwarded helpers consume the cursor's item domain, which
       // need not be the range's endpoint domain. Reuse the iterator contract
       // without making a claim about either replaceable method's identity.
       const signature = iteratorMethodSignature(key, rangeIteratorItemType(element, view));
@@ -309,7 +311,7 @@ export const rangePropertyType = (receiver: Known, key: string): Known => {
     case 'reverse': return {
       Kind: 'function',
       Signatures: [{ Parameters: key === 'step' ? [parameter(anyType, { Name: 'by', Optional: true })] : [],
-        Return: rangeIteratorType(element, view), Untyped: false }],
+        Return: iteratorHelperType(rangeIteratorItemType(element, view)), Untyped: false }],
     } as unknown as Known;
     // Parameters retain their runtime numeric validation. This return view
     // neither coerces counts/factors nor claims every domain can complete.
@@ -377,8 +379,20 @@ export const iteratorMethodSignature = (name: string, element: TypeRecord): Know
   // `Iterator.<T>` stays the interface a hand-written iterator satisfies.
   const iteratorOf = (t: TypeRecord) => libraryTypeRecord('IteratorHelper', [t, voidType, voidType])!;
   switch (name) {
-    case 'map': return fn([cb(anyT) as TypeRecord], iteratorOf(anyT));
-    case 'filter': return fn([cb(boolType) as TypeRecord], iteratorOf(element));
+    case 'map': {
+      // A fresh mapper first adopts the established input positions; ordinary
+      // callback-result inference then binds U. Avoid capturing a free U in I.
+      let resultName = 'U';
+      while (!SameType(element, substituteTypeParameters(element, new Map([[resultName, neverType]]))!)) resultName += '_';
+      const declaration = { type: 'TypeParameter', BindingIdentifier: { name: resultName } } as ParseNode.TypeParameter;
+      const result: TypeRecord = { Kind: 'parameter', Name: resultName };
+      return { Kind: 'function', Signatures: [{
+        TypeParameters: [{ Name: resultName, Kind: 'type', Variadic: false, Variance: 'invariant', Arity: 0,
+          ConstraintNode: null, DefaultNode: null, Declaration: declaration, Parameter: result }],
+        Parameters: [parameter(cb(result) as TypeRecord, { Name: 'callback' })], Return: iteratorHelperType(result),
+      }] };
+    }
+    case 'filter': return fn([cb(boolType) as TypeRecord], iteratorHelperType(element), ['callback']);
     case 'take':
     case 'drop': return fn([index], iteratorOf(element));
     case 'flatMap': return fn([cb(anyT) as TypeRecord], iteratorOf(anyT), ['callback']);

@@ -16,18 +16,20 @@ test('a generic interface discriminates its type arguments', () => {
   expect(evaluated(`${P} ${o} String(o is P.<string>);`)).toBe('false');
 });
 
-test('the wrong argument is refused at every boundary, not just `is`', () => {
-  // The refusal is not confined to the operator. A value crossing a parameter or an
-  // annotation must not later be READ at a type it does not have - a `uint8` returned from
-  // a function declared `: string` - which makes this a soundness property and not only a
-  // matter of which application is refused.
-  expectThrown(`${P} ${o} function f(p: P.<string>) { return 1; } f(o);`);
-  expectThrown(`${P} ${o} let q: P.<string> = o;`);
-  expectThrown(`${P} ${o} function f(p: P.<string>): string { return p.x; } f(o);`);
-  // And a declared, checked implementation crossed it too - not only ad-hoc
-  // object literals.
+test('an inadmissible member is refused at every boundary, not just `is`', () => {
+  // Membership and boundary conversion are different judgments. Numeric to
+  // String conversion is permitted; a numeric value cannot become a Boolean
+  // at a checked boundary. Keep that genuinely inadmissible target here.
+  expectThrown(`${P} ${o} function f(p: P.<boolean>) { return 1; } f(o);`);
+  expectThrown(`${P} ${o} let q: P.<boolean> = o;`);
+  expectThrown(`${P} ${o} function f(p: P.<boolean>): boolean { return p.x; } f(o);`);
   expectThrown('interface GS<T: type> { x: T; } class GI implements GS.<uint8> { x: uint8; } '
     + 'let h: GS.<string> = new GI();');
+});
+
+test('a permitted structural conversion preserves identity and changes the member', () => {
+  expect(evaluated(`${P} ${o} function f(p: P.<string>): string { return p.x; } String(f(o)) + ":" + typeof o.x;`)).toBe('1:string');
+  expect(evaluated(`${P} ${o} let q: P.<string> = o; String(q === o) + ":" + typeof q.x;`)).toBe('true:string');
 });
 
 test('subtyping discriminates the arguments too, in both directions', () => {

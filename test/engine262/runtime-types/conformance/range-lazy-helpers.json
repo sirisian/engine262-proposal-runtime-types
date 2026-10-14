@@ -1,0 +1,1522 @@
+{
+  "cases": [
+    {
+      "name": "ClosedRange map result",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.map(v=>v).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom map result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeFrom.<uint8>){const x:string=r.map(v=>v).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo map result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeTo.<uint8>){const x:string=r.map(v=>v).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull map result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeFull.<uint8>){const x:string=r.map(v=>v).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds map result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeBounds.<uint8>){const x:string=r.map(v=>v).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "map member r[\"map\"](v=>v)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r[\"map\"](v=>v).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "map member r?.map(v=>v)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r?.map(v=>v).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "map member r.map?.(v=>v)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.map?.(v=>v).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "map extracted const f=r.map;",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const f=r.map;const x:string=f(v=>v).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "map extracted const {map:f}=r;",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const {map:f}=r;const x:string=f(v=>v).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "map contextual v",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.map((v,i)=>{const wrong:string=v;return v;});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "map contextual i",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.map((v,i)=>{const wrong:string=i;return v;});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "map includes exhaustion",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:uint8=r.map(v=>v).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "map self iteration mismatch",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.map(v=>v)[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "map self iteration closes result",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const it=r.map(v=>v);const x:uint8|undefined=it[Symbol.iterator]().next().value;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map structural result admission",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const it:Iterator.<uint8,undefined,any>=r.map(v=>v);String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map wrong structural result",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const it:Iterator.<string,undefined,any>=r.map(v=>v);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "map remains lazy",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;let visits=0;const it=r.map(v=>{visits++;return v;});const before=visits;it.next();String(before)+\":\"+String(visits);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map exhaustion is undefined",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;const it=r.map(v=>v);it.next();const last=it.next();String(last.done)+\":\"+String(last.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map empty skips callback",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=2..=1;let visits=0;const it=r.map(v=>{visits++;return v;});String(it.next().done)+\":\"+String(visits);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map contextual runtime carriers",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let result=\"\";const it=r.map((v,i)=>{result=String(Reflect.typeOf(v)===(type uint8))+\":\"+String(Reflect.typeOf(i)===(type uint64));return v;});it.next();result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map replacement guards r",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.map=function(cb){cb(\"wrong\",0);};let caught=false;try{r.map((v,i)=>{entered++;return v;});}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map replacement guards Iterator.prototype",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;Iterator.prototype.map=function(cb){cb(\"wrong\",0);};let caught=false;try{r.map((v,i)=>{entered++;return v;});}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map retained callback input",
+      "steps": [
+        {
+          "source": "let saved:any;let entered=0;const r:ClosedRange.<uint8>=1..=1;r.map=function(cb){saved=cb;};r.map((v,i)=>{entered++;return v;});let caught=false;try{saved(\"wrong\",0);}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map contextual later store",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let bad:any=\"wrong\";let caught=false;try{const it=r.map(v=>{v=bad;return v;});it.next();}catch(e){caught=e instanceof TypeError;}String(caught);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map written any input remains gradual",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let result=\"\";const it=r.map((v,i:any)=>{result=String(Reflect.typeOf(i)===(type number));return v;});it.next();result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map preexisting callback remains uncontextualized",
+      "steps": [
+        {
+          "source": "let result=\"\";function cb(v,i){result=String(Reflect.typeOf(i)===(type number));return v;}const r:ClosedRange.<uint8>=1..=1;const it=r.map(cb);it.next();result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map any receiver remains gradual",
+      "steps": [
+        {
+          "source": "function unused(r:any){const x:string=r.map(v=>v).next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map optional short circuit",
+      "steps": [
+        {
+          "source": "let effects=0;function run(r:ClosedRange.<uint8>|null){r?.map((effects++,v=>v));}run(null);String(effects);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map replacement result cannot initialize",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>){return r.map(v=>v);}const r:ClosedRange.<uint8>=1..=1;r.map=()=>\"wrong\";read(r);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map endpoint literal widens to interior",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<1|3>=1..=3;String(r.map(v=>v).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map endpoint literal is not item set",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<1|3>){const x:1|3|undefined=r.map(v=>v).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "map endpoint view retains union",
+      "steps": [
+        {
+          "source": "function unused(r:RangeBounds.<uint8|uint16>){const x:uint8|undefined=r.map(v=>v).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "map unbounded lazy prefix",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint8>=1..;const it=r.map(v=>v);String(it.next().value)+\":\"+String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1:2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map domain bigint",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<bigint>=1..=1;const v=r.map(v=>v).next().value;String(Reflect.typeOf(v)===(type bigint));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map domain int16",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int16>=1..=1;const v=r.map(v=>v).next().value;String(Reflect.typeOf(v)===(type int16));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map domain uint128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint128>=1..=1;const v=r.map(v=>v).next().value;String(Reflect.typeOf(v)===(type uint128));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map domain float16",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float16>=1..=1;const v=r.map(v=>v).next().value;String(Reflect.typeOf(v)===(type float16));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "map domain float64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float64>=1..=1;const v=r.map(v=>v).next().value;String(Reflect.typeOf(v)===(type float64));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange filter result",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.filter(v=>true).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom filter result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeFrom.<uint8>){const x:string=r.filter(v=>true).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo filter result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeTo.<uint8>){const x:string=r.filter(v=>true).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull filter result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeFull.<uint8>){const x:string=r.filter(v=>true).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds filter result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeBounds.<uint8>){const x:string=r.filter(v=>true).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter member r[\"filter\"](v=>true)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r[\"filter\"](v=>true).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter member r?.filter(v=>true)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r?.filter(v=>true).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter member r.filter?.(v=>true)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.filter?.(v=>true).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter extracted const f=r.filter;",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const f=r.filter;const x:string=f(v=>true).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter extracted const {filter:f}=r;",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const {filter:f}=r;const x:string=f(v=>true).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter contextual v",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.filter((v,i)=>{const wrong:string=v;return true;});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter contextual i",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.filter((v,i)=>{const wrong:string=i;return true;});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter includes exhaustion",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:uint8=r.filter(v=>true).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter self iteration mismatch",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.filter(v=>true)[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter self iteration closes result",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const it=r.filter(v=>true);const x:uint8|undefined=it[Symbol.iterator]().next().value;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter structural result admission",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const it:Iterator.<uint8,undefined,any>=r.filter(v=>true);String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter wrong structural result",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const it:Iterator.<string,undefined,any>=r.filter(v=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter remains lazy",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;let visits=0;const it=r.filter(v=>{visits++;return true;});const before=visits;it.next();String(before)+\":\"+String(visits);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter exhaustion is undefined",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;const it=r.filter(v=>true);it.next();const last=it.next();String(last.done)+\":\"+String(last.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter empty skips callback",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=2..=1;let visits=0;const it=r.filter(v=>{visits++;return true;});String(it.next().done)+\":\"+String(visits);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter contextual runtime carriers",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let result=\"\";const it=r.filter((v,i)=>{result=String(Reflect.typeOf(v)===(type uint8))+\":\"+String(Reflect.typeOf(i)===(type uint64));return true;});it.next();result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter replacement guards r",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.filter=function(cb){cb(\"wrong\",0);};let caught=false;try{r.filter((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter replacement guards Iterator.prototype",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;Iterator.prototype.filter=function(cb){cb(\"wrong\",0);};let caught=false;try{r.filter((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter retained callback input",
+      "steps": [
+        {
+          "source": "let saved:any;let entered=0;const r:ClosedRange.<uint8>=1..=1;r.filter=function(cb){saved=cb;};r.filter((v,i)=>{entered++;return true;});let caught=false;try{saved(\"wrong\",0);}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter contextual later store",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let bad:any=\"wrong\";let caught=false;try{const it=r.filter(v=>{v=bad;return true;});it.next();}catch(e){caught=e instanceof TypeError;}String(caught);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter written any input remains gradual",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let result=\"\";const it=r.filter((v,i:any)=>{result=String(Reflect.typeOf(i)===(type number));return true;});it.next();result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter preexisting callback remains uncontextualized",
+      "steps": [
+        {
+          "source": "let result=\"\";function cb(v,i){result=String(Reflect.typeOf(i)===(type number));return true;}const r:ClosedRange.<uint8>=1..=1;const it=r.filter(cb);it.next();result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter any receiver remains gradual",
+      "steps": [
+        {
+          "source": "function unused(r:any){const x:string=r.filter(v=>true).next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter optional short circuit",
+      "steps": [
+        {
+          "source": "let effects=0;function run(r:ClosedRange.<uint8>|null){r?.filter((effects++,v=>true));}run(null);String(effects);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter replacement result cannot initialize",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>){return r.filter(v=>true);}const r:ClosedRange.<uint8>=1..=1;r.filter=()=>\"wrong\";read(r);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter endpoint literal widens to interior",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<1|3>=1..=3;String(r.filter(v=>true).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter endpoint literal is not item set",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<1|3>){const x:1|3|undefined=r.filter(v=>true).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter endpoint view retains union",
+      "steps": [
+        {
+          "source": "function unused(r:RangeBounds.<uint8|uint16>){const x:uint8|undefined=r.filter(v=>true).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter unbounded lazy prefix",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint8>=1..;const it=r.filter(v=>true);String(it.next().value)+\":\"+String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1:2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter domain bigint",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<bigint>=1..=1;const v=r.filter(v=>true).next().value;String(Reflect.typeOf(v)===(type bigint));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter domain int16",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int16>=1..=1;const v=r.filter(v=>true).next().value;String(Reflect.typeOf(v)===(type int16));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter domain uint128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint128>=1..=1;const v=r.filter(v=>true).next().value;String(Reflect.typeOf(v)===(type uint128));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter domain float16",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float16>=1..=1;const v=r.filter(v=>true).next().value;String(Reflect.typeOf(v)===(type float16));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter domain float64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float64>=1..=1;const v=r.filter(v=>true).next().value;String(Reflect.typeOf(v)===(type float64));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mapper inference v=>v",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;const it=r.map(v=>v);String(it.toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mapper result rejects string v=>v",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.map(v=>v).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "mapper inference v=>{return v;}",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;const it=r.map(v=>{return v;});String(it.toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mapper result rejects string v=>{return v;}",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.map(v=>{return v;}).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "mapper inference function(v){return v;}",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;const it=r.map(function(v){return v;});String(it.toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mapper result rejects string function(v){return v;}",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.map(function(v){return v;}).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "mapper inference (v):uint8=>v",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;const it=r.map((v):uint8=>v);String(it.toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mapper result rejects string (v):uint8=>v",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.map((v):uint8=>v).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "mapper changes item type",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const it=r.map(v=>String(v));const x:string|undefined=it.next().value;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mapper any result stays gradual",
+      "steps": [
+        {
+          "source": "function cb(v:uint8):any{return \"s\";}const r:ClosedRange.<uint8>=1..=1;const it=r.map(cb);String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mapper async result is not assimilated",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;const it=r.map(async v=>v);String(it.next().value instanceof Promise);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter preserves selected items",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;String(r.filter(v=>v>1).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter no match exhausts",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;String(r.filter(v=>false).next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter requires boolean",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.filter(v=>1);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter checks contextual unknown result on demand",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let bad:any=1;const it=r.filter(v=>bad);it.next();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "filter existing explicit any return is not adopted",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:(v:uint8,i:uint64)=>any){r.filter(cb);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "map filter map chain",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;const it=r.map(v=>v).filter(v=>v>1).map(v=>String(v));String(it.toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "chained mapper input remains typed",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.map(v=>v).filter(v=>true).map(v=>{const x:string=v;return v;});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit step helper shares inference",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;String(r.step(1).map(v=>v).filter(v=>true).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic outer binder named U remains captured",
+      "steps": [
+        {
+          "source": "function outer<U:type>(r:ClosedRange.<uint8>,value:U){return r.map(v=>value);}const r:ClosedRange.<uint8>=1..=1;const it=outer.<string>(r,\"s\");String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary generic callback input before result inference",
+      "steps": [
+        {
+          "source": "function call<U:type>(cb:(v:uint8)=>U):U{const v:uint8=1;return cb(v);}String(call(v=>v));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary generic callback inferred result mismatch",
+      "steps": [
+        {
+          "source": "function call<U:type>(cb:(v:uint8)=>U):U{const v:uint8=1;return cb(v);}const x:string=call(v=>v);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary generic explicitly annotated mapper result",
+      "steps": [
+        {
+          "source": "function call<U:type>(cb:(v:uint8)=>U):U{const v:uint8=1;return cb(v);}String(call((v):string=>String(v)));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed helper result preserves effects and TDZ",
+      "steps": [
+        {
+          "source": "let effects=0;const r:ClosedRange.<uint8>=1..=1;r.map=()=>{effects++;return \"wrong\";};const rejected=r.map(v=>v);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "String(effects);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        },
+        {
+          "source": "rejected;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "ReferenceError"
+          }
+        },
+        {
+          "source": "const fresh:ClosedRange.<uint8>=1..=2;String(fresh.map(v=>v).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2"
+          }
+        }
+      ]
+    }
+  ]
+}

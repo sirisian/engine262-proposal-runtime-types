@@ -2218,6 +2218,12 @@ const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string
   if (withArgs.Arguments && withArgs.Arguments.length > 0) {
     return {
       ...t,
+      // Library carriers attach an expanded receiving shape. Its free
+      // arguments must close with the carrier (including a helper's
+      // self-iteration result). User declarations instead retain a member
+      // template whose own binders are applied by InterfaceStructureOf.
+      ...(t.Kind === 'nominal' && t.LibraryName && t.Structure
+        ? { Structure: walk(t.Structure) as TypeRecord } : {}),
       Arguments: withArgs.Arguments.map((a) => {
         if (typeof a === 'number') return a;
         const substituted = walk(a) as TypeRecord;
