@@ -12,9 +12,9 @@ import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { IsGenericBuiltin } from '../type-system/generic-builtins.mts';
 import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumber, wellKnownSymbols } from '../value.mts';
 import { SelfThisTypeRecord, PatternLiteralTypeOf, PublishedClassTypeOf } from '../type-system/check.mts';
-import { SelectClassCase, CaseGroupMembers, SelectExplicitCase, StoredCaseValue, RecordSelection } from '../abstract-ops/callable-selection.mts';
+import { SelectClassCase, CaseGroupMembers, SelectExplicitCase, StoredCaseValue, RecordSelection, InCallableDeclarationContext } from '../abstract-ops/callable-selection.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
-import { CheckedConvertValue, LookupClassOperator, OverloadSignatureOf, functionWhereClauses, functionTypeParameters, classFrameOfObject } from '../abstract-ops/runtime-types.mts';
+import { CheckedConvertValue, LookupClassOperator, OverloadSignatureOf, functionWhereClauses, functionTypeParameters, classFrameOfObject, classFrameOfMethod } from '../abstract-ops/runtime-types.mts';
 import { CreateDecimalValue, decimalAdd, isDecimalObject, type DecimalObject, DecimalFromResult, CreateDecimalSpecial } from '../intrinsics/Decimal.mts';
 import { isFloat128Object, Float128ToBinary128, Binary128ToFloat128 } from '../intrinsics/Float128.mts';
 import { add as float128Add, finite as float128Finite } from '../intrinsics/Float128Arithmetic.mts';
@@ -36,7 +36,7 @@ import { GetValue } from '../abstract-ops/all.mts';
 import { iterationInterfaceRecord } from '../type-system/iteration-types.mts';
 import { CanonicalizeType } from '../type-system/intern.mts';
 import { GetTypeObject, isTypeObject } from '../type-system/intern.mts';
-import { mentionsTypeParameter, type TypeRecord } from '../type-system/records.mts';
+import { mentionsTypeParameter, type TypeRecord, type SignatureRecord } from '../type-system/records.mts';
 import { beginResolvingAlias, endResolvingAlias, tieAliasKnot, recordResolvedAlias } from '../type-system/resolving-aliases.mts';
 import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin, RecordDeclaredMemberOrigins } from '../type-system/provenance.mts';
@@ -2741,75 +2741,77 @@ export function ClearTypeArgumentsCallee(): void {
  * Before this the expression evaluated to the bare function and the bindings
  * were lost.
  */
-function* SpecializeGenericFunction(fn: ObjectValue, ref: unknown, node: ParseNode.TypeArgumentsExpression, params: readonly ParseNode.TypeParameter[], preBound?: Map<string, TypeRecord>): ValueEvaluator {
+export function* SpecializeGenericFunction(fn: ObjectValue, ref: unknown, node: ParseNode.TypeArgumentsExpression | undefined, params: readonly ParseNode.TypeParameter[], preBound?: Map<string, TypeRecord>): ValueEvaluator {
   const frame = preBound ?? new Map<string, TypeRecord>();
   const fnName = ((fn as unknown as { ECMAScriptCode?: { parent?: { BindingIdentifier?: { name?: string } } } }).ECMAScriptCode?.parent?.BindingIdentifier?.name) ?? 'the function';
   let bound: TypeRecord[];
   if (preBound) bound = params.map((p) => preBound.get(p.BindingIdentifier.name)!);
-  else bound = Q(yield* BindTypeArgumentsInto(params, node.TypeArguments.TypeArgumentList, frame, fnName, fn as never));
-  const key = bound.map(specializationKeyOf).join('|');
-  let table = genericFunctionSpecializations.get(fn as unknown as object);
-  if (!table) {
-    table = new Map<string, Value>();
-    genericFunctionSpecializations.set(fn as unknown as object, table);
-  }
-  const existing = table.get(key);
-  if (existing) {
-    return existing;
-  }
-  // #sec-generic-where: checked once, at creation, over the class's frame (a
-  // method's clause may name its class's parameters) and this one.
-  const whereClauses = functionWhereClauses(fn as never);
-  if (whereClauses && whereClauses.length > 0) {
-    const classFrame = classTypeParameterFrame(ref);
-    if (classFrame) {
-      pushTypeParameterFrame(classFrame);
+  else bound = Q(yield* BindTypeArgumentsInto(params, node!.TypeArguments.TypeArgumentList, frame, fnName, fn as never));
+  return yield* InCallableDeclarationContext(fn, new Map(), classFrameOfMethod(fn), function* specialize(): ValueEvaluator {
+    const key = bound.map(specializationKeyOf).join('|');
+    let table = genericFunctionSpecializations.get(fn as unknown as object);
+    if (!table) {
+      table = new Map<string, Value>();
+      genericFunctionSpecializations.set(fn as unknown as object, table);
     }
-    pushTypeParameterFrame(frame);
-    try {
-      for (const clause of whereClauses) {
-            if (GenericWhereVerified(clause, frame)) continue;
-        const predicate = (clause as unknown as { RefinementPredicate?: ParseNode }).RefinementPredicate;
-        if (!predicate) {
-          continue;
+    const existing = table.get(key);
+    if (existing) {
+      return existing;
+    }
+    // #sec-generic-where: checked once, at creation, over the class's frame (a
+    // method's clause may name its class's parameters) and this one.
+    const whereClauses = functionWhereClauses(fn as never);
+    if (whereClauses && whereClauses.length > 0) {
+      const classFrame = classTypeParameterFrame(ref);
+      if (classFrame) {
+        pushTypeParameterFrame(classFrame);
+      }
+      pushTypeParameterFrame(frame);
+      try {
+        for (const clause of whereClauses) {
+              if (GenericWhereVerified(clause, frame)) continue;
+          const predicate = (clause as unknown as { RefinementPredicate?: ParseNode }).RefinementPredicate;
+          if (!predicate) {
+            continue;
+          }
+          const verdict = Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));
+          if (verdict === Value.false || verdict === Value.undefined || verdict === Value.null) {
+            return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
+          }
         }
-        const verdict = Q(yield* GetValue(Q(yield* Evaluate(predicate as never))));
-        if (verdict === Value.false || verdict === Value.undefined || verdict === Value.null) {
-          return Throw.TypeError('a $1 clause is not satisfied by this application', Value('where'));
+      } finally {
+        popTypeParameterFrame();
+        if (classFrame) {
+          popTypeParameterFrame();
         }
       }
-    } finally {
-      popTypeParameterFrame();
-      if (classFrame) {
+    }
+    const specialized = CreateBuiltinFunction(function* SpecializedCall(args: Arguments, context: { thisValue?: Value }): ValueEvaluator {
+      pushTypeParameterFrame(frame);
+      try {
+        return Q(yield* Call(fn, context.thisValue ?? Value.undefined, Array.from(args, (a) => a ?? Value.undefined)));
+      } finally {
         popTypeParameterFrame();
       }
-    }
-  }
-  const specialized = CreateBuiltinFunction(function* SpecializedCall(args: Arguments, context: { thisValue?: Value }): ValueEvaluator {
-    pushTypeParameterFrame(frame);
-    try {
-      return Q(yield* Call(fn, context.thisValue ?? Value.undefined, Array.from(args, (a) => a ?? Value.undefined)));
-    } finally {
-      popTypeParameterFrame();
-    }
-  }, 0, Value(fnName), []);
-  // The instantiated signature: the declared one, its ~parameter~ records
-  // replaced by the bindings.
-  const declared = EnsureCompletion(yield* OverloadSignatureOf(fn as never));
-  if (declared.Type === 'normal') {
-    const sig = declared.Value as { Parameters: readonly unknown[], ReturnType?: TypeRecord, TypeParameters?: readonly { Name: string, Parameter?: TypeRecord }[] };
-    const bindings = new Map<TypeRecord, TypeRecord>();
-    for (const tp of sig.TypeParameters ?? []) {
-      const b = frame.get(tp.Name);
-      if (tp.Parameter && b) {
-        bindings.set(tp.Parameter, b);
+    }, 0, Value(fnName), []);
+    // The instantiated signature: the declared one, its ~parameter~ records
+    // replaced by the bindings.
+    const declared = EnsureCompletion(yield* OverloadSignatureOf(fn as never));
+    if (declared.Type === 'normal') {
+      const sig = declared.Value as { Parameters: readonly unknown[], ReturnType?: TypeRecord, Narrows?: SignatureRecord['Narrows'], TypeParameters?: readonly { Name: string, Parameter?: TypeRecord }[] };
+      const bindings = new Map<TypeRecord, TypeRecord>();
+      for (const tp of sig.TypeParameters ?? []) {
+        const b = frame.get(tp.Name);
+        if (tp.Parameter && b) {
+          bindings.set(tp.Parameter, b);
+        }
       }
+      const generic = { Kind: 'function', Signatures: [{ Parameters: sig.Parameters, Return: sig.ReturnType ?? null, Narrows: sig.Narrows, TypeParameters: sig.TypeParameters }] } as unknown as TypeRecord;
+      RegisterSpecializedFunctionType(specialized as unknown as object, substituteParameterRecords(generic, bindings));
     }
-    const generic = { Kind: 'function', Signatures: [{ Parameters: sig.Parameters, Return: sig.ReturnType ?? null, TypeParameters: sig.TypeParameters }] } as unknown as TypeRecord;
-    RegisterSpecializedFunctionType(specialized as unknown as object, substituteParameterRecords(generic, bindings));
-  }
-  table.set(key, specialized);
-  return specialized;
+    table.set(key, specialized);
+    return specialized;
+  });
 }
 
 export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsExpression, evaluatedReference?: ReferenceRecord): PlainEvaluator<unknown> {

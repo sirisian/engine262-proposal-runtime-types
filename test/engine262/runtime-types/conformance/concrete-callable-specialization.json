@@ -1,0 +1,1016 @@
+{
+  "cases": [
+    {
+      "name": "source direct identity",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const f:(x:string)=>string=id;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source erased identity",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const erased:any=id;const f:(x:string)=>string=erased;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source held declaration identity",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}function other<T:type>(x:T):T{return x;}let v:any=other;const f:(x:string)=>string=v;String(f===other.<string>)+\"/\"+String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source output survives erasure",
+      "steps": [
+        {
+          "source": "function make<T:type>():T{const x:any=1;return x;}const f:()=>string=make;const g:any=f;typeof g();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source output failure at call",
+      "steps": [
+        {
+          "source": "function make<T:type>():T{const x:any={};return x;}const f:()=>string=make;const g:any=f;let caught=false;try{g();}catch(e){caught=e instanceof TypeError;}String(caught);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source value parameters preserve inference",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const f:(x:string)=>string=id;const g:any=f;typeof g(1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source generic view keeps identity",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const f:<U:type>(x:U)=>U=id;String(f===id)+\"/\"+f.<string>(\"a\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source any view keeps identity",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const f:any=id;String(f===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source concrete control",
+      "steps": [
+        {
+          "source": "function id(x:string):string{return x;}const f:(x:string)=>string=id;String(f===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source untyped control",
+      "steps": [
+        {
+          "source": "function id(x){return x;}const f:(x:string)=>string=id;String(f===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source parameter boundary",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}function use(f:(x:string)=>string){return f===id.<string>;}String(use(id));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source return boundary",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}function get():(x:string)=>string{return id;}String(get()===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source field boundary",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}class Box{f:(x:string)=>string=id;}String(new Box().f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source later assignment",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}let f:(x:string)=>string=(x:string)=>x;f=id;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source distinct concrete bindings",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const a:(x:string)=>string=id;const b:(x:uint8)=>uint8=id;String(a!==b)+\"/\"+String(a===id.<string>)+\"/\"+String(b===id.<uint8>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source repeated boundary cache",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}function get():(x:string)=>string{return id;}String(get()===get());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source named view",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const f:(renamed:string)=>string=id;f(renamed:\"a\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source target default",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const f:(renamed:string=\"b\")=>string=id;f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source own default",
+      "steps": [
+        {
+          "source": "const fallback:any=\"a\";function id<T:type>(x:T=fallback):T{return x;}const f:(x:string=\"b\")=>string=id;const g:any=f;String(g());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source result covariance",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const f:(x:string)=>any=id;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source explicit before boundary",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const e:any=id.<string>;const f:(x:string)=>string=id;String(f===e);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source no body at boundary",
+      "steps": [
+        {
+          "source": "let calls=0;function id<T:type>(x:T):T{calls++;return x;}const f:(x:string)=>string=id;String(calls)+\"/\"+f(\"a\")+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/a/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source captured generic context",
+      "steps": [
+        {
+          "source": "function make<A:type>(){function id<T:type>(x:T):T{return x;}const f:(x:A)=>A=id;return f;}const a:any=make.<string>();typeof a(1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source captured where environment",
+      "steps": [
+        {
+          "source": "function factory(){const limit=2;function id<T:type>(x:T):T where limit===2{return x;}return id;}const id:any=factory();const f:(x:string)=>string=id;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit captured where environment",
+      "steps": [
+        {
+          "source": "function factory(){const limit=2;function id<T:type>(x:T):T where limit===2{return x;}return id;}const id:any=factory();const e:any=id.<string>;const f:(x:string)=>string=id;String(f===e);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source where failure before publication",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T where T===uint8{return x;}const erased:any=id;let reached=false;try{const f:(x:string)=>string=erased;reached=true;}catch(e){}String(reached);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source failed where keeps old binding",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T where T===uint8{return x;}const erased:any=id;const old:any=(x:string)=>x;let f:(x:string)=>string=old;try{f=erased;}catch(e){}String(f===old);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source failed crossing then valid crossing",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T where T===uint8{return x;}const erased:any=id;try{const bad:(x:string)=>string=erased;}catch(e){}const good:(x:uint8)=>uint8=erased;String(good===id.<uint8>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source bound accepted",
+      "steps": [
+        {
+          "source": "function id<T:type extends number>(x:T):T{return x;}const f:(x:number)=>number=id;String(f===id.<number>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source bound refused gradually",
+      "steps": [
+        {
+          "source": "function id<T:type extends number>(x:T):T{return x;}const erased:any=id;const f:(x:string)=>string=erased;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source bound refused early",
+      "steps": [
+        {
+          "source": "function id<T:type extends number>(x:T):T{return x;}const f:(x:string)=>string=id;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "source dependent constraints",
+      "steps": [
+        {
+          "source": "function id<T:type,U:type extends T>(a:T,b:U):U{return b;}const f:(a:number,b:number)=>number=id;String(f===id.<number,number>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source reflection completed",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const f:(x:string)=>string=id;String(Reflect.typeOf(f));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "(x: string) => string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source alias type identity",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type Text=string;const f:(x:Text)=>Text=id;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source ref parameter identity",
+      "steps": [
+        {
+          "source": "function id<T:type>(ref x:T):T{return x;}const f:(ref x:string)=>string=id;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source ref parameter use",
+      "steps": [
+        {
+          "source": "function id<T:type>(ref x:T):T{return x;}const f:(ref x:string)=>string=id;let x:string=\"a\";f(ref x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source reference convention refused",
+      "steps": [
+        {
+          "source": "function id<T:type>(ref x:T):T{return x;}const erased:any=id;const f:(x:string)=>string=erased;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source inferred binding overrides generic default",
+      "steps": [
+        {
+          "source": "function id<T:type=string>(x:T):T{return x;}const f:(x:number)=>number=id;String(f===id.<number>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source body is fixed after variable mutation",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}let held:any=id;const f:(x:string)=>string=held;held=(x:any)=>false;const g:any=f;typeof g(1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source getter evaluated once",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}let reads=0;const o:any={get f(){reads++;return id;}};const f:(x:string)=>string=o.f;String(reads)+\"/\"+String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source throws from captured where before body",
+      "steps": [
+        {
+          "source": "function make(){const o:any={get check(){throw new RangeError(\"check\");}};function id<T:type>(x:T):T where o.check{return x;}return id;}const erased:any=make();const f:(x:string)=>string=erased;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "membership does not specialize",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const alias:any=id;String(id is ((x:string)=>string))+\"/\"+String(alias===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source same-spelled closures keep identity",
+      "steps": [
+        {
+          "source": "function make(){function id<T:type>(x:T):T{return x;}return id;}const a:any=make(),b:any=make();const f:(x:string)=>string=a;const g:(x:string)=>string=b;String(f!==g)+\"/\"+String(f===a.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source receiver-independent method",
+      "steps": [
+        {
+          "source": "class Box{m<T:type>(x:T):T{return x;}}const a=new Box();interface I{m(x:string):string}const f:I[\"m\"]=a.m;String(f===a.m.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source callable interface",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}interface I{(x:string):string}const f:I=id;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source callable object type",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F={(x:string):string};const f:F=id;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source method borrows call receiver",
+      "steps": [
+        {
+          "source": "class Box{v:string=\"a\";m<T:type>(x:T):T{this.v=String(x);return x;}}interface I{m(x:string):string}const a=new Box(),b=new Box();const f:I[\"m\"]=a.m;const g:any=f;g.call(b,\"b\");a.v+\"/\"+b.v;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source cached where is not repeated",
+      "steps": [
+        {
+          "source": "function factory(){let allowed=true;function id<T:type>(x:T):T where allowed{return x;}return {id,stop(){allowed=false;}};}const o:any=factory();const first:(x:string)=>string=o.id;o.stop();const second:(x:string)=>string=o.id;String(first===second)+\"/\"+String(second===o.id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source erased predicate retains narrowing",
+      "steps": [
+        {
+          "source": "function shape(){return Reflect.makeType({kind:\"function\",signatures:[{parameters:[{name:\"x\",type:type string}],return:{type:type boolean},narrows:[{target:\"x\",type:type string}]}]});}type G=shape();function predicate<T:type>(x:T):x is T{return true;}const erased:any=predicate;const g:G=erased;String(g===predicate.<string>)+\"/\"+String(g(\"a\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit erased predicate retains narrowing",
+      "steps": [
+        {
+          "source": "function shape(){return Reflect.makeType({kind:\"function\",signatures:[{parameters:[{name:\"x\",type:type string}],return:{type:type boolean},narrows:[{target:\"x\",type:type string}]}]});}type G=shape();function predicate<T:type>(x:T):x is T{return true;}const erased:any=predicate.<string>;const g:G=erased;String(g===erased)+\"/\"+String(g(\"a\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range concrete identity",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;const f:(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>=r.map;String(f===r.map.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range erased output",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;const f:(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>=r.map;const callback:any=v=>v;const it:any=f.call(r,callback);typeof it.next().value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range lazy output failure",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;const f:(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>=r.map;let calls=0;const callback:any=()=>{calls++;return {};};const it:any=f.call(r,callback);let caught=false;const before=calls;try{it.next();}catch(e){caught=e instanceof TypeError;}String(before)+\"/\"+calls+\"/\"+caught+\"/\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/1/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range borrowed receiver",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;const f:(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>=r.map;const other:any=1..<3;const callback:any=v=>v;const it:any=f.call(other,callback);typeof it.next().value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range direct erased callee",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;const f:(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>=r.map;const g:any=f;let caught=false;try{g(v=>v);}catch(e){caught=e instanceof TypeError;}String(caught);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range generic value unchanged",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;const f:any=r.map;String(f===r.map);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range concrete application distinct",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;const f:(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>=r.map;String(f!==r.map);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range selected before mutation",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;const selected:any=r.map;const f:(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>=selected;r.map=()=>\"replacement\";const callback:any=v=>v;const it:any=f.call(r,callback);typeof it.next().value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range native reflection completed",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;const f:(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>=r.map;String(Reflect.typeOf(f)).startsWith(\"(callback:\")?\"concrete\":\"generic\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "concrete"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range assignment to concrete field",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;class Box{f:(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>=r.map;}String(new Box().f===r.map.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range return receiving boundary",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;function get():(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>{return r.map;}String(get()===r.map.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator concrete identity",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);const f:(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>=r.map;String(f===r.map.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator erased output",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);const f:(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>=r.map;const callback:any=v=>v;const it:any=f.call(r,callback);typeof it.next().value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator lazy output failure",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);const f:(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>=r.map;let calls=0;const callback:any=()=>{calls++;return {};};const it:any=f.call(r,callback);let caught=false;const before=calls;try{it.next();}catch(e){caught=e instanceof TypeError;}String(before)+\"/\"+calls+\"/\"+caught+\"/\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/1/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator borrowed receiver",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);const f:(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>=r.map;const other:any=Iterator.from([1,2]);const callback:any=v=>v;const it:any=f.call(other,callback);typeof it.next().value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator direct erased callee",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);const f:(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>=r.map;const g:any=f;let caught=false;try{g(v=>v);}catch(e){caught=e instanceof TypeError;}String(caught);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator generic value unchanged",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);const f:any=r.map;String(f===r.map);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator concrete application distinct",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);const f:(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>=r.map;String(f!==r.map);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator selected before mutation",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);const selected:any=r.map;const f:(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>=selected;r.map=()=>\"replacement\";const callback:any=v=>v;const it:any=f.call(r,callback);typeof it.next().value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator native reflection completed",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);const f:(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>=r.map;String(Reflect.typeOf(f)).startsWith(\"(callback:\")?\"concrete\":\"generic\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "concrete"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator assignment to concrete field",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);class Box{f:(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>=r.map;}String(new Box().f===r.map.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator return receiving boundary",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);function get():(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>{return r.map;}String(get()===r.map.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

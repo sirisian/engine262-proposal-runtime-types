@@ -1923,6 +1923,8 @@ export function substituteParameterRecords(t: TypeRecord, bindings: Map<TypeReco
           Parameters: g.Parameters.map((q) => ({ ...q, Type: substituteParameterRecords(q.Type, bindings) })),
           Return: g.Return === null ? null : substituteParameterRecords(g.Return, bindings),
           ...(g.InferredReturn ? { InferredReturn: substituteParameterRecords(g.InferredReturn, bindings) } : {}),
+          ...(g.ThisType ? { ThisType: substituteParameterRecords(g.ThisType, bindings) } : {}),
+          ...(g.Narrows ? { Narrows: g.Narrows.map((n) => ({ ...n, Type: substituteParameterRecords(n.Type, bindings) })) } : {}),
           TypeParameters: undefined,
         })),
       } as TypeRecord;
@@ -1931,6 +1933,52 @@ export function substituteParameterRecords(t: TypeRecord, bindings: Map<TypeReco
     default:
       return t;
   }
+}
+
+/** The concrete-boundary binding plan, shared by conformance and materialization. */
+export function InferSignatureInstantiation(sg: SignatureRecord, tg: SignatureRecord,
+  assumptions: readonly Assumption[] = [], preserveReferences = true): Map<string, TypeRecord> | undefined {
+  const sTP = sg.TypeParameters ?? [];
+  if (!sTP.length || tg.TypeParameters?.length) return undefined;
+  if (sg.Parameters.length !== tg.Parameters.length) {
+    return undefined;
+  }
+  const bindings = new Map<TypeRecord, TypeRecord>();
+  for (let j = 0; j < sg.Parameters.length; j += 1) {
+    if (!matchTypeStructurally(sg.Parameters[j]!.Type, tg.Parameters[j]!.Type, bindings)) {
+      return undefined;
+    }
+  }
+  const byName = new Map<string, TypeRecord>();
+  const collectBindings = (): boolean => {
+    for (const [pattern, bound] of bindings) {
+      if (pattern.Kind !== 'parameter') continue;
+      const prior = byName.get(pattern.Name);
+      if (prior && !SameTypeWithAssumptions(prior, bound, assumptions)) return false;
+      byName.set(pattern.Name, bound);
+    }
+    return true;
+  };
+  if (!collectBindings()) return undefined;
+  const sourceResult = substituteTypeParameters(signatureResult(sg), byName);
+  const targetResult = signatureResult(tg);
+  // Inputs already fixed these parameters. A wider expected result must not
+  // rebind them or turn result covariance into an equality constraint.
+  if (sourceResult && targetResult && !returnRequiredOfNothing(targetResult)
+      && mentionsTypeParameter(sourceResult)
+      && !matchTypeStructurally(sourceResult, targetResult, bindings)) return undefined;
+  if (!collectBindings()) return undefined;
+  // Inference does not discharge bounds, including dependent constraints.
+  for (const u of sTP) {
+    const bound = u.Parameter ? bindings.get(u.Parameter) : byName.get(u.Name);
+    if (!bound) return undefined;
+    if (u.Constraint) {
+      const constraint = substituteTypeParameters(u.Constraint, byName)!;
+      if (!mentionsTypeParameter(constraint) && !IsAssignable(bound, constraint)) return undefined;
+    }
+  }
+  const substituted = substituteTypeParameters({ Kind: 'function', Signatures: [sg] }, byName) as Extract<TypeRecord, { Kind: 'function' }>;
+  return IsSignatureSubtypeCore(substituted.Signatures[0]!, tg, assumptions, preserveReferences) ? byName : undefined;
 }
 
 /**
@@ -1956,45 +2004,7 @@ function IsSignatureSubtypeGeneric(sg: SignatureRecord, tg: SignatureRecord, ass
   const sTP = sg.TypeParameters ?? [];
   const tTP = tg.TypeParameters ?? [];
   if (sTP.length > 0 && tTP.length === 0) {
-    if (sg.Parameters.length !== tg.Parameters.length) {
-      return false;
-    }
-    const bindings = new Map<TypeRecord, TypeRecord>();
-    for (let j = 0; j < sg.Parameters.length; j += 1) {
-      if (!matchTypeStructurally(sg.Parameters[j]!.Type, tg.Parameters[j]!.Type, bindings)) {
-        return false;
-      }
-    }
-    const byName = new Map<string, TypeRecord>();
-    const collectBindings = (): boolean => {
-      for (const [pattern, bound] of bindings) {
-        if (pattern.Kind !== 'parameter') continue;
-        const prior = byName.get(pattern.Name);
-        if (prior && !SameTypeWithAssumptions(prior, bound, assumptions)) return false;
-        byName.set(pattern.Name, bound);
-      }
-      return true;
-    };
-    if (!collectBindings()) return false;
-    const sourceResult = substituteTypeParameters(signatureResult(sg), byName);
-    const targetResult = signatureResult(tg);
-    // Inputs already fixed these parameters. A wider expected result must not
-    // rebind them or turn result covariance into an equality constraint.
-    if (sourceResult && targetResult && !returnRequiredOfNothing(targetResult)
-        && mentionsTypeParameter(sourceResult)
-        && !matchTypeStructurally(sourceResult, targetResult, bindings)) return false;
-    if (!collectBindings()) return false;
-    // Inference does not discharge bounds, including dependent constraints.
-    for (const u of sTP) {
-      const bound = u.Parameter ? bindings.get(u.Parameter) : byName.get(u.Name);
-      if (!bound) return false;
-      if (u.Constraint) {
-        const constraint = substituteTypeParameters(u.Constraint, byName)!;
-        if (!mentionsTypeParameter(constraint) && !IsAssignable(bound, constraint)) return false;
-      }
-    }
-    const substituted = substituteTypeParameters({ Kind: 'function', Signatures: [sg] }, byName) as Extract<TypeRecord, { Kind: 'function' }>;
-    return IsSignatureSubtypeCore(substituted.Signatures[0]!, tg, assumptions, preserveReferences);
+    return InferSignatureInstantiation(sg, tg, assumptions, preserveReferences) !== undefined;
   }
   if (sTP.length === 0 && tTP.length > 0) {
     return false;

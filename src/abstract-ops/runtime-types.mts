@@ -903,6 +903,7 @@ export function* ConvertValueToUnion(value: Value, t: TypeRecord & { Members: re
 }
 
 export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
+  value = Q(yield* MaterializeGenericCallable(value, t));
   // #sec-composite-typeobject-call: the typed creation "is the CONSTRUCTION
   // BOUNDARY of the composite types, as calling any parameterized Type Object is
   // its type's". A conversion to a composite type over a shape is that boundary:
@@ -1630,6 +1631,7 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
     // let `b[0] = 300` through - the store check reads the type the VALUE
     // carries, which is the whole of why the covariance is sound.
     const elided = Q(yield* TypeNodeToTypeRecord(annotation.Type));
+    value = Q(yield* MaterializeGenericCallable(value, elided));
     if (!StructuralStorageEstablished(value, elided)) return Q(yield* RequireType(value, elided));
     // "HAS THIS VALUE BEEN THROUGH THE CONVERSION", which is the question this
     // branch means to ask. It used to ask "does it have an element type", and
@@ -1871,6 +1873,7 @@ function* BoundaryNumericConvert(value: Value, t: TypeRecord & { Kind: 'primitiv
 }
 
 export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
+  value = Q(yield* MaterializeGenericCallable(value, t));
   // sec-user-defined-conversions form 2, tried FIRST because the paths below
   // fork by target kind: a primitive target reaches its own switch and refuses
   // an object there, never arriving at the membership fallback where the
@@ -6352,4 +6355,5 @@ import { rationalPartsFitWidth } from '../intrinsics/Rational.mts';
 
 import { FillGenericConstraintFrame } from '../type-system/runtime.mts';
 import { IsCheckedCode } from '../type-system/checked-code.mts';
+import { MaterializeGenericCallable } from './generic-callable-boundary.mts';
 import { NamedCallItemsOf, SelectedNamedArguments } from './named-call.mts';

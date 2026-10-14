@@ -3793,7 +3793,7 @@ export function SubstituteTypeArguments(
 }
 
 /** Complete captured, closed bounds for the callable comparison that needs them. */
-function* CompleteCallableConstraints(type: TypeRecord, runtimeEnvironment = false): PlainEvaluator<TypeRecord> {
+export function* CompleteCallableConstraints(type: TypeRecord, runtimeEnvironment = false): PlainEvaluator<TypeRecord> {
   if (type.Kind !== 'function' || !type.Signatures.some((signature) =>
     signature.TypeParameters?.some((parameter) => parameter.ConstraintNode
       && (!parameter.Constraint || parameter.Constraint.Kind === 'deferred')))) return type;

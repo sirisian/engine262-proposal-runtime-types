@@ -394,7 +394,7 @@ export function CaseArgumentsAdmit(parameters: readonly ParameterRecord[], types
 }
 
 /** Resolve a declaration's types in its lexical environment, under this binding. */
-function* InCaseContext<T>(fn: Value, frame: Map<string, TypeRecord>, classFrame: Map<string, TypeRecord> | null,
+export function* InCallableDeclarationContext<T>(fn: Value, frame: Map<string, TypeRecord>, classFrame: Map<string, TypeRecord> | null,
   body: () => PlainEvaluator<T>): PlainEvaluator<T> {
   const declared = fn as unknown as { Environment?: unknown, PrivateEnvironment?: unknown, Realm?: unknown, ScriptOrModule?: unknown, TypeParameterFrame?: Map<string, TypeRecord> };
   const context = new ExecutionContext();
@@ -675,7 +675,7 @@ export function* SelectExplicitCase(
   const boundOwners = new Map<ParseNode, readonly TypeRecord[]>();
   for (const owner of analysis.Owners) {
     const fn = fnOf(owner.Node);
-    const bound = EnsureCompletion(yield* InCaseContext(fn, new Map(), classFrame, function* bindOwner() {
+    const bound = EnsureCompletion(yield* InCallableDeclarationContext(fn, new Map(), classFrame, function* bindOwner() {
       return yield* BindTypeArgumentRecordsInto((owner.Node as Declaration).TypeParameters?.TypeParameterList ?? [], args as TypeRecord[], names, new Map(), name);
     }));
     if (bound.Type === 'normal') boundOwners.set(owner.Node, bound.Value as readonly TypeRecord[]);
@@ -701,7 +701,7 @@ export function* SelectExplicitCase(
     const candidate = step.value;
     const fn = fnOf(candidate.Declaration);
     const frame = Q(yield* TypedFrameOfBindings(candidate.Declaration, candidate.Bindings.map((b) => ({ Capture: { Name: b.Name }, Value: b.Value }))));
-    const accepted = Q(yield* InCaseContext(fn, frame, classFrame, function* admitCase() {
+    const accepted = Q(yield* InCallableDeclarationContext(fn, frame, classFrame, function* admitCase() {
       if (values) {
         const resolved = new Map<ParseNode.TypeAnnotation, TypeRecord>();
         for (const formal of CaseFormals(candidate.Declaration)) {
