@@ -6,11 +6,11 @@ import { Q, type ValueEvaluator, type ThrowCompletion } from '../completion.mts'
 import { isIntegerTypeName } from '../type-system/numeric-signatures.mts';
 import { JSStringValue } from '../value.mts';
 import { type Mutable } from '../utils/language.mts';
-import { makePrimitive } from '../type-system/records.mts';
+import { makePrimitive, type TypeRecord } from '../type-system/records.mts';
 import { bootstrapPrototype } from './bootstrap.mts';
 import { isDecimalObject, exactExpansionOfDouble, ParseDecimalDigits } from './Decimal.mts';
 import { isFloat128Object } from './Float128.mts';
-import { surroundingAgent, Throw } from '#self';
+import { surroundingAgent, Throw, ConvertValue } from '#self';
 import {
   OrdinaryObjectCreate,
   CreateBuiltinFunction, ToNumber,
@@ -441,7 +441,7 @@ export function* RationalConstructAt([a = Value.undefined, b]: Arguments, typeRe
   // `rational(-1)` hand this a rational and were refused for it.
   // One argument: the conversion, shared with `:=` and the boundary.
   if (b === undefined) {
-    return ToRational(a, realmRec, typeRecord);
+    return Q(yield* ConvertValue(a, typeRecord as TypeRecord ?? makePrimitive('rational', [64])));
   }
   // A BigInt IS an integer, so "must be an integer" misstated why it is
   // refused. It is refused because the parts are `int.<N>`, and rational.md

@@ -77,7 +77,9 @@ test('nothing observable about the binding changes', () => {
   // A non-constant initializer does not qualify.
   expectThrown('function f(){ return 3.14; } const K = f(); let a: float64 = 2.0; K * a;');
   // An annotation pins the type, which is how a plain `number` is requested.
-  expect(evaluated('const n: number = 5; String((5 := uint8) === n);')).toBe('false');
+  expect(evaluated('const n: number = 5; function equal(a: any, b: any) { return a === b; } String(equal(5 := uint8, n));')).toBe('false');
+  // A statically disjoint comparison is diagnosed before evaluation.
+  expectThrown('const n: number = 5; String((5 := uint8) === n);');
 });
 
 test('with no contextual type, an adopting constant is a `number`', () => {

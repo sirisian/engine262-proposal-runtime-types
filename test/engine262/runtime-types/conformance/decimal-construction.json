@@ -1,0 +1,3374 @@
+{
+  "cases": [
+    {
+      "name": "decimal32 T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal32.<{flag:true}>;const x=decimal32.parse('1.50');recording=true;const y=(T(x));recording=false;`${Reflect.typeOf(x)===decimal32};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.50;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal32 x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal32.<{flag:true}>;const x=decimal32.parse('1.50');recording=true;const y=(x:=T);recording=false;`${Reflect.typeOf(x)===decimal32};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.50;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const x=decimal64.parse('1.50');recording=true;const y=(T(x));recording=false;`${Reflect.typeOf(x)===decimal64};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.50;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const x=decimal64.parse('1.50');recording=true;const y=(x:=T);recording=false;`${Reflect.typeOf(x)===decimal64};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.50;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal128.<{flag:true}>;const x=decimal128.parse('1.50');recording=true;const y=(T(x));recording=false;`${Reflect.typeOf(x)===decimal128};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.50;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal128.<{flag:true}>;const x=decimal128.parse('1.50');recording=true;const y=(x:=T);recording=false;`${Reflect.typeOf(x)===decimal128};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.50;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=float128.<{flag:true}>;const x=float128(1.5);recording=true;const y=(T(x));recording=false;`${Reflect.typeOf(x)===float128};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.5;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=float128.<{flag:true}>;const x=float128(1.5);recording=true;const y=(x:=T);recording=false;`${Reflect.typeOf(x)===float128};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.5;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=rational64.<{flag:true}>;const x=rational64(3,2);recording=true;const y=(T(x));recording=false;`${Reflect.typeOf(x)===rational64};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;3/2;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=rational64.<{flag:true}>;const x=rational64(3,2);recording=true;const y=(x:=T);recording=false;`${Reflect.typeOf(x)===rational64};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;3/2;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=complex64.<{flag:true}>;const x=complex64(1.5);recording=true;const y=(T(x));recording=false;`${Reflect.typeOf(x)===complex64};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.5+0i;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=complex64.<{flag:true}>;const x=complex64(1.5);recording=true;const y=(x:=T);recording=false;`${Reflect.typeOf(x)===complex64};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.5+0i;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=float64.<{flag:true}>;const x=float64(1.5);recording=true;const y=(T(x));recording=false;`${Reflect.typeOf(x)===float64};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.5;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=float64.<{flag:true}>;const x=float64(1.5);recording=true;const y=(x:=T);recording=false;`${Reflect.typeOf(x)===float64};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.5;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "int16 T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=int16.<{flag:true}>;const x=int16(2);recording=true;const y=(T(x));recording=false;`${Reflect.typeOf(x)===int16};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;2;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "int16 x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=int16.<{flag:true}>;const x=int16(2);recording=true;const y=(x:=T);recording=false;`${Reflect.typeOf(x)===int16};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;2;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=bigint.<{flag:true}>;const x=2n;recording=true;const y=(T(x));recording=false;`${Reflect.typeOf(x)===bigint};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;2;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=bigint.<{flag:true}>;const x=2n;recording=true;const y=(x:=T);recording=false;`${Reflect.typeOf(x)===bigint};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;2;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=number.<{flag:true}>;const x=1.5;recording=true;const y=(T(x));recording=false;`${Reflect.typeOf(x)===number};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.5;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=number.<{flag:true}>;const x=1.5;recording=true;const y=(x:=T);recording=false;`${Reflect.typeOf(x)===number};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.5;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal32 literal valid",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal32.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal32 literal reject",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return false;}}type T=decimal32.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal32 literal brand",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}}type T=decimal32.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 literal valid",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 literal reject",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return false;}}type T=decimal64.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 literal brand",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}}type T=decimal64.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 literal valid",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal128.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 literal reject",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return false;}}type T=decimal128.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 literal brand",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}}type T=decimal128.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 literal valid",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=float128.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 literal reject",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return false;}}type T=float128.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 literal brand",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}}type T=float128.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 literal valid",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=rational64.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 literal reject",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return false;}}type T=rational64.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 literal brand",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}}type T=rational64.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 literal valid",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=complex64.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 literal reject",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return false;}}type T=complex64.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 literal brand",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}}type T=complex64.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 literal valid",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=float64.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 literal reject",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return false;}}type T=float64.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 literal brand",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}}type T=float64.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 literal valid",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=uint64.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 literal reject",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return false;}}type T=uint64.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 literal brand",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}}type T=uint64.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "int16 literal valid",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=int16.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "int16 literal reject",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return false;}}type T=int16.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "int16 literal brand",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}}type T=int16.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint literal valid",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=bigint.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint literal reject",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return false;}}type T=bigint.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint literal brand",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}}type T=bigint.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number literal valid",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=number.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number literal reject",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return false;}}type T=number.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number literal brand",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}}type T=number.<{flag:true}>;recording=true;const x=(2:=T);recording=false;`${Reflect.typeOf(x)===T};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 implicit metadata crossing",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=decimal64.<{r:2}>;type B=decimal64.<{r:4}>;const x=A(6);recording=true;const y:B=x;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 implicit metadata crossing erased",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=decimal64.<{r:2}>;type B=decimal64.<{r:4}>;const x=A(6);recording=true;let unknown:any=x;const y:B=unknown;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 implicit metadata crossing base annotation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=decimal64.<{r:2}>;type B=decimal64.<{r:4}>;const x=A(6);recording=true;const bare:decimal64=x;const y:B=bare;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 implicit metadata crossing parameter",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=decimal64.<{r:2}>;type B=decimal64.<{r:4}>;const x=A(6);recording=true;function accept(z:B):B{return z;}const y=accept(x);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 implicit metadata crossing return",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=decimal64.<{r:2}>;type B=decimal64.<{r:4}>;const x=A(6);recording=true;function produce(z:any):B{return z;}const y=produce(x);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 implicit metadata crossing",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=rational64.<{r:2}>;type B=rational64.<{r:4}>;const x=A(6);recording=true;const y:B=x;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 implicit metadata crossing erased",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=rational64.<{r:2}>;type B=rational64.<{r:4}>;const x=A(6);recording=true;let unknown:any=x;const y:B=unknown;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 implicit metadata crossing base annotation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=rational64.<{r:2}>;type B=rational64.<{r:4}>;const x=A(6);recording=true;const bare:rational64=x;const y:B=bare;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 implicit metadata crossing parameter",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=rational64.<{r:2}>;type B=rational64.<{r:4}>;const x=A(6);recording=true;function accept(z:B):B{return z;}const y=accept(x);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 implicit metadata crossing return",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=rational64.<{r:2}>;type B=rational64.<{r:4}>;const x=A(6);recording=true;function produce(z:any):B{return z;}const y=produce(x);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 implicit metadata crossing",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float128.<{r:2}>;type B=float128.<{r:4}>;const x=A(6);recording=true;const y:B=x;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 implicit metadata crossing erased",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float128.<{r:2}>;type B=float128.<{r:4}>;const x=A(6);recording=true;let unknown:any=x;const y:B=unknown;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 implicit metadata crossing base annotation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float128.<{r:2}>;type B=float128.<{r:4}>;const x=A(6);recording=true;const bare:float128=x;const y:B=bare;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 implicit metadata crossing parameter",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float128.<{r:2}>;type B=float128.<{r:4}>;const x=A(6);recording=true;function accept(z:B):B{return z;}const y=accept(x);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 implicit metadata crossing return",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float128.<{r:2}>;type B=float128.<{r:4}>;const x=A(6);recording=true;function produce(z:any):B{return z;}const y=produce(x);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 implicit metadata crossing",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=complex64.<{r:2}>;type B=complex64.<{r:4}>;const x=A(6);recording=true;const y:B=x;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3+0i;true;true;6+0i;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 implicit metadata crossing erased",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=complex64.<{r:2}>;type B=complex64.<{r:4}>;const x=A(6);recording=true;let unknown:any=x;const y:B=unknown;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3+0i;true;true;6+0i;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 implicit metadata crossing base annotation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=complex64.<{r:2}>;type B=complex64.<{r:4}>;const x=A(6);recording=true;const bare:complex64=x;const y:B=bare;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3+0i;true;true;6+0i;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 implicit metadata crossing parameter",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=complex64.<{r:2}>;type B=complex64.<{r:4}>;const x=A(6);recording=true;function accept(z:B):B{return z;}const y=accept(x);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3+0i;true;true;6+0i;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 implicit metadata crossing return",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=complex64.<{r:2}>;type B=complex64.<{r:4}>;const x=A(6);recording=true;function produce(z:any):B{return z;}const y=produce(x);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3+0i;true;true;6+0i;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 implicit metadata crossing",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=uint64.<{r:2}>;type B=uint64.<{r:4}>;const x=A(6);recording=true;const y:B=x;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 implicit metadata crossing erased",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=uint64.<{r:2}>;type B=uint64.<{r:4}>;const x=A(6);recording=true;let unknown:any=x;const y:B=unknown;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 implicit metadata crossing base annotation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=uint64.<{r:2}>;type B=uint64.<{r:4}>;const x=A(6);recording=true;const bare:uint64=x;const y:B=bare;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 implicit metadata crossing parameter",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=uint64.<{r:2}>;type B=uint64.<{r:4}>;const x=A(6);recording=true;function accept(z:B):B{return z;}const y=accept(x);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 implicit metadata crossing return",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=uint64.<{r:2}>;type B=uint64.<{r:4}>;const x=A(6);recording=true;function produce(z:any):B{return z;}const y=produce(x);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 implicit metadata crossing",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float64.<{r:2}>;type B=float64.<{r:4}>;const x=A(6);recording=true;const y:B=x;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 implicit metadata crossing erased",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float64.<{r:2}>;type B=float64.<{r:4}>;const x=A(6);recording=true;let unknown:any=x;const y:B=unknown;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 implicit metadata crossing base annotation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float64.<{r:2}>;type B=float64.<{r:4}>;const x=A(6);recording=true;const bare:float64=x;const y:B=bare;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 implicit metadata crossing parameter",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float64.<{r:2}>;type B=float64.<{r:4}>;const x=A(6);recording=true;function accept(z:B):B{return z;}const y=accept(x);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 implicit metadata crossing return",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float64.<{r:2}>;type B=float64.<{r:4}>;const x=A(6);recording=true;function produce(z:any):B{return z;}const y=produce(x);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint implicit metadata crossing",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=bigint.<{r:2}>;type B=bigint.<{r:4}>;const x=A(6);recording=true;const y:B=x;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint implicit metadata crossing erased",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=bigint.<{r:2}>;type B=bigint.<{r:4}>;const x=A(6);recording=true;let unknown:any=x;const y:B=unknown;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint implicit metadata crossing base annotation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=bigint.<{r:2}>;type B=bigint.<{r:4}>;const x=A(6);recording=true;const bare:bigint=x;const y:B=bare;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint implicit metadata crossing parameter",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=bigint.<{r:2}>;type B=bigint.<{r:4}>;const x=A(6);recording=true;function accept(z:B):B{return z;}const y=accept(x);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint implicit metadata crossing return",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=bigint.<{r:2}>;type B=bigint.<{r:4}>;const x=A(6);recording=true;function produce(z:any):B{return z;}const y=produce(x);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number implicit metadata crossing",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=number.<{r:2}>;type B=number.<{r:4}>;const x=A(6);recording=true;const y:B=x;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number implicit metadata crossing erased",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=number.<{r:2}>;type B=number.<{r:4}>;const x=A(6);recording=true;let unknown:any=x;const y:B=unknown;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number implicit metadata crossing base annotation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=number.<{r:2}>;type B=number.<{r:4}>;const x=A(6);recording=true;const bare:number=x;const y:B=bare;recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number implicit metadata crossing parameter",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=number.<{r:2}>;type B=number.<{r:4}>;const x=A(6);recording=true;function accept(z:B):B{return z;}const y=accept(x);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number implicit metadata crossing return",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=number.<{r:2}>;type B=number.<{r:4}>;const x=A(6);recording=true;function produce(z:any):B{return z;}const y=produce(x);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 crossing B(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=decimal64.<{r:2}>;type B=decimal64.<{r:4}>;const x=A(6);recording=true;const y=(B(x));recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 crossing x:=B",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=decimal64.<{r:2}>;type B=decimal64.<{r:4}>;const x=A(6);recording=true;const y=(x:=B);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 identity decimal64(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=decimal64.<{r:2}>;const x=A(6);recording=true;const y=(decimal64(x));recording=false;`${String(y)};${Reflect.typeOf(y)===decimal64};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;true;false;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 identity x:=decimal64",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=decimal64.<{r:2}>;const x=A(6);recording=true;const y=(x:=decimal64);recording=false;`${String(y)};${Reflect.typeOf(y)===decimal64};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;true;false;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 identity A(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=decimal64.<{r:2}>;const x=A(6);recording=true;const y=(A(x));recording=false;`${String(y)};${Reflect.typeOf(y)===decimal64};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;false;true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 identity x:=A",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=decimal64.<{r:2}>;const x=A(6);recording=true;const y=(x:=A);recording=false;`${String(y)};${Reflect.typeOf(y)===decimal64};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;false;true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 crossing B(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=rational64.<{r:2}>;type B=rational64.<{r:4}>;const x=A(6);recording=true;const y=(B(x));recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 crossing x:=B",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=rational64.<{r:2}>;type B=rational64.<{r:4}>;const x=A(6);recording=true;const y=(x:=B);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 identity rational64(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=rational64.<{r:2}>;const x=A(6);recording=true;const y=(rational64(x));recording=false;`${String(y)};${Reflect.typeOf(y)===rational64};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;true;false;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 identity x:=rational64",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=rational64.<{r:2}>;const x=A(6);recording=true;const y=(x:=rational64);recording=false;`${String(y)};${Reflect.typeOf(y)===rational64};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;true;false;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 identity A(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=rational64.<{r:2}>;const x=A(6);recording=true;const y=(A(x));recording=false;`${String(y)};${Reflect.typeOf(y)===rational64};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;false;true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 identity x:=A",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=rational64.<{r:2}>;const x=A(6);recording=true;const y=(x:=A);recording=false;`${String(y)};${Reflect.typeOf(y)===rational64};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;false;true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 crossing B(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float128.<{r:2}>;type B=float128.<{r:4}>;const x=A(6);recording=true;const y=(B(x));recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 crossing x:=B",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float128.<{r:2}>;type B=float128.<{r:4}>;const x=A(6);recording=true;const y=(x:=B);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 identity float128(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float128.<{r:2}>;const x=A(6);recording=true;const y=(float128(x));recording=false;`${String(y)};${Reflect.typeOf(y)===float128};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;true;false;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 identity x:=float128",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float128.<{r:2}>;const x=A(6);recording=true;const y=(x:=float128);recording=false;`${String(y)};${Reflect.typeOf(y)===float128};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;true;false;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 identity A(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float128.<{r:2}>;const x=A(6);recording=true;const y=(A(x));recording=false;`${String(y)};${Reflect.typeOf(y)===float128};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;false;true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 identity x:=A",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float128.<{r:2}>;const x=A(6);recording=true;const y=(x:=A);recording=false;`${String(y)};${Reflect.typeOf(y)===float128};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;false;true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 crossing B(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=complex64.<{r:2}>;type B=complex64.<{r:4}>;const x=A(6);recording=true;const y=(B(x));recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3+0i;true;true;6+0i;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 crossing x:=B",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=complex64.<{r:2}>;type B=complex64.<{r:4}>;const x=A(6);recording=true;const y=(x:=B);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3+0i;true;true;6+0i;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 identity complex64(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=complex64.<{r:2}>;const x=A(6);recording=true;const y=(complex64(x));recording=false;`${String(y)};${Reflect.typeOf(y)===complex64};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6+0i;true;false;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 identity x:=complex64",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=complex64.<{r:2}>;const x=A(6);recording=true;const y=(x:=complex64);recording=false;`${String(y)};${Reflect.typeOf(y)===complex64};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6+0i;true;false;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 identity A(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=complex64.<{r:2}>;const x=A(6);recording=true;const y=(A(x));recording=false;`${String(y)};${Reflect.typeOf(y)===complex64};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6+0i;false;true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 identity x:=A",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=complex64.<{r:2}>;const x=A(6);recording=true;const y=(x:=A);recording=false;`${String(y)};${Reflect.typeOf(y)===complex64};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6+0i;false;true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 crossing B(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=uint64.<{r:2}>;type B=uint64.<{r:4}>;const x=A(6);recording=true;const y=(B(x));recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 crossing x:=B",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=uint64.<{r:2}>;type B=uint64.<{r:4}>;const x=A(6);recording=true;const y=(x:=B);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 identity uint64(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=uint64.<{r:2}>;const x=A(6);recording=true;const y=(uint64(x));recording=false;`${String(y)};${Reflect.typeOf(y)===uint64};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;true;false;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 identity x:=uint64",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=uint64.<{r:2}>;const x=A(6);recording=true;const y=(x:=uint64);recording=false;`${String(y)};${Reflect.typeOf(y)===uint64};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;true;false;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 identity A(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=uint64.<{r:2}>;const x=A(6);recording=true;const y=(A(x));recording=false;`${String(y)};${Reflect.typeOf(y)===uint64};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;false;true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 identity x:=A",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=uint64.<{r:2}>;const x=A(6);recording=true;const y=(x:=A);recording=false;`${String(y)};${Reflect.typeOf(y)===uint64};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;false;true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 crossing B(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float64.<{r:2}>;type B=float64.<{r:4}>;const x=A(6);recording=true;const y=(B(x));recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 crossing x:=B",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float64.<{r:2}>;type B=float64.<{r:4}>;const x=A(6);recording=true;const y=(x:=B);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 identity float64(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float64.<{r:2}>;const x=A(6);recording=true;const y=(float64(x));recording=false;`${String(y)};${Reflect.typeOf(y)===float64};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;true;false;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 identity x:=float64",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float64.<{r:2}>;const x=A(6);recording=true;const y=(x:=float64);recording=false;`${String(y)};${Reflect.typeOf(y)===float64};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;true;false;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 identity A(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float64.<{r:2}>;const x=A(6);recording=true;const y=(A(x));recording=false;`${String(y)};${Reflect.typeOf(y)===float64};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;false;true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 identity x:=A",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float64.<{r:2}>;const x=A(6);recording=true;const y=(x:=A);recording=false;`${String(y)};${Reflect.typeOf(y)===float64};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;false;true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint crossing B(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=bigint.<{r:2}>;type B=bigint.<{r:4}>;const x=A(6);recording=true;const y=(B(x));recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint crossing x:=B",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=bigint.<{r:2}>;type B=bigint.<{r:4}>;const x=A(6);recording=true;const y=(x:=B);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint identity bigint(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=bigint.<{r:2}>;const x=A(6);recording=true;const y=(bigint(x));recording=false;`${String(y)};${Reflect.typeOf(y)===bigint};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;true;false;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint identity x:=bigint",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=bigint.<{r:2}>;const x=A(6);recording=true;const y=(x:=bigint);recording=false;`${String(y)};${Reflect.typeOf(y)===bigint};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;true;false;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint identity A(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=bigint.<{r:2}>;const x=A(6);recording=true;const y=(A(x));recording=false;`${String(y)};${Reflect.typeOf(y)===bigint};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;false;true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint identity x:=A",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=bigint.<{r:2}>;const x=A(6);recording=true;const y=(x:=A);recording=false;`${String(y)};${Reflect.typeOf(y)===bigint};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;false;true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number crossing B(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=number.<{r:2}>;type B=number.<{r:4}>;const x=A(6);recording=true;const y=(B(x));recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number crossing x:=B",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=number.<{r:2}>;type B=number.<{r:4}>;const x=A(6);recording=true;const y=(x:=B);recording=false;`${String(y)};${Reflect.typeOf(y)===B};${Reflect.typeOf(x)===A};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3;true;true;6;f,q,v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number identity number(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=number.<{r:2}>;const x=A(6);recording=true;const y=(number(x));recording=false;`${String(y)};${Reflect.typeOf(y)===number};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;true;false;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number identity x:=number",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=number.<{r:2}>;const x=A(6);recording=true;const y=(x:=number);recording=false;`${String(y)};${Reflect.typeOf(y)===number};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;true;false;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number identity A(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=number.<{r:2}>;const x=A(6);recording=true;const y=(A(x));recording=false;`${String(y)};${Reflect.typeOf(y)===number};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;false;true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number identity x:=A",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){if(recording)log+=\"f,\";return a.r/b.r;}quantize(v,m){if(recording)log+=\"q,\";return v;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=number.<{r:2}>;const x=A(6);recording=true;const y=(x:=A);recording=false;`${String(y)};${Reflect.typeOf(y)===number};${Reflect.typeOf(y)===A};${Reflect.typeOf(x)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "6;false;true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 membership does not construct",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const x=decimal64.parse('1.50');recording=true;const ok=x is T;recording=false;`${ok};${Reflect.typeOf(x)===decimal64};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 no-validate brand preserves its source",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}}type T=decimal64.<{flag:true}>;const x=decimal64.parse('1.50');const y=T(x);`${Reflect.typeOf(x)===decimal64};${Reflect.typeOf(y)===T};${String(y)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.50"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 explicit default identity",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:false}>;const x=decimal64.parse('1.50');recording=true;const y=T(x);recording=false;`${Reflect.typeOf(x)===decimal64};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.50;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 implicit default admission remains unmarked",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:false}>;const x:any=decimal64.parse('1.50');recording=true;const y:T=x;recording=false;`${Reflect.typeOf(x)===decimal64};${Reflect.typeOf(y)===decimal64};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 base annotation preserves constructed metadata",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const x=T(decimal64.parse('1.50'));const y:decimal64=x;`${Reflect.typeOf(x)===T};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 failed construction preserves aliases and hook count",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return false;}}type T=decimal64.<{flag:true}>;const x=decimal64.parse('1.50');const alias=x;let failed=false;recording=true;try{T(x);}catch(e){failed=true;}recording=false;`${failed};${Reflect.typeOf(x)===decimal64};${Reflect.typeOf(alias)===decimal64};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;1.50;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 membership does not construct",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=float128.<{flag:true}>;const x=float128(1.5);recording=true;const ok=x is T;recording=false;`${ok};${Reflect.typeOf(x)===float128};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 no-validate brand preserves its source",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}}type T=float128.<{flag:true}>;const x=float128(1.5);const y=T(x);`${Reflect.typeOf(x)===float128};${Reflect.typeOf(y)===T};${String(y)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 explicit default identity",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=float128.<{flag:false}>;const x=float128(1.5);recording=true;const y=T(x);recording=false;`${Reflect.typeOf(x)===float128};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.5;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 implicit default admission remains unmarked",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=float128.<{flag:false}>;const x:any=float128(1.5);recording=true;const y:T=x;recording=false;`${Reflect.typeOf(x)===float128};${Reflect.typeOf(y)===float128};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 base annotation preserves constructed metadata",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=float128.<{flag:true}>;const x=T(float128(1.5));const y:float128=x;`${Reflect.typeOf(x)===T};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 failed construction preserves aliases and hook count",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return false;}}type T=float128.<{flag:true}>;const x=float128(1.5);const alias=x;let failed=false;recording=true;try{T(x);}catch(e){failed=true;}recording=false;`${failed};${Reflect.typeOf(x)===float128};${Reflect.typeOf(alias)===float128};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;1.5;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 membership does not construct",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=rational64.<{flag:true}>;const x=rational64(3,2);recording=true;const ok=x is T;recording=false;`${ok};${Reflect.typeOf(x)===rational64};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 no-validate brand preserves its source",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}}type T=rational64.<{flag:true}>;const x=rational64(3,2);const y=T(x);`${Reflect.typeOf(x)===rational64};${Reflect.typeOf(y)===T};${String(y)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;3/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 explicit default identity",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=rational64.<{flag:false}>;const x=rational64(3,2);recording=true;const y=T(x);recording=false;`${Reflect.typeOf(x)===rational64};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;3/2;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 implicit default admission remains unmarked",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=rational64.<{flag:false}>;const x:any=rational64(3,2);recording=true;const y:T=x;recording=false;`${Reflect.typeOf(x)===rational64};${Reflect.typeOf(y)===rational64};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 base annotation preserves constructed metadata",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=rational64.<{flag:true}>;const x=T(rational64(3,2));const y:rational64=x;`${Reflect.typeOf(x)===T};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 failed construction preserves aliases and hook count",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return false;}}type T=rational64.<{flag:true}>;const x=rational64(3,2);const alias=x;let failed=false;recording=true;try{T(x);}catch(e){failed=true;}recording=false;`${failed};${Reflect.typeOf(x)===rational64};${Reflect.typeOf(alias)===rational64};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;3/2;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 membership does not construct",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=complex64.<{flag:true}>;const x=complex64(1.5,2);recording=true;const ok=x is T;recording=false;`${ok};${Reflect.typeOf(x)===complex64};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 no-validate brand preserves its source",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}}type T=complex64.<{flag:true}>;const x=complex64(1.5,2);const y=T(x);`${Reflect.typeOf(x)===complex64};${Reflect.typeOf(y)===T};${String(y)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.5+2i"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 explicit default identity",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=complex64.<{flag:false}>;const x=complex64(1.5,2);recording=true;const y=T(x);recording=false;`${Reflect.typeOf(x)===complex64};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.5+2i;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 implicit default admission remains unmarked",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=complex64.<{flag:false}>;const x:any=complex64(1.5,2);recording=true;const y:T=x;recording=false;`${Reflect.typeOf(x)===complex64};${Reflect.typeOf(y)===complex64};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 base annotation preserves constructed metadata",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=complex64.<{flag:true}>;const x=T(complex64(1.5,2));const y:complex64=x;`${Reflect.typeOf(x)===T};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 failed construction preserves aliases and hook count",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return false;}}type T=complex64.<{flag:true}>;const x=complex64(1.5,2);const alias=x;let failed=false;recording=true;try{T(x);}catch(e){failed=true;}recording=false;`${failed};${Reflect.typeOf(x)===complex64};${Reflect.typeOf(alias)===complex64};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;1.5+2i;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 membership does not construct",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=uint64.<{flag:true}>;const x=uint64(9007199254740993);recording=true;const ok=x is T;recording=false;`${ok};${Reflect.typeOf(x)===uint64};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 no-validate brand preserves its source",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}}type T=uint64.<{flag:true}>;const x=uint64(9007199254740993);const y=T(x);`${Reflect.typeOf(x)===uint64};${Reflect.typeOf(y)===T};${String(y)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;9007199254740993"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 explicit default identity",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=uint64.<{flag:false}>;const x=uint64(9007199254740993);recording=true;const y=T(x);recording=false;`${Reflect.typeOf(x)===uint64};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;9007199254740993;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 implicit default admission remains unmarked",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=uint64.<{flag:false}>;const x:any=uint64(9007199254740993);recording=true;const y:T=x;recording=false;`${Reflect.typeOf(x)===uint64};${Reflect.typeOf(y)===uint64};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 base annotation preserves constructed metadata",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=uint64.<{flag:true}>;const x=T(uint64(9007199254740993));const y:uint64=x;`${Reflect.typeOf(x)===T};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 failed construction preserves aliases and hook count",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return false;}}type T=uint64.<{flag:true}>;const x=uint64(9007199254740993);const alias=x;let failed=false;recording=true;try{T(x);}catch(e){failed=true;}recording=false;`${failed};${Reflect.typeOf(x)===uint64};${Reflect.typeOf(alias)===uint64};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;9007199254740993;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 membership does not construct",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=float64.<{flag:true}>;const x=float64(1.5);recording=true;const ok=x is T;recording=false;`${ok};${Reflect.typeOf(x)===float64};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 no-validate brand preserves its source",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}}type T=float64.<{flag:true}>;const x=float64(1.5);const y=T(x);`${Reflect.typeOf(x)===float64};${Reflect.typeOf(y)===T};${String(y)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 explicit default identity",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=float64.<{flag:false}>;const x=float64(1.5);recording=true;const y=T(x);recording=false;`${Reflect.typeOf(x)===float64};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.5;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 implicit default admission remains unmarked",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=float64.<{flag:false}>;const x:any=float64(1.5);recording=true;const y:T=x;recording=false;`${Reflect.typeOf(x)===float64};${Reflect.typeOf(y)===float64};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 base annotation preserves constructed metadata",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=float64.<{flag:true}>;const x=T(float64(1.5));const y:float64=x;`${Reflect.typeOf(x)===T};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 failed construction preserves aliases and hook count",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return false;}}type T=float64.<{flag:true}>;const x=float64(1.5);const alias=x;let failed=false;recording=true;try{T(x);}catch(e){failed=true;}recording=false;`${failed};${Reflect.typeOf(x)===float64};${Reflect.typeOf(alias)===float64};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;1.5;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint membership does not construct",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=bigint.<{flag:true}>;const x=9007199254740993n;recording=true;const ok=x is T;recording=false;`${ok};${Reflect.typeOf(x)===bigint};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint no-validate brand preserves its source",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}}type T=bigint.<{flag:true}>;const x=9007199254740993n;const y=T(x);`${Reflect.typeOf(x)===bigint};${Reflect.typeOf(y)===T};${String(y)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;9007199254740993"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint explicit default identity",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=bigint.<{flag:false}>;const x=9007199254740993n;recording=true;const y=T(x);recording=false;`${Reflect.typeOf(x)===bigint};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;9007199254740993;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint implicit default admission remains unmarked",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=bigint.<{flag:false}>;const x:any=9007199254740993n;recording=true;const y:T=x;recording=false;`${Reflect.typeOf(x)===bigint};${Reflect.typeOf(y)===bigint};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint base annotation preserves constructed metadata",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=bigint.<{flag:true}>;const x=T(9007199254740993n);const y:bigint=x;`${Reflect.typeOf(x)===T};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint failed construction preserves aliases and hook count",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return false;}}type T=bigint.<{flag:true}>;const x=9007199254740993n;const alias=x;let failed=false;recording=true;try{T(x);}catch(e){failed=true;}recording=false;`${failed};${Reflect.typeOf(x)===bigint};${Reflect.typeOf(alias)===bigint};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;9007199254740993;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number membership does not construct",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=number.<{flag:true}>;const x=1.5;recording=true;const ok=x is T;recording=false;`${ok};${Reflect.typeOf(x)===number};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number no-validate brand preserves its source",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}}type T=number.<{flag:true}>;const x=1.5;const y=T(x);`${Reflect.typeOf(x)===number};${Reflect.typeOf(y)===T};${String(y)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number explicit default identity",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=number.<{flag:false}>;const x=1.5;recording=true;const y=T(x);recording=false;`${Reflect.typeOf(x)===number};${Reflect.typeOf(y)===T};${String(y)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.5;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number implicit default admission remains unmarked",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=number.<{flag:false}>;const x:any=1.5;recording=true;const y:T=x;recording=false;`${Reflect.typeOf(x)===number};${Reflect.typeOf(y)===number};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number base annotation preserves constructed metadata",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=number.<{flag:true}>;const x=T(1.5);const y:number=x;`${Reflect.typeOf(x)===T};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number failed construction preserves aliases and hook count",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return false;}}type T=number.<{flag:true}>;const x=1.5;const alias=x;let failed=false;recording=true;try{T(x);}catch(e){failed=true;}recording=false;`${failed};${Reflect.typeOf(x)===number};${Reflect.typeOf(alias)===number};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;1.5;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal32 payload decimal32.parse(\"0.000\") T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal32.<{flag:true}>;const x=decimal32.parse(\"0.000\");const y=(T(x));const z=(y:=decimal32);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal32}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0.000;0.000;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal32 payload decimal32.parse(\"0.000\") x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal32.<{flag:true}>;const x=decimal32.parse(\"0.000\");const y=(x:=T);const z=(y:=decimal32);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal32}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0.000;0.000;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal32 payload decimal32.parse(\"-1.2300\") T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal32.<{flag:true}>;const x=decimal32.parse(\"-1.2300\");const y=(T(x));const z=(y:=decimal32);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal32}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-1.2300;-1.2300;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal32 payload decimal32.parse(\"-1.2300\") x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal32.<{flag:true}>;const x=decimal32.parse(\"-1.2300\");const y=(x:=T);const z=(y:=decimal32);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal32}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-1.2300;-1.2300;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal32 payload decimal32(NaN) T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal32.<{flag:true}>;const x=decimal32(NaN);const y=(T(x));const z=(y:=decimal32);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal32}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "NaN;NaN;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal32 payload decimal32(NaN) x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal32.<{flag:true}>;const x=decimal32(NaN);const y=(x:=T);const z=(y:=decimal32);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal32}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "NaN;NaN;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal32 payload decimal32(Infinity) T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal32.<{flag:true}>;const x=decimal32(Infinity);const y=(T(x));const z=(y:=decimal32);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal32}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "Infinity;Infinity;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal32 payload decimal32(Infinity) x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal32.<{flag:true}>;const x=decimal32(Infinity);const y=(x:=T);const z=(y:=decimal32);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal32}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "Infinity;Infinity;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal32 payload decimal32(-Infinity) T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal32.<{flag:true}>;const x=decimal32(-Infinity);const y=(T(x));const z=(y:=decimal32);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal32}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-Infinity;-Infinity;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal32 payload decimal32(-Infinity) x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal32.<{flag:true}>;const x=decimal32(-Infinity);const y=(x:=T);const z=(y:=decimal32);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal32}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-Infinity;-Infinity;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal32 contextual T(1.00)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal32.<{flag:true}>;const y=T(1.00);`${String(y)};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1.00;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal32 contextual (1.00:=T)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal32.<{flag:true}>;const y=(1.00:=T);`${String(y)};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1.00;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal32 contextual T(0.1+0.2)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal32.<{flag:true}>;const y=T(0.1+0.2);`${String(y)};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0.3;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal32 contextual ((0.1+0.2):=T)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal32.<{flag:true}>;const y=((0.1+0.2):=T);`${String(y)};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0.3;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 payload decimal64.parse(\"0.000\") T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const x=decimal64.parse(\"0.000\");const y=(T(x));const z=(y:=decimal64);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0.000;0.000;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 payload decimal64.parse(\"0.000\") x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const x=decimal64.parse(\"0.000\");const y=(x:=T);const z=(y:=decimal64);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0.000;0.000;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 payload decimal64.parse(\"-1.2300\") T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const x=decimal64.parse(\"-1.2300\");const y=(T(x));const z=(y:=decimal64);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-1.2300;-1.2300;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 payload decimal64.parse(\"-1.2300\") x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const x=decimal64.parse(\"-1.2300\");const y=(x:=T);const z=(y:=decimal64);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-1.2300;-1.2300;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 payload decimal64(NaN) T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const x=decimal64(NaN);const y=(T(x));const z=(y:=decimal64);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "NaN;NaN;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 payload decimal64(NaN) x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const x=decimal64(NaN);const y=(x:=T);const z=(y:=decimal64);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "NaN;NaN;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 payload decimal64(Infinity) T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const x=decimal64(Infinity);const y=(T(x));const z=(y:=decimal64);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "Infinity;Infinity;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 payload decimal64(Infinity) x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const x=decimal64(Infinity);const y=(x:=T);const z=(y:=decimal64);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "Infinity;Infinity;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 payload decimal64(-Infinity) T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const x=decimal64(-Infinity);const y=(T(x));const z=(y:=decimal64);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-Infinity;-Infinity;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 payload decimal64(-Infinity) x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const x=decimal64(-Infinity);const y=(x:=T);const z=(y:=decimal64);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-Infinity;-Infinity;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 contextual T(1.00)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const y=T(1.00);`${String(y)};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1.00;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 contextual (1.00:=T)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const y=(1.00:=T);`${String(y)};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1.00;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 contextual T(0.1+0.2)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const y=T(0.1+0.2);`${String(y)};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0.3;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 contextual ((0.1+0.2):=T)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const y=((0.1+0.2):=T);`${String(y)};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0.3;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 payload decimal128.parse(\"0.000\") T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal128.<{flag:true}>;const x=decimal128.parse(\"0.000\");const y=(T(x));const z=(y:=decimal128);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0.000;0.000;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 payload decimal128.parse(\"0.000\") x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal128.<{flag:true}>;const x=decimal128.parse(\"0.000\");const y=(x:=T);const z=(y:=decimal128);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0.000;0.000;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 payload decimal128.parse(\"-1.2300\") T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal128.<{flag:true}>;const x=decimal128.parse(\"-1.2300\");const y=(T(x));const z=(y:=decimal128);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-1.2300;-1.2300;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 payload decimal128.parse(\"-1.2300\") x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal128.<{flag:true}>;const x=decimal128.parse(\"-1.2300\");const y=(x:=T);const z=(y:=decimal128);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-1.2300;-1.2300;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 payload decimal128(NaN) T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal128.<{flag:true}>;const x=decimal128(NaN);const y=(T(x));const z=(y:=decimal128);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "NaN;NaN;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 payload decimal128(NaN) x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal128.<{flag:true}>;const x=decimal128(NaN);const y=(x:=T);const z=(y:=decimal128);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "NaN;NaN;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 payload decimal128(Infinity) T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal128.<{flag:true}>;const x=decimal128(Infinity);const y=(T(x));const z=(y:=decimal128);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "Infinity;Infinity;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 payload decimal128(Infinity) x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal128.<{flag:true}>;const x=decimal128(Infinity);const y=(x:=T);const z=(y:=decimal128);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "Infinity;Infinity;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 payload decimal128(-Infinity) T(x)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal128.<{flag:true}>;const x=decimal128(-Infinity);const y=(T(x));const z=(y:=decimal128);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-Infinity;-Infinity;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 payload decimal128(-Infinity) x:=T",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal128.<{flag:true}>;const x=decimal128(-Infinity);const y=(x:=T);const z=(y:=decimal128);`${String(y)};${String(z)};${Reflect.typeOf(y)===T};${Reflect.typeOf(z)===decimal128}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-Infinity;-Infinity;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 contextual T(1.00)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal128.<{flag:true}>;const y=T(1.00);`${String(y)};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1.00;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 contextual (1.00:=T)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal128.<{flag:true}>;const y=(1.00:=T);`${String(y)};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1.00;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 contextual T(0.1+0.2)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal128.<{flag:true}>;const y=T(0.1+0.2);`${String(y)};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0.3;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 contextual ((0.1+0.2):=T)",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal128.<{flag:true}>;const y=((0.1+0.2):=T);`${String(y)};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0.3;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number negative zero survives construction and erasure",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=number.<{flag:true}>;let zero=-0;const x=number(zero);const y=T(x);const z=y:=number;`${Object.is(number(x),-0)};${Object.is(number(y),-0)};${Object.is(number(z),-0)};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float32 negative zero survives construction and erasure",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=float32.<{flag:true}>;let zero=-0;const x=float32(zero);const y=T(x);const z=y:=float32;`${Object.is(number(x),-0)};${Object.is(number(y),-0)};${Object.is(number(z),-0)};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 negative zero survives construction and erasure",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=float64.<{flag:true}>;let zero=-0;const x=float64(zero);const y=T(x);const z=y:=float64;`${Object.is(number(x),-0)};${Object.is(number(y),-0)};${Object.is(number(z),-0)};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 negative zero survives construction and erasure",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=float128.<{flag:true}>;let zero=-0;const x=float128(zero);const y=T(x);const z=y:=float128;`${Object.is(number(x),-0)};${Object.is(number(y),-0)};${Object.is(number(z),-0)};${Reflect.typeOf(y)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 direct construction range +",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const a:ClosedRange.<T>=T(2)..=T(4);const b:ClosedRange.<T>=T(2)..=T(2);const c=a+b;`${String(c.start)};${String(c.end)};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;6;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 direct construction range *",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const a:ClosedRange.<T>=T(2)..=T(4);const b:ClosedRange.<T>=T(2)..=T(2);const c=a*b;`${String(c.start)};${String(c.end)};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;8;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 direct construction range /",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const a:ClosedRange.<T>=T(2)..=T(4);const b:ClosedRange.<T>=T(2)..=T(2);const c=a/b;`${String(c.start)};${String(c.end)};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 direct construction range +",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=rational64.<{flag:true}>;const a:ClosedRange.<T>=T(2)..=T(4);const b:ClosedRange.<T>=T(2)..=T(2);const c=a+b;`${String(c.start)};${String(c.end)};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;6;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 direct construction range *",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=rational64.<{flag:true}>;const a:ClosedRange.<T>=T(2)..=T(4);const b:ClosedRange.<T>=T(2)..=T(2);const c=a*b;`${String(c.start)};${String(c.end)};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;8;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 direct construction range /",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=rational64.<{flag:true}>;const a:ClosedRange.<T>=T(2)..=T(4);const b:ClosedRange.<T>=T(2)..=T(2);const c=a/b;`${String(c.start)};${String(c.end)};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 direct construction range +",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=float128.<{flag:true}>;const a:ClosedRange.<T>=T(2)..=T(4);const b:ClosedRange.<T>=T(2)..=T(2);const c=a+b;`${String(c.start)};${String(c.end)};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;6;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 direct construction range *",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=float128.<{flag:true}>;const a:ClosedRange.<T>=T(2)..=T(4);const b:ClosedRange.<T>=T(2)..=T(2);const c=a*b;`${String(c.start)};${String(c.end)};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;8;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 direct construction range /",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=float128.<{flag:true}>;const a:ClosedRange.<T>=T(2)..=T(4);const b:ClosedRange.<T>=T(2)..=T(2);const c=a/b;`${String(c.start)};${String(c.end)};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bare conversion validates before range scaling",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const c=a.scale(2);`${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4;8;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "immutable constructor alias and erased source",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;const make=T;const also=make;const x:any=decimal64.parse(\"1.50\");const y=also(x);`${Reflect.typeOf(x)===decimal64};${Reflect.typeOf(y)===T};${String(y)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.50"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown dynamic constructor and once-only operand",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;let make:any=T;let reads=0;function source():any{reads+=1;return decimal64.parse(\"1.50\");}const y=make(source());`${reads};${Reflect.typeOf(y)===T};${String(y)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;true;1.50"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong source stops before target validation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type T=decimal64.<{flag:true}>;let x:any=\"1.50\";let failed=false;recording=true;try{T(x);}catch(e){failed=true;}recording=false;`${failed};${x};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;1.50;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "validation throw preserves source and exact error",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";if(recording)throw new RangeError(\"stop\");return true;}}type T=decimal64.<{flag:true}>;const x=decimal64.parse(\"1.50\");let result=\"\";recording=true;try{T(x);}catch(e){result=e.name+\":\"+e.message;}recording=false;`${result};${Reflect.typeOf(x)===decimal64};${String(x)};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "RangeError:stop;true;1.50;v,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested numeric brands do not retag inner source",
+      "steps": [
+        {
+          "source": "type M={a:boolean};meta M{default={a:false};subtype(x,y){return x.a===y.a;}}type N={b:boolean};meta N{default={b:false};subtype(x,y){return x.b===y.b;}}type A=decimal64.<{a:true}>;type B=A.<{b:true}>;const a=A(decimal64.parse(\"1.50\"));const b=B(a);const c=b:=A;`${Reflect.typeOf(a)===A};${Reflect.typeOf(b)===B};${Reflect.typeOf(c)===A};${String(b)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;true;1.50"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric intersection construction does not retag source",
+      "steps": [
+        {
+          "source": "type M={a:boolean};meta M{default={a:false};subtype(x,y){return x.a===y.a;}}type N={b:boolean};meta N{default={b:false};subtype(x,y){return x.b===y.b;}}type A=decimal64.<{a:true}>;type B=decimal64.<{b:true}>;type I=A&B;const x=decimal64.parse(\"1.50\");const y=I(x);`${Reflect.typeOf(x)===decimal64};${Reflect.typeOf(y)===I};${String(y)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.50"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 incompatible metadata rejects before validation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=decimal64.<{flag:true}>;type B=decimal64.<{flag:false}>;const a=A(2);let failed=false;recording=true;try{B(a);}catch(e){failed=true;}recording=false;`${failed};${Reflect.typeOf(a)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 incompatible metadata rejects before validation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=rational64.<{flag:true}>;type B=rational64.<{flag:false}>;const a=A(2);let failed=false;recording=true;try{B(a);}catch(e){failed=true;}recording=false;`${failed};${Reflect.typeOf(a)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 incompatible metadata rejects before validation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=float128.<{flag:true}>;type B=float128.<{flag:false}>;const a=A(2);let failed=false;recording=true;try{B(a);}catch(e){failed=true;}recording=false;`${failed};${Reflect.typeOf(a)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "complex64 incompatible metadata rejects before validation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=complex64.<{flag:true}>;type B=complex64.<{flag:false}>;const a=A(2);let failed=false;recording=true;try{B(a);}catch(e){failed=true;}recording=false;`${failed};${Reflect.typeOf(a)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint incompatible metadata rejects before validation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return true;}}type A=bigint.<{flag:true}>;type B=bigint.<{flag:false}>;const a=A(2);let failed=false;recording=true;try{B(a);}catch(e){failed=true;}recording=false;`${failed};${Reflect.typeOf(a)===A};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed construction leaves binding uninitialized and next Script recovers",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=\"v,\";return !recording;}}type T=decimal64.<{flag:true}>;const x=decimal64.parse(\"1.50\");recording=true;let y=T(x);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "y;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "ReferenceError"
+          }
+        },
+        {
+          "source": "recording=false;const z=T(x);`${Reflect.typeOf(x)===decimal64};${Reflect.typeOf(z)===T};${String(z)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;1.50"
+          }
+        }
+      ]
+    },
+    {
+      "name": "deep numeric construction retains its source",
+      "steps": [
+        {
+          "source": "type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}}type T0=decimal64;type T1=T0.<{flag:true}>;type T2=T1.<{flag:true}>;type T3=T2.<{flag:true}>;type T4=T3.<{flag:true}>;type T5=T4.<{flag:true}>;type T6=T5.<{flag:true}>;type T7=T6.<{flag:true}>;type T8=T7.<{flag:true}>;type T9=T8.<{flag:true}>;type T10=T9.<{flag:true}>;type T11=T10.<{flag:true}>;type T12=T11.<{flag:true}>;type T13=T12.<{flag:true}>;type T14=T13.<{flag:true}>;type T15=T14.<{flag:true}>;type T16=T15.<{flag:true}>;type T17=T16.<{flag:true}>;type T18=T17.<{flag:true}>;const x=T17(2);const y=T18(x);`${Reflect.typeOf(x)===T17};${Reflect.typeOf(y)===T18};${String(y)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true;2"
+          }
+        }
+      ]
+    }
+  ]
+}

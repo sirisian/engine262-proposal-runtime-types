@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectThrownKind } from '../harness.mts';
+import { evaluated, expectThrownKind, expectStaticTypeError } from '../harness.mts';
 
 /**
  * proposal-runtime-types `#sec-type-names`: a type position names a TYPE. A
@@ -63,7 +63,8 @@ test('decimal no longer crashes the host', () => {
 test('the two spellings that DO name a type still work', () => {
   // Name it.
   expect(evaluated('const T = type uint8; let v: T = 2; String(v);')).toBe('2');
-  expectThrownKind('const T = type uint8; let v: T = 300;', 'RangeError');
+  // The immutable alias establishes uint8 during source checking.
+  expectStaticTypeError('const T = type uint8; let v: T = 300;');
   // Or query it.
   expect(evaluated('const q: uint8 = 1; let v: Reflect.typeOf(q) = 2; String(v);')).toBe('2');
   expectThrownKind('const q: uint8 = 1; let v: Reflect.typeOf(q) = 300;', 'RangeError');

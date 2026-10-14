@@ -75,7 +75,9 @@ import { IsSelectedInvocation, DispatchCaseGroup } from './callable-selection.mt
  */
 function underlyingPrimitiveName(t: TypeRecord): string | undefined {
   let cur: TypeRecord = t;
-  for (let depth = 0; depth < 16; depth += 1) {
+  const visited = new Set<TypeRecord>();
+  while (!visited.has(cur)) {
+    visited.add(cur);
     if (cur.Kind === 'primitive') {
       return cur.Name;
     }
@@ -956,6 +958,30 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     }
   }
 
+  // Explicit numeric construction is a provenance boundary. Membership may
+  // validate a bare payload without giving it the requested runtime type.
+  // Handle carried metadata before either membership or base-family conversion.
+  if (isBoundaryNumericSource(value)) {
+    const from = RuntimeTypeOf(value);
+    if (from.Kind === 'parameterized') {
+      if (SameType(from, t)) return value;
+      if (t.Kind === 'parameterized' && SameType(from.Base, t.Base)) {
+        return Q(yield* ConvertParameterization(value, from, t));
+      }
+      if (SameType(from.Base, t)) {
+        return Q(StampNumericType(value, t))!;
+      }
+    }
+  }
+  const targetPrimitive = t.Kind === 'parameterized' ? underlyingPrimitiveName(t) : undefined;
+  if (t.Kind === 'parameterized' && targetPrimitive !== undefined && isBoundaryNumericTarget(targetPrimitive)) {
+    const atBase = Q(yield* ConvertValue(value, t.Base));
+    // Defined judgments run once over the base result; an absent validate hook
+    // does not prevent explicit brand construction. No source is stamped.
+    Q(yield* RequireTypeAfterCast(atBase, t));
+    return Q(StampNumericType(atBase, t))!;
+  }
+
   // proposal-runtime-types: a DECIMAL TARGET converts through ConvertToDecimal,
   // the function calling the type uses - so `x := decimal128` and
   // `decimal128(x)` are one operation, as #sec-conversions says the two spellings
@@ -1111,9 +1137,8 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
         }
       }
     }
-    if (isTypedNumber(atBase)) {
-      return new TypedNumberValue(atBase.value, t);
-    }
+    const numeric = Q(StampNumericType(atBase, t));
+    if (numeric !== undefined) return numeric;
     if (atBase instanceof ObjectValue) {
       Object.defineProperty(atBase, 'BrandTypeRecord', {
         value: t, enumerable: false, configurable: true,
@@ -1121,17 +1146,6 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
       return atBase;
     }
     return carryStringType(atBase, t);
-  }
-  if (isTypedNumber(value) && (value.TypeRecord as TypeRecord).Kind === 'parameterized') {
-    const carried = value.TypeRecord as TypeRecord & { Kind: 'parameterized' };
-    if (t.Kind === 'parameterized' && SameType(carried.Base, t.Base) && !SameType(carried, t)) {
-      return Q(yield* ConvertParameterization(value, carried, t));
-    }
-    if (t.Kind !== 'parameterized' && SameType(carried.Base, t)) {
-      // "A parameterized type is a subtype of its base, so the brand is shed
-      // freely on the way up." No meta type gates this direction.
-      return new TypedNumberValue(value.value, t);
-    }
   }
   // A collection with NO type arguments adopts the target's, at the boundary,
   // before membership is asked.
@@ -2043,8 +2057,8 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   // The crossing between two parameterizations gates and scales here exactly as
   // at the cast: the checked rule differs from ConvertValue only in what a
   // LOSSY numeric conversion does, and a crossing is a conversion, not a loss.
-  if (isTypedNumber(value) && (value.TypeRecord as TypeRecord).Kind === 'parameterized') {
-    const carried = value.TypeRecord as TypeRecord & { Kind: 'parameterized' };
+  const carried = isBoundaryNumericSource(value) ? RuntimeTypeOf(value) : undefined;
+  if (carried?.Kind === 'parameterized') {
     if (t.Kind === 'parameterized' && SameType(carried.Base, t.Base) && !SameType(carried, t)) {
       return Q(yield* ConvertParameterization(value, carried, t));
     }
@@ -2196,6 +2210,13 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
       const from = RuntimeTypeOf(value);
       const widening = from !== undefined && SubclassAddsStorageOver(from, t);
       return Q(yield* CopyValueTypeInstance(value, t, widening));
+    }
+    // A bare BigInt admitted at an explicit default requirement stays bare.
+    // Its carrier helper is also used by explicit brand construction, which
+    // must not turn this ordinary admission into that construction boundary.
+    if (value instanceof BigIntValue && t.Kind === 'parameterized'
+        && !GoverningMetaTypes(t.Metadata).types.some((m) => MetaTypeGoverns(t.Metadata, m, t.Base))) {
+      return value;
     }
     // proposal-runtime-types (Capability B): even when the value already
     // satisfies the type, a literal string type is carried on the value.
@@ -3841,6 +3862,22 @@ export function CastCoversTarget(castTarget: TypeRecord, target: TypeRecord): bo
   return MetaTypeGoverns(metadata, metaType, target.Base);
 }
 
+/** Retain an admitted numeric payload without mutating a source carrier. */
+function StampNumericType(value: Value, t: TypeRecord): Value | ThrowCompletion | undefined {
+  if (isTypedNumber(value)) {
+    return t.Kind === 'primitive' && t.Name === 'number' ? Value(value.value) : new TypedNumberValue(value.value, t);
+  }
+  if (value instanceof NumberValue) {
+    // Preserve the representation's negative zero, which R() erases.
+    // eslint-disable-next-line @engine262/mathematical-value
+    return new TypedNumberValue(value.numberValue(), t);
+  }
+  if (value instanceof BigIntValue) {
+    return t.Kind === 'primitive' && t.Name === 'bigint' ? Value(R(value)) : TypedBigInt(R(value), t);
+  }
+  return StampFamilyValue(value, t);
+}
+
 /**
  * A fresh value of an object-represented numeric family carrying _t_.
  */
@@ -4420,13 +4457,7 @@ export function* ConvertParameterization(value: Value, from: TypeRecord, to: Typ
   // parameterization; membership treats the carried record as its base (the
   // branding rule), so the value is a value of the base everywhere the base is
   // asked for.
-  if (converted instanceof NumberValue) {
-    converted = new TypedNumberValue(R(converted) as number, carriedType);
-  } else if (isTypedNumber(converted)) {
-    converted = new TypedNumberValue(converted.value, carriedType);
-  } else {
-    converted = Q(StampFamilyValue(converted, carriedType)) ?? converted;
-  }
+  converted = Q(StampNumericType(converted, carriedType)) ?? converted;
   return Q(yield* RequireTypeAfterCast(converted, carriedType));
 }
 

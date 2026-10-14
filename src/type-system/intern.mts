@@ -747,21 +747,9 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
       }
       return Throw.TypeError('$1 is not a value of this enum', arg);
     }
-    // proposal-runtime-types: calling a decimal Type
-    // Object with a STRING reads a decimal from its digits. That is where a
-    // cohort member comes from - "a decimal type reads its cohort member from
-    // the SOURCE TEXT rather than from the mathematical value, since `1.0` and
-    // `1.00` have the same mathematical value" - so a string is the only
-    // argument that can carry one today.
-    //
-    // Every numeric type converts too - the table's row is "any numeric type" -
-    // in ConvertToDecimal, which `x := decimal128` calls as well, so the two
-    // spellings are one operation.
+    // Share the explicit conversion path, including metadata erasure, with :=.
     if (record.Kind === 'primitive' && (record.Name === 'decimal32' || record.Name === 'decimal64' || record.Name === 'decimal128')) {
-      const converted = ConvertToDecimal(arg, record.Name === 'decimal32' ? 32 : record.Name === 'decimal64' ? 64 : 128, record.Name);
-      if (converted !== undefined) {
-        return converted;
-      }
+      return Q(yield* ConvertValue(arg, record));
     }
     // decimal.md, "Conversions ... Explicit in every direction, and each names
     // its loss": "To an integer: `int64(d)` TRUNCATES TOWARD ZERO."

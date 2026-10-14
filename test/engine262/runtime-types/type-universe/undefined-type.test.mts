@@ -97,18 +97,20 @@ test('RuntimeTypeOf reports the undefined type for undefined', () => {
 });
 
 test('nullish coalescing works over an optional union', () => {
+  // Parameter values keep both alternatives live; initialized locals can
+  // already prove a nullish test constant.
   // The nullish half of the `??` test is the `undefined` TYPE; built over
   // ~void~ it shared no member with `uint32 | undefined`, so this live code
   // was reported as a test that can never succeed.
-  expect(value('let x: uint32 | undefined = undefined; const c: uint32 = x ?? 10; `${c}`;')).toBe('10');
-  expect(value('let x: uint32 | undefined = 5; const c: uint32 = x ?? 10; `${c}`;')).toBe('5');
+  expect(value('function coalesce(x: uint32 | undefined): uint32 { return x ?? 10; } `${coalesce(undefined)}`;')).toBe('10');
+  expect(value('function coalesce(x: uint32 | undefined): uint32 { return x ?? 10; } `${coalesce(5)}`;')).toBe('5');
   // A left operand that cannot be nullish is still reported.
   expectTypeError('let x: uint32 = 5; const c = x ?? 10;');
 });
 
 test('narrowing an optional union reaches the non-undefined arm', () => {
-  expectOk('let x: uint32 | undefined = 5; if (x !== undefined) { const y: uint32 = x; }');
-  expectOk("let x: uint32 | undefined = 5; if (typeof x === 'undefined') { } ");
+  expectOk('function narrow(x: uint32 | undefined) { if (x !== undefined) { const y: uint32 = x; } } narrow(5); narrow(undefined);');
+  expectOk("function narrow(x: uint32 | undefined) { if (typeof x === 'undefined') { } } narrow(5); narrow(undefined);");
   expectOk('let o: { a?: uint32 } = { }; let v = o.a;');
 });
 
@@ -133,7 +135,7 @@ test('null is a primitive type named for its value', () => {
   // Everything the old representation carried still holds.
   expectOk('let x: null = null;');
   expectOk('let x: uint32 | null = null; x = 5;');
-  expectOk('let x: uint32 | null = null; if (x !== null) { const y: uint32 = x; }');
+  expectOk('function narrow(x: uint32 | null) { if (x !== null) { const y: uint32 = x; } } narrow(null); narrow(5);');
   // A nullable union defaults to null, and a plain `null` binding does too.
   expect(value('let x: uint32 | null; `${x}`;')).toBe('null');
   expect(value('let a: [].<uint8> | null; `${a}`;')).toBe('null');
