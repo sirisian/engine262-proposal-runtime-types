@@ -340,7 +340,7 @@
     },
     {
       "name": "object contract: generator method: string",
-      "source": "function outer(){const box={*m(x:string){yield x;}};const target:{readonly m:(x:string)=>Generator.<string,void,void>}=box;}",
+      "source": "function outer(){const box={*m(x:string){yield x;}};const target:{readonly m:(x:string)=>Generator.<string,undefined,void>}=box;}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -348,7 +348,7 @@
     },
     {
       "name": "object contract: generator method: number",
-      "source": "function outer(){const box={*m(x:string){yield x;}};const target:{readonly m:(x:string)=>Generator.<number,void,void>}=box;}",
+      "source": "function outer(){const box={*m(x:string){yield x;}};const target:{readonly m:(x:string)=>Generator.<number,undefined,void>}=box;}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -363,7 +363,7 @@
     },
     {
       "name": "object contract: async generator method: string",
-      "source": "function outer(){const box={async *m(x:string){yield x;}};const target:{readonly m:(x:string)=>AsyncGenerator.<string,void,void>}=box;}",
+      "source": "function outer(){const box={async *m(x:string){yield x;}};const target:{readonly m:(x:string)=>AsyncGenerator.<string,undefined,void>}=box;}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -371,7 +371,7 @@
     },
     {
       "name": "object contract: async generator method: number",
-      "source": "function outer(){const box={async *m(x:string){yield x;}};const target:{readonly m:(x:string)=>AsyncGenerator.<number,void,void>}=box;}",
+      "source": "function outer(){const box={async *m(x:string){yield x;}};const target:{readonly m:(x:string)=>AsyncGenerator.<number,undefined,void>}=box;}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,

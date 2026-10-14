@@ -1,4 +1,4 @@
-import { EnforceYieldType, EnforceDelegatedYield } from '../abstract-ops/runtime-types.mts';
+import { AdmitGeneratorReturn, EnforceYieldType, EnforceDelegatedYield, IsAdmittedGeneratorReturn } from '../abstract-ops/runtime-types.mts';
 import { ObjectValue, Value } from '../value.mts';
 import {
   Await,
@@ -143,6 +143,9 @@ export function* Evaluate_YieldExpression({ hasStar, AssignmentExpression }: Par
         const ret = Q(yield* GetMethod(iterator, Value('return')));
         // iii. If return is undefined, then
         if (ret === Value.undefined) {
+          // Sync delegation without a return method propagates the external
+          // completion itself, including its admission provenance.
+          if (generatorKind === 'sync') return received;
           let receivedValue = received.Value;
           // 1. If generatorKind is async, then set receivedValue to ? Await(received.[[Value]]).
           if (generatorKind === 'async') {
@@ -167,6 +170,13 @@ export function* Evaluate_YieldExpression({ hasStar, AssignmentExpression }: Par
         if (done === Value.true) {
           // 1. Set returnedValue to ? IteratorValue(innerReturnResult).
           const returnedValue = Q(yield* IteratorValue(innerReturnResult));
+          const generator = surroundingAgent.runningExecutionContext.Generator;
+          if (surroundingAgent.feature('runtime-types') && generatorKind === 'sync' && generator
+            && IsAdmittedGeneratorReturn(generator, received)) {
+            // A delegate supplies a new external-result payload. Admit it
+            // separately; equal primitive values do not transfer provenance.
+            return Q(yield* AdmitGeneratorReturn(generator, returnedValue));
+          }
           // 2. Return ReturnCompletion(value).
           return ReturnCompletion(returnedValue);
         }

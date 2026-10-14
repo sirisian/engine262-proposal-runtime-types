@@ -1,0 +1,773 @@
+{
+  "cases": [
+    {
+      "name": "invalid request preserves unstarted",
+      "steps": [
+        {
+          "source": "let entered=0,cleaned=0;function* g():Generator.<uint8,string,void>{entered++;try{yield uint8(1);yield uint8(2);return \"body\";}finally{cleaned++;}}const it:any=g();let failure=\"\";try{it.return({});}catch(e){failure=e.name;}const result=it.next();failure+\":\"+entered+\":\"+cleaned+\":\"+result.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:1:0:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "omitted return unstarted",
+      "steps": [
+        {
+          "source": "let entered=0,cleaned=0;function* g():Generator.<uint8,string,void>{entered++;try{yield uint8(1);yield uint8(2);return \"body\";}finally{cleaned++;}}const it:any=g();const result=it.return();String(result.done)+\":\"+result.value+\":\"+entered+\":\"+cleaned;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:undefined:0:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit undefined return unstarted",
+      "steps": [
+        {
+          "source": "let entered=0,cleaned=0;function* g():Generator.<uint8,string,void>{entered++;try{yield uint8(1);yield uint8(2);return \"body\";}finally{cleaned++;}}const it:any=g();const result=it.return(undefined);String(result.done)+\":\"+result.value+\":\"+entered+\":\"+cleaned;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:undefined:0:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "string return unstarted",
+      "steps": [
+        {
+          "source": "let entered=0,cleaned=0;function* g():Generator.<uint8,string,void>{entered++;try{yield uint8(1);yield uint8(2);return \"body\";}finally{cleaned++;}}const it:any=g();const result=it.return(\"external\");String(result.done)+\":\"+result.value+\":\"+entered+\":\"+cleaned;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:external:0:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid request preserves suspended",
+      "steps": [
+        {
+          "source": "let entered=0,cleaned=0;function* g():Generator.<uint8,string,void>{entered++;try{yield uint8(1);yield uint8(2);return \"body\";}finally{cleaned++;}}const it:any=g();it.next();let failure=\"\";try{it.return({});}catch(e){failure=e.name;}const result=it.next();failure+\":\"+entered+\":\"+cleaned+\":\"+result.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:1:0:2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "omitted return suspended",
+      "steps": [
+        {
+          "source": "let entered=0,cleaned=0;function* g():Generator.<uint8,string,void>{entered++;try{yield uint8(1);yield uint8(2);return \"body\";}finally{cleaned++;}}const it:any=g();it.next();const result=it.return();String(result.done)+\":\"+result.value+\":\"+entered+\":\"+cleaned;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:undefined:1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit undefined return suspended",
+      "steps": [
+        {
+          "source": "let entered=0,cleaned=0;function* g():Generator.<uint8,string,void>{entered++;try{yield uint8(1);yield uint8(2);return \"body\";}finally{cleaned++;}}const it:any=g();it.next();const result=it.return(undefined);String(result.done)+\":\"+result.value+\":\"+entered+\":\"+cleaned;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:undefined:1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "string return suspended",
+      "steps": [
+        {
+          "source": "let entered=0,cleaned=0;function* g():Generator.<uint8,string,void>{entered++;try{yield uint8(1);yield uint8(2);return \"body\";}finally{cleaned++;}}const it:any=g();it.next();const result=it.return(\"external\");String(result.done)+\":\"+result.value+\":\"+entered+\":\"+cleaned;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:external:1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid request preserves completed",
+      "steps": [
+        {
+          "source": "let entered=0,cleaned=0;function* g():Generator.<uint8,string,void>{entered++;try{yield uint8(1);yield uint8(2);return \"body\";}finally{cleaned++;}}const it:any=g();it.next();it.next();it.next();let failure=\"\";try{it.return({});}catch(e){failure=e.name;}const result=it.next();failure+\":\"+entered+\":\"+cleaned+\":\"+result.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:1:1:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "omitted return completed",
+      "steps": [
+        {
+          "source": "let entered=0,cleaned=0;function* g():Generator.<uint8,string,void>{entered++;try{yield uint8(1);yield uint8(2);return \"body\";}finally{cleaned++;}}const it:any=g();it.next();it.next();it.next();const result=it.return();String(result.done)+\":\"+result.value+\":\"+entered+\":\"+cleaned;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:undefined:1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit undefined return completed",
+      "steps": [
+        {
+          "source": "let entered=0,cleaned=0;function* g():Generator.<uint8,string,void>{entered++;try{yield uint8(1);yield uint8(2);return \"body\";}finally{cleaned++;}}const it:any=g();it.next();it.next();it.next();const result=it.return(undefined);String(result.done)+\":\"+result.value+\":\"+entered+\":\"+cleaned;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:undefined:1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "string return completed",
+      "steps": [
+        {
+          "source": "let entered=0,cleaned=0;function* g():Generator.<uint8,string,void>{entered++;try{yield uint8(1);yield uint8(2);return \"body\";}finally{cleaned++;}}const it:any=g();it.next();it.next();it.next();const result=it.return(\"external\");String(result.done)+\":\"+result.value+\":\"+entered+\":\"+cleaned;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:external:1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "void request refuses payload unstarted",
+      "steps": [
+        {
+          "source": "let entered=0,cleaned=0;function* g():Generator.<uint8,void,void>{entered++;try{yield uint8(1);}finally{cleaned++;}}const it:any=g();let failure=\"\";try{it.return(\"bad\");}catch(e){failure=e.name;}failure+\":\"+entered+\":\"+cleaned;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:0:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "void request refuses payload suspended",
+      "steps": [
+        {
+          "source": "let entered=0,cleaned=0;function* g():Generator.<uint8,void,void>{entered++;try{yield uint8(1);}finally{cleaned++;}}const it:any=g();it.next();let failure=\"\";try{it.return(\"bad\");}catch(e){failure=e.name;}failure+\":\"+entered+\":\"+cleaned;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:1:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "void request refuses payload completed",
+      "steps": [
+        {
+          "source": "let entered=0,cleaned=0;function* g():Generator.<uint8,void,void>{entered++;try{yield uint8(1);}finally{cleaned++;}}const it:any=g();it.next();it.next();let failure=\"\";try{it.return(\"bad\");}catch(e){failure=e.name;}failure+\":\"+entered+\":\"+cleaned;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint8 wrong-kind rejected before entry",
+      "steps": [
+        {
+          "source": "let entered=0;function* g():Generator.<uint8,uint8,void>{entered++;return uint8(7);}const it:any=g();let failure=\"\";try{it.return(\"bad\");}catch(e){failure=e.name;}const result=it.next();failure+\":\"+entered+\":\"+result.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:1:7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint8 out-of-range rejected before entry",
+      "steps": [
+        {
+          "source": "let entered=0;function* g():Generator.<uint8,uint8,void>{entered++;return uint8(7);}const it:any=g();let failure=\"\";try{it.return(256);}catch(e){failure=e.name;}const result=it.next();failure+\":\"+entered+\":\"+result.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError:1:7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric return admission retains numeric result",
+      "steps": [
+        {
+          "source": "function* g():Generator.<uint8,uint8,void>{return uint8(7);}const it:any=g();const result=it.return(9);String(result.value is uint8)+\":\"+result.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "undefined survives nested finally",
+      "steps": [
+        {
+          "source": "let trace=\"\";function* g():Generator.<uint8,string,void>{try{try{yield uint8(1);return \"body\";}finally{trace+=\"a\";}}finally{trace+=\"b\";}}const it:any=g();it.next();const result=it.return();trace+\":\"+result.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "undefined survives yielding finally",
+      "steps": [
+        {
+          "source": "let trace=\"\";function* g():Generator.<uint8,string,void>{try{yield uint8(1);return \"body\";}finally{trace+=\"a\";yield uint8(2);trace+=\"b\";}}const it:any=g();it.next();const first=it.return();const last=it.next();trace+\":\"+first.value+\":\"+first.done+\":\"+last.value+\":\"+last.done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab:2:false:undefined:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid new request preserves suspended external completion",
+      "steps": [
+        {
+          "source": "let trace=\"\";function* g():Generator.<uint8,string,void>{try{yield uint8(1);return \"body\";}finally{trace+=\"a\";yield uint8(2);trace+=\"b\";}}const it:any=g();it.next();it.return();let failure=\"\";try{it.return({});}catch(e){failure=e.name;}const last=it.next();failure+\":\"+trace+\":\"+last.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:ab:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "second external return replaces first during finally",
+      "steps": [
+        {
+          "source": "let trace=\"\";function* g():Generator.<uint8,string,void>{try{yield uint8(1);return \"body\";}finally{trace+=\"a\";yield uint8(2);trace+=\"b\";}}const it:any=g();it.next();it.return();const last=it.return(\"second\");trace+\":\"+last.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a:second"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finally body replacement undefined still checked",
+      "steps": [
+        {
+          "source": "const bad:any=undefined;let cleaned=0;function* g():Generator.<uint8,string,void>{try{yield uint8(1);return \"body\";}finally{cleaned++;const replacement:any=bad;return replacement;}}const it:any=g();it.next();let failure=\"\";try{it.return();}catch(e){failure=e.name;}failure+\":\"+cleaned+\":\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:1:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finally body replacement object still checked",
+      "steps": [
+        {
+          "source": "const bad:any=undefined;let cleaned=0;function* g():Generator.<uint8,string,void>{try{yield uint8(1);return \"body\";}finally{cleaned++;const replacement:any=({});return replacement;}}const it:any=g();it.next();let failure=\"\";try{it.return();}catch(e){failure=e.name;}failure+\":\"+cleaned+\":\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:1:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid finally body replacement",
+      "steps": [
+        {
+          "source": "function* g():Generator.<uint8,string,void>{try{yield uint8(1);return \"body\";}finally{return \"replacement\";}}const it:any=g();it.next();String(it.return().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "replacement"
+          }
+        }
+      ]
+    },
+    {
+      "name": "throw replaces external return",
+      "steps": [
+        {
+          "source": "function* g():Generator.<uint8,string,void>{try{yield uint8(1);return \"body\";}finally{throw new RangeError(\"replacement\");}}const it:any=g();it.next();let failure=\"\";try{it.return();}catch(e){failure=e.name;}failure+\":\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "throw request remains catchable",
+      "steps": [
+        {
+          "source": "function* g():Generator.<uint8,string,void>{try{yield uint8(1);return \"body\";}catch(e){return \"caught\";}}const it:any=g();it.next();String(it.throw(\"x\").value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "caught"
+          }
+        }
+      ]
+    },
+    {
+      "name": "external return bypasses catch but executes finally",
+      "steps": [
+        {
+          "source": "let trace=\"\";function* g():Generator.<uint8,string,void>{try{yield uint8(1);return \"body\";}catch(e){trace+=\"catch\";return \"caught\";}finally{trace+=\"finally\";}}const it:any=g();it.next();const result=it.return();trace+\":\"+result.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "finally:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intrinsic borrowed method enforces receiver contract",
+      "steps": [
+        {
+          "source": "function* g():Generator.<uint8,void,void>{yield uint8(1);}const it:any=g();const close:any=it.return;let failure=\"\";try{close.call(it,\"bad\");}catch(e){failure=e.name;}failure+\":\"+it.next().value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement method uses ordinary lookup",
+      "steps": [
+        {
+          "source": "function* g():Generator.<uint8,string,void>{yield uint8(1);return \"body\";}const it:any=g();it.return=function(value:any){return {done:true,value};};String(it.return({a:1}).value.a)+\":\"+it.next().value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "known bad request remains an early error",
+      "steps": [
+        {
+          "source": "function* g():Generator.<uint8,string,void>{return \"body\";}g().return({});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "delegate missing completion",
+      "steps": [
+        {
+          "source": "let trace=\"\";const delegate:any={next(){return {done:false,value:uint8(1)};},[Symbol.iterator](){return this;}};function* g():Generator.<uint8,string,void>{try{yield* delegate;return \"body\";}finally{trace+=\"f\";}}const it:any=g();it.next();const result=it.return();trace+\":\"+result.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "f:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delegate undefined replacement completion",
+      "steps": [
+        {
+          "source": "let trace=\"\";const delegate:any={return(value:any){trace+=\"r\";return {done:true,value:undefined};},next(){return {done:false,value:uint8(1)};},[Symbol.iterator](){return this;}};function* g():Generator.<uint8,string,void>{try{yield* delegate;return \"body\";}finally{trace+=\"f\";}}const it:any=g();it.next();const result=it.return();trace+\":\"+result.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "rf:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delegate string replacement completion",
+      "steps": [
+        {
+          "source": "let trace=\"\";const delegate:any={return(value:any){trace+=\"r\";return {done:true,value:\"delegate\"};},next(){return {done:false,value:uint8(1)};},[Symbol.iterator](){return this;}};function* g():Generator.<uint8,string,void>{try{yield* delegate;return \"body\";}finally{trace+=\"f\";}}const it:any=g();it.next();const result=it.return();trace+\":\"+result.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "rf:delegate"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delegate replacement is independently admitted",
+      "steps": [
+        {
+          "source": "let trace=\"\";const delegate:any={next(){return {done:false,value:uint8(1)};},return(value:any){trace+=\"r\";return {done:true,value:{}};},[Symbol.iterator](){return this;}};function* g():Generator.<uint8,string,void>{try{yield* delegate;return \"body\";}catch(e){trace+=\"c\";return \"caught\";}finally{trace+=\"f\";}}const it:any=g();it.next();const result=it.return();trace+\":\"+result.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "rcf:caught"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delegate done getter precedes replacement admission",
+      "steps": [
+        {
+          "source": "let trace=\"\";const delegate:any={next(){return {done:false,value:uint8(1)};},return(value:any):any{return {get done(){trace+=\"d\";return true;},get value(){trace+=\"v\";return undefined;}};},[Symbol.iterator](){return this;}};function* g():Generator.<uint8,string,void>{yield* delegate;return \"body\";}const it:any=g();it.next();const result=it.return();trace+\":\"+result.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "dv:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delegate return throwing reaches catch",
+      "steps": [
+        {
+          "source": "const delegate:any={next(){return {done:false,value:uint8(1)};},return(value:any){throw new Error(\"delegate\");},[Symbol.iterator](){return this;}};function* g():Generator.<uint8,string,void>{try{yield* delegate;return \"body\";}catch(e){return \"caught\";}}const it:any=g();it.next();String(it.return().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "caught"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delegate non-object return retains native error",
+      "steps": [
+        {
+          "source": "const delegate:any={next(){return {done:false,value:uint8(1)};},return(value:any){return undefined;},[Symbol.iterator](){return this;}};function* g():Generator.<uint8,string,void>{yield* delegate;return \"body\";}const it:any=g();it.next();let failure=\"\";try{it.return();}catch(e){failure=e.name;}failure;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested real delegation accepts omitted close",
+      "steps": [
+        {
+          "source": "function* inner():Generator.<uint8,string,void>{yield uint8(1);return \"inner\";}function* middle():Generator.<uint8,string,void>{yield* inner();return \"middle\";}function* outer():Generator.<uint8,string,void>{yield* middle();return \"outer\";}const it:any=outer();it.next();String(it.return().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delegate yielding on close can resume ordinary body",
+      "steps": [
+        {
+          "source": "let count=0;const delegate:any={next(){count++;return {done:count>1,value:uint8(1)};},return(value:any){return {done:false,value:uint8(2)};},[Symbol.iterator](){return this;}};function* g():Generator.<uint8,string,void>{yield* delegate;return \"body\";}const it:any=g();it.next();const first=it.return();const last=it.next();first.value+\":\"+first.done+\":\"+last.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2:false:body"
+          }
+        }
+      ]
+    },
+    {
+      "name": "body return after yielded delegation is a fresh obligation",
+      "steps": [
+        {
+          "source": "const bad:any=undefined;let count=0;const delegate:any={next(){count++;return {done:count>1,value:count>1?bad:uint8(1)};},return(value:any){return {done:false,value:uint8(2)};},[Symbol.iterator](){return this;}};function* g():Generator.<uint8,string,void>{return yield* delegate;}const it:any=g();it.next();it.return();let failure=\"\";try{it.next();}catch(e){failure=e.name;}failure;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured generic return input survives erasure",
+      "steps": [
+        {
+          "source": "function factory<R:type>(){return function*():Generator.<uint8,R,void>{const value:any=undefined;return value;};}const make=factory.<string>();const it:any=make();let failure=\"\";try{it.return({});}catch(e){failure=e.name;}failure+\":\"+it.return(\"closed\").value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:closed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct generic closures use their own return contract",
+      "steps": [
+        {
+          "source": "function factory<R:type>(){return function*():Generator.<uint8,R,void>{const value:any=undefined;return value;};}const a:any=factory.<string>()();const b:any=factory.<uint8>()();let failure=\"\";try{b.return(\"bad\");}catch(e){failure=e.name;}failure+\":\"+a.return(\"closed\").value+\":\"+b.return(uint8(7)).value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:closed:7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contextual generator do has return admission",
+      "steps": [
+        {
+          "source": "const generator:Generator.<uint8,string,void>=do*{yield uint8(1);return \"body\";};const it:any=generator;let failure=\"\";try{it.return({});}catch(e){failure=e.name;}failure+\":\"+it.next().value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generator do expression captures return contract",
+      "steps": [
+        {
+          "source": "const it:any=do*{yield uint8(1);return \"body\";};let failure=\"\";try{it.return({});}catch(e){failure=e.name;}failure+\":\"+it.next().value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "runtime refusal leaves later Script state reusable",
+      "steps": [
+        {
+          "source": "let entered=0,cleaned=0;function* g():Generator.<uint8,string,void>{entered++;try{yield uint8(1);yield uint8(2);return \"body\";}finally{cleaned++;}}const it:any=g();it.return({});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "String(entered)+\":\"+cleaned+\":\"+it.next().value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0:0:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "executing validation wins before payload admission",
+      "steps": [
+        {
+          "source": "let failure=\"\";let it:any;function* g():Generator.<uint8,uint8,void>{try{it.return(256);}catch(e){failure=e.message;}yield uint8(1);return uint8(7);}it=g();it.next();String(failure.includes(\"running generator\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong receiver retains native validation",
+      "steps": [
+        {
+          "source": "function* g():Generator.<uint8,uint8,void>{return uint8(7);}const close:any=g().return;let failure=\"\";try{close.call({},256);}catch(e){failure=e.message;}String(failure.includes(\"GeneratorState\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary untyped generator native close",
+      "steps": [
+        {
+          "source": "function* g(){yield 1;}const it:any=g();String(it.return().done)+\":\"+it.next().value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "admission conversion advances unstarted generator",
+      "steps": [
+        {
+          "source": "let entered=0,cleaned=0,hooks=0;let it:any;class C{operator string(){hooks++;it.next();return \"converted\";}}function* g():Generator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}it=g();const value:any=new C();const result=it.return(value);hooks+\":\"+entered+\":\"+cleaned+\":\"+result.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1:1:1:converted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "admission conversion completes suspended generator",
+      "steps": [
+        {
+          "source": "let entered=0,cleaned=0,hooks=0;let it:any;class C{operator string(){hooks++;it.next();return \"converted\";}}function* g():Generator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}it=g();it.next();const value:any=new C();const result=it.return(value);hooks+\":\"+entered+\":\"+cleaned+\":\"+result.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1:1:1:converted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed conversion retains its own reentrant effects",
+      "steps": [
+        {
+          "source": "let entered=0,cleaned=0;let it:any;class C{operator string(){it.next();throw new RangeError(\"conversion\");}}function* g():Generator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}it=g();const value:any=new C();let failure=\"\";try{it.return(value);}catch(e){failure=e.name;}const before=entered+\":\"+cleaned;const result=it.next();failure+\":\"+before+\":\"+cleaned+\":\"+result.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError:1:0:1:body"
+          }
+        }
+      ]
+    },
+    {
+      "name": "executing validation suppresses admission hook",
+      "steps": [
+        {
+          "source": "let hooks=0;let it:any;class C{operator string(){hooks++;return \"converted\";}}function* g():Generator.<uint8,string,void>{try{const value:any=new C();it.return(value);}catch(e){}yield uint8(1);return \"body\";}it=g();it.next();String(hooks);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "body replacement after pending close cannot use equal undefined",
+      "steps": [
+        {
+          "source": "const bad:any=undefined;function* g():Generator.<uint8,string,void>{try{yield uint8(1);return \"body\";}finally{yield uint8(2);return bad;}}const it:any=g();it.next();it.return();let failure=\"\";try{it.next();}catch(e){failure=e.name;}failure;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -722,16 +722,16 @@
       }
     },
     {
-      "name": "generator: Generator.<number,void,void>",
-      "source": "function outer(g:()=>string){function* f(x:number){yield g();function g(){return 1;}};const q:Generator.<number,void,void>=f(1);}",
+      "name": "generator: Generator.<number,undefined,void>",
+      "source": "function outer(g:()=>string){function* f(x:number){yield g();function g(){return 1;}};const q:Generator.<number,undefined,void>=f(1);}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
       }
     },
     {
-      "name": "generator: Generator.<string,void,void>",
-      "source": "function outer(g:()=>string){function* f(x:number){yield g();function g(){return 1;}};const q:Generator.<string,void,void>=f(1);}",
+      "name": "generator: Generator.<string,undefined,void>",
+      "source": "function outer(g:()=>string){function* f(x:number){yield g();function g(){return 1;}};const q:Generator.<string,undefined,void>=f(1);}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -745,16 +745,16 @@
       }
     },
     {
-      "name": "async generator: AsyncGenerator.<number,void,void>",
-      "source": "function outer(g:()=>string){async function* f(x:number){yield g();function g(){return 1;}};const q:AsyncGenerator.<number,void,void>=f(1);}",
+      "name": "async generator: AsyncGenerator.<number,undefined,void>",
+      "source": "function outer(g:()=>string){async function* f(x:number){yield g();function g(){return 1;}};const q:AsyncGenerator.<number,undefined,void>=f(1);}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
       }
     },
     {
-      "name": "async generator: AsyncGenerator.<string,void,void>",
-      "source": "function outer(g:()=>string){async function* f(x:number){yield g();function g(){return 1;}};const q:AsyncGenerator.<string,void,void>=f(1);}",
+      "name": "async generator: AsyncGenerator.<string,undefined,void>",
+      "source": "function outer(g:()=>string){async function* f(x:number){yield g();function g(){return 1;}};const q:AsyncGenerator.<string,undefined,void>=f(1);}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,

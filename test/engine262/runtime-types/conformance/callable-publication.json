@@ -325,7 +325,7 @@
     },
     {
       "name": "generator callable value: compatible",
-      "source": "interface I{m():(x:string)=>Generator.<string,void,void>;}class C implements I{m(){ function* f(x:string){yield x;}return f; }}",
+      "source": "interface I{m():(x:string)=>Generator.<string,undefined,void>;}class C implements I{m(){ function* f(x:string){yield x;}return f; }}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -333,7 +333,7 @@
     },
     {
       "name": "generator callable value: incompatible",
-      "source": "interface I{m():(x:string)=>Generator.<number,void,void>;}class C implements I{m(){ function* f(x:string){yield x;}return f; }}",
+      "source": "interface I{m():(x:string)=>Generator.<number,undefined,void>;}class C implements I{m(){ function* f(x:string){yield x;}return f; }}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -348,7 +348,7 @@
     },
     {
       "name": "async generator callable value: compatible",
-      "source": "interface I{m():(x:string)=>AsyncGenerator.<string,void,void>;}class C implements I{m(){ async function* f(x:string){yield x;}return f; }}",
+      "source": "interface I{m():(x:string)=>AsyncGenerator.<string,undefined,void>;}class C implements I{m(){ async function* f(x:string){yield x;}return f; }}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -356,7 +356,7 @@
     },
     {
       "name": "async generator callable value: incompatible",
-      "source": "interface I{m():(x:string)=>AsyncGenerator.<number,void,void>;}class C implements I{m(){ async function* f(x:string){yield x;}return f; }}",
+      "source": "interface I{m():(x:string)=>AsyncGenerator.<number,undefined,void>;}class C implements I{m(){ async function* f(x:string){yield x;}return f; }}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,

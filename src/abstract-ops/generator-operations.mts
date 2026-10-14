@@ -17,7 +17,7 @@ import {
 } from '../evaluator.mts';
 import { __ts_cast__, type Mutable } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { EnforceResumableReturn } from './runtime-types.mts';
+import { AdmitGeneratorReturn, EnforceResumableReturn, IsAdmittedGeneratorReturn } from './runtime-types.mts';
 import {
   Assert,
   AsyncGeneratorYield,
@@ -76,7 +76,8 @@ export function GeneratorStart(generator: GeneratorObject, generatorBody: ParseN
         ? generatorBody()
         : Evaluate(generatorBody),
     );
-    if (surroundingAgent.feature('runtime-types') && (result.Type === 'normal' || result.Type === 'return')) {
+    if (surroundingAgent.feature('runtime-types') && (result.Type === 'normal' || result.Type === 'return')
+      && !IsAdmittedGeneratorReturn(acGenerator, result)) {
       const converted = EnsureCompletion(yield* EnforceResumableReturn(acGenContext.Function,
         result.Type === 'return' ? result.Value : Value.undefined, 'generator'));
       result = converted.Type === 'throw' ? converted
@@ -189,6 +190,12 @@ export function* GeneratorResumeAbrupt(generator: Value, abruptCompletion: Throw
   // 1. Let state be ? GeneratorValidate(generator, generatorBrand).
   let state = Q(GeneratorValidate(generator, generatorBrand));
   __ts_cast__<GeneratorObject>(generator);
+  if (surroundingAgent.feature('runtime-types') && abruptCompletion.Type === 'return') {
+    abruptCompletion = Q(yield* AdmitGeneratorReturn(generator, abruptCompletion.Value));
+    // Admission can invoke a permitted conversion or getter. It may re-enter
+    // this generator, so resume only from its newly validated current state.
+    state = Q(GeneratorValidate(generator, generatorBrand));
+  }
   // 2. If state is suspendedStart, then
   if (state === 'suspendedStart') {
     // a. Set generator.[[GeneratorState]] to completed.

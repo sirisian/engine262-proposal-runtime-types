@@ -152,7 +152,7 @@
     },
     {
       "name": "generator: 2 declarations, forward accepts matching protocol",
-      "source": "{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield \"s\";}const q:Generator.<string,void,void>=f0(1);} \"ok\";",
+      "source": "{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield \"s\";}const q:Generator.<string,undefined,void>=f0(1);} \"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -161,7 +161,7 @@
     },
     {
       "name": "generator: 2 declarations, forward rejects wrong component",
-      "source": "{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield \"s\";}const q:Generator.<number,void,void>=f0(1);}",
+      "source": "{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield \"s\";}const q:Generator.<number,undefined,void>=f0(1);}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -176,7 +176,7 @@
     },
     {
       "name": "generator: 2 declarations, reverse accepts matching protocol",
-      "source": "{function* f1(x:number){yield \"s\";}function* f0(x:number){yield* f1(x);}const q:Generator.<string,void,void>=f0(1);} \"ok\";",
+      "source": "{function* f1(x:number){yield \"s\";}function* f0(x:number){yield* f1(x);}const q:Generator.<string,undefined,void>=f0(1);} \"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -185,7 +185,7 @@
     },
     {
       "name": "generator: 2 declarations, reverse rejects wrong component",
-      "source": "{function* f1(x:number){yield \"s\";}function* f0(x:number){yield* f1(x);}const q:Generator.<number,void,void>=f0(1);}",
+      "source": "{function* f1(x:number){yield \"s\";}function* f0(x:number){yield* f1(x);}const q:Generator.<number,undefined,void>=f0(1);}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -200,7 +200,7 @@
     },
     {
       "name": "generator: 12 declarations, forward accepts matching protocol",
-      "source": "{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield \"s\";}const q:Generator.<string,void,void>=f0(1);} \"ok\";",
+      "source": "{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield \"s\";}const q:Generator.<string,undefined,void>=f0(1);} \"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -209,7 +209,7 @@
     },
     {
       "name": "generator: 12 declarations, forward rejects wrong component",
-      "source": "{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield \"s\";}const q:Generator.<number,void,void>=f0(1);}",
+      "source": "{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield \"s\";}const q:Generator.<number,undefined,void>=f0(1);}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -224,7 +224,7 @@
     },
     {
       "name": "generator: 12 declarations, reverse accepts matching protocol",
-      "source": "{function* f11(x:number){yield \"s\";}function* f10(x:number){yield* f11(x);}function* f9(x:number){yield* f10(x);}function* f8(x:number){yield* f9(x);}function* f7(x:number){yield* f8(x);}function* f6(x:number){yield* f7(x);}function* f5(x:number){yield* f6(x);}function* f4(x:number){yield* f5(x);}function* f3(x:number){yield* f4(x);}function* f2(x:number){yield* f3(x);}function* f1(x:number){yield* f2(x);}function* f0(x:number){yield* f1(x);}const q:Generator.<string,void,void>=f0(1);} \"ok\";",
+      "source": "{function* f11(x:number){yield \"s\";}function* f10(x:number){yield* f11(x);}function* f9(x:number){yield* f10(x);}function* f8(x:number){yield* f9(x);}function* f7(x:number){yield* f8(x);}function* f6(x:number){yield* f7(x);}function* f5(x:number){yield* f6(x);}function* f4(x:number){yield* f5(x);}function* f3(x:number){yield* f4(x);}function* f2(x:number){yield* f3(x);}function* f1(x:number){yield* f2(x);}function* f0(x:number){yield* f1(x);}const q:Generator.<string,undefined,void>=f0(1);} \"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -233,7 +233,7 @@
     },
     {
       "name": "generator: 12 declarations, reverse rejects wrong component",
-      "source": "{function* f11(x:number){yield \"s\";}function* f10(x:number){yield* f11(x);}function* f9(x:number){yield* f10(x);}function* f8(x:number){yield* f9(x);}function* f7(x:number){yield* f8(x);}function* f6(x:number){yield* f7(x);}function* f5(x:number){yield* f6(x);}function* f4(x:number){yield* f5(x);}function* f3(x:number){yield* f4(x);}function* f2(x:number){yield* f3(x);}function* f1(x:number){yield* f2(x);}function* f0(x:number){yield* f1(x);}const q:Generator.<number,void,void>=f0(1);}",
+      "source": "{function* f11(x:number){yield \"s\";}function* f10(x:number){yield* f11(x);}function* f9(x:number){yield* f10(x);}function* f8(x:number){yield* f9(x);}function* f7(x:number){yield* f8(x);}function* f6(x:number){yield* f7(x);}function* f5(x:number){yield* f6(x);}function* f4(x:number){yield* f5(x);}function* f3(x:number){yield* f4(x);}function* f2(x:number){yield* f3(x);}function* f1(x:number){yield* f2(x);}function* f0(x:number){yield* f1(x);}const q:Generator.<number,undefined,void>=f0(1);}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -248,7 +248,7 @@
     },
     {
       "name": "generator: 24 declarations, forward accepts matching protocol",
-      "source": "{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield* f12(x);}function* f12(x:number){yield* f13(x);}function* f13(x:number){yield* f14(x);}function* f14(x:number){yield* f15(x);}function* f15(x:number){yield* f16(x);}function* f16(x:number){yield* f17(x);}function* f17(x:number){yield* f18(x);}function* f18(x:number){yield* f19(x);}function* f19(x:number){yield* f20(x);}function* f20(x:number){yield* f21(x);}function* f21(x:number){yield* f22(x);}function* f22(x:number){yield* f23(x);}function* f23(x:number){yield \"s\";}const q:Generator.<string,void,void>=f0(1);} \"ok\";",
+      "source": "{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield* f12(x);}function* f12(x:number){yield* f13(x);}function* f13(x:number){yield* f14(x);}function* f14(x:number){yield* f15(x);}function* f15(x:number){yield* f16(x);}function* f16(x:number){yield* f17(x);}function* f17(x:number){yield* f18(x);}function* f18(x:number){yield* f19(x);}function* f19(x:number){yield* f20(x);}function* f20(x:number){yield* f21(x);}function* f21(x:number){yield* f22(x);}function* f22(x:number){yield* f23(x);}function* f23(x:number){yield \"s\";}const q:Generator.<string,undefined,void>=f0(1);} \"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -257,7 +257,7 @@
     },
     {
       "name": "generator: 24 declarations, forward rejects wrong component",
-      "source": "{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield* f12(x);}function* f12(x:number){yield* f13(x);}function* f13(x:number){yield* f14(x);}function* f14(x:number){yield* f15(x);}function* f15(x:number){yield* f16(x);}function* f16(x:number){yield* f17(x);}function* f17(x:number){yield* f18(x);}function* f18(x:number){yield* f19(x);}function* f19(x:number){yield* f20(x);}function* f20(x:number){yield* f21(x);}function* f21(x:number){yield* f22(x);}function* f22(x:number){yield* f23(x);}function* f23(x:number){yield \"s\";}const q:Generator.<number,void,void>=f0(1);}",
+      "source": "{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield* f12(x);}function* f12(x:number){yield* f13(x);}function* f13(x:number){yield* f14(x);}function* f14(x:number){yield* f15(x);}function* f15(x:number){yield* f16(x);}function* f16(x:number){yield* f17(x);}function* f17(x:number){yield* f18(x);}function* f18(x:number){yield* f19(x);}function* f19(x:number){yield* f20(x);}function* f20(x:number){yield* f21(x);}function* f21(x:number){yield* f22(x);}function* f22(x:number){yield* f23(x);}function* f23(x:number){yield \"s\";}const q:Generator.<number,undefined,void>=f0(1);}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -272,7 +272,7 @@
     },
     {
       "name": "generator: 24 declarations, reverse accepts matching protocol",
-      "source": "{function* f23(x:number){yield \"s\";}function* f22(x:number){yield* f23(x);}function* f21(x:number){yield* f22(x);}function* f20(x:number){yield* f21(x);}function* f19(x:number){yield* f20(x);}function* f18(x:number){yield* f19(x);}function* f17(x:number){yield* f18(x);}function* f16(x:number){yield* f17(x);}function* f15(x:number){yield* f16(x);}function* f14(x:number){yield* f15(x);}function* f13(x:number){yield* f14(x);}function* f12(x:number){yield* f13(x);}function* f11(x:number){yield* f12(x);}function* f10(x:number){yield* f11(x);}function* f9(x:number){yield* f10(x);}function* f8(x:number){yield* f9(x);}function* f7(x:number){yield* f8(x);}function* f6(x:number){yield* f7(x);}function* f5(x:number){yield* f6(x);}function* f4(x:number){yield* f5(x);}function* f3(x:number){yield* f4(x);}function* f2(x:number){yield* f3(x);}function* f1(x:number){yield* f2(x);}function* f0(x:number){yield* f1(x);}const q:Generator.<string,void,void>=f0(1);} \"ok\";",
+      "source": "{function* f23(x:number){yield \"s\";}function* f22(x:number){yield* f23(x);}function* f21(x:number){yield* f22(x);}function* f20(x:number){yield* f21(x);}function* f19(x:number){yield* f20(x);}function* f18(x:number){yield* f19(x);}function* f17(x:number){yield* f18(x);}function* f16(x:number){yield* f17(x);}function* f15(x:number){yield* f16(x);}function* f14(x:number){yield* f15(x);}function* f13(x:number){yield* f14(x);}function* f12(x:number){yield* f13(x);}function* f11(x:number){yield* f12(x);}function* f10(x:number){yield* f11(x);}function* f9(x:number){yield* f10(x);}function* f8(x:number){yield* f9(x);}function* f7(x:number){yield* f8(x);}function* f6(x:number){yield* f7(x);}function* f5(x:number){yield* f6(x);}function* f4(x:number){yield* f5(x);}function* f3(x:number){yield* f4(x);}function* f2(x:number){yield* f3(x);}function* f1(x:number){yield* f2(x);}function* f0(x:number){yield* f1(x);}const q:Generator.<string,undefined,void>=f0(1);} \"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -281,7 +281,7 @@
     },
     {
       "name": "generator: 24 declarations, reverse rejects wrong component",
-      "source": "{function* f23(x:number){yield \"s\";}function* f22(x:number){yield* f23(x);}function* f21(x:number){yield* f22(x);}function* f20(x:number){yield* f21(x);}function* f19(x:number){yield* f20(x);}function* f18(x:number){yield* f19(x);}function* f17(x:number){yield* f18(x);}function* f16(x:number){yield* f17(x);}function* f15(x:number){yield* f16(x);}function* f14(x:number){yield* f15(x);}function* f13(x:number){yield* f14(x);}function* f12(x:number){yield* f13(x);}function* f11(x:number){yield* f12(x);}function* f10(x:number){yield* f11(x);}function* f9(x:number){yield* f10(x);}function* f8(x:number){yield* f9(x);}function* f7(x:number){yield* f8(x);}function* f6(x:number){yield* f7(x);}function* f5(x:number){yield* f6(x);}function* f4(x:number){yield* f5(x);}function* f3(x:number){yield* f4(x);}function* f2(x:number){yield* f3(x);}function* f1(x:number){yield* f2(x);}function* f0(x:number){yield* f1(x);}const q:Generator.<number,void,void>=f0(1);}",
+      "source": "{function* f23(x:number){yield \"s\";}function* f22(x:number){yield* f23(x);}function* f21(x:number){yield* f22(x);}function* f20(x:number){yield* f21(x);}function* f19(x:number){yield* f20(x);}function* f18(x:number){yield* f19(x);}function* f17(x:number){yield* f18(x);}function* f16(x:number){yield* f17(x);}function* f15(x:number){yield* f16(x);}function* f14(x:number){yield* f15(x);}function* f13(x:number){yield* f14(x);}function* f12(x:number){yield* f13(x);}function* f11(x:number){yield* f12(x);}function* f10(x:number){yield* f11(x);}function* f9(x:number){yield* f10(x);}function* f8(x:number){yield* f9(x);}function* f7(x:number){yield* f8(x);}function* f6(x:number){yield* f7(x);}function* f5(x:number){yield* f6(x);}function* f4(x:number){yield* f5(x);}function* f3(x:number){yield* f4(x);}function* f2(x:number){yield* f3(x);}function* f1(x:number){yield* f2(x);}function* f0(x:number){yield* f1(x);}const q:Generator.<number,undefined,void>=f0(1);}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -296,7 +296,7 @@
     },
     {
       "name": "async-generator: 2 declarations, forward accepts matching protocol",
-      "source": "{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield \"s\";}const q:AsyncGenerator.<string,void,void>=f0(1);} \"ok\";",
+      "source": "{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield \"s\";}const q:AsyncGenerator.<string,undefined,void>=f0(1);} \"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -305,7 +305,7 @@
     },
     {
       "name": "async-generator: 2 declarations, forward rejects wrong component",
-      "source": "{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield \"s\";}const q:AsyncGenerator.<number,void,void>=f0(1);}",
+      "source": "{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield \"s\";}const q:AsyncGenerator.<number,undefined,void>=f0(1);}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -320,7 +320,7 @@
     },
     {
       "name": "async-generator: 2 declarations, reverse accepts matching protocol",
-      "source": "{async function* f1(x:number){yield \"s\";}async function* f0(x:number){yield* f1(x);}const q:AsyncGenerator.<string,void,void>=f0(1);} \"ok\";",
+      "source": "{async function* f1(x:number){yield \"s\";}async function* f0(x:number){yield* f1(x);}const q:AsyncGenerator.<string,undefined,void>=f0(1);} \"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -329,7 +329,7 @@
     },
     {
       "name": "async-generator: 2 declarations, reverse rejects wrong component",
-      "source": "{async function* f1(x:number){yield \"s\";}async function* f0(x:number){yield* f1(x);}const q:AsyncGenerator.<number,void,void>=f0(1);}",
+      "source": "{async function* f1(x:number){yield \"s\";}async function* f0(x:number){yield* f1(x);}const q:AsyncGenerator.<number,undefined,void>=f0(1);}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -344,7 +344,7 @@
     },
     {
       "name": "async-generator: 12 declarations, forward accepts matching protocol",
-      "source": "{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield \"s\";}const q:AsyncGenerator.<string,void,void>=f0(1);} \"ok\";",
+      "source": "{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield \"s\";}const q:AsyncGenerator.<string,undefined,void>=f0(1);} \"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -353,7 +353,7 @@
     },
     {
       "name": "async-generator: 12 declarations, forward rejects wrong component",
-      "source": "{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield \"s\";}const q:AsyncGenerator.<number,void,void>=f0(1);}",
+      "source": "{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield \"s\";}const q:AsyncGenerator.<number,undefined,void>=f0(1);}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -368,7 +368,7 @@
     },
     {
       "name": "async-generator: 12 declarations, reverse accepts matching protocol",
-      "source": "{async function* f11(x:number){yield \"s\";}async function* f10(x:number){yield* f11(x);}async function* f9(x:number){yield* f10(x);}async function* f8(x:number){yield* f9(x);}async function* f7(x:number){yield* f8(x);}async function* f6(x:number){yield* f7(x);}async function* f5(x:number){yield* f6(x);}async function* f4(x:number){yield* f5(x);}async function* f3(x:number){yield* f4(x);}async function* f2(x:number){yield* f3(x);}async function* f1(x:number){yield* f2(x);}async function* f0(x:number){yield* f1(x);}const q:AsyncGenerator.<string,void,void>=f0(1);} \"ok\";",
+      "source": "{async function* f11(x:number){yield \"s\";}async function* f10(x:number){yield* f11(x);}async function* f9(x:number){yield* f10(x);}async function* f8(x:number){yield* f9(x);}async function* f7(x:number){yield* f8(x);}async function* f6(x:number){yield* f7(x);}async function* f5(x:number){yield* f6(x);}async function* f4(x:number){yield* f5(x);}async function* f3(x:number){yield* f4(x);}async function* f2(x:number){yield* f3(x);}async function* f1(x:number){yield* f2(x);}async function* f0(x:number){yield* f1(x);}const q:AsyncGenerator.<string,undefined,void>=f0(1);} \"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -377,7 +377,7 @@
     },
     {
       "name": "async-generator: 12 declarations, reverse rejects wrong component",
-      "source": "{async function* f11(x:number){yield \"s\";}async function* f10(x:number){yield* f11(x);}async function* f9(x:number){yield* f10(x);}async function* f8(x:number){yield* f9(x);}async function* f7(x:number){yield* f8(x);}async function* f6(x:number){yield* f7(x);}async function* f5(x:number){yield* f6(x);}async function* f4(x:number){yield* f5(x);}async function* f3(x:number){yield* f4(x);}async function* f2(x:number){yield* f3(x);}async function* f1(x:number){yield* f2(x);}async function* f0(x:number){yield* f1(x);}const q:AsyncGenerator.<number,void,void>=f0(1);}",
+      "source": "{async function* f11(x:number){yield \"s\";}async function* f10(x:number){yield* f11(x);}async function* f9(x:number){yield* f10(x);}async function* f8(x:number){yield* f9(x);}async function* f7(x:number){yield* f8(x);}async function* f6(x:number){yield* f7(x);}async function* f5(x:number){yield* f6(x);}async function* f4(x:number){yield* f5(x);}async function* f3(x:number){yield* f4(x);}async function* f2(x:number){yield* f3(x);}async function* f1(x:number){yield* f2(x);}async function* f0(x:number){yield* f1(x);}const q:AsyncGenerator.<number,undefined,void>=f0(1);}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -392,7 +392,7 @@
     },
     {
       "name": "async-generator: 24 declarations, forward accepts matching protocol",
-      "source": "{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield* f12(x);}async function* f12(x:number){yield* f13(x);}async function* f13(x:number){yield* f14(x);}async function* f14(x:number){yield* f15(x);}async function* f15(x:number){yield* f16(x);}async function* f16(x:number){yield* f17(x);}async function* f17(x:number){yield* f18(x);}async function* f18(x:number){yield* f19(x);}async function* f19(x:number){yield* f20(x);}async function* f20(x:number){yield* f21(x);}async function* f21(x:number){yield* f22(x);}async function* f22(x:number){yield* f23(x);}async function* f23(x:number){yield \"s\";}const q:AsyncGenerator.<string,void,void>=f0(1);} \"ok\";",
+      "source": "{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield* f12(x);}async function* f12(x:number){yield* f13(x);}async function* f13(x:number){yield* f14(x);}async function* f14(x:number){yield* f15(x);}async function* f15(x:number){yield* f16(x);}async function* f16(x:number){yield* f17(x);}async function* f17(x:number){yield* f18(x);}async function* f18(x:number){yield* f19(x);}async function* f19(x:number){yield* f20(x);}async function* f20(x:number){yield* f21(x);}async function* f21(x:number){yield* f22(x);}async function* f22(x:number){yield* f23(x);}async function* f23(x:number){yield \"s\";}const q:AsyncGenerator.<string,undefined,void>=f0(1);} \"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -401,7 +401,7 @@
     },
     {
       "name": "async-generator: 24 declarations, forward rejects wrong component",
-      "source": "{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield* f12(x);}async function* f12(x:number){yield* f13(x);}async function* f13(x:number){yield* f14(x);}async function* f14(x:number){yield* f15(x);}async function* f15(x:number){yield* f16(x);}async function* f16(x:number){yield* f17(x);}async function* f17(x:number){yield* f18(x);}async function* f18(x:number){yield* f19(x);}async function* f19(x:number){yield* f20(x);}async function* f20(x:number){yield* f21(x);}async function* f21(x:number){yield* f22(x);}async function* f22(x:number){yield* f23(x);}async function* f23(x:number){yield \"s\";}const q:AsyncGenerator.<number,void,void>=f0(1);}",
+      "source": "{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield* f12(x);}async function* f12(x:number){yield* f13(x);}async function* f13(x:number){yield* f14(x);}async function* f14(x:number){yield* f15(x);}async function* f15(x:number){yield* f16(x);}async function* f16(x:number){yield* f17(x);}async function* f17(x:number){yield* f18(x);}async function* f18(x:number){yield* f19(x);}async function* f19(x:number){yield* f20(x);}async function* f20(x:number){yield* f21(x);}async function* f21(x:number){yield* f22(x);}async function* f22(x:number){yield* f23(x);}async function* f23(x:number){yield \"s\";}const q:AsyncGenerator.<number,undefined,void>=f0(1);}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -416,7 +416,7 @@
     },
     {
       "name": "async-generator: 24 declarations, reverse accepts matching protocol",
-      "source": "{async function* f23(x:number){yield \"s\";}async function* f22(x:number){yield* f23(x);}async function* f21(x:number){yield* f22(x);}async function* f20(x:number){yield* f21(x);}async function* f19(x:number){yield* f20(x);}async function* f18(x:number){yield* f19(x);}async function* f17(x:number){yield* f18(x);}async function* f16(x:number){yield* f17(x);}async function* f15(x:number){yield* f16(x);}async function* f14(x:number){yield* f15(x);}async function* f13(x:number){yield* f14(x);}async function* f12(x:number){yield* f13(x);}async function* f11(x:number){yield* f12(x);}async function* f10(x:number){yield* f11(x);}async function* f9(x:number){yield* f10(x);}async function* f8(x:number){yield* f9(x);}async function* f7(x:number){yield* f8(x);}async function* f6(x:number){yield* f7(x);}async function* f5(x:number){yield* f6(x);}async function* f4(x:number){yield* f5(x);}async function* f3(x:number){yield* f4(x);}async function* f2(x:number){yield* f3(x);}async function* f1(x:number){yield* f2(x);}async function* f0(x:number){yield* f1(x);}const q:AsyncGenerator.<string,void,void>=f0(1);} \"ok\";",
+      "source": "{async function* f23(x:number){yield \"s\";}async function* f22(x:number){yield* f23(x);}async function* f21(x:number){yield* f22(x);}async function* f20(x:number){yield* f21(x);}async function* f19(x:number){yield* f20(x);}async function* f18(x:number){yield* f19(x);}async function* f17(x:number){yield* f18(x);}async function* f16(x:number){yield* f17(x);}async function* f15(x:number){yield* f16(x);}async function* f14(x:number){yield* f15(x);}async function* f13(x:number){yield* f14(x);}async function* f12(x:number){yield* f13(x);}async function* f11(x:number){yield* f12(x);}async function* f10(x:number){yield* f11(x);}async function* f9(x:number){yield* f10(x);}async function* f8(x:number){yield* f9(x);}async function* f7(x:number){yield* f8(x);}async function* f6(x:number){yield* f7(x);}async function* f5(x:number){yield* f6(x);}async function* f4(x:number){yield* f5(x);}async function* f3(x:number){yield* f4(x);}async function* f2(x:number){yield* f3(x);}async function* f1(x:number){yield* f2(x);}async function* f0(x:number){yield* f1(x);}const q:AsyncGenerator.<string,undefined,void>=f0(1);} \"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -425,7 +425,7 @@
     },
     {
       "name": "async-generator: 24 declarations, reverse rejects wrong component",
-      "source": "{async function* f23(x:number){yield \"s\";}async function* f22(x:number){yield* f23(x);}async function* f21(x:number){yield* f22(x);}async function* f20(x:number){yield* f21(x);}async function* f19(x:number){yield* f20(x);}async function* f18(x:number){yield* f19(x);}async function* f17(x:number){yield* f18(x);}async function* f16(x:number){yield* f17(x);}async function* f15(x:number){yield* f16(x);}async function* f14(x:number){yield* f15(x);}async function* f13(x:number){yield* f14(x);}async function* f12(x:number){yield* f13(x);}async function* f11(x:number){yield* f12(x);}async function* f10(x:number){yield* f11(x);}async function* f9(x:number){yield* f10(x);}async function* f8(x:number){yield* f9(x);}async function* f7(x:number){yield* f8(x);}async function* f6(x:number){yield* f7(x);}async function* f5(x:number){yield* f6(x);}async function* f4(x:number){yield* f5(x);}async function* f3(x:number){yield* f4(x);}async function* f2(x:number){yield* f3(x);}async function* f1(x:number){yield* f2(x);}async function* f0(x:number){yield* f1(x);}const q:AsyncGenerator.<number,void,void>=f0(1);}",
+      "source": "{async function* f23(x:number){yield \"s\";}async function* f22(x:number){yield* f23(x);}async function* f21(x:number){yield* f22(x);}async function* f20(x:number){yield* f21(x);}async function* f19(x:number){yield* f20(x);}async function* f18(x:number){yield* f19(x);}async function* f17(x:number){yield* f18(x);}async function* f16(x:number){yield* f17(x);}async function* f15(x:number){yield* f16(x);}async function* f14(x:number){yield* f15(x);}async function* f13(x:number){yield* f14(x);}async function* f12(x:number){yield* f13(x);}async function* f11(x:number){yield* f12(x);}async function* f10(x:number){yield* f11(x);}async function* f9(x:number){yield* f10(x);}async function* f8(x:number){yield* f9(x);}async function* f7(x:number){yield* f8(x);}async function* f6(x:number){yield* f7(x);}async function* f5(x:number){yield* f6(x);}async function* f4(x:number){yield* f5(x);}async function* f3(x:number){yield* f4(x);}async function* f2(x:number){yield* f3(x);}async function* f1(x:number){yield* f2(x);}async function* f0(x:number){yield* f1(x);}const q:AsyncGenerator.<number,undefined,void>=f0(1);}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -593,7 +593,7 @@
     },
     {
       "name": "generator in uncalled",
-      "source": "function unused(){function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield \"s\";}const q:Generator.<string,void,void>=f0(1);}\"ok\";",
+      "source": "function unused(){function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield \"s\";}const q:Generator.<string,undefined,void>=f0(1);}\"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -602,7 +602,7 @@
     },
     {
       "name": "async-generator in uncalled",
-      "source": "function unused(){async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield \"s\";}const q:AsyncGenerator.<string,void,void>=f0(1);}\"ok\";",
+      "source": "function unused(){async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield \"s\";}const q:AsyncGenerator.<string,undefined,void>=f0(1);}\"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -620,7 +620,7 @@
     },
     {
       "name": "generator in dead branch",
-      "source": "if(false){function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield \"s\";}const q:Generator.<string,void,void>=f0(1);}\"ok\";",
+      "source": "if(false){function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield \"s\";}const q:Generator.<string,undefined,void>=f0(1);}\"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -629,7 +629,7 @@
     },
     {
       "name": "async-generator in dead branch",
-      "source": "if(false){async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield \"s\";}const q:AsyncGenerator.<string,void,void>=f0(1);}\"ok\";",
+      "source": "if(false){async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield \"s\";}const q:AsyncGenerator.<string,undefined,void>=f0(1);}\"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -647,7 +647,7 @@
     },
     {
       "name": "generator in try",
-      "source": "try{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield \"s\";}const q:Generator.<string,void,void>=f0(1);}catch(e){}\"ok\";",
+      "source": "try{function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield \"s\";}const q:Generator.<string,undefined,void>=f0(1);}catch(e){}\"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -656,7 +656,7 @@
     },
     {
       "name": "async-generator in try",
-      "source": "try{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield \"s\";}const q:AsyncGenerator.<string,void,void>=f0(1);}catch(e){}\"ok\";",
+      "source": "try{async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield \"s\";}const q:AsyncGenerator.<string,undefined,void>=f0(1);}catch(e){}\"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -674,7 +674,7 @@
     },
     {
       "name": "generator in switch",
-      "source": "switch(0){case 0:function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield \"s\";}const q:Generator.<string,void,void>=f0(1);break;}\"ok\";",
+      "source": "switch(0){case 0:function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield \"s\";}const q:Generator.<string,undefined,void>=f0(1);break;}\"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -683,7 +683,7 @@
     },
     {
       "name": "async-generator in switch",
-      "source": "switch(0){case 0:async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield \"s\";}const q:AsyncGenerator.<string,void,void>=f0(1);break;}\"ok\";",
+      "source": "switch(0){case 0:async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield \"s\";}const q:AsyncGenerator.<string,undefined,void>=f0(1);break;}\"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -782,7 +782,7 @@
     },
     {
       "name": "generator locals anchor yielded contribution",
-      "source": "function* g(){const s:string=\"s\";yield s;} const q:Generator.<string,void,void>=g(); \"ok\";",
+      "source": "function* g(){const s:string=\"s\";yield s;} const q:Generator.<string,undefined,void>=g(); \"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -791,7 +791,7 @@
     },
     {
       "name": "generator local aliases keep provenance",
-      "source": "function* g(){const s:string=\"s\";const t=s;yield t;} const q:Generator.<string,void,void>=g(); \"ok\";",
+      "source": "function* g(){const s:string=\"s\";const t=s;yield t;} const q:Generator.<string,undefined,void>=g(); \"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -800,7 +800,7 @@
     },
     {
       "name": "delegation carries declared anchor",
-      "source": "function* inner():string{yield \"s\";} function* g(){yield* inner();} const q:Generator.<string,void,void>=g(); \"ok\";",
+      "source": "function* inner():string{yield \"s\";} function* g(){yield* inner();} const q:Generator.<string,undefined,void>=g(); \"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -869,7 +869,7 @@
     },
     {
       "name": "async generator local yield contributes",
-      "source": "async function* g(){const s:string=\"s\";yield s;} const q:AsyncGenerator.<string,void,void>=g(); \"ok\";",
+      "source": "async function* g(){const s:string=\"s\";yield s;} const q:AsyncGenerator.<string,undefined,void>=g(); \"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -905,7 +905,7 @@
     },
     {
       "name": "typed wrapper can use private generator contribution",
-      "source": "function* legacy(){yield \"s\";} function wrapper(x:number){return legacy();} const q:Generator.<string,void,void>=wrapper(0); \"ok\";",
+      "source": "function* legacy(){yield \"s\";} function wrapper(x:number){return legacy();} const q:Generator.<string,undefined,void>=wrapper(0); \"ok\";",
       "expected": {
         "completion": "normal",
         "bodyEntered": true,
@@ -1023,7 +1023,7 @@
       "name": "generator module export dependency",
       "modules": {
         "dep": "export function* f0(x:number){yield* f1(x);}function* f1(x:number){yield* f2(x);}function* f2(x:number){yield* f3(x);}function* f3(x:number){yield* f4(x);}function* f4(x:number){yield* f5(x);}function* f5(x:number){yield* f6(x);}function* f6(x:number){yield* f7(x);}function* f7(x:number){yield* f8(x);}function* f8(x:number){yield* f9(x);}function* f9(x:number){yield* f10(x);}function* f10(x:number){yield* f11(x);}function* f11(x:number){yield \"s\";}",
-        "main": "import {f0} from \"dep\";const q:Generator.<string,void,void>=f0(1);"
+        "main": "import {f0} from \"dep\";const q:Generator.<string,undefined,void>=f0(1);"
       },
       "expected": {
         "status": "fulfilled",
@@ -1037,7 +1037,7 @@
       "name": "async-generator module export dependency",
       "modules": {
         "dep": "export async function* f0(x:number){yield* f1(x);}async function* f1(x:number){yield* f2(x);}async function* f2(x:number){yield* f3(x);}async function* f3(x:number){yield* f4(x);}async function* f4(x:number){yield* f5(x);}async function* f5(x:number){yield* f6(x);}async function* f6(x:number){yield* f7(x);}async function* f7(x:number){yield* f8(x);}async function* f8(x:number){yield* f9(x);}async function* f9(x:number){yield* f10(x);}async function* f10(x:number){yield* f11(x);}async function* f11(x:number){yield \"s\";}",
-        "main": "import {f0} from \"dep\";const q:AsyncGenerator.<string,void,void>=f0(1);"
+        "main": "import {f0} from \"dep\";const q:AsyncGenerator.<string,undefined,void>=f0(1);"
       },
       "expected": {
         "status": "fulfilled",

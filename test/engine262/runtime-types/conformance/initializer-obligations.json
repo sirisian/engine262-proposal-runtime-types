@@ -379,7 +379,7 @@
     },
     {
       "name": "generator yield: compatible",
-      "source": "function unused(){let u:string|number=\"s\";const q:Generator.<string,void,void>=g();function* g(){yield s;}const s=u;}",
+      "source": "function unused(){let u:string|number=\"s\";const q:Generator.<string,undefined,void>=g();function* g(){yield s;}const s=u;}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -387,7 +387,7 @@
     },
     {
       "name": "generator yield: incompatible",
-      "source": "function unused(){let u:string|number=\"s\";const q:Generator.<number,void,void>=g();function* g(){yield s;}const s=u;}",
+      "source": "function unused(){let u:string|number=\"s\";const q:Generator.<number,undefined,void>=g();function* g(){yield s;}const s=u;}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,

@@ -1060,7 +1060,7 @@
     },
     {
       "name": "generator stored contribution: string",
-      "source": "function outer(){function* f(x:string|number){x=\"s\";const s=x;yield g();return g();function g(){return s;}}const q:string=f(\"s\") .next().value;}",
+      "source": "function outer(){function* f(x:string|number){x=\"s\";const s=x;yield g();return g();function g(){return s;}}const result=f(\"s\") .next();if(result.done===false){const q:string=result.value;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -1068,7 +1068,7 @@
     },
     {
       "name": "generator stored contribution: number",
-      "source": "function outer(){function* f(x:string|number){x=\"s\";const s=x;yield g();return g();function g(){return s;}}const q:number=f(\"s\") .next().value;}",
+      "source": "function outer(){function* f(x:string|number){x=\"s\";const s=x;yield g();return g();function g(){return s;}}const result=f(\"s\") .next();if(result.done===false){const q:number=result.value;}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -1083,7 +1083,7 @@
     },
     {
       "name": "async generator stored contribution: string",
-      "source": "async function outer(){async function* f(x:string|number){x=\"s\";const s=x;yield g();return g();function g(){return s;}}const q:string=(await f(\"s\").next()).value;}",
+      "source": "async function outer(){async function* f(x:string|number){x=\"s\";const s=x;yield g();return g();function g(){return s;}}const result=(await f(\"s\").next());if(result.done===false){const q:string=result.value;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -1091,7 +1091,7 @@
     },
     {
       "name": "async generator stored contribution: number",
-      "source": "async function outer(){async function* f(x:string|number){x=\"s\";const s=x;yield g();return g();function g(){return s;}}const q:number=(await f(\"s\").next()).value;}",
+      "source": "async function outer(){async function* f(x:string|number){x=\"s\";const s=x;yield g();return g();function g(){return s;}}const result=(await f(\"s\").next());if(result.done===false){const q:number=result.value;}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,

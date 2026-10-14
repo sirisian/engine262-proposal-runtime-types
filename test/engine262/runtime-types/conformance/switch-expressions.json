@@ -863,7 +863,7 @@
     },
     {
       "name": "generator Boolean switch: string",
-      "source": "function outer(){function* f(x:string|number){switch(x is string){case true:yield x;return \"s\";default:yield \"s\";return \"s\";}}const q:string=f(\"s\").next().value;}",
+      "source": "function outer(){function* f(x:string|number){switch(x is string){case true:yield x;return \"s\";default:yield \"s\";return \"s\";}}const result=f(\"s\").next();if(result.done===false){const q:string=result.value;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -871,7 +871,7 @@
     },
     {
       "name": "generator Boolean switch: number",
-      "source": "function outer(){function* f(x:string|number){switch(x is string){case true:yield x;return \"s\";default:yield \"s\";return \"s\";}}const q:number=f(\"s\").next().value;}",
+      "source": "function outer(){function* f(x:string|number){switch(x is string){case true:yield x;return \"s\";default:yield \"s\";return \"s\";}}const result=f(\"s\").next();if(result.done===false){const q:number=result.value;}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -886,7 +886,7 @@
     },
     {
       "name": "async generator Boolean switch: string",
-      "source": "async function outer(){async function* f(x:string|number){switch(x is string){case true:yield x;return \"s\";default:yield \"s\";return \"s\";}}const q:string=(await f(\"s\").next()).value;}",
+      "source": "async function outer(){async function* f(x:string|number){switch(x is string){case true:yield x;return \"s\";default:yield \"s\";return \"s\";}}const result=(await f(\"s\").next());if(result.done===false){const q:string=result.value;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -894,7 +894,7 @@
     },
     {
       "name": "async generator Boolean switch: number",
-      "source": "async function outer(){async function* f(x:string|number){switch(x is string){case true:yield x;return \"s\";default:yield \"s\";return \"s\";}}const q:number=(await f(\"s\").next()).value;}",
+      "source": "async function outer(){async function* f(x:string|number){switch(x is string){case true:yield x;return \"s\";default:yield \"s\";return \"s\";}}const result=(await f(\"s\").next());if(result.done===false){const q:number=result.value;}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,

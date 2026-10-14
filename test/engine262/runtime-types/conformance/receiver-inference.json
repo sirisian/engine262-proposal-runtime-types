@@ -555,7 +555,7 @@
     },
     {
       "name": "generator method: compatible",
-      "source": "class C{x:string=\"s\";*m(){yield this.x;}}function unused(){const q:Generator.<string,void,void>=new C().m();}",
+      "source": "class C{x:string=\"s\";*m(){yield this.x;}}function unused(){const q:Generator.<string,undefined,void>=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -563,7 +563,7 @@
     },
     {
       "name": "generator method: incompatible",
-      "source": "class C{x:string=\"s\";*m(){yield this.x;}}function unused(){const q:Generator.<number,void,void>=new C().m();}",
+      "source": "class C{x:string=\"s\";*m(){yield this.x;}}function unused(){const q:Generator.<number,undefined,void>=new C().m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -578,7 +578,7 @@
     },
     {
       "name": "async generator method: compatible",
-      "source": "class C{x:string=\"s\";async *m(){yield this.x;}}function unused(){const q:AsyncGenerator.<string,void,void>=new C().m();}",
+      "source": "class C{x:string=\"s\";async *m(){yield this.x;}}function unused(){const q:AsyncGenerator.<string,undefined,void>=new C().m();}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -586,7 +586,7 @@
     },
     {
       "name": "async generator method: incompatible",
-      "source": "class C{x:string=\"s\";async *m(){yield this.x;}}function unused(){const q:AsyncGenerator.<number,void,void>=new C().m();}",
+      "source": "class C{x:string=\"s\";async *m(){yield this.x;}}function unused(){const q:AsyncGenerator.<number,undefined,void>=new C().m();}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,

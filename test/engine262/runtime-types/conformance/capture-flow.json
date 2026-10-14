@@ -669,16 +669,16 @@
       }
     },
     {
-      "name": "generator guarded capture: Generator.<string,void,void>",
-      "source": "function outer(){function* f(x:string|number){if(typeof x!==\"string\")return;const s=x;yield g();return;function g(){return s;}};const q:Generator.<string,void,void>=f(\"s\");}",
+      "name": "generator guarded capture: Generator.<string,undefined,void>",
+      "source": "function outer(){function* f(x:string|number){if(typeof x!==\"string\")return;const s=x;yield g();return;function g(){return s;}};const q:Generator.<string,undefined,void>=f(\"s\");}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
       }
     },
     {
-      "name": "generator guarded capture: Generator.<number,void,void>",
-      "source": "function outer(){function* f(x:string|number){if(typeof x!==\"string\")return;const s=x;yield g();return;function g(){return s;}};const q:Generator.<number,void,void>=f(\"s\");}",
+      "name": "generator guarded capture: Generator.<number,undefined,void>",
+      "source": "function outer(){function* f(x:string|number){if(typeof x!==\"string\")return;const s=x;yield g();return;function g(){return s;}};const q:Generator.<number,undefined,void>=f(\"s\");}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -692,16 +692,16 @@
       }
     },
     {
-      "name": "async generator guarded capture: AsyncGenerator.<string,void,void>",
-      "source": "function outer(){async function* f(x:string|number){if(typeof x!==\"string\")return;const s=x;yield g();return;function g(){return s;}};const q:AsyncGenerator.<string,void,void>=f(\"s\");}",
+      "name": "async generator guarded capture: AsyncGenerator.<string,undefined,void>",
+      "source": "function outer(){async function* f(x:string|number){if(typeof x!==\"string\")return;const s=x;yield g();return;function g(){return s;}};const q:AsyncGenerator.<string,undefined,void>=f(\"s\");}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
       }
     },
     {
-      "name": "async generator guarded capture: AsyncGenerator.<number,void,void>",
-      "source": "function outer(){async function* f(x:string|number){if(typeof x!==\"string\")return;const s=x;yield g();return;function g(){return s;}};const q:AsyncGenerator.<number,void,void>=f(\"s\");}",
+      "name": "async generator guarded capture: AsyncGenerator.<number,undefined,void>",
+      "source": "function outer(){async function* f(x:string|number){if(typeof x!==\"string\")return;const s=x;yield g();return;function g(){return s;}};const q:AsyncGenerator.<number,undefined,void>=f(\"s\");}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -1255,7 +1255,7 @@
     },
     {
       "name": "yield contribution inside if condition: string",
-      "source": "function outer(){function* f(x:string,flag:boolean){if((yield x,flag))return;}const q:Generator.<string,void,void>=f(\"s\",false);}",
+      "source": "function outer(){function* f(x:string,flag:boolean){if((yield x,flag))return;}const q:Generator.<string,undefined,void>=f(\"s\",false);}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -1263,7 +1263,7 @@
     },
     {
       "name": "yield contribution inside if condition: number",
-      "source": "function outer(){function* f(x:string,flag:boolean){if((yield x,flag))return;}const q:Generator.<number,void,void>=f(\"s\",false);}",
+      "source": "function outer(){function* f(x:string,flag:boolean){if((yield x,flag))return;}const q:Generator.<number,undefined,void>=f(\"s\",false);}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -1278,7 +1278,7 @@
     },
     {
       "name": "yield contribution inside while condition: string",
-      "source": "function outer(){function* f(x:string,flag:boolean){while((yield x,flag)){break;}}const q:Generator.<string,void,void>=f(\"s\",false);}",
+      "source": "function outer(){function* f(x:string,flag:boolean){while((yield x,flag)){break;}}const q:Generator.<string,undefined,void>=f(\"s\",false);}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -1286,7 +1286,7 @@
     },
     {
       "name": "yield contribution inside while condition: number",
-      "source": "function outer(){function* f(x:string,flag:boolean){while((yield x,flag)){break;}}const q:Generator.<number,void,void>=f(\"s\",false);}",
+      "source": "function outer(){function* f(x:string,flag:boolean){while((yield x,flag)){break;}}const q:Generator.<number,undefined,void>=f(\"s\",false);}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -1301,7 +1301,7 @@
     },
     {
       "name": "yield contribution inside for condition: string",
-      "source": "function outer(){function* f(x:string,flag:boolean){for(;(yield x,flag);){break;}}const q:Generator.<string,void,void>=f(\"s\",false);}",
+      "source": "function outer(){function* f(x:string,flag:boolean){for(;(yield x,flag);){break;}}const q:Generator.<string,undefined,void>=f(\"s\",false);}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -1309,7 +1309,7 @@
     },
     {
       "name": "yield contribution inside for condition: number",
-      "source": "function outer(){function* f(x:string,flag:boolean){for(;(yield x,flag);){break;}}const q:Generator.<number,void,void>=f(\"s\",false);}",
+      "source": "function outer(){function* f(x:string,flag:boolean){for(;(yield x,flag);){break;}}const q:Generator.<number,undefined,void>=f(\"s\",false);}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -1324,7 +1324,7 @@
     },
     {
       "name": "yield contribution inside do condition: string",
-      "source": "function outer(){function* f(x:string,flag:boolean){do{}while((yield x,flag));}const q:Generator.<string,void,void>=f(\"s\",false);}",
+      "source": "function outer(){function* f(x:string,flag:boolean){do{}while((yield x,flag));}const q:Generator.<string,undefined,void>=f(\"s\",false);}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -1332,7 +1332,7 @@
     },
     {
       "name": "yield contribution inside do condition: number",
-      "source": "function outer(){function* f(x:string,flag:boolean){do{}while((yield x,flag));}const q:Generator.<number,void,void>=f(\"s\",false);}",
+      "source": "function outer(){function* f(x:string,flag:boolean){do{}while((yield x,flag));}const q:Generator.<number,undefined,void>=f(\"s\",false);}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -1355,7 +1355,7 @@
     },
     {
       "name": "yield initializer precedes following binding: string|number",
-      "source": "function outer(){function* f(x:string|number){if(typeof x!==\"string\")return;const unused=yield \"pause\",s=x;yield g();return;function g(){return s;}function write(){x=1;}}const q:Generator.<string|number,void,void>=f(\"s\");}",
+      "source": "function outer(){function* f(x:string|number){if(typeof x!==\"string\")return;const unused=yield \"pause\",s=x;yield g();return;function g(){return s;}function write(){x=1;}}const q:Generator.<string|number,undefined,void>=f(\"s\");}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -1378,7 +1378,7 @@
     },
     {
       "name": "yield initializer precedes following binding: string",
-      "source": "function outer(){function* f(x:string|number){if(typeof x!==\"string\")return;const unused=yield \"pause\",s=x;yield g();return;function g(){return s;}function write(){x=1;}}const q:Generator.<string,void,void>=f(\"s\");}",
+      "source": "function outer(){function* f(x:string|number){if(typeof x!==\"string\")return;const unused=yield \"pause\",s=x;yield g();return;function g(){return s;}function write(){x=1;}}const q:Generator.<string,undefined,void>=f(\"s\");}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,

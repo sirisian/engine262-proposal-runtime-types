@@ -233,7 +233,7 @@
     },
     {
       "name": "interface generator yield: compatible",
-      "source": "interface I{m():Generator.<string,void,void>;}class C implements I{x:string=\"s\";*m(){yield this.x;}}",
+      "source": "interface I{m():Generator.<string,undefined,void>;}class C implements I{x:string=\"s\";*m(){yield this.x;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -241,7 +241,7 @@
     },
     {
       "name": "interface generator yield: incompatible",
-      "source": "interface I{m():Generator.<number,void,void>;}class C implements I{x:string=\"s\";*m(){yield this.x;}}",
+      "source": "interface I{m():Generator.<number,undefined,void>;}class C implements I{x:string=\"s\";*m(){yield this.x;}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -256,7 +256,7 @@
     },
     {
       "name": "interface async generator yield: compatible",
-      "source": "interface I{m():AsyncGenerator.<string,void,void>;}class C implements I{x:string=\"s\";async *m(){yield this.x;}}",
+      "source": "interface I{m():AsyncGenerator.<string,undefined,void>;}class C implements I{x:string=\"s\";async *m(){yield this.x;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -264,7 +264,7 @@
     },
     {
       "name": "interface async generator yield: incompatible",
-      "source": "interface I{m():AsyncGenerator.<number,void,void>;}class C implements I{x:string=\"s\";async *m(){yield this.x;}}",
+      "source": "interface I{m():AsyncGenerator.<number,undefined,void>;}class C implements I{x:string=\"s\";async *m(){yield this.x;}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,

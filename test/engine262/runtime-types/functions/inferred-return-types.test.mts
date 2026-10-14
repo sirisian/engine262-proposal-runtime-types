@@ -259,8 +259,9 @@ test('a generator infers its yield type', () => {
   // `uint.<8>`: a return statement cannot narrow a yield type, so the routing
   // was the defect rather than the rule. The `expectOk` at the foot of this test
   // is what the old expectation contradicted.
-  expectEarly('function f(): uint8 { return 1; } function* g(a: uint32) { yield f(); } const n: number = g(1);', 'Generator.<uint.<8>, void, void>');
+  expectEarly('function f(): uint8 { return 1; } function* g(a: uint32) { yield f(); } const n: number = g(1);', 'Generator.<uint.<8>, undefined, void>');
   expect(thrown('function f(): uint8 { return 1; } function* g(a: uint32) { yield f(); yield "x"; } const n: number = g(1);')).toContain('uint.<8> | string');
+  // Inferred fallthrough remains the undefined completion value; written shorthand stays void.
   // A declared annotation still wins, and a legacy generator is unchanged.
   expectEarly('function* g(a: uint32): uint8 { yield 1; } const n: number = g(1);', 'Generator.<uint.<8>, void, void>');
   expectEarly('function* g() { yield 1; } const n: number = g();', 'Generator.<any, void, void>');
@@ -272,7 +273,7 @@ test('yield* contributes the delegated element type', () => {
   // #sec-inference-and-function-forms: delegation contributes yielded values.
   const source = 'function f(): uint8 { return 1; } function* inner() { yield f(); }'
     + ' function* g(a: uint32) { yield* inner(); } ';
-  expectEarly(source + 'const n: number = g(1);', 'Generator.<uint.<8>, void, void>');
+  expectEarly(source + 'const n: number = g(1);', 'Generator.<uint.<8>, undefined, void>');
   expectStaticTypeError(source + 'for (const x of g(1)) { let s: string = x; }');
   expectOk(source + 'for (const x of g(1)) { let n: uint8 = x; }');
 });

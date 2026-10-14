@@ -715,16 +715,16 @@
       }
     },
     {
-      "name": "generator forward captured constant: Generator.<string,void,void>",
-      "source": "function outer(){function* f(x:string){yield g();function g(){return s;}const s=x;};const q:Generator.<string,void,void>=f(\"s\");}",
+      "name": "generator forward captured constant: Generator.<string,undefined,void>",
+      "source": "function outer(){function* f(x:string){yield g();function g(){return s;}const s=x;};const q:Generator.<string,undefined,void>=f(\"s\");}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
       }
     },
     {
-      "name": "generator forward captured constant: Generator.<number,void,void>",
-      "source": "function outer(){function* f(x:string){yield g();function g(){return s;}const s=x;};const q:Generator.<number,void,void>=f(\"s\");}",
+      "name": "generator forward captured constant: Generator.<number,undefined,void>",
+      "source": "function outer(){function* f(x:string){yield g();function g(){return s;}const s=x;};const q:Generator.<number,undefined,void>=f(\"s\");}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -738,16 +738,16 @@
       }
     },
     {
-      "name": "async generator forward captured constant: AsyncGenerator.<string,void,void>",
-      "source": "function outer(){async function* f(x:string){yield g();function g(){return s;}const s=x;};const q:AsyncGenerator.<string,void,void>=f(\"s\");}",
+      "name": "async generator forward captured constant: AsyncGenerator.<string,undefined,void>",
+      "source": "function outer(){async function* f(x:string){yield g();function g(){return s;}const s=x;};const q:AsyncGenerator.<string,undefined,void>=f(\"s\");}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
       }
     },
     {
-      "name": "async generator forward captured constant: AsyncGenerator.<number,void,void>",
-      "source": "function outer(){async function* f(x:string){yield g();function g(){return s;}const s=x;};const q:AsyncGenerator.<number,void,void>=f(\"s\");}",
+      "name": "async generator forward captured constant: AsyncGenerator.<number,undefined,void>",
+      "source": "function outer(){async function* f(x:string){yield g();function g(){return s;}const s=x;};const q:AsyncGenerator.<number,undefined,void>=f(\"s\");}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,

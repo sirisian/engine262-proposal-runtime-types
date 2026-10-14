@@ -687,7 +687,7 @@
     },
     {
       "name": "generator deferred contribution: string",
-      "source": "function outer(){function* f(x:string){x=\"s\";yield g();return g();function g(){return s;}const s=x;}const q:string=f(\"s\").next().value;}",
+      "source": "function outer(){function* f(x:string){x=\"s\";yield g();return g();function g(){return s;}const s=x;}const result=f(\"s\").next();if(result.done===false){const q:string=result.value;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -695,7 +695,7 @@
     },
     {
       "name": "generator deferred contribution: number",
-      "source": "function outer(){function* f(x:string){x=\"s\";yield g();return g();function g(){return s;}const s=x;}const q:number=f(\"s\").next().value;}",
+      "source": "function outer(){function* f(x:string){x=\"s\";yield g();return g();function g(){return s;}const s=x;}const result=f(\"s\").next();if(result.done===false){const q:number=result.value;}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -710,7 +710,7 @@
     },
     {
       "name": "async generator deferred contribution: string",
-      "source": "async function outer(){async function* f(x:string){x=\"s\";yield g();return g();function g(){return s;}const s=x;}const q:string=(await f(\"s\").next()).value;}",
+      "source": "async function outer(){async function* f(x:string){x=\"s\";yield g();return g();function g(){return s;}const s=x;}const result=(await f(\"s\").next());if(result.done===false){const q:string=result.value;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -718,7 +718,7 @@
     },
     {
       "name": "async generator deferred contribution: number",
-      "source": "async function outer(){async function* f(x:string){x=\"s\";yield g();return g();function g(){return s;}const s=x;}const q:number=(await f(\"s\").next()).value;}",
+      "source": "async function outer(){async function* f(x:string){x=\"s\";yield g();return g();function g(){return s;}const s=x;}const result=(await f(\"s\").next());if(result.done===false){const q:number=result.value;}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,
@@ -733,7 +733,7 @@
     },
     {
       "name": "delegated yield dependency: string",
-      "source": "function outer(){function* f(x:string){yield* h();return \"s\";function* h(){yield s;return \"s\";}const s=x;}const q:string=f(\"s\").next().value;}",
+      "source": "function outer(){function* f(x:string){yield* h();return \"s\";function* h(){yield s;return \"s\";}const s=x;}const result=f(\"s\").next();if(result.done===false){const q:string=result.value;}}",
       "expected": {
         "completion": "normal",
         "bodyEntered": true
@@ -741,7 +741,7 @@
     },
     {
       "name": "delegated yield dependency: number",
-      "source": "function outer(){function* f(x:string){yield* h();return \"s\";function* h(){yield s;return \"s\";}const s=x;}const q:number=f(\"s\").next().value;}",
+      "source": "function outer(){function* f(x:string){yield* h();return \"s\";function* h(){yield s;return \"s\";}const s=x;}const result=f(\"s\").next();if(result.done===false){const q:number=result.value;}}",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,

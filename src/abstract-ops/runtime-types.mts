@@ -7,7 +7,7 @@ import { primitiveMembership } from '../type-system/runtime.mts';
 import { currentTypeParameterFrame, SpecializedFunctionSignatureOf } from '../type-system/runtime.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { sourceTextOf } from '../parser/TokensOf.mts';
-import { Q, X, EnsureCompletion, isEvaluator, Await, type ThrowCompletion } from '../completion.mts';
+import { Q, X, EnsureCompletion, isEvaluator, Await, Completion, NormalCompletion, ReturnCompletion, type ThrowCompletion } from '../completion.mts';
 // Placed with the other `./` imports and NOT after `../intrinsics/`, which
 // `import-x/order` asks for and which `./all.mts` and `./array-view.mts` below
 // already decline: moved there it forms a cycle through `array-view.mts` and
@@ -4608,6 +4608,27 @@ export function* EnforceGeneratorNextArgument(generator: Value, value: Value): V
   const nextType = protocol ? generatorParameters(protocol)?.Next : null;
   if (!nextType || nextType.Kind === 'any' || value === Value.undefined) return value;
   return Q(yield* RequireType(value, nextType));
+}
+
+// An admitted external completion belongs to one generator. Its identity,
+// rather than its payload or a per-generator flag, survives normal finally
+// blocks and suspension without excusing a replacement body return.
+const generatorReturnCompletions = new WeakMap<ReturnCompletion, object>();
+
+/** #sec-generator-return-admission: optional R is an input, not the body return. */
+export function* AdmitGeneratorReturn(generator: Value, value: Value): PlainEvaluator<ReturnCompletion> {
+  const protocol = generatorProtocolTypes.get(generator);
+  const target = protocol ? generatorParameters(protocol)?.Return : null;
+  if (target && target.Kind !== 'any' && value !== Value.undefined) {
+    value = Q(yield* RequireType(value, target));
+  }
+  const completion = new Completion({ Type: 'return', Value: value, Target: undefined });
+  generatorReturnCompletions.set(completion, generator);
+  return NormalCompletion(completion);
+}
+
+export function IsAdmittedGeneratorReturn(generator: Value, completion: object): boolean {
+  return completion instanceof ReturnCompletion && generatorReturnCompletions.get(completion) === generator;
 }
 
 /**
