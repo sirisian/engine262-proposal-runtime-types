@@ -291,6 +291,20 @@ export const rangePropertyType = (receiver: Known, key: string): Known => {
     case 'isEmpty':
     case 'isFull': return makePrimitive('boolean');
     case 'length': return makePrimitive('bigint');
+    case 'toArray':
+    case 'forEach':
+    case 'some':
+    case 'every':
+    case 'find': {
+      // Forwarded terminal helpers consume the cursor's item domain, which
+      // need not be the range's endpoint domain. Reuse the iterator contract
+      // without making a claim about either replaceable method's identity.
+      const signature = iteratorMethodSignature(key, rangeIteratorItemType(element, view));
+      if (signature?.Kind !== 'function') return null;
+      return { ...signature, Signatures: signature.Signatures.map((s) => ({ ...s,
+        Parameters: s.Parameters.map((p) => ({ ...p, Name: 'callback' })),
+      })) };
+    }
     case 'step':
     case 'reverse': return {
       Kind: 'function',

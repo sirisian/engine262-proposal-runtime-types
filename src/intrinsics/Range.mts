@@ -263,10 +263,9 @@ function* RangeProto_scale([factor = Value.undefined]: Arguments, { thisValue }:
  * Making a range *be* an iterator would make `[...r]` consume it; delegating
  * keeps `r.map(f)` callable twice and `r` a value afterwards.
  *
- * The range's own iterator already inherits `Iterator.prototype`, so the
- * forwarded method is the built-in one and the resulting chain is BRANDED -
- * standardlibrary.md's fast path, rather than the structural check a
- * hand-written iterable pays on the way in.
+ * The fresh iterator inherits `Iterator.prototype`. Its helper is read by
+ * ordinary property access below; neither inheritance nor the method name
+ * proves that the public method still holds the original built-in.
  */
 function* delegateToIterator(name: string, args: Arguments, thisValue: Value): ValueEvaluator {
   const self = thisRange(thisValue);

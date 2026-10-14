@@ -1,0 +1,2402 @@
+{
+  "cases": [
+    {
+      "name": "ClosedRange toArray result",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.toArray();}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom toArray result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeFrom.<uint8>){const x:string=r.toArray();}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo toArray result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeTo.<uint8>){const x:string=r.toArray();}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull toArray result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeFull.<uint8>){const x:string=r.toArray();}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds toArray result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeBounds.<uint8>){const x:string=r.toArray();}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "toArray view r[\"toArray\"]()",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r[\"toArray\"]();}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "toArray view r?.toArray()",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r?.toArray();}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "toArray view r.toArray?.()",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.toArray?.();}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "toArray extracted const f=r.toArray;",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const f=r.toArray;const x:string=f();}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "toArray extracted const {toArray:f}=r;",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const {toArray:f}=r;const x:string=f();}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "toArray any receiver",
+      "steps": [
+        {
+          "source": "function unused(r:any){const x:string=r.toArray();}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "toArray absent receiver skips callback expression",
+      "steps": [
+        {
+          "source": "let calls=0;function run(r:ClosedRange.<uint8>|null){r?.toArray();}run(null);String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "toArray replacement still checks inferred return",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>){return r.toArray();}const r:ClosedRange.<uint8>=1..=2;r.toArray=()=>\"wrong\";read(r);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange forEach result",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.forEach((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom forEach result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeFrom.<uint8>){const x:string=r.forEach((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo forEach result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeTo.<uint8>){const x:string=r.forEach((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull forEach result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeFull.<uint8>){const x:string=r.forEach((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds forEach result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeBounds.<uint8>){const x:string=r.forEach((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach view r[\"forEach\"]((v,i)=>true)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r[\"forEach\"]((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach view r?.forEach((v,i)=>true)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r?.forEach((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach view r.forEach?.((v,i)=>true)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.forEach?.((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach extracted const f=r.forEach;",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const f=r.forEach;const x:string=f((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach extracted const {forEach:f}=r;",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const {forEach:f}=r;const x:string=f((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach any receiver",
+      "steps": [
+        {
+          "source": "function unused(r:any){const x:string=r.forEach((v,i)=>true);}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach absent receiver skips callback expression",
+      "steps": [
+        {
+          "source": "let calls=0;function run(r:ClosedRange.<uint8>|null){r?.forEach((calls++,()=>true));}run(null);String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach contextual v",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.forEach((v,i)=>{const wrong:string=v;return true;});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach contextual i",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.forEach((v,i)=>{const wrong:string=i;return true;});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach runtime callback carriers",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let result=\"\";r.forEach((v,i)=>{result=String(Reflect.typeOf(v)===(type uint8))+\":\"+String(Reflect.typeOf(i)===(type uint64));return true;});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach function expression callback carriers",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let result=\"\";r.forEach(function(v,i){result=String(Reflect.typeOf(v)===(type uint8))+\":\"+String(Reflect.typeOf(i)===(type uint64));return true;});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach rest callback carriers",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let result=\"\";r.forEach((...args)=>{result=String(Reflect.typeOf(args[0])===(type uint8))+\":\"+String(Reflect.typeOf(args[1])===(type uint64));return true;});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach r rejects wrong item before callback",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.forEach=function(cb){cb(\"wrong\",0);return true;};let caught=false;try{r.forEach((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach Iterator.prototype rejects wrong item before callback",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;Iterator.prototype.forEach=function(cb){cb(\"wrong\",0);return true;};let caught=false;try{r.forEach((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach rejects injected arguments 1,-1",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.forEach=function(cb){cb(1,-1);return true;};let caught=false;try{r.forEach((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof RangeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach rejects injected arguments 1,0.5",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.forEach=function(cb){cb(1,0.5);return true;};let caught=false;try{r.forEach((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof RangeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach rejects injected arguments 1",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.forEach=function(cb){cb(1);return true;};let caught=false;try{r.forEach((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach rejects injected arguments 300,0",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.forEach=function(cb){cb(300,0);return true;};let caught=false;try{r.forEach((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof RangeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach retained callback keeps contract",
+      "steps": [
+        {
+          "source": "let saved:any;let entered=0;const r:ClosedRange.<uint8>=1..=1;r.forEach=function(cb){saved=cb;return true;};r.forEach((v,i)=>{entered++;return true;});let caught=false;try{saved(\"wrong\",0);}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach later write keeps contextual binding",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let bad:any=\"wrong\";let caught=false;try{r.forEach((v,i)=>{v=bad;return true;});}catch(e){caught=e instanceof TypeError;}String(caught);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach discards callback result",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;let visits=0;r.forEach(v=>{visits++;return \"discard\";});String(visits);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange some result",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.some((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom some result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeFrom.<uint8>){const x:string=r.some((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo some result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeTo.<uint8>){const x:string=r.some((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull some result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeFull.<uint8>){const x:string=r.some((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds some result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeBounds.<uint8>){const x:string=r.some((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "some view r[\"some\"]((v,i)=>true)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r[\"some\"]((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "some view r?.some((v,i)=>true)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r?.some((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "some view r.some?.((v,i)=>true)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.some?.((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "some extracted const f=r.some;",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const f=r.some;const x:string=f((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "some extracted const {some:f}=r;",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const {some:f}=r;const x:string=f((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "some any receiver",
+      "steps": [
+        {
+          "source": "function unused(r:any){const x:string=r.some((v,i)=>true);}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "some absent receiver skips callback expression",
+      "steps": [
+        {
+          "source": "let calls=0;function run(r:ClosedRange.<uint8>|null){r?.some((calls++,()=>true));}run(null);String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "some replacement still checks inferred return",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>){return r.some((v,i)=>true);}const r:ClosedRange.<uint8>=1..=2;r.some=()=>\"wrong\";read(r);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "some contextual v",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.some((v,i)=>{const wrong:string=v;return true;});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "some contextual i",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.some((v,i)=>{const wrong:string=i;return true;});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "some runtime callback carriers",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let result=\"\";r.some((v,i)=>{result=String(Reflect.typeOf(v)===(type uint8))+\":\"+String(Reflect.typeOf(i)===(type uint64));return true;});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "some function expression callback carriers",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let result=\"\";r.some(function(v,i){result=String(Reflect.typeOf(v)===(type uint8))+\":\"+String(Reflect.typeOf(i)===(type uint64));return true;});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "some rest callback carriers",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let result=\"\";r.some((...args)=>{result=String(Reflect.typeOf(args[0])===(type uint8))+\":\"+String(Reflect.typeOf(args[1])===(type uint64));return true;});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "some r rejects wrong item before callback",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.some=function(cb){cb(\"wrong\",0);return true;};let caught=false;try{r.some((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "some Iterator.prototype rejects wrong item before callback",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;Iterator.prototype.some=function(cb){cb(\"wrong\",0);return true;};let caught=false;try{r.some((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "some rejects injected arguments 1,-1",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.some=function(cb){cb(1,-1);return true;};let caught=false;try{r.some((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof RangeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "some rejects injected arguments 1,0.5",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.some=function(cb){cb(1,0.5);return true;};let caught=false;try{r.some((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof RangeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "some rejects injected arguments 1",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.some=function(cb){cb(1);return true;};let caught=false;try{r.some((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "some rejects injected arguments 300,0",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.some=function(cb){cb(300,0);return true;};let caught=false;try{r.some((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof RangeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "some retained callback keeps contract",
+      "steps": [
+        {
+          "source": "let saved:any;let entered=0;const r:ClosedRange.<uint8>=1..=1;r.some=function(cb){saved=cb;return true;};r.some((v,i)=>{entered++;return true;});let caught=false;try{saved(\"wrong\",0);}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "some later write keeps contextual binding",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let bad:any=\"wrong\";let caught=false;try{r.some((v,i)=>{v=bad;return true;});}catch(e){caught=e instanceof TypeError;}String(caught);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "some known nonboolean predicate",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.some(v=>1);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "some contextual any predicate is checked",
+      "steps": [
+        {
+          "source": "let result:any=1;const r:ClosedRange.<uint8>=1..=1;r.some(v=>result);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "some preexisting explicit any return does not adopt",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:(v:uint8,i:uint64)=>any){r.some(cb);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange every result",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.every((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom every result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeFrom.<uint8>){const x:string=r.every((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo every result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeTo.<uint8>){const x:string=r.every((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull every result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeFull.<uint8>){const x:string=r.every((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds every result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeBounds.<uint8>){const x:string=r.every((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "every view r[\"every\"]((v,i)=>true)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r[\"every\"]((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "every view r?.every((v,i)=>true)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r?.every((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "every view r.every?.((v,i)=>true)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.every?.((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "every extracted const f=r.every;",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const f=r.every;const x:string=f((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "every extracted const {every:f}=r;",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const {every:f}=r;const x:string=f((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "every any receiver",
+      "steps": [
+        {
+          "source": "function unused(r:any){const x:string=r.every((v,i)=>true);}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "every absent receiver skips callback expression",
+      "steps": [
+        {
+          "source": "let calls=0;function run(r:ClosedRange.<uint8>|null){r?.every((calls++,()=>true));}run(null);String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "every replacement still checks inferred return",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>){return r.every((v,i)=>true);}const r:ClosedRange.<uint8>=1..=2;r.every=()=>\"wrong\";read(r);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "every contextual v",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.every((v,i)=>{const wrong:string=v;return true;});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "every contextual i",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.every((v,i)=>{const wrong:string=i;return true;});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "every runtime callback carriers",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let result=\"\";r.every((v,i)=>{result=String(Reflect.typeOf(v)===(type uint8))+\":\"+String(Reflect.typeOf(i)===(type uint64));return true;});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "every function expression callback carriers",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let result=\"\";r.every(function(v,i){result=String(Reflect.typeOf(v)===(type uint8))+\":\"+String(Reflect.typeOf(i)===(type uint64));return true;});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "every rest callback carriers",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let result=\"\";r.every((...args)=>{result=String(Reflect.typeOf(args[0])===(type uint8))+\":\"+String(Reflect.typeOf(args[1])===(type uint64));return true;});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "every r rejects wrong item before callback",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.every=function(cb){cb(\"wrong\",0);return true;};let caught=false;try{r.every((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "every Iterator.prototype rejects wrong item before callback",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;Iterator.prototype.every=function(cb){cb(\"wrong\",0);return true;};let caught=false;try{r.every((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "every rejects injected arguments 1,-1",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.every=function(cb){cb(1,-1);return true;};let caught=false;try{r.every((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof RangeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "every rejects injected arguments 1,0.5",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.every=function(cb){cb(1,0.5);return true;};let caught=false;try{r.every((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof RangeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "every rejects injected arguments 1",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.every=function(cb){cb(1);return true;};let caught=false;try{r.every((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "every rejects injected arguments 300,0",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.every=function(cb){cb(300,0);return true;};let caught=false;try{r.every((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof RangeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "every retained callback keeps contract",
+      "steps": [
+        {
+          "source": "let saved:any;let entered=0;const r:ClosedRange.<uint8>=1..=1;r.every=function(cb){saved=cb;return true;};r.every((v,i)=>{entered++;return true;});let caught=false;try{saved(\"wrong\",0);}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "every later write keeps contextual binding",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let bad:any=\"wrong\";let caught=false;try{r.every((v,i)=>{v=bad;return true;});}catch(e){caught=e instanceof TypeError;}String(caught);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "every known nonboolean predicate",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.every(v=>1);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "every contextual any predicate is checked",
+      "steps": [
+        {
+          "source": "let result:any=1;const r:ClosedRange.<uint8>=1..=1;r.every(v=>result);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "every preexisting explicit any return does not adopt",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:(v:uint8,i:uint64)=>any){r.every(cb);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange find result",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.find((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom find result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeFrom.<uint8>){const x:string=r.find((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo find result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeTo.<uint8>){const x:string=r.find((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull find result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeFull.<uint8>){const x:string=r.find((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds find result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeBounds.<uint8>){const x:string=r.find((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "find view r[\"find\"]((v,i)=>true)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r[\"find\"]((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "find view r?.find((v,i)=>true)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r?.find((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "find view r.find?.((v,i)=>true)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.find?.((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "find extracted const f=r.find;",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const f=r.find;const x:string=f((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "find extracted const {find:f}=r;",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const {find:f}=r;const x:string=f((v,i)=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "find any receiver",
+      "steps": [
+        {
+          "source": "function unused(r:any){const x:string=r.find((v,i)=>true);}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "find absent receiver skips callback expression",
+      "steps": [
+        {
+          "source": "let calls=0;function run(r:ClosedRange.<uint8>|null){r?.find((calls++,()=>true));}run(null);String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "find replacement still checks inferred return",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>){return r.find((v,i)=>true);}const r:ClosedRange.<uint8>=1..=2;r.find=()=>\"wrong\";read(r);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "find contextual v",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.find((v,i)=>{const wrong:string=v;return true;});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "find contextual i",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.find((v,i)=>{const wrong:string=i;return true;});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "find runtime callback carriers",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let result=\"\";r.find((v,i)=>{result=String(Reflect.typeOf(v)===(type uint8))+\":\"+String(Reflect.typeOf(i)===(type uint64));return true;});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "find function expression callback carriers",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let result=\"\";r.find(function(v,i){result=String(Reflect.typeOf(v)===(type uint8))+\":\"+String(Reflect.typeOf(i)===(type uint64));return true;});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "find rest callback carriers",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let result=\"\";r.find((...args)=>{result=String(Reflect.typeOf(args[0])===(type uint8))+\":\"+String(Reflect.typeOf(args[1])===(type uint64));return true;});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "find r rejects wrong item before callback",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.find=function(cb){cb(\"wrong\",0);return true;};let caught=false;try{r.find((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "find Iterator.prototype rejects wrong item before callback",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;Iterator.prototype.find=function(cb){cb(\"wrong\",0);return true;};let caught=false;try{r.find((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "find rejects injected arguments 1,-1",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.find=function(cb){cb(1,-1);return true;};let caught=false;try{r.find((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof RangeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "find rejects injected arguments 1,0.5",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.find=function(cb){cb(1,0.5);return true;};let caught=false;try{r.find((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof RangeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "find rejects injected arguments 1",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.find=function(cb){cb(1);return true;};let caught=false;try{r.find((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "find rejects injected arguments 300,0",
+      "steps": [
+        {
+          "source": "let entered=0;const r:ClosedRange.<uint8>=1..=1;r.find=function(cb){cb(300,0);return true;};let caught=false;try{r.find((v,i)=>{entered++;return true;});}catch(e){caught=e instanceof RangeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "find retained callback keeps contract",
+      "steps": [
+        {
+          "source": "let saved:any;let entered=0;const r:ClosedRange.<uint8>=1..=1;r.find=function(cb){saved=cb;return true;};r.find((v,i)=>{entered++;return true;});let caught=false;try{saved(\"wrong\",0);}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "find later write keeps contextual binding",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let bad:any=\"wrong\";let caught=false;try{r.find((v,i)=>{v=bad;return true;});}catch(e){caught=e instanceof TypeError;}String(caught);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "find known nonboolean predicate",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.find(v=>1);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "find contextual any predicate is checked",
+      "steps": [
+        {
+          "source": "let result:any=1;const r:ClosedRange.<uint8>=1..=1;r.find(v=>result);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "find preexisting explicit any return does not adopt",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:(v:uint8,i:uint64)=>any){r.find(cb);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "find exhaustion is undefined",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;const x=r.find(v=>false);String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "find cannot omit exhaustion",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:uint8=r.find(v=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "toArray items retain typed carrier",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;const a=r.toArray();String(a)+\":\"+String(Reflect.typeOf(a[1])===(type uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,3:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal endpoint domain includes interior",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<1|3>=1..=3;String(r.toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal endpoint domain is not item set",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<1|3>){const a:[].<1|3>=r.toArray();}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "union endpoint view contributes all carriers",
+      "steps": [
+        {
+          "source": "function unused(r:RangeBounds.<uint8|uint16>){const a:[].<uint8>=r.toArray();}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint8|string unsupported item contribution remains gradual",
+      "steps": [
+        {
+          "source": "function unused<T:type>(r:ClosedRange.<uint8|string>){r.forEach(v=>{const x:string=v;});}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any unsupported item contribution remains gradual",
+      "steps": [
+        {
+          "source": "function unused<T:type>(r:ClosedRange.<any>){r.forEach(v=>{const x:string=v;});}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "T unsupported item contribution remains gradual",
+      "steps": [
+        {
+          "source": "function unused<T:type>(r:ClosedRange.<T>){r.forEach(v=>{const x:string=v;});}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number helper item domain",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<number>=1..=2;let result=\"\";r.forEach((v,i)=>{result=String(Reflect.typeOf(v)===(type number))+\":\"+String(Reflect.typeOf(i)===(type uint64));});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint helper item domain",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<bigint>=1..=2;let result=\"\";r.forEach((v,i)=>{result=String(Reflect.typeOf(v)===(type bigint))+\":\"+String(Reflect.typeOf(i)===(type uint64));});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "int16 helper item domain",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int16>=1..=2;let result=\"\";r.forEach((v,i)=>{result=String(Reflect.typeOf(v)===(type int16))+\":\"+String(Reflect.typeOf(i)===(type uint64));});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint128 helper item domain",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint128>=1..=2;let result=\"\";r.forEach((v,i)=>{result=String(Reflect.typeOf(v)===(type uint128))+\":\"+String(Reflect.typeOf(i)===(type uint64));});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float16 helper item domain",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float16>=1..=2;let result=\"\";r.forEach((v,i)=>{result=String(Reflect.typeOf(v)===(type float16))+\":\"+String(Reflect.typeOf(i)===(type uint64));});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float32 helper item domain",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float32>=1..=2;let result=\"\";r.forEach((v,i)=>{result=String(Reflect.typeOf(v)===(type float32))+\":\"+String(Reflect.typeOf(i)===(type uint64));});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 helper item domain",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<float64>=1..=2;let result=\"\";r.forEach((v,i)=>{result=String(Reflect.typeOf(v)===(type float64))+\":\"+String(Reflect.typeOf(i)===(type uint64));});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range remains reusable",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;String(r.toArray())+\":\"+String(r.toArray())+\":\"+String(r.contains(2));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,3:1,2,3:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "some unbounded short circuit",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint8>=1..;let visits=0;r.some(v=>{visits++;return true;});String(visits);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "some empty does not invoke callback",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=3..=1;let visits=0;const result=r.some(v=>{visits++;return true;});String(visits)+\":\"+String(result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0:false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "every unbounded short circuit",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint8>=1..;let visits=0;r.every(v=>{visits++;return false;});String(visits);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "every empty does not invoke callback",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=3..=1;let visits=0;const result=r.every(v=>{visits++;return true;});String(visits)+\":\"+String(result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "find unbounded short circuit",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint8>=1..;let visits=0;r.find(v=>{visits++;return true;});String(visits);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "find empty does not invoke callback",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=3..=1;let visits=0;const result=r.find(v=>{visits++;return true;});String(visits)+\":\"+String(result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "toArray refuses endless whole consumption",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint8>=1..;r.toArray();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forEach refuses endless whole consumption",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint8>=1..;r.forEach(v=>{});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary untyped callback index stays Number",
+      "steps": [
+        {
+          "source": "const r:any=1..=1;let result=\"\";r.forEach((v,i)=>{result=String(Reflect.typeOf(i)===(type number));});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written any index overrides context",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let result=\"\";r.forEach((v,i:any)=>{result=String(Reflect.typeOf(i)===(type number));});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "preexisting untyped callback is not retroactively adopted",
+      "steps": [
+        {
+          "source": "let result=\"\";function cb(v,i){result=String(Reflect.typeOf(i)===(type number));}const r:ClosedRange.<uint8>=1..=1;r.forEach(cb);result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contextual standalone literal protects an erased call",
+      "steps": [
+        {
+          "source": "let entered=0;const f:(v:uint8)=>void=v=>{entered++;};const g:any=f;let caught=false;try{g(\"wrong\");}catch(e){caught=e instanceof TypeError;}String(caught)+\":\"+String(entered);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contextual parameter admitted before later default",
+      "steps": [
+        {
+          "source": "let result=\"\";const f:(v:uint8,i?:string)=>void=(v,i=String(Reflect.typeOf(v)===(type uint8)))=>{result=i;};const g:any=f;g(1);result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contextual optional omission retains undefined",
+      "steps": [
+        {
+          "source": "const f:(v?:uint8)=>string=v=>String(v);const g:any=f;g();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "callback survives captured generic specializations",
+      "steps": [
+        {
+          "source": "function make<T:type>():any{const f:(x:T)=>boolean=x=>Reflect.typeOf(x)===T;return f;}const a=make.<uint8>();const b=make.<uint16>();String(a(1))+\":\"+String(b(1));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured callback rejects wrong erased call",
+      "steps": [
+        {
+          "source": "function make<T:type>():any{const f:(x:T)=>void=x=>{};return f;}const f=make.<uint8>();let caught=false;try{f(\"wrong\");}catch(e){caught=e instanceof TypeError;}String(caught);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest callback rejects wrong retained item",
+      "steps": [
+        {
+          "source": "let saved:any;const r:ClosedRange.<uint8>=1..=1;r.forEach=function(cb){saved=cb;};r.forEach((...args)=>{});let caught=false;try{saved(\"wrong\",0);}catch(e){caught=e instanceof TypeError;}String(caught);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator callback shares inferred index boundary",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let result=\"\";r.step(1).forEach((v,i)=>{result=String(Reflect.typeOf(i)===(type uint64));});result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed result initializer preserves effects and TDZ",
+      "steps": [
+        {
+          "source": "let effects=0;const r:ClosedRange.<uint8>=1..=1;r.toArray=()=>{effects++;return \"wrong\";};const rejected=r.toArray();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "String(effects);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        },
+        {
+          "source": "rejected;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "ReferenceError"
+          }
+        },
+        {
+          "source": "const fresh:ClosedRange.<uint8>=1..=2;String(fresh.toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2"
+          }
+        }
+      ]
+    }
+  ]
+}

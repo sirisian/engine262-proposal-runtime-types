@@ -30702,7 +30702,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       // #sec-type-annotations: an omitted optional parameter holds undefined.
       // A parameter with a default instead holds its supplied or default value.
-      declare(b.BindingIdentifier.name, parameterBodyType(b, contextual, record));
+      const bodyType = parameterBodyType(b, contextual, record);
+      declare(b.BindingIdentifier.name, bodyType);
+      // Context supplies a real binding contract, including calls through an
+      // erased alias or a replacement library method. Admit the argument at
+      // initialization, before later defaults and the body can read it.
+      inferredConstTypes.delete(b);
+      if (!b.TypeAnnotation && !b.Ref && bodyType && bodyType.Kind !== 'any') {
+        inferredConstTypes.set(b, bodyType);
+      }
       // A simple parameter is declared here directly rather than through
       // checkPattern, so it records its unary-operand participation here: an
       // annotation is an operand contract, and an unannotated parameter has
@@ -30940,6 +30948,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const restName = (p as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name;
         if (typeof restName === 'string') {
           declare(restName, restType);
+          inferredConstTypes.delete(p);
+          if (!p.TypeAnnotation && !(p as { Ref?: boolean }).Ref && restType && restType.Kind !== 'any') {
+            inferredConstTypes.set(p, restType);
+          }
         } else {
           checkPattern(p.BindingPattern as PatternNode, { type: restType, typed: !!restType, annotated: !!p.TypeAnnotation }, true, !!restType);
         }
