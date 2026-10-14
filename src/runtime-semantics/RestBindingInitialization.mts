@@ -1,8 +1,10 @@
+import { EnforceInferredBinding } from '../type-system/inferred-binding.mts';
 import { Value } from '../value.mts';
 import { StringValue } from '../static-semantics/all.mts';
 import { Q } from '../completion.mts';
 import { EnforceAnnotation } from '../abstract-ops/runtime-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { recordDeclaredType } from './LexicalDeclaration.mts';
 import {
   surroundingAgent,
   CopyDataProperties,
@@ -14,7 +16,8 @@ import {
 import type { EnvironmentRecord, PropertyKeyValue, UndefinedValue } from '#self';
 
 // BindingRestProperty : `...` BindingIdentifier
-export function* RestBindingInitialization({ BindingIdentifier, TypeAnnotation }: ParseNode.BindingRestProperty, value: Value, environment: EnvironmentRecord | UndefinedValue, excludedNames: readonly PropertyKeyValue[]) {
+export function* RestBindingInitialization(node: ParseNode.BindingRestProperty, value: Value, environment: EnvironmentRecord | UndefinedValue, excludedNames: readonly PropertyKeyValue[]) {
+  const { BindingIdentifier, TypeAnnotation } = node;
   // 1. Let lhs be ? ResolveBinding(StringValue of BindingIdentifier, environment).
   const lhs = Q(yield* ResolveBinding(StringValue(BindingIdentifier), environment, BindingIdentifier.strict));
   // 2. Let restObj be OrdinaryObjectCreate(%Object.prototype%).
@@ -27,13 +30,17 @@ export function* RestBindingInitialization({ BindingIdentifier, TypeAnnotation }
   // one position in a destructuring pattern whose contents the author has not
   // named, which is why leaving it untypeable typed the wrong half of the
   // pattern.
-  const bound = TypeAnnotation
+  let bound = TypeAnnotation
     ? Q(yield* EnforceAnnotation(TypeAnnotation, restObj))
     : restObj;
+  const inferred = Q(yield* EnforceInferredBinding(node, bound));
+  bound = inferred.value;
   // 4. If environment is undefined, return PutValue(lhs, restObj).
   if (environment === Value.undefined) {
     return yield* PutValue(lhs, bound);
   }
   // 5. Return InitializeReferencedBinding(lhs, restObj).
-  return yield* InitializeReferencedBinding(lhs, bound);
+  const initialized = Q(yield* InitializeReferencedBinding(lhs, bound));
+  if (inferred.type) recordDeclaredType(lhs, inferred.type);
+  return initialized;
 }

@@ -82,15 +82,16 @@ test('`?.` is not the punctuator before a `.`, so a range may follow a `?`', () 
   // a Syntax Error. With it, this is a conditional whose consequent is the full
   // range. The spaced form is the same program and pins that spacing is not what
   // rescues it.
-  expect(evaluated('String((true?..:2).start);')).toBe('undefined');
-  expect(evaluated('String((true ? .. : 2).start);')).toBe('undefined');
+  // Keep both alternatives range-shaped; a Number arm fails the union-member rule.
+  expect(evaluated('String((true?..:..).start);')).toBe('undefined');
+  expect(evaluated('String((true ? .. : ..).start);')).toBe('undefined');
 });
 
 test('the `?.`-before-`.` extension gives meaning only to input that had none', () => {
   // Flag off, the same source is what it always was: a Syntax Error. The
   // extension is safe precisely because `?.` followed by `.` is rejected under
   // every production that consumes the punctuator.
-  expectErrorFlagOff('String((true?..:2).start);');
+  expectErrorFlagOff('String((true?..:..).start);');
   // And a `?.` followed by `.` that forms no range stays an error either way.
   expectError('const a = 1, b = 2; String(a?..b);');
   expectErrorFlagOff('const a = 1, b = 2; String(a?..b);');
@@ -178,8 +179,8 @@ describe('the family, its removed forms, and its edges', () => {
   });
 
   test('the conditional takes a marked range as its consequent', () => {
-    expect(evaluated('(true?..<5:2).end;')).toBe('5');
-    expect(evaluated('(true?..=5:2).end;')).toBe('5');
+    expect(evaluated('(true?..<5:..<2).end;')).toBe('5');
+    expect(evaluated('(true?..=5:..=2).end;')).toBe('5');
   });
 
   test('the family is non-associative', () => {

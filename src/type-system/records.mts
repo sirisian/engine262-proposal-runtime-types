@@ -922,7 +922,7 @@ const RANGE_ALIAS_BOUNDS: Record<string, readonly [number, number] | undefined> 
   OpenRange: [1, 1],
 };
 
-function rangeEnumRecord(name: 'Bound' | 'Interval'): TypeRecord | null {
+export function rangeEnumRecord(name: 'Bound' | 'Interval'): TypeRecord | null {
   return rangeEnumRecordImpl ? rangeEnumRecordImpl(name) : null;
 }
 

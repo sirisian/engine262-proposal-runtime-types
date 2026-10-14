@@ -1,3 +1,4 @@
+import { EnforceInferredBinding } from '../type-system/inferred-binding.mts';
 import { Value, ObjectValue, ReferenceRecord } from '../value.mts';
 import { EnforceAnnotation, IsOfTypeNode } from '../abstract-ops/runtime-types.mts';
 import { CreateRefBinding, RefBindingHolder } from '../execution-context/Environment.mts';
@@ -7,6 +8,7 @@ import { Evaluate } from '../evaluator.mts';
 import { StringValue, IsAnonymousFunctionDefinition } from '../static-semantics/all.mts';
 import { Q } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { recordDeclaredType } from './LexicalDeclaration.mts';
 import { SoAElementLocationFor } from './RefExpression.mts';
 import {
   NamedEvaluation,
@@ -45,6 +47,7 @@ export function* KeyedBindingInitialization(node: ParseNode.BindingElement | Par
     const lhs = Q(yield* ResolveBinding(bindingId, environment, node.BindingIdentifier.strict));
     // 3. Let v be ? GetV(value, propertyName).
     let v = Q(yield* GetV(value, propertyName));
+    const usedDefault = !!node.Initializer && v === Value.undefined;
     if (node.Initializer && v === Value.undefined) {
       // a. If IsAnonymousFunctionDefinition(Initializer) is true, then
       if (IsAnonymousFunctionDefinition(node.Initializer)) {
@@ -110,6 +113,8 @@ export function* KeyedBindingInitialization(node: ParseNode.BindingElement | Par
     if (node.TypeAnnotation && !absentAndOptional) {
       v = Q(yield* EnforceAnnotation(node.TypeAnnotation, v));
     }
+    const inferred = Q(yield* EnforceInferredBinding(node, v, usedDefault ? node.Initializer : undefined));
+    v = inferred.value;
     // 5. If environment is undefined, return ? PutValue(lhs, v).
     if (environment === Value.undefined) {
       return Q(yield* PutValue(lhs, CopyValueClassInstance(v)));
@@ -124,6 +129,8 @@ export function* KeyedBindingInitialization(node: ParseNode.BindingElement | Par
     // read copies, a construction does not - which `defaultCopies` applies
     // above. There is no construction that reaches this line uncopied.
     // 6. Return InitializeReferencedBinding(lhs, v).
-    return yield* InitializeReferencedBinding(lhs, CopyValueClassInstance(v));
+    const initialized = Q(yield* InitializeReferencedBinding(lhs, CopyValueClassInstance(v)));
+    if (inferred.type) recordDeclaredType(lhs, inferred.type);
+    return initialized;
   }
 }

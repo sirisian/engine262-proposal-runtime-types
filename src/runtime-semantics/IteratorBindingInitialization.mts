@@ -1,3 +1,4 @@
+import { EnforceInferredBinding } from '../type-system/inferred-binding.mts';
 import { Value, ReferenceValue, ReferenceRunValue, ObjectValue, JSStringValue } from '../value.mts';
 import type { ReferenceRecord } from '../value.mts';
 import { DecayReferenceValue, withReferenceRunInitializationEvaluator } from '../abstract-ops/reference-operations.mts';
@@ -22,6 +23,7 @@ import { SameType } from '../type-system/relations.mts';
 import { displayType } from '../type-system/records.mts';
 import { AssignRuntimeArguments } from '../abstract-ops/argument-distribution.mts';
 import type { TypeRecord } from '../type-system/records.mts';
+import { recordDeclaredType } from './LexicalDeclaration.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';
 import {
   Assert,
@@ -201,6 +203,7 @@ function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.Single
       v = next;
     }
   }
+  const usedDefault = !!Initializer && v === Value.undefined;
   // 5. If Initializer is present and v is undefined, then
   if (Initializer && v === Value.undefined) {
     if (IsAnonymousFunctionDefinition(Initializer)) {
@@ -298,6 +301,8 @@ function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.Single
   if (node.TypeAnnotation && !annotatedRef && isPatternElement(node)) {
     v = Q(yield* EnforceAnnotation(node.TypeAnnotation, v));
   }
+  const inferred = Q(yield* EnforceInferredBinding(node, X(v), usedDefault ? Initializer : undefined));
+  v = inferred.value;
   // 6. If environment is undefined, return ? PutValue(lhs, v).
   if (environment === Value.undefined) {
     return Q(yield* PutValue(lhs, v));
@@ -307,7 +312,9 @@ function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.Single
   // default, and a read into a binding is a copy position. `const [_q_] = _arr_`
   // and `function f(p: P = _a_)` copy for the reason `const _b_ = _a_` does.
   // 7. Return InitializeReferencedBinding(lhs, v).
-  return yield* InitializeReferencedBinding(lhs, CopyValueClassInstance(X(v)));
+  const initialized = Q(yield* InitializeReferencedBinding(lhs, CopyValueClassInstance(X(v))));
+  if (inferred.type) recordDeclaredType(lhs, inferred.type);
+  return initialized;
 }
 
 // BindingRestElement :
@@ -423,10 +430,14 @@ function* IteratorBindingInitialization_BindingRestElement(restNode: ParseNode.B
       if (restDeclared) collected = Q(yield* CheckedConvertValue(array, restDeclared));
       if (BindingPattern) return yield* BindingInitialization(BindingPattern, collected, environment);
       Assert(lhs !== undefined);
+      const inferred = Q(yield* EnforceInferredBinding(restNode, collected));
+      collected = inferred.value;
       if (environment === Value.undefined) {
         return Q(yield* PutValue(lhs, collected));
       }
-      return yield* InitializeReferencedBinding(lhs, collected);
+      const initialized = Q(yield* InitializeReferencedBinding(lhs, collected));
+      if (inferred.type) recordDeclaredType(lhs, inferred.type);
+      return initialized;
     }
     // f. Perform ! CreateDataPropertyOrThrow(A, ! ToString(𝔽(n)), next).
     // proposal-runtime-types (references extension): a rest parameter is an

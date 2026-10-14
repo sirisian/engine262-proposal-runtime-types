@@ -39,7 +39,7 @@ for (const { name, steps, limits } of corpus.cases) {
 
 test('Module endpoint construction and full reflection survive await', async () => {
   const result = await observeModuleGraph({ main: 'const r:Range.<uint8>=0..<5;await 0;'
-    + 'const full:RangeFull.<uint8>=(..);if(!(r.end is uint8)||Reflect.typeOf(full)!==(type RangeFull.<uint8>))throw new Error("domain");' });
+    + 'const full:RangeFull.<uint8>=(..);if(Reflect.typeOf(r.end)!==(type uint8)||Reflect.typeOf(full)!==(type RangeFull.<uint8>))throw new Error("domain");' });
   expect(result).toMatchObject({ status: 'fulfilled', bodyEntries: ['main'] });
   expect(result.diagnostic).toBeUndefined();
 });

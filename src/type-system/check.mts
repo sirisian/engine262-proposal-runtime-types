@@ -104,7 +104,7 @@ import {
   scopeOfNames, typeParameterNamesOf, mentionsTypeParameter, substituteTypeParameters, substituteFreeTypeParameters, bindTypeParametersFromArguments,
 } from './type-parameters.mts';
 import {
-  awaitedElementType, numericFamilyOf, isRangeFamilyName, boundOrdinalOf, spanElementOfReceiver, spanExtentOfReceiver, iteratorMethodSignature, collectionMethodSignature, promiseMethodSignature,
+  awaitedElementType, numericFamilyOf, isRangeFamilyName, rangePropertyType, boundOrdinalOf, spanElementOfReceiver, spanExtentOfReceiver, iteratorMethodSignature, collectionMethodSignature, promiseMethodSignature,
   libraryConstructParameters,
 } from './std-signatures.mts';
 import { memberKind, normalizedMemberType, addMemberContract, abstractMemberViolation, inheritedFieldViolation, type MemberContract, sameFieldContract, type FieldContract } from './member-contracts.mts';
@@ -4188,6 +4188,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!node || typeof node !== 'object') {
       return true;
     }
+    if (node.type === 'OptionalExpression') {
+      return derivationIsStable(optionalChainView(node, false).expression);
+    }
+    if (node.type === 'MemberExpression') {
+      // A range's static property view does not prove the identity of a public
+      // getter. Own properties and prototype changes can replace that getter;
+      // keep the receiving boundary unless an independent guard proves it.
+      const receiver = operationalType(staticType(node.MemberExpression));
+      const carriesRange = (type: Known): boolean => type?.Kind === 'union'
+        ? type.Members.some(carriesRange) : type?.Kind === 'nominal' && isRangeFamilyName(type.LibraryName);
+      if (carriesRange(receiver)) return false;
+    }
     if (node.type === 'CallExpression') {
       const callee = (node as unknown as { CallExpression?: ParseNode, MemberExpression?: ParseNode });
       const target = callee.CallExpression ?? callee.MemberExpression;
@@ -6164,8 +6176,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // Library members have the same contract for dot and known String keys.
   // This describes the typed view, not the identity of the runtime method.
   const collectionMemberType = (receiver: Known, key: string | SymbolValue): Known => {
-    // Numeric range cardinality has one exact, item-independent result type.
-    if (key === 'length' && receiver?.Kind === 'nominal' && isRangeFamilyName(receiver.LibraryName)) return makePrimitive('bigint');
+    const range = typeof key === 'string' ? rangePropertyType(receiver, key) : null;
+    if (range) return range;
     // Checked before the String-key and type-argument gates: the absence is a
     // fact of WeakMap and WeakSet themselves, and `@@iterator` is in the table.
     if (weakCollectionRefusesRead(receiver, key)) {
@@ -6182,7 +6194,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // returns only value contracts and emits no missing-key/bounds diagnostics.
   const sequencePropertyContribution = (receiver: Known, key: string | SymbolValue): Known => {
     if (typeof key !== 'string' || !receiver) return null;
-    if (key === 'length' && receiver.Kind === 'nominal' && isRangeFamilyName(receiver.LibraryName)) return makePrimitive('bigint');
+    const range = rangePropertyType(receiver, key);
+    if (range) return range;
     if (receiver.Kind === 'array') {
       if (key === 'length' || key === 'capacity') return indexTypeRecord();
       if (!/^(0|[1-9][0-9]*)$/.test(key)) return null;
@@ -19357,7 +19370,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           // #sec-object-types: finite keys preserve each exact-key contract;
           // a non-finite domain still has no index-signature read type.
-          if (key === undefined && (base?.Kind === 'union' || structureOf(base)?.Kind === 'object')) {
+          if (key === undefined && (base?.Kind === 'union' || structureOf(base)?.Kind === 'object'
+              || (base?.Kind === 'nominal' && isRangeFamilyName(base.LibraryName)))) {
             const keys = memberKeys(m);
             if (keys?.length) {
               const reads = keys.map((candidate) => memberReadType(base, candidate));
@@ -19396,8 +19410,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           const receiver = staticType(m.MemberExpression);
-          if (m.IdentifierName.name === 'length' && receiver?.Kind === 'nominal'
-              && isRangeFamilyName(receiver.LibraryName)) return makePrimitive('bigint');
+          const rangeProperty = rangePropertyType(receiver, m.IdentifierName.name);
+          if (rangeProperty) return rangeProperty;
           // A PROMISE receiver: its two arguments are the resolution and the
           // rejection type, and a handler's parameter is one of them.
           // Placed beside `receiver` rather than inside the ARRAY arm below,
@@ -30015,9 +30029,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return { type: t ? elementTypeOfIterable(t) : null };
   };
 
-  const patternProperty = (source: PatternSource, key: string | SymbolValue | null): PatternSource => {
+  const patternProperty = (source: PatternSource, key: string | SymbolValue | null, keyExpression?: ParseNode): PatternSource => {
     if (key === null) {
-      return { type: null };
+      const keys = keyExpression ? memberKeys({ Expression: keyExpression }) : undefined;
+      const contributions = keys?.map((candidate) => patternProperty(source, candidate).type);
+      return { type: contributions?.length && contributions.every((type) => type !== null)
+        ? CanonicalizeType({ Kind: 'union', Members: contributions as TypeRecord[] }) : null };
     }
     // #sec-collection-iteration: "reading any of them from a value of either
     // type is a type error", and a pattern property IS a read. This is not a
@@ -30291,7 +30308,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // annotation is a `void` binding as much as one annotated itself - each
       // name's type "follows from the annotated type's members" (line 1761).
       if (declaring && !annotation && source.annotated) requireBindingType(source.type);
-      declare(node.BindingIdentifier.name, bindingType ?? (infer ? source.type : null), frame);
+      const inferred = infer ? source.type : null;
+      inferredConstTypes.delete(node);
+      if (declaring && !annotation && !(node as { Ref?: boolean }).Ref && inferred && inferred.Kind !== 'any') {
+        inferredConstTypes.set(node, inferred);
+      }
+      declare(node.BindingIdentifier.name, bindingType ?? inferred, frame);
       let participation = unaryBindingParticipation.get(frame);
       if (!participation) {
         participation = new Map();
@@ -30389,7 +30411,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (key !== null) {
           consumed.add(key);
         } else knownExclusions = false;
-        let contribution = patternProperty(source, key);
+        let contribution = patternProperty(source, key,
+          p.PropertyName?.type === 'PropertyName' ? p.PropertyName.ComputedPropertyName : undefined);
         if (source.immutableCopy) {
           const computed = p.PropertyName?.type === 'PropertyName' ? p.PropertyName.ComputedPropertyName : null;
           if (computed) previewFlowEffects(computed);

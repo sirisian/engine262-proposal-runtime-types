@@ -1,7 +1,7 @@
-import { NumberValue } from '../value.mts';
+import { Value, NumberValue } from '../value.mts';
 import {
   type ParameterRecord, type TypeRecord, type Known,
-  anyType, builtinTypeRecord, libraryTypeRecord, makePrimitive, voidType, parameter,
+  anyType, builtinTypeRecord, libraryTypeRecord, rangeEnumRecord, makePrimitive, voidType, parameter,
 } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
 import { isFloatTypeName, isIntegerTypeName } from './numeric-signatures.mts';
@@ -105,6 +105,46 @@ export const boundOrdinalOf = (arg: TypeRecord | number | undefined): number | n
     return R(t.Value);
   }
   return null;
+};
+
+/** The read surface of built-in ranges. This describes normal getter results,
+ * not a new structural conversion or authority to bypass runtime boundaries.
+ * It is shared by dot/computed reads and object-pattern contributions.
+ */
+export const rangePropertyType = (receiver: Known, key: string): Known => {
+  if (receiver?.Kind !== 'nominal' || !isRangeFamilyName(receiver.LibraryName)) return null;
+  const name = receiver.LibraryName;
+  const args = receiver.Arguments;
+  const element = args[0] !== undefined && typeof args[0] !== 'number' ? args[0] : anyType;
+  const absent = makePrimitive('undefined');
+  const start = name === 'Range' || name === 'RangeFrom';
+  const end = name === 'Range' || name === 'RangeTo';
+  const view = name === 'RangeBounds';
+  const bound = rangeEnumRecord('Bound')!;
+  const interval = rangeEnumRecord('Interval')!;
+  const literal = (ordinal: number, base: TypeRecord): TypeRecord => ({ Kind: 'literal', Value: Value(ordinal), Base: base });
+  switch (key) {
+    case 'start': return view ? orUndefined(element) : start ? element : absent;
+    case 'end': return view ? orUndefined(element) : end ? element : absent;
+    case 'startBound':
+    case 'endBound': {
+      if (view) return orUndefined(bound);
+      if (key === 'startBound' ? !start : !end) return absent;
+      const ordinal = boundOrdinalOf(args[name === 'Range' && key === 'endBound' ? 2 : 1]);
+      return ordinal === 0 || ordinal === 1 ? literal(ordinal, bound) : bound;
+    }
+    case 'interval': {
+      if (view) return orUndefined(interval);
+      if (name !== 'Range') return absent;
+      const low = boundOrdinalOf(args[1]);
+      const high = boundOrdinalOf(args[2]);
+      return (low === 0 || low === 1) && (high === 0 || high === 1) ? literal(low * 2 + high, interval) : interval;
+    }
+    case 'isEmpty':
+    case 'isFull': return makePrimitive('boolean');
+    case 'length': return makePrimitive('bigint');
+    default: return null;
+  }
 };
 
 /**

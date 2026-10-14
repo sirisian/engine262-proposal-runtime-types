@@ -1,0 +1,3538 @@
+{
+  "cases": [
+    {
+      "name": "ClosedRange.<uint8> wrong r.start",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> valid r.start",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<uint8>):uint8{return r.start;}const r:ClosedRange.<uint8>=1..=3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> wrong r[\"start\"]",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r[\"start\"];} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> valid r[\"start\"]",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<uint8>):uint8{return r[\"start\"];}const r:ClosedRange.<uint8>=1..=3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> destructure start",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const {start:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> destructure known key start",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const {[\"start\"]:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> wrong r.end",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r.end;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> valid r.end",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<uint8>):uint8{return r.end;}const r:ClosedRange.<uint8>=1..=3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> wrong r[\"end\"]",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r[\"end\"];} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> valid r[\"end\"]",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<uint8>):uint8{return r[\"end\"];}const r:ClosedRange.<uint8>=1..=3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> destructure end",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const {end:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> destructure known key end",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const {[\"end\"]:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> enum wrong startBound",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r.startBound;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> enum read startBound",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<uint8>):Range.Bound{return r[\"startBound\"];}const r:ClosedRange.<uint8>=1..=3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> enum wrong endBound",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r.endBound;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> enum read endBound",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<uint8>):Range.Bound{return r[\"endBound\"];}const r:ClosedRange.<uint8>=1..=3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> enum wrong interval",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r.interval;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> enum read interval",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<uint8>):Range.Interval{return r[\"interval\"];}const r:ClosedRange.<uint8>=1..=3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> scalar property wrong isEmpty",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r.isEmpty;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> scalar property valid unused isEmpty",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<uint8>):boolean{return r.isEmpty;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> scalar property wrong isFull",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r.isFull;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> scalar property valid unused isFull",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<uint8>):boolean{return r.isFull;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> scalar property wrong length",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r.length;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange.<uint8> scalar property valid unused length",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<uint8>):bigint{return r.length;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> wrong r.start",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> valid r.start",
+      "steps": [
+        {
+          "source": "function get(r:RangeFrom.<uint8>):uint8{return r.start;}const r:RangeFrom.<uint8>=1..;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> wrong r[\"start\"]",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:string=r[\"start\"];} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> valid r[\"start\"]",
+      "steps": [
+        {
+          "source": "function get(r:RangeFrom.<uint8>):uint8{return r[\"start\"];}const r:RangeFrom.<uint8>=1..;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> destructure start",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const {start:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> destructure known key start",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const {[\"start\"]:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> wrong r.end",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:string=r.end;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> valid r.end",
+      "steps": [
+        {
+          "source": "function get(r:RangeFrom.<uint8>):undefined{return r.end;}const r:RangeFrom.<uint8>=1..;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> wrong r[\"end\"]",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:string=r[\"end\"];} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> valid r[\"end\"]",
+      "steps": [
+        {
+          "source": "function get(r:RangeFrom.<uint8>):undefined{return r[\"end\"];}const r:RangeFrom.<uint8>=1..;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> destructure end",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const {end:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> destructure known key end",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const {[\"end\"]:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> enum wrong startBound",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:string=r.startBound;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> enum read startBound",
+      "steps": [
+        {
+          "source": "function get(r:RangeFrom.<uint8>):Range.Bound{return r[\"startBound\"];}const r:RangeFrom.<uint8>=1..;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> enum wrong endBound",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:string=r.endBound;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> enum read endBound",
+      "steps": [
+        {
+          "source": "function get(r:RangeFrom.<uint8>):undefined{return r[\"endBound\"];}const r:RangeFrom.<uint8>=1..;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> enum wrong interval",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:string=r.interval;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> enum read interval",
+      "steps": [
+        {
+          "source": "function get(r:RangeFrom.<uint8>):undefined{return r[\"interval\"];}const r:RangeFrom.<uint8>=1..;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> scalar property wrong isEmpty",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:string=r.isEmpty;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> scalar property valid unused isEmpty",
+      "steps": [
+        {
+          "source": "function get(r:RangeFrom.<uint8>):boolean{return r.isEmpty;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> scalar property wrong isFull",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:string=r.isFull;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> scalar property valid unused isFull",
+      "steps": [
+        {
+          "source": "function get(r:RangeFrom.<uint8>):boolean{return r.isFull;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> scalar property wrong length",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:string=r.length;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom.<uint8> scalar property valid unused length",
+      "steps": [
+        {
+          "source": "function get(r:RangeFrom.<uint8>):bigint{return r.length;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> wrong r.start",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> valid r.start",
+      "steps": [
+        {
+          "source": "function get(r:RangeTo.<uint8>):undefined{return r.start;}const r:RangeTo.<uint8>=..<3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> wrong r[\"start\"]",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:string=r[\"start\"];} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> valid r[\"start\"]",
+      "steps": [
+        {
+          "source": "function get(r:RangeTo.<uint8>):undefined{return r[\"start\"];}const r:RangeTo.<uint8>=..<3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> destructure start",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const {start:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> destructure known key start",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const {[\"start\"]:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> wrong r.end",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:string=r.end;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> valid r.end",
+      "steps": [
+        {
+          "source": "function get(r:RangeTo.<uint8>):uint8{return r.end;}const r:RangeTo.<uint8>=..<3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> wrong r[\"end\"]",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:string=r[\"end\"];} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> valid r[\"end\"]",
+      "steps": [
+        {
+          "source": "function get(r:RangeTo.<uint8>):uint8{return r[\"end\"];}const r:RangeTo.<uint8>=..<3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> destructure end",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const {end:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> destructure known key end",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const {[\"end\"]:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> enum wrong startBound",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:string=r.startBound;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> enum read startBound",
+      "steps": [
+        {
+          "source": "function get(r:RangeTo.<uint8>):undefined{return r[\"startBound\"];}const r:RangeTo.<uint8>=..<3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> enum wrong endBound",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:string=r.endBound;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> enum read endBound",
+      "steps": [
+        {
+          "source": "function get(r:RangeTo.<uint8>):Range.Bound{return r[\"endBound\"];}const r:RangeTo.<uint8>=..<3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> enum wrong interval",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:string=r.interval;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> enum read interval",
+      "steps": [
+        {
+          "source": "function get(r:RangeTo.<uint8>):undefined{return r[\"interval\"];}const r:RangeTo.<uint8>=..<3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> scalar property wrong isEmpty",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:string=r.isEmpty;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> scalar property valid unused isEmpty",
+      "steps": [
+        {
+          "source": "function get(r:RangeTo.<uint8>):boolean{return r.isEmpty;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> scalar property wrong isFull",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:string=r.isFull;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> scalar property valid unused isFull",
+      "steps": [
+        {
+          "source": "function get(r:RangeTo.<uint8>):boolean{return r.isFull;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> scalar property wrong length",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:string=r.length;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo.<uint8> scalar property valid unused length",
+      "steps": [
+        {
+          "source": "function get(r:RangeTo.<uint8>):bigint{return r.length;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> wrong r.start",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> valid r.start",
+      "steps": [
+        {
+          "source": "function get(r:RangeFull.<uint8>):undefined{return r.start;}const r:RangeFull.<uint8>=..;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> wrong r[\"start\"]",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:string=r[\"start\"];} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> valid r[\"start\"]",
+      "steps": [
+        {
+          "source": "function get(r:RangeFull.<uint8>):undefined{return r[\"start\"];}const r:RangeFull.<uint8>=..;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> destructure start",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const {start:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> destructure known key start",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const {[\"start\"]:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> wrong r.end",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:string=r.end;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> valid r.end",
+      "steps": [
+        {
+          "source": "function get(r:RangeFull.<uint8>):undefined{return r.end;}const r:RangeFull.<uint8>=..;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> wrong r[\"end\"]",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:string=r[\"end\"];} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> valid r[\"end\"]",
+      "steps": [
+        {
+          "source": "function get(r:RangeFull.<uint8>):undefined{return r[\"end\"];}const r:RangeFull.<uint8>=..;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> destructure end",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const {end:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> destructure known key end",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const {[\"end\"]:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> enum wrong startBound",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:string=r.startBound;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> enum read startBound",
+      "steps": [
+        {
+          "source": "function get(r:RangeFull.<uint8>):undefined{return r[\"startBound\"];}const r:RangeFull.<uint8>=..;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> enum wrong endBound",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:string=r.endBound;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> enum read endBound",
+      "steps": [
+        {
+          "source": "function get(r:RangeFull.<uint8>):undefined{return r[\"endBound\"];}const r:RangeFull.<uint8>=..;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> enum wrong interval",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:string=r.interval;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> enum read interval",
+      "steps": [
+        {
+          "source": "function get(r:RangeFull.<uint8>):undefined{return r[\"interval\"];}const r:RangeFull.<uint8>=..;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> scalar property wrong isEmpty",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:string=r.isEmpty;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> scalar property valid unused isEmpty",
+      "steps": [
+        {
+          "source": "function get(r:RangeFull.<uint8>):boolean{return r.isEmpty;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> scalar property wrong isFull",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:string=r.isFull;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> scalar property valid unused isFull",
+      "steps": [
+        {
+          "source": "function get(r:RangeFull.<uint8>):boolean{return r.isFull;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> scalar property wrong length",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:string=r.length;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull.<uint8> scalar property valid unused length",
+      "steps": [
+        {
+          "source": "function get(r:RangeFull.<uint8>):bigint{return r.length;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> wrong r.start",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> valid r.start",
+      "steps": [
+        {
+          "source": "function get(r:RangeBounds.<uint8>):uint8|undefined{return r.start;}const r:RangeBounds.<uint8>=1..=3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> wrong r[\"start\"]",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:string=r[\"start\"];} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> valid r[\"start\"]",
+      "steps": [
+        {
+          "source": "function get(r:RangeBounds.<uint8>):uint8|undefined{return r[\"start\"];}const r:RangeBounds.<uint8>=1..=3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> destructure start",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const {start:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> destructure known key start",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const {[\"start\"]:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> wrong r.end",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:string=r.end;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> valid r.end",
+      "steps": [
+        {
+          "source": "function get(r:RangeBounds.<uint8>):uint8|undefined{return r.end;}const r:RangeBounds.<uint8>=1..=3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> wrong r[\"end\"]",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:string=r[\"end\"];} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> valid r[\"end\"]",
+      "steps": [
+        {
+          "source": "function get(r:RangeBounds.<uint8>):uint8|undefined{return r[\"end\"];}const r:RangeBounds.<uint8>=1..=3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> destructure end",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const {end:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> destructure known key end",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const {[\"end\"]:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> enum wrong startBound",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:string=r.startBound;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> enum read startBound",
+      "steps": [
+        {
+          "source": "function get(r:RangeBounds.<uint8>):Range.Bound|undefined{return r[\"startBound\"];}const r:RangeBounds.<uint8>=1..=3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> enum wrong endBound",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:string=r.endBound;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> enum read endBound",
+      "steps": [
+        {
+          "source": "function get(r:RangeBounds.<uint8>):Range.Bound|undefined{return r[\"endBound\"];}const r:RangeBounds.<uint8>=1..=3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> enum wrong interval",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:string=r.interval;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> enum read interval",
+      "steps": [
+        {
+          "source": "function get(r:RangeBounds.<uint8>):Range.Interval|undefined{return r[\"interval\"];}const r:RangeBounds.<uint8>=1..=3;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> scalar property wrong isEmpty",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:string=r.isEmpty;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> scalar property valid unused isEmpty",
+      "steps": [
+        {
+          "source": "function get(r:RangeBounds.<uint8>):boolean{return r.isEmpty;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> scalar property wrong isFull",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:string=r.isFull;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> scalar property valid unused isFull",
+      "steps": [
+        {
+          "source": "function get(r:RangeBounds.<uint8>):boolean{return r.isFull;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> scalar property wrong length",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:string=r.length;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds.<uint8> scalar property valid unused length",
+      "steps": [
+        {
+          "source": "function get(r:RangeBounds.<uint8>):bigint{return r.length;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain number",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<number>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type number",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<number>):number{return r.start;}const r:ClosedRange.<number>=1..=3;String(get(r) is number);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain bigint",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<bigint>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type bigint",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<bigint>):bigint{return r.start;}const r:ClosedRange.<bigint>=1..=3;String(get(r) is bigint);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain int8",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<int8>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type int8",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<int8>):int8{return r.start;}const r:ClosedRange.<int8>=1..=3;String(get(r) is int8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain uint8",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type uint8",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<uint8>):uint8{return r.start;}const r:ClosedRange.<uint8>=1..=3;String(get(r) is uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain int16",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<int16>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type int16",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<int16>):int16{return r.start;}const r:ClosedRange.<int16>=1..=3;String(get(r) is int16);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain uint16",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint16>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type uint16",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<uint16>):uint16{return r.start;}const r:ClosedRange.<uint16>=1..=3;String(get(r) is uint16);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain int32",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<int32>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type int32",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<int32>):int32{return r.start;}const r:ClosedRange.<int32>=1..=3;String(get(r) is int32);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain uint32",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint32>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type uint32",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<uint32>):uint32{return r.start;}const r:ClosedRange.<uint32>=1..=3;String(get(r) is uint32);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain int64",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<int64>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type int64",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<int64>):int64{return r.start;}const r:ClosedRange.<int64>=1..=3;String(get(r) is int64);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain uint64",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint64>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type uint64",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<uint64>):uint64{return r.start;}const r:ClosedRange.<uint64>=1..=3;String(get(r) is uint64);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain int128",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<int128>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type int128",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<int128>):int128{return r.start;}const r:ClosedRange.<int128>=1..=3;String(get(r) is int128);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain uint128",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint128>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type uint128",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<uint128>):uint128{return r.start;}const r:ClosedRange.<uint128>=1..=3;String(get(r) is uint128);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain float16",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<float16>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type float16",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<float16>):float16{return r.start;}const r:ClosedRange.<float16>=1..=3;String(get(r) is float16);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain float32",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<float32>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type float32",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<float32>):float32{return r.start;}const r:ClosedRange.<float32>=1..=3;String(get(r) is float32);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain float64",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<float64>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type float64",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<float64>):float64{return r.start;}const r:ClosedRange.<float64>=1..=3;String(get(r) is float64);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain float128",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<float128>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type float128",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<float128>):float128{return r.start;}const r:ClosedRange.<float128>=1..=3;String(get(r) is float128);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain decimal32",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<decimal32>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type decimal32",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<decimal32>):decimal32{return r.start;}const r:ClosedRange.<decimal32>=1..=3;String(get(r) is decimal32);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain decimal64",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<decimal64>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type decimal64",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<decimal64>):decimal64{return r.start;}const r:ClosedRange.<decimal64>=1..=3;String(get(r) is decimal64);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain decimal128",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<decimal128>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type decimal128",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<decimal128>):decimal128{return r.start;}const r:ClosedRange.<decimal128>=1..=3;String(get(r) is decimal128);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain rational64",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<rational64>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type rational64",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<rational64>):rational64{return r.start;}const r:ClosedRange.<rational64>=1..=3;String(get(r) is rational64);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retains endpoint domain rational.<bigint>",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<rational.<bigint>>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint runtime type rational.<bigint>",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<rational.<bigint>>):rational.<bigint>{return r.start;}const r:ClosedRange.<rational.<bigint>>=1..=3;String(get(r) is rational.<bigint>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "missing end cannot promise element RangeFrom",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>):uint8{return r.end;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "missing start cannot promise element RangeTo",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>):uint8{return r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "missing end cannot promise element RangeFull",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>):uint8{return r.end;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "missing start cannot promise element RangeFull",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>):uint8{return r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "bound enum identities ClosedRange",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>){const a:Range.Bound=r.startBound;const b:Range.Bound=r.endBound;const c:Range.Interval=r.interval;return `${a};${b};${c}`;}const r:ClosedRange.<uint8>=1..=3;read(r);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bound enum identities Range",
+      "steps": [
+        {
+          "source": "function read(r:Range.<uint8>){const a:Range.Bound=r.startBound;const b:Range.Bound=r.endBound;const c:Range.Interval=r.interval;return `${a};${b};${c}`;}const r:Range.<uint8>=1..<3;read(r);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;1;1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bound enum identities OpenClosedRange",
+      "steps": [
+        {
+          "source": "function read(r:OpenClosedRange.<uint8>){const a:Range.Bound=r.startBound;const b:Range.Bound=r.endBound;const c:Range.Interval=r.interval;return `${a};${b};${c}`;}const r:OpenClosedRange.<uint8>=1<..=3;read(r);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;0;2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bound enum identities OpenRange",
+      "steps": [
+        {
+          "source": "function read(r:OpenRange.<uint8>){const a:Range.Bound=r.startBound;const b:Range.Bound=r.endBound;const c:Range.Interval=r.interval;return `${a};${b};${c}`;}const r:OpenRange.<uint8>=1<..<3;read(r);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite key domain \"start\"|\"end\"",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,k:\"start\"|\"end\"){const x:string=r[k];} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite key domain \"start\"|\"length\"",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,k:\"start\"|\"length\"){const x:string=r[k];} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite key domain \"startBound\"|\"interval\"",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,k:\"startBound\"|\"interval\"){const x:string=r[k];} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic key remains gradual",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>,k:string){const x:string=r[k];return x;}const r:ClosedRange.<uint8>=1..=2;read(r,\"start\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union endpoint domains",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>|ClosedRange.<uint16>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "union shape absent endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>|RangeTo.<uint8>){const x:string=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "union shape allows optional endpoint",
+      "steps": [
+        {
+          "source": "function get(r:RangeFrom.<uint8>|RangeTo.<uint8>):uint8|undefined{return r.start;}const a:RangeFrom.<uint8>=1..;const b:RangeTo.<uint8> = ..<2;`${get(a)};${get(b)}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "known property keys conditional",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,b:boolean){const x:string=r[b?\"start\":\"end\"];} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "destructured default keeps endpoint domain",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const {start:x=2}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "absent endpoint destructuring default",
+      "steps": [
+        {
+          "source": "function get(r:RangeFull.<uint8>):string{const {start:x=\"missing\"}=r;return x;}const r:RangeFull.<uint8>=..;get(r);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "missing"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased endpoints remain gradual",
+      "steps": [
+        {
+          "source": "function get(r:Range.<any>):string{return r.start;}const r:Range.<uint8>=1..<3;get(r);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bare shape still requires type argument",
+      "steps": [
+        {
+          "source": "function get(r:Range):string{return r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_GENERIC_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "constant range fact retains endpoint type",
+      "steps": [
+        {
+          "source": "const r=1..=2;const x:string=r.start; \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "unannotated function parameter remains gradual",
+      "steps": [
+        {
+          "source": "function get(r):string{return r.start;}get(1..=2);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "user class named Range retains own members",
+      "steps": [
+        {
+          "source": "class Range{start:string=\"user\";}function get(r:Range):string{return r.start;}get(new Range());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "user"
+          }
+        }
+      ]
+    },
+    {
+      "name": "user class wrong member type retains own contract",
+      "steps": [
+        {
+          "source": "class Range{start:string=\"user\";}function bad(r:Range){const x:uint8=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic endpoint declaration identity",
+      "steps": [
+        {
+          "source": "function get<T:type>(r:ClosedRange.<T>):T{return r.start;}const a:ClosedRange.<uint8>=1..=2;const b:ClosedRange.<decimal64>=3..=4;`${get.<uint8>(a) is uint8};${get.<decimal64>(b) is decimal64}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordered class endpoint identity",
+      "steps": [
+        {
+          "source": "class P{value:uint8;constructor(v:uint8){this.value=v;}operator<(rhs:P){return this.value<rhs.value;}}function get(r:ClosedRange.<P>):P{return r.start;}const a=new P(1),b=new P(2);const r:ClosedRange.<P>=a..=b;String(get(r)===a);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class endpoint retained",
+      "steps": [
+        {
+          "source": "class P{operator<(rhs:P){return false;}}function bad(r:ClosedRange.<P>){const x:uint8=r.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata endpoint retained",
+      "steps": [
+        {
+          "source": "type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){return true;}}type T=uint8.<{flag:true}>;function get(r:ClosedRange.<T>):T{return r.start;}const r:ClosedRange.<T>=(1:=T)..=(2:=T);String(get(r) is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "borrowed alias endpoint read retains liveness",
+      "steps": [
+        {
+          "source": "let a:[].<ClosedRange.<uint8>>=[1..=2];let ref r=a[0];const x:uint8=r.start;a.length=0;let ok=false;try{r.start;}catch(e){ok=e instanceof TypeError;}`${x};${ok}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "runtime public getter still executes",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;let calls=0;Object.defineProperty(r,\"start\",{get(){calls++;throw new Error(\"stop\");}});let ok=false;try{const x:uint8=r.start;}catch(e){ok=e instanceof Error;}`${ok};${calls}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overridden getter retains dynamic admission",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;Object.defineProperty(r,\"start\",{get(){return \"wrong\";}});let ok=false;try{const x:uint8=r.start;}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unrelated key remains dynamic",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>){return r.extra;}const r:ClosedRange.<uint8>=1..=2;Object.defineProperty(r,\"extra\",{value:\"extra\"});read(r);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "extra"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional receiver preserves endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>|undefined){const x:string=r?.start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional receiver absence",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<uint8>|undefined):uint8|undefined{return r?.start;}String(get(undefined));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overridden getter return boundary",
+      "steps": [
+        {
+          "source": "function get(r:ClosedRange.<uint8>):uint8{return r.start;}const r:ClosedRange.<uint8>=1..=2;Object.defineProperty(r,\"start\",{get(){return \"wrong\";}});let ok=false;try{get(r);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overridden getter destructuring boundary",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;Object.defineProperty(r,\"start\",{get(){return \"wrong\";}});let ok=false;try{const {start:x}=r;const y:uint8=x;String(y);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overridden getter published result boundary",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const read=()=>r.start;Object.defineProperty(r,\"start\",{get(){return \"wrong\";}});let ok=false;try{const y:uint8=read();String(y);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement plain inferred alias",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;Object.defineProperty(r,\"start\",{get(){return \"wrong\";}});let ok=false;try{const x=r.start;const y:uint8=x;String(y);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement destructured alias chain",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;Object.defineProperty(r,\"start\",{get(){return \"wrong\";}});let ok=false;try{const {start:x}=r;const a=x,b=a;const y:uint8=b;String(y);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement destructured captured return",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;Object.defineProperty(r,\"start\",{get(){return \"wrong\";}});let ok=false;try{const {start:x}=r;function f():uint8{return x;}f();}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement destructured forward capture",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;Object.defineProperty(r,\"start\",{get(){return \"wrong\";}});let ok=false;try{function f():uint8{return x;}const {start:x}=r;f();}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement destructured computed key",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;Object.defineProperty(r,\"start\",{get(){return \"wrong\";}});let ok=false;try{const k=\"start\";const {[k]:x}=r;String(x);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement destructured optional default",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;Object.defineProperty(r,\"start\",{get(){return \"wrong\";}});let ok=false;try{const {start:x=3}=r;String(x);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement destructured parameter",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;Object.defineProperty(r,\"start\",{get(){return \"wrong\";}});let ok=false;try{function f({start:x}:ClosedRange.<uint8>):uint8{return x;}f(r);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement destructured generic parameter",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;Object.defineProperty(r,\"start\",{get(){return \"wrong\";}});let ok=false;try{function f<T:type>({start:x}:ClosedRange.<T>):T{return x;}f.<uint8>(r);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement nested object pattern",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;Object.defineProperty(r,\"start\",{get(){return \"wrong\";}});let ok=false;try{const {r:{start:x}}:{r:ClosedRange.<uint8>}={r};String(x);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement nested array pattern",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;Object.defineProperty(r,\"start\",{get(){return \"wrong\";}});let ok=false;try{const [{start:x}]:[ClosedRange.<uint8>]=[r];String(x);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement optional property read",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;Object.defineProperty(r,\"start\",{get(){return \"wrong\";}});let ok=false;try{function f(r:ClosedRange.<uint8>|undefined){const x:uint8|undefined=r?.start;return x;}f(r);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement computed property read",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;Object.defineProperty(r,\"start\",{get(){return \"wrong\";}});let ok=false;try{const k:\"start\"|\"end\"=\"start\";const x:uint8=r[k];String(x);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement optional return",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;Object.defineProperty(r,\"start\",{get(){return \"wrong\";}});let ok=false;try{function f(r:ClosedRange.<uint8>|undefined):uint8|undefined{return r?.start;}f(r);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "extraction failure stops before later getter",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;let log=\"\";Object.defineProperty(r,\"start\",{get(){log+=\"s\";return \"wrong\";}});Object.defineProperty(r,\"end\",{get(){log+=\"e\";return 2:=uint8;}});let ok=false;try{const {start,end}=r;}catch(e){ok=e instanceof TypeError;}`${ok};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "successful extraction reads each getter once",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;let log=\"\";Object.defineProperty(r,\"start\",{get(){log+=\"s\";return 1:=uint8;}});Object.defineProperty(r,\"end\",{get(){log+=\"e\";return 2:=uint8;}});const {start,end}=r;`${start};${end};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;se"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gradual let pattern remains unchecked",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;Object.defineProperty(r,\"start\",{get(){return \"wrong\";}});let {start:x}=r;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "wrong"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit any pattern member remains unchecked",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;Object.defineProperty(r,\"start\",{get(){return \"wrong\";}});const {start:x:any}=r;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "wrong"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic extracted const retains endpoint type",
+      "steps": [
+        {
+          "source": "function f<T:type>(r:ClosedRange.<T>):T{const {start:x}=r;return x;}const r:ClosedRange.<uint64>=9007199254740993..=9007199254740995;String(f.<uint64>(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "9007199254740993"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic parameter extraction valid",
+      "steps": [
+        {
+          "source": "function f<T:type>({start:x}:ClosedRange.<T>):T{return x;}const r:ClosedRange.<uint8>=1..=2;String(f.<uint8>(r) is uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gradual array extraction retains later receiving boundary",
+      "steps": [
+        {
+          "source": "const a:[uint8]=[1];a[Symbol.iterator]=function*(){yield \"wrong\";};let ok=false;try{const [x]=a;const y:uint8=x;}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gradual array rest retains later receiving boundary",
+      "steps": [
+        {
+          "source": "const a:[uint8]=[1];a[Symbol.iterator]=function*(){yield \"wrong\";};let ok=false;try{const [...x]=a;const y:uint8=x[0];}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "extracted constant persists across Scripts",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const {start:extracted}=r;\"bound\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "bound"
+          }
+        },
+        {
+          "source": "function bad(){const x:string=extracted;}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "String(extracted is uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inferred binding failure closes iterator",
+      "steps": [
+        {
+          "source": "let closed=0;function extract(a:Iterable.<uint8>){const [x]=a;}let dynamic:any={*[Symbol.iterator](){try{yield \"wrong\";}finally{closed++;}}};let ok=false;try{extract(dynamic);}catch(e){ok=e instanceof TypeError;}`${ok};${closed}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh object default does not evaluate accessors",
+      "steps": [
+        {
+          "source": "const r:RangeFull.<uint8>=..;let calls=0;const {start:x={get v():uint8{calls++;return 1;}}}=r;String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "extraction failure preserves initialized sibling and TDZ",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;Object.defineProperty(r,\"end\",{get(){return \"wrong\";}});const {start:first,end:failed}=r;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "String(first);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        },
+        {
+          "source": "String(failed);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "ReferenceError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inferred iterable rest rejects wrong collected value",
+      "steps": [
+        {
+          "source": "function extract(a:Iterable.<uint8>){const [...x]=a;}let dynamic:any={*[Symbol.iterator](){yield \"wrong\";}};let ok=false;try{extract(dynamic);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replaceable array iteration supplies no inferred contract",
+      "steps": [
+        {
+          "source": "const a:[uint8]=[1];a[Symbol.iterator]=function*(){yield \"wrong\";};const [x]=a;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "wrong"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mixed range and primitive union lacks common boolean property",
+      "steps": [
+        {
+          "source": "String((true?..:2).isFull);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_UNDECLARED_MEMBER",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "mixed range and primitive union lacks common endpoint property",
+      "steps": [
+        {
+          "source": "String((true?..<5:2).end);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_UNDECLARED_MEMBER",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite pattern endpoint domain",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,k:\"start\"|\"end\"){const {[k]:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite pattern preserves possible absence",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>,k:\"start\"|\"end\"){const {[k]:x}=r;const y:string=x;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite pattern admits both endpoint keys",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>,k:\"start\"|\"end\"):uint8{const {[k]:x}=r;return x;}const r:ClosedRange.<uint8>=1..=3;`${read(r,\"start\")};${read(r,\"end\")}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite pattern keeps receiving boundary",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>,k:\"start\"|\"end\"){const {[k]:x}=r;return String(x);}const r:ClosedRange.<uint8>=1..=3;Object.defineProperty(r,\"start\",{get(){return \"wrong\";}});let ok=false;try{read(r,\"start\");}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite pattern evaluates key once",
+      "steps": [
+        {
+          "source": "let calls=0;function key():\"start\"|\"end\"{calls++;return \"start\";}const r:ClosedRange.<uint8>=1..=3;const {[key()]:x}=r;`${x};${calls}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "cross Script recovery",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r.start;}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "function get(r:ClosedRange.<uint8>):uint8{return r.start;}const r:ClosedRange.<uint8>=1..=2;String(get(r));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    }
+  ]
+}

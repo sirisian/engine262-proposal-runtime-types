@@ -82,8 +82,9 @@ test('sec-range-literals: `1..toString()` is a Syntax Error, not a member access
 });
 
 test('sec-range-literals: `?.` is not the punctuator where a `.` follows it', () => {
-  expect(evaluated('String((true?..:2).isFull);')).toBe('true');
-  expect(evaluated('String((true?..<5:2).end);')).toBe('5');
+  // Keep both alternatives range-shaped; a Number arm fails the union-member rule.
+  expect(evaluated('String((true?..:..).isFull);')).toBe('true');
+  expect(evaluated('String((true?..<5:..<2).end);')).toBe('5');
 });
 
 test('sec-range-literals: the `?.` extension changes no program', () => {
