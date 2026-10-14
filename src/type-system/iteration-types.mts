@@ -291,6 +291,22 @@ function promiseOf(t: TypeRecord): TypeRecord {
   return libraryTypeRecord('Promise', [t, anyType])!;
 }
 
+/** #sec-async-generator-return-admission: raw input is not a fulfillment proof. */
+function asyncGeneratorReturnInput(type: TypeRecord): TypeRecord {
+  if (type.Kind === 'any') return type;
+  // Like a typed Promise resolver, accept promises and callable thenables
+  // without pretending their eventual value is already admitted. Incompatible
+  // direct scalars remain visible to the ordinary call checker.
+  const then: TypeRecord = { Kind: 'function', Signatures: [{
+    Parameters: [parameter(anyType), parameter(anyType)], Return: anyType,
+  }] };
+  const thenable = objectType([{ key: 'then', type: then }]);
+  return CanonicalizeType({ Kind: 'union', Members: [
+    type.Kind === 'void' ? makePrimitive('undefined') : type,
+    promiseOf(anyType), thenable,
+  ] });
+}
+
 /** #sec-generator-operation-results: an exhausted generator also completes with undefined. */
 export function generatorCompletionValue(type: TypeRecord): TypeRecord {
   return CanonicalizeType({ Kind: 'union', Members: [iteratorCompletionValue(type), makePrimitive('undefined')] });
@@ -304,7 +320,7 @@ export function generatorProtocolRecord(name: 'Generator' | 'AsyncGenerator', ar
   const wrapped = asynchronous ? promiseOf(result) : result;
   return objectType([
     { key: 'next', type: fnType([N], wrapped) },
-    { key: 'return', type: fnType([R], wrapped) },
+    { key: 'return', type: fnType([asynchronous ? asyncGeneratorReturnInput(R) : R], wrapped) },
     { key: 'throw', type: fnType([anyType], wrapped) },
     { key: Symbol.for(asynchronous ? 'asyncIterator' : 'iterator'), type: fnType([], libraryTypeRecord(name, [Y, R, N])!) },
   ]);

@@ -151,6 +151,13 @@ export function* Evaluate_YieldExpression({ hasStar, AssignmentExpression }: Par
           if (generatorKind === 'async') {
             receivedValue = Q(yield* Await(receivedValue));
           }
+          const generator = surroundingAgent.runningExecutionContext.Generator;
+          if (surroundingAgent.feature('runtime-types') && generator && IsAdmittedGeneratorReturn(generator, received)) {
+            // Keep the native second Await, then admit its actual result. A
+            // mutable thenable can change between the two assimilation stages.
+            const admitted = Q(yield* AdmitGeneratorReturn(generator, receivedValue));
+            return admitted;
+          }
           // 2. Return ReturnCompletion(receivedValue).
           return ReturnCompletion(receivedValue);
         }
@@ -171,11 +178,13 @@ export function* Evaluate_YieldExpression({ hasStar, AssignmentExpression }: Par
           // 1. Set returnedValue to ? IteratorValue(innerReturnResult).
           const returnedValue = Q(yield* IteratorValue(innerReturnResult));
           const generator = surroundingAgent.runningExecutionContext.Generator;
-          if (surroundingAgent.feature('runtime-types') && generatorKind === 'sync' && generator
+          if (surroundingAgent.feature('runtime-types') && generator
             && IsAdmittedGeneratorReturn(generator, received)) {
             // A delegate supplies a new external-result payload. Admit it
             // separately; equal primitive values do not transfer provenance.
-            return Q(yield* AdmitGeneratorReturn(generator, returnedValue));
+            // Async yield* awaits the result object, not this done-true value.
+            const admitted = Q(yield* AdmitGeneratorReturn(generator, returnedValue));
+            return admitted;
           }
           // 2. Return ReturnCompletion(value).
           return ReturnCompletion(returnedValue);

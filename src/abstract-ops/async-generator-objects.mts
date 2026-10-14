@@ -31,7 +31,7 @@ import {
   SameValue,
   type OrdinaryObject,
 } from './all.mts';
-import { EnforceResumableReturn } from './runtime-types.mts';
+import { AdmitGeneratorReturn, EnforceResumableReturn, IsAdmittedGeneratorReturn } from './runtime-types.mts';
 import {
   RunSuspendedContext, Throw, type Realm, surroundingAgent,
   RunCallerContext,
@@ -88,7 +88,8 @@ export function AsyncGeneratorStart(generator: AsyncGeneratorObject, generatorBo
         ? generatorBody()
         : Evaluate(generatorBody),
     ) as YieldCompletion;
-    if (surroundingAgent.feature('runtime-types') && (result instanceof NormalCompletion || result instanceof ReturnCompletion)) {
+    if (surroundingAgent.feature('runtime-types') && (result instanceof NormalCompletion || result instanceof ReturnCompletion)
+      && !IsAdmittedGeneratorReturn(acGenerator, result)) {
       const converted = EnsureCompletion(yield* EnforceResumableReturn(acGenContext.Function,
         result instanceof ReturnCompletion ? result.Value : Value.undefined, 'async-generator'));
       result = converted.Type === 'throw' ? converted : ReturnCompletion(converted.Value);
@@ -219,6 +220,14 @@ function* AsyncGeneratorUnwrapYieldResumption(resumptionValue: YieldCompletion):
     return Q(awaited);
   }
   Assert(awaited instanceof NormalCompletion);
+  if (surroundingAgent.feature('runtime-types')) {
+    const generator = runningExecutionContext().Generator;
+    Assert(generator !== undefined);
+    // Admit only after the native Await. Failure is a throw resumption at the
+    // suspended yield, so ordinary catch/finally processing remains in force.
+    const admitted = Q(yield* AdmitGeneratorReturn(generator, awaited.Value));
+    return admitted;
+  }
   return ReturnCompletion(awaited.Value);
 }
 
@@ -278,7 +287,18 @@ export function* AsyncGeneratorAwaitReturn(generator: AsyncGeneratorObject): Pla
   const fulfilledClosure: NativeSteps = function* fulfilledClosure([value = Value.undefined]: Arguments) {
     Assert(generator.AsyncGeneratorState === 'draining-queue');
     // b. Let result be NormalCompletion(value).
-    const result = NormalCompletion(value);
+    let result: NormalCompletion<Value> | ThrowCompletion = NormalCompletion(value);
+    if (surroundingAgent.feature('runtime-types')) {
+      // The request is already at the head of the draining queue. Complete it
+      // on either admission outcome, then continue draining subsequent requests.
+      const admitted = EnsureCompletion(yield* AdmitGeneratorReturn(generator, value));
+      if (admitted instanceof ThrowCompletion) {
+        result = admitted;
+      } else {
+        Assert(admitted instanceof NormalCompletion);
+        result = NormalCompletion(admitted.Value.Value);
+      }
+    }
     // c. Perform AsyncGeneratorCompleteStep(generator, result, true).
     AsyncGeneratorCompleteStep(generator, result, Value.true);
     // d. Perform AsyncGeneratorDrainQueue(generator).

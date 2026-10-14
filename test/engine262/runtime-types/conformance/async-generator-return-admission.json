@@ -1,0 +1,1594 @@
+{
+  "cases": [
+    {
+      "name": "invalid request unstarted",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}const it:any=g();let failure=\"\";try{await it.return({});}catch(e){failure=e.name;}const next=await it.next();return failure+\":\"+entered+\":\"+cleaned+\":\"+next.done+\":\"+next.value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:0:0:true:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "omitted return unstarted",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}const it:any=g();const result=await it.return();return result.done+\":\"+result.value+\":\"+entered+\":\"+cleaned;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:undefined:0:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit undefined return unstarted",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}const it:any=g();const result=await it.return(undefined);return result.done+\":\"+result.value+\":\"+entered+\":\"+cleaned;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:undefined:0:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "string return unstarted",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}const it:any=g();const result=await it.return(\"external\");return result.done+\":\"+result.value+\":\"+entered+\":\"+cleaned;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:external:0:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "promise return unstarted",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}const it:any=g();const result=await it.return(Promise.resolve(\"external\"));return result.done+\":\"+result.value+\":\"+entered+\":\"+cleaned;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:external:0:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid request suspended",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}const it:any=g();await it.next();let failure=\"\";try{await it.return({});}catch(e){failure=e.name;}const next=await it.next();return failure+\":\"+entered+\":\"+cleaned+\":\"+next.done+\":\"+next.value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:1:1:true:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "omitted return suspended",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}const it:any=g();await it.next();const result=await it.return();return result.done+\":\"+result.value+\":\"+entered+\":\"+cleaned;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:undefined:1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit undefined return suspended",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}const it:any=g();await it.next();const result=await it.return(undefined);return result.done+\":\"+result.value+\":\"+entered+\":\"+cleaned;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:undefined:1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "string return suspended",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}const it:any=g();await it.next();const result=await it.return(\"external\");return result.done+\":\"+result.value+\":\"+entered+\":\"+cleaned;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:external:1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "promise return suspended",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}const it:any=g();await it.next();const result=await it.return(Promise.resolve(\"external\"));return result.done+\":\"+result.value+\":\"+entered+\":\"+cleaned;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:external:1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid request completed",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}const it:any=g();await it.next();await it.next();let failure=\"\";try{await it.return({});}catch(e){failure=e.name;}const next=await it.next();return failure+\":\"+entered+\":\"+cleaned+\":\"+next.done+\":\"+next.value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:1:1:true:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "omitted return completed",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}const it:any=g();await it.next();await it.next();const result=await it.return();return result.done+\":\"+result.value+\":\"+entered+\":\"+cleaned;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:undefined:1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit undefined return completed",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}const it:any=g();await it.next();await it.next();const result=await it.return(undefined);return result.done+\":\"+result.value+\":\"+entered+\":\"+cleaned;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:undefined:1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "string return completed",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}const it:any=g();await it.next();await it.next();const result=await it.return(\"external\");return result.done+\":\"+result.value+\":\"+entered+\":\"+cleaned;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:external:1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "promise return completed",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}const it:any=g();await it.next();await it.next();const result=await it.return(Promise.resolve(\"external\"));return result.done+\":\"+result.value+\":\"+entered+\":\"+cleaned;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:external:1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "void refuses resolved payload unstarted",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,void,void>{entered++;try{yield uint8(1);}finally{cleaned++;}}const it:any=g();let failure=\"\";try{await it.return(Promise.resolve(\"bad\"));}catch(e){failure=e.name;}return failure+\":\"+entered+\":\"+cleaned;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:0:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "void refuses resolved payload suspended",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,void,void>{entered++;try{yield uint8(1);}finally{cleaned++;}}const it:any=g();await it.next();let failure=\"\";try{await it.return(Promise.resolve(\"bad\"));}catch(e){failure=e.name;}return failure+\":\"+entered+\":\"+cleaned;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "void refuses resolved payload completed",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,void,void>{entered++;try{yield uint8(1);}finally{cleaned++;}}const it:any=g();await it.next();await it.next();let failure=\"\";try{await it.return(Promise.resolve(\"bad\"));}catch(e){failure=e.name;}return failure+\":\"+entered+\":\"+cleaned;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed admission reaches catch and normal body return",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let trace=\"\";async function* g():AsyncGenerator.<uint8,string,void>{try{yield uint8(1);return \"body\";}catch(e){trace+=e.name;return \"caught\";}finally{trace+=\":finally\";}}const it:any=g();await it.next();const x=await it.return({});return trace+\":\"+x.value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:finally:caught"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed admission can yield from catch",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* g():AsyncGenerator.<uint8,string,void>{try{yield uint8(1);}catch(e){yield uint8(2);}return \"body\";}const it:any=g();await it.next();const x=await it.return({});const y=await it.next();return x.done+\":\"+x.value+\":\"+y.value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false:2:body"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid close bypasses catch and runs finally",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let trace=\"\";async function* g():AsyncGenerator.<uint8,string,void>{try{yield uint8(1);return \"body\";}catch(e){trace+=\"c\";return \"caught\";}finally{await 0;trace+=\"f\";}}const it:any=g();await it.next();const x=await it.return();return trace+\":\"+x.value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "f:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "omitted close survives awaited yielding nested finally",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let trace=\"\";async function* g():AsyncGenerator.<uint8,string,void>{try{try{yield uint8(1);return \"body\";}finally{await 0;trace+=\"a\";yield uint8(2);}}finally{await 0;trace+=\"b\";}}const it:any=g();await it.next();const x=await it.return();const y=await it.next();return trace+\":\"+x.done+\":\"+x.value+\":\"+y.done+\":\"+y.value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab:false:2:true:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh body replacement of identical undefined rejects",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){const bad:any=undefined;async function* g():AsyncGenerator.<uint8,string,void>{try{yield uint8(1);return \"body\";}finally{await 0;return bad;}}const it:any=g();await it.next();let failure=\"\";try{await it.return();}catch(e){failure=e.name;}return failure;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh body replacement after a yielding finally rejects",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){const bad:any=undefined;async function* g():AsyncGenerator.<uint8,string,void>{try{yield uint8(1);return \"body\";}finally{yield uint8(2);return bad;}}const it:any=g();await it.next();await it.return();let failure=\"\";try{await it.next();}catch(e){failure=e.name;}return failure;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid replacement body return",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* g():AsyncGenerator.<uint8,string,void>{try{yield uint8(1);return \"body\";}finally{return Promise.resolve(\"replacement\");}}const it:any=g();await it.next();return (await it.return()).value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "replacement"
+          }
+        }
+      ]
+    },
+    {
+      "name": "second return replaces suspended external completion",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* g():AsyncGenerator.<uint8,string,void>{try{yield uint8(1);return \"body\";}finally{yield uint8(2);}}const it:any=g();await it.next();await it.return();return (await it.return(\"second\")).value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "second"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid second request replaces pending completion with throw",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* g():AsyncGenerator.<uint8,string,void>{try{yield uint8(1);return \"body\";}finally{yield uint8(2);}}const it:any=g();await it.next();await it.return();let failure=\"\";try{await it.return({});}catch(e){failure=e.name;}return failure+\":\"+(await it.next()).value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric wrong kind",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* g():AsyncGenerator.<uint8,uint8,void>{return uint8(1);}const it:any=g();let failure=\"\";try{await it.return(\"bad\");}catch(e){failure=e.name;}return failure;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric out of range",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* g():AsyncGenerator.<uint8,uint8,void>{return uint8(1);}const it:any=g();let failure=\"\";try{await it.return(256);}catch(e){failure=e.name;}return failure;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric conversion retains result tag",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* g():AsyncGenerator.<uint8,uint8,void>{return uint8(1);}const it:any=g();const x=await it.return(Promise.resolve(9));return (x.value is uint8)+\":\"+x.value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rejected thenable retains original reason",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let cleaned=0;async function* g():AsyncGenerator.<uint8,string,void>{try{yield uint8(1);return \"body\";}finally{cleaned++;}}const it:any=g();await it.next();const value:any={then(resolve,reject){reject(new RangeError(\"reason\"));}};let failure=\"\";try{await it.return(value);}catch(e){failure=e.name+\":\"+e.message;}return failure+\":\"+cleaned;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError:reason:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "throwing then getter retains native failure",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* g():AsyncGenerator.<uint8,string,void>{return \"body\";}const it:any=g();const value:any={get then(){throw new RangeError(\"getter\");}};let failure=\"\";try{await it.return(value);}catch(e){failure=e.name+\":\"+e.message;}return failure;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError:getter"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested thenables resolve before admission",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* g():AsyncGenerator.<uint8,string,void>{return \"body\";}const value:any={then(resolve){resolve({then(resolve){resolve(\"nested\");}});}};return (await g().return(value)).value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "nested"
+          }
+        }
+      ]
+    },
+    {
+      "name": "known Promise input uses raw async signature",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* g():AsyncGenerator.<uint8,string,void>{return \"body\";}return (await g().return(Promise.resolve(\"closed\"))).value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "closed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "resolved numeric to string uses ordinary conversion",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* g():AsyncGenerator.<uint8,string,void>{return \"body\";}const it:any=g();const x=await it.return(Promise.resolve(5));return typeof x.value+\":\"+x.value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string:5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "known incompatible Promise has a rejected request",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* g():AsyncGenerator.<uint8,string,void>{return \"body\";}let failure=\"\";try{await g().return(Promise.resolve({}));}catch(e){failure=e.name;}return failure;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "known thenable input uses raw signature",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* g():AsyncGenerator.<uint8,string,void>{return \"body\";}return (await g().return({then(resolve:any,reject:any){resolve(\"thenable\");}})).value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "thenable"
+          }
+        }
+      ]
+    },
+    {
+      "name": "known malformed then callback fails before entry",
+      "steps": [
+        {
+          "source": "async function* g():AsyncGenerator.<uint8,string,void>{return \"body\";}g().return({then(resolve:number,reject:number){}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased malformed then callback rejects normally",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* g():AsyncGenerator.<uint8,string,void>{return \"body\";}const value:any={then(resolve:number,reject:number){}};let failure=\"\";try{await g().return(value);}catch(e){failure=e.name;}return failure;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "known incompatible scalar fails before entry",
+      "steps": [
+        {
+          "source": "async function* g():AsyncGenerator.<uint8,string,void>{return \"body\";}g().return(5);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "known plain object fails before entry",
+      "steps": [
+        {
+          "source": "async function* g():AsyncGenerator.<uint8,string,void>{return \"body\";}g().return({});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "known void payload fails before entry",
+      "steps": [
+        {
+          "source": "async function* g():AsyncGenerator.<uint8,void,void>{}g().return(\"bad\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "known void accepts Promise of undefined",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* g():AsyncGenerator.<uint8,void,void>{}const x=await g().return(Promise.resolve(undefined));return x.done+\":\"+x.value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "borrowed method uses receiver captured protocol",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* g():AsyncGenerator.<uint8,string,void>{return \"body\";}const it:any=g();const close:any=it.return;let failure=\"\";try{await close.call(it,{});}catch(e){failure=e.name;}return failure;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong receiver rejects before then access",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* g():AsyncGenerator.<uint8,string,void>{return \"body\";}const close:any=g().return;let reads=0;const value:any={get then(){reads++;throw new RangeError(\"then\");}};let failure=\"\";try{await close.call({},value);}catch(e){failure=e.name;}return failure+\":\"+reads;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement method preserves ordinary lookup",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* g():AsyncGenerator.<uint8,string,void>{return \"body\";}const it:any=g();it.return=function(value:any){return {done:true,value};};return String((await it.return({x:1})).value.x);}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "queued invalid return retains order unstarted",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}const it:any=g();let resolve:any;const pending=new Promise(r=>{resolve=r;});let trace=\"\";const a=it.return(pending).then(x=>{trace+=\"a:\"+x.value+\";\";},e=>{trace+=\"a:\"+e.name+\";\";});const b=it.next().then(x=>{trace+=\"b:\"+x.value+\";\";});const c=it.return(\"last\").then(x=>{trace+=\"c:\"+x.value+\";\";});const before=trace;resolve({});await a;await b;await c;return before+\"/\"+trace+\":\"+entered+\":\"+cleaned;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "/a:TypeError;b:undefined;c:last;:0:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "queued invalid return retains order suspended",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}const it:any=g();await it.next();let resolve:any;const pending=new Promise(r=>{resolve=r;});let trace=\"\";const a=it.return(pending).then(x=>{trace+=\"a:\"+x.value+\";\";},e=>{trace+=\"a:\"+e.name+\";\";});const b=it.next().then(x=>{trace+=\"b:\"+x.value+\";\";});const c=it.return(\"last\").then(x=>{trace+=\"c:\"+x.value+\";\";});const before=trace;resolve({});await a;await b;await c;return before+\"/\"+trace+\":\"+entered+\":\"+cleaned;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "/a:TypeError;b:undefined;c:last;:1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "queued invalid return retains order completed",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let entered=0,cleaned=0;async function* g():AsyncGenerator.<uint8,string,void>{entered++;try{yield uint8(1);return \"body\";}finally{cleaned++;}}const it:any=g();await it.next();await it.next();let resolve:any;const pending=new Promise(r=>{resolve=r;});let trace=\"\";const a=it.return(pending).then(x=>{trace+=\"a:\"+x.value+\";\";},e=>{trace+=\"a:\"+e.name+\";\";});const b=it.next().then(x=>{trace+=\"b:\"+x.value+\";\";});const c=it.return(\"last\").then(x=>{trace+=\"c:\"+x.value+\";\";});const before=trace;resolve({});await a;await b;await c;return before+\"/\"+trace+\":\"+entered+\":\"+cleaned;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "/a:TypeError;b:undefined;c:last;:1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "queued request during executing await",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let resolve:any;const pending=new Promise(r=>{resolve=r;});async function* g():AsyncGenerator.<uint8,string,void>{await pending;try{yield uint8(1);return \"body\";}catch(e){return \"caught\";}}const it:any=g();const first=it.next();const close=it.return({});const last=it.next();resolve(0);return (await first).value+\":\"+(await close).value+\":\"+(await last).value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1:caught:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "draining failure continues through throw and valid return",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* g():AsyncGenerator.<uint8,string,void>{return \"body\";}const it:any=g();const a=it.return({}).then(x=>\"bad\",e=>e.name);const b=it.throw(\"reason\").then(x=>\"bad\",e=>e);const c=it.return(\"last\");return (await a)+\":\"+(await b)+\":\"+(await c).value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:reason:last"
+          }
+        }
+      ]
+    },
+    {
+      "name": "conversion enqueues after current draining request",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let trace=\"\";let it:any;let later:any;class C{operator string(){trace+=\"convert;\";later=it.return(\"later\");return \"converted\";}}async function* g():AsyncGenerator.<uint8,string,void>{return \"body\";}it=g();const v:any=new C();const first=await it.return(v);const second=await later;return trace+first.value+\":\"+second.value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "convert;converted:later"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed conversion keeps effects and drains next request",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let hooks=0;let it:any;let later:any;class C{operator string(){hooks++;later=it.return(\"later\");throw new RangeError(\"convert\");}}async function* g():AsyncGenerator.<uint8,string,void>{return \"body\";}it=g();const v:any=new C();let failure=\"\";try{await it.return(v);}catch(e){failure=e.name;}return failure+\":\"+hooks+\":\"+(await later).value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError:1:later"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured generic contracts remain distinct after awaits",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){function factory<R:type>(){return async function*():AsyncGenerator.<uint8,R,void>{const value:any=undefined;return value;};}const a:any=factory.<string>()();const b:any=factory.<uint8>()();await 0;let failure=\"\";try{await b.return(\"bad\");}catch(e){failure=e.name;}return failure+\":\"+(await a.return(\"closed\")).value+\":\"+(await b.return(7)).value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:closed:7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async delegate missing",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let trace=\"\";const delegate:any={next(){return {done:false,value:uint8(1)};},[Symbol.asyncIterator](){return this;}};async function* g():AsyncGenerator.<uint8,string,void>{try{yield* delegate;return \"body\";}finally{await 0;trace+=\"f\";}}const it:any=g();await it.next();const x=await it.return();return trace+\":\"+x.value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "f:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async delegate undefined replacement",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let trace=\"\";const delegate:any={return(value:any){trace+=\"r\";return Promise.resolve({done:true,value:undefined});},next(){return {done:false,value:uint8(1)};},[Symbol.asyncIterator](){return this;}};async function* g():AsyncGenerator.<uint8,string,void>{try{yield* delegate;return \"body\";}finally{await 0;trace+=\"f\";}}const it:any=g();await it.next();const x=await it.return();return trace+\":\"+x.value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "rf:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async delegate string replacement",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let trace=\"\";const delegate:any={return(value:any){trace+=\"r\";return Promise.resolve({done:true,value:\"delegate\"});},next(){return {done:false,value:uint8(1)};},[Symbol.asyncIterator](){return this;}};async function* g():AsyncGenerator.<uint8,string,void>{try{yield* delegate;return \"body\";}finally{await 0;trace+=\"f\";}}const it:any=g();await it.next();const x=await it.return();return trace+\":\"+x.value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "rf:delegate"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delegate replacement failure reaches enclosing catch",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let trace=\"\";const d:any={next(){return {done:false,value:uint8(1)};},return(){trace+=\"r\";return {done:true,value:{}};},[Symbol.asyncIterator](){return this;}};async function* g():AsyncGenerator.<uint8,string,void>{try{yield* d;return \"body\";}catch(e){trace+=e.name;return \"caught\";}finally{trace+=\"f\";}}const it:any=g();await it.next();return trace+\":\"+(await it.return()).value+\":\"+trace;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": ":caught:rTypeErrorf"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delegate getters retain order",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let trace=\"\";const d:any={next(){return {done:false,value:uint8(1)};},get return(){trace+=\"r\";return function(){trace+=\"c\";return {get done(){trace+=\"d\";return true;},get value(){trace+=\"v\";return undefined;}};};},[Symbol.asyncIterator](){return this;}};async function* g():AsyncGenerator.<uint8,string,void>{yield* d;return \"body\";}const it:any=g();await it.next();const x=await it.return();return trace+\":\"+x.value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "rcdv:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delegate done true value is not additionally awaited",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let reads=0;const value:any={get then(){reads++;return function(resolve){resolve(\"hidden\");};}};const d:any={next(){return {done:false,value:uint8(1)};},return(){return {done:true,value};},[Symbol.asyncIterator](){return this;}};async function* g():AsyncGenerator.<uint8,object,void>{yield* d;return {};}const it:any=g();await it.next();const x=await it.return();return (x.value===value)+\":\"+reads;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delegate Promise value does not satisfy string terminal",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){const d:any={next(){return {done:false,value:uint8(1)};},return(){return {done:true,value:Promise.resolve(\"hidden\")};},[Symbol.asyncIterator](){return this;}};async function* g():AsyncGenerator.<uint8,string,void>{yield* d;return \"body\";}const it:any=g();await it.next();let failure=\"\";try{await it.return();}catch(e){failure=e.name;}return failure;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delegate done false continues to fresh body return",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let count=0;const bad:any=undefined;const d:any={next(){count++;return {done:count>1,value:count>1?bad:uint8(1)};},return(){return {done:false,value:uint8(2)};},[Symbol.asyncIterator](){return this;}};async function* g():AsyncGenerator.<uint8,string,void>{return yield* d;}const it:any=g();await it.next();const x=await it.return();let failure=\"\";try{await it.next();}catch(e){failure=e.name;}return x.done+\":\"+x.value+\":\"+failure;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false:2:TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested real async delegation keeps omitted close",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* a():AsyncGenerator.<uint8,string,void>{yield uint8(1);return \"a\";}async function* b():AsyncGenerator.<uint8,string,void>{yield* a();return \"b\";}const it:any=b();await it.next();const x=await it.return();return x.done+\":\"+x.value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async from sync delegation keeps omitted close",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){function* a():Generator.<uint8,string,void>{yield uint8(1);return \"a\";}async function* b():AsyncGenerator.<uint8,string,void>{yield* a();return \"b\";}const it:any=b();await it.next();const x=await it.return();return x.done+\":\"+x.value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delegate call rejection remains original error",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){const d:any={next(){return {done:false,value:uint8(1)};},return(){return Promise.reject(new RangeError(\"delegate\"));},[Symbol.asyncIterator](){return this;}};async function* g():AsyncGenerator.<uint8,string,void>{yield* d;return \"body\";}const it:any=g();await it.next();let failure=\"\";try{await it.return();}catch(e){failure=e.name+\":\"+e.message;}return failure;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError:delegate"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delegate non-object result retains native error",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){const d:any={next(){return {done:false,value:uint8(1)};},return(){return undefined;},[Symbol.asyncIterator](){return this;}};async function* g():AsyncGenerator.<uint8,string,void>{yield* d;return \"body\";}const it:any=g();await it.next();let failure=\"\";try{await it.return();}catch(e){failure=e.name;}return failure;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "awaited close cannot revive invalidated element borrow",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let a:[].<uint8>=[1,2];a.reserve(10);let read=\"\";async function* g():AsyncGenerator.<uint8,string,void>{let ref r=a[1];try{yield uint8(1);return \"body\";}finally{try{read=String(r);}catch(e){read=e.name;}}}const it:any=g();await it.next();const value:any={then(resolve){a.pop();resolve(\"closed\");}};const x=await it.return(value);return read+\":\"+x.value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:closed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "awaited close preserves still-live element borrow",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let a:[].<uint8>=[1,2];a.reserve(10);let read=\"\";async function* g():AsyncGenerator.<uint8,string,void>{let ref r=a[0];try{yield uint8(1);return \"body\";}finally{read=String(r);}}const it:any=g();await it.next();const value:any={then(resolve){a.pop();resolve(\"closed\");}};const x=await it.return(value);return read+\":\"+x.value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1:closed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "missing delegate return retains second native Await",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){let reads=0;const value:any={get then(){reads++;if(reads===1)return undefined;return function(resolve){resolve(5);};}};const d:any={next(){return {done:false,value:uint8(1)};},[Symbol.asyncIterator](){return this;}};async function* g():AsyncGenerator.<uint8,object,void>{yield* d;return {};}const it:any=g();await it.next();let failure=\"\";try{await it.return(value);}catch(e){failure=e.name;}return failure+\":\"+reads;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed return uses the same raw signature",
+      "steps": [
+        {
+          "source": "let outcome=\"pending\";async function scenario(){async function* g():AsyncGenerator.<uint8,string,void>{return \"body\";}const x=await g()[\"return\"](Promise.resolve(\"computed\"));return x.value;}scenario().then(v=>{outcome=v;},e=>{outcome=\"UNCAUGHT:\"+e.name+\":\"+e.message;});\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "outcome;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "computed"
+          }
+        }
+      ]
+    }
+  ]
+}
