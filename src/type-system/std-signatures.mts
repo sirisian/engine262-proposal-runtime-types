@@ -1,5 +1,5 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { Value, NumberValue } from '../value.mts';
+import { Value, NumberValue, wellKnownSymbols } from '../value.mts';
 import {
   type ParameterRecord, type TypeRecord, type Known,
   anyType, neverType, substituteTypeParameters, builtinTypeRecord, libraryTypeRecord, rangeEnumRecord, makePrimitive, voidType, parameter,
@@ -9,6 +9,7 @@ import { isFloatTypeName, isIntegerTypeName } from './numeric-signatures.mts';
 import { indexTypeRecord } from './index-type.mts';
 import { joinTypes } from './logical-types.mts';
 import { SameType } from './relations.mts';
+import { iterationInterfaceRecord } from './iteration-types.mts';
 import { R } from '#self';
 
 /**
@@ -114,6 +115,56 @@ const rangeElementType = (receiver: Known): Known => {
   if (receiver?.Kind !== 'nominal' || !isRangeFamilyName(receiver.LibraryName)) return null;
   const element = receiver.Arguments[0];
   return element !== undefined && typeof element !== 'number' ? element : anyType;
+};
+
+/** A static upper bound on NumericRangeItemDomain, without reading endpoints.
+ * Literal endpoint sets are not item sets: 1..=3 also yields 2. An unknown
+ * alternative cannot be discarded merely because another arm is numeric.
+ */
+export const rangeIteratorItemType = (domain: TypeRecord, endpointView = false): TypeRecord => {
+  const memo = new Map<TypeRecord, Map<boolean, TypeRecord>>();
+  const contribute = (type: TypeRecord, fallback: boolean): TypeRecord => {
+    const entries = memo.get(type) ?? new Map<boolean, TypeRecord>();
+    if (entries.has(fallback)) return entries.get(fallback)!;
+    memo.set(type, entries);
+    entries.set(fallback, anyType);
+    let base = type;
+    const seen = new Set<TypeRecord>();
+    while (base.Kind === 'parameterized' && !seen.has(base)) {
+      seen.add(base);
+      base = base.Base;
+    }
+    let result = anyType;
+    if (base.Kind === 'primitive' && ['number', 'bigint', 'int', 'uint', 'float16', 'float32', 'float64'].includes(base.Name)) {
+      // A Number endpoint is not a typed-number carrier. An endpoint-only
+      // view may hide a union/erased stored domain, whose fallback yields
+      // ordinary Number even when the endpoints carry Number metadata.
+      result = fallback && base.Name === 'number' ? makePrimitive('number') : type;
+    } else if (type.Kind === 'literal') {
+      result = contribute(type.Base, true);
+    } else if (type.Kind === 'union' && type.Members.length) {
+      result = type.Members.map((arm) => contribute(arm, true)).reduce(joinTypes);
+    }
+    entries.set(fallback, result);
+    return result;
+  };
+  return contribute(domain, endpointView);
+};
+
+/** The internal helper carrier needs a real structural receiving contract;
+ * IteratorHelper is not a global constructor. Keep exhaustion undefined on
+ * both next and the self-iteration protocol, independently of public defaults.
+ */
+const rangeIteratorType = (element: TypeRecord, endpointView: boolean): TypeRecord => {
+  const args = [rangeIteratorItemType(element, endpointView), makePrimitive('undefined'), anyType];
+  const iterator = iterationInterfaceRecord('Iterator', args)! as Extract<TypeRecord, { Kind: 'object' }>;
+  return {
+    ...libraryTypeRecord('IteratorHelper', args)! as Extract<TypeRecord, { Kind: 'nominal' }>,
+    Structure: { ...iterator, Properties: [...iterator.Properties, {
+      key: wellKnownSymbols.iterator, optional: false, readonly: true,
+      type: { Kind: 'function', Signatures: [{ Parameters: [], Return: iterator }] },
+    }] },
+  };
 };
 
 /** Normal built-in interval results. Runtime domain validation is independent
@@ -240,6 +291,12 @@ export const rangePropertyType = (receiver: Known, key: string): Known => {
     case 'isEmpty':
     case 'isFull': return makePrimitive('boolean');
     case 'length': return makePrimitive('bigint');
+    case 'step':
+    case 'reverse': return {
+      Kind: 'function',
+      Signatures: [{ Parameters: key === 'step' ? [parameter(anyType, { Name: 'by', Optional: true })] : [],
+        Return: rangeIteratorType(element, view), Untyped: false }],
+    } as unknown as Known;
     // Parameters retain their runtime numeric validation. This return view
     // neither coerces counts/factors nor claims every domain can complete.
     case 'scale':
