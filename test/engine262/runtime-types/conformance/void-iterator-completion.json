@@ -830,10 +830,10 @@
       ]
     },
     {
-      "name": "concrete completion remains precise",
+      "name": "concrete completion narrows past exhaustion",
       "steps": [
         {
-          "source": "function* f():Generator.<uint8,string,void>{return \"end\";}const x=f().next();if(x.done===true){const v:string=x.value;}\"ok\";",
+          "source": "function* f():Generator.<uint8,string,void>{return \"end\";}const x=f().next();if(x.done===true&&x.value!==undefined){const v:string=x.value;}\"ok\";",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -919,7 +919,7 @@
       "name": "structural explicit string completion runs",
       "steps": [
         {
-          "source": "const it:IterableIterator.<uint8,string,void>={next(){return {done:true,value:\"terminal\"};},[Symbol.iterator](){return this;}};function* g(){return yield* it;}const b=g().next();if(b.done===true){const x:string=b.value;}\"ok\";",
+          "source": "const it:IterableIterator.<uint8,string,void>={next(){return {done:true,value:\"terminal\"};},[Symbol.iterator](){return this;}};function* g(){return yield* it;}const b=g().next();if(b.done===true&&b.value!==undefined){const x:string=b.value;}\"ok\";",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

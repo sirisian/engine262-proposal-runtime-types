@@ -1,0 +1,913 @@
+{
+  "cases": [
+    {
+      "name": "sync completion count 1",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it=f();let x:any;for(let i=0;i<1;i++)x=it.next();String(x.done)+\":\"+String(x.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:done"
+          }
+        }
+      ]
+    },
+    {
+      "name": "sync completion count 2",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it=f();let x:any;for(let i=0;i<2;i++)x=it.next();String(x.done)+\":\"+String(x.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "sync completion count 4",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it=f();let x:any;for(let i=0;i<4;i++)x=it.next();String(x.done)+\":\"+String(x.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed next completion",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it=f();it[\"next\"]();const x=it[\"next\"]();String(x.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "self iterator completion",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it=f()[Symbol.iterator]();it.next();const x=it.next();String(x.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constant Symbol alias self iteration",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const key=Symbol.iterator;const it=f()[key]();it.next();String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional next completion",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it=f();it.next();String(it?.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "concrete next value narrows past exhaustion",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const x=f().next();if(x.done===true&&x.value!==undefined){const s:string=x.value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "done alone cannot prove nonvoid body payload",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}function read(it:Generator.<uint8,string,void>){const x=it.next();if(x.done===true){const s:string=x.value;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "next result cannot fit precise IteratorResult",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const x:IteratorResult.<uint8,string>=f().next();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "next result fits exhaustion union",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const x:IteratorResult.<uint8,string|undefined>=f().next();\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "required result methods remain callable",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it=f();const a=it.return(\"closed\");const b=it.next();String(a.value)+\":\"+String(b.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "closed:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unstarted omitted return result",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it=f();const x=it.return();String(x.done)+\":\"+String(x.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "completed omitted return result",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it=f();it.next();const x=it.return();String(x.done)+\":\"+String(x.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "completed supplied return result",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it=f();it.next();const x=it.return(\"closed\");String(x.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "closed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "throw caught completion then exhausted",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{try{yield 1;}catch(e){return \"caught\";}return \"done\";}const it=f();it.next();const a=it.throw(1);const b=it.next();String(a.value)+\":\"+String(b.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "caught:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uncaught throw leaves exhausted result",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it=f();try{it.throw(\"x\");}catch(e){}const x=it.next();String(x.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "return input remains string",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}f().return(true);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "next input remains void",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}f().next(1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "yield arm remains uint8",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}function read(it:Generator.<uint8,string,void>){const x=it.next();if(x.done===false){const s:string=x.value;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "body return does not gain undefined",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return undefined;}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic body return does not gain undefined",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{const x:any=undefined;return x;}f().next();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "void completion remains gradual",
+      "steps": [
+        {
+          "source": "function* f():uint8{}const it=f();it.next=()=>({done:true,value:\"changed\"});String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "changed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "undefined body completion stays precise",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,undefined,void>{}const it=f();it.next();const x=it.next();if(x.done===true){const u:undefined=x.value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any body completion stays gradual",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,any,void>{return \"done\";}const it=f();it.next();String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "structural IteratorResult still exact",
+      "steps": [
+        {
+          "source": "const x:IteratorResult.<uint8,string>={done:true,value:undefined};",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "structural IteratorResult still accepts string",
+      "steps": [
+        {
+          "source": "const x:IteratorResult.<uint8,string>={done:true,value:\"done\"};\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "structural Iterator still exact",
+      "steps": [
+        {
+          "source": "const it:Iterator.<uint8,string,void>={next(){return {done:true,value:undefined};}};",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "structural Iterator precise completed read",
+      "steps": [
+        {
+          "source": "function read(it:Iterator.<uint8,string,void>){const x=it.next();if(x.done===true){const s:string=x.value;}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nominal cannot assert precise structural next",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it:Iterator.<uint8,string,void>=f();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nominal fits exhaustion structural next",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it:Iterator.<uint8,string|undefined,void>=f();it.next();String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nominal still satisfies ordinary Iterable",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it:Iterable.<uint8>=f();String([...it]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "nominal identity unchanged",
+      "steps": [
+        {
+          "source": "String((type Generator.<uint8,string,void>)===(type Generator.<uint8,string|undefined,void>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "exhausted delegation completes undefined",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it=f();it.next();function* outer(){return yield* it;}String(outer().next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nominal delegation includes exhaustion",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}function* outer(it:Generator.<uint8,string,void>){const s:string=yield* it;}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nominal delegation explicit union",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}function* outer(it:Generator.<uint8,string,void>){const s:string|undefined=yield* it;return s;}const it=f();it.next();String(outer(it).next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "structural delegation stays precise",
+      "steps": [
+        {
+          "source": "function* outer(it:IterableIterator.<uint8,string,void>){const s:string=yield* it;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic result closes string",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}function read<R:type>(it:Generator.<uint8,R,void>){return it.next();}const it=f();read.<string>(it);String(read.<string>(it).value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured generic result closes string",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}function reader<R:type>(){return (it:Generator.<uint8,R,void>)=>it.next();}const read=reader.<string>();const it=f();read(it);String(read(it).value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic self iterator retains contract",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}function self<R:type>(it:Generator.<uint8,R,void>){return it[Symbol.iterator]();}const it=self.<string>(f());it.next();String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "self iterator retains next input",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,boolean>{return \"done\";}f()[Symbol.iterator]().next(\"wrong\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "self hook replacement still looked up",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it=f();const other=f();other.next();it[Symbol.iterator]=()=>other;String(it[Symbol.iterator]().next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "method extraction does not bind receiver",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it=f();const next=it.next;let result=\"none\";try{next();}catch(e){result=e.constructor.name;}String(result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed destructuring method retains call shape",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it=f();const {next}=it;next.call(it);String(next.call(it).value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async repeated completion next",
+      "steps": [
+        {
+          "source": "async function* f():AsyncGenerator.<uint8,string,void>{return \"done\";}const it=f();it.next().then(()=>it.next()).then(x=>globalThis.result=String(x.done)+\":\"+String(x.value),e=>globalThis.result=e.constructor.name);\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "String(globalThis.result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async repeated completion [\"next\"]",
+      "steps": [
+        {
+          "source": "async function* f():AsyncGenerator.<uint8,string,void>{return \"done\";}const it=f();it[\"next\"]().then(()=>it[\"next\"]()).then(x=>globalThis.result=String(x.done)+\":\"+String(x.value),e=>globalThis.result=e.constructor.name);\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "String(globalThis.result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async queued exhaustion",
+      "steps": [
+        {
+          "source": "async function* f():AsyncGenerator.<uint8,string,void>{return \"done\";}const it=f();const a=it.next();const b=it.next();const c=it.next();Promise.all([a,b,c]).then(xs=>globalThis.result=xs.map(x=>String(x.value)).join(\":\"),e=>globalThis.result=e.constructor.name);\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "String(globalThis.result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "done:undefined:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async self iterator exhaustion",
+      "steps": [
+        {
+          "source": "async function* f():AsyncGenerator.<uint8,string,void>{return \"done\";}const it=f()[Symbol.asyncIterator]();it.next().then(()=>it.next()).then(x=>globalThis.result=String(x.value),e=>globalThis.result=e.constructor.name);\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "String(globalThis.result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async omitted return before start",
+      "steps": [
+        {
+          "source": "async function* f():AsyncGenerator.<uint8,string,void>{return \"done\";}f().return().then(x=>globalThis.result=String(x.done)+\":\"+String(x.value),e=>globalThis.result=e.constructor.name);\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "String(globalThis.result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async omitted return after completion",
+      "steps": [
+        {
+          "source": "async function* f():AsyncGenerator.<uint8,string,void>{return \"done\";}const it=f();it.next().then(()=>it.return()).then(x=>globalThis.result=String(x.value),e=>globalThis.result=e.constructor.name);\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "String(globalThis.result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async exhausted delegation",
+      "steps": [
+        {
+          "source": "async function* f():AsyncGenerator.<uint8,string,void>{return \"done\";}const it=f();async function* outer(){return yield* it;}it.next().then(()=>outer().next()).then(x=>globalThis.result=String(x.value),e=>globalThis.result=e.constructor.name);\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "String(globalThis.result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async done alone cannot prove body payload",
+      "steps": [
+        {
+          "source": "async function* f():AsyncGenerator.<uint8,string,void>{return \"done\";}async function read(it:AsyncGenerator.<uint8,string,void>){const x=await it.next();if(x.done===true){const s:string=x.value;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "async narrow result remains precise",
+      "steps": [
+        {
+          "source": "async function read(it:AsyncIterator.<uint8,string,void>){const x=await it.next();if(x.done===true){const n:uint8=x.value;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "do generator exhaustion",
+      "steps": [
+        {
+          "source": "const it=do * {return \"done\";};it.next();String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generator expression exhaustion",
+      "steps": [
+        {
+          "source": "const f=function*():Generator.<uint8,string,void>{return \"done\";};const it=f();it.next();String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class generator method exhaustion",
+      "steps": [
+        {
+          "source": "class C{*f():Generator.<uint8,string,void>{return \"done\";}}const it=new C().f();it.next();String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nominal fits exhaustion IterableIterator",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it:IterableIterator.<uint8,string|undefined,void>=f();it.next();String(it[Symbol.iterator]().next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "void generator cannot promise undefined structural result",
+      "steps": [
+        {
+          "source": "function* f():uint8{}const it:Iterator.<uint8,undefined,void>=f();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "void generator still fits discard Iterator",
+      "steps": [
+        {
+          "source": "function* f():uint8{}const it:Iterator.<uint8,void,void>=f();String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional return equivalent view does not erase inputs",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"done\";}const it:Iterator.<uint8,string|undefined,void>=f();it.return(true);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "union generator member read retains exhaustion",
+      "steps": [
+        {
+          "source": "function* a():Generator.<uint8,string,void>{return \"a\";}function* b():Generator.<uint8,undefined,void>{}function read(it:Generator.<uint8,string,void>|Generator.<uint8,undefined,void>){return it.next();}const it=a();read(it);String(read(it).value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -66,7 +66,7 @@ import { elementTypeOfIterable, widenForBinding } from './unify.mts';
 import { CompileTimeEvaluabilityChecker, ResolveBindingDeclaration, LexicalFreeReferences } from './compile-time-evaluability.mts';
 import { LexicalMutationAnalysis } from './lexical-mutations.mts';
 import {
-  iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration,
+  iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration, generatorPropertyType,
 } from './iteration-types.mts';
 import {
   IsSharableValueType, SoAColumnsOf, LayoutOf, ReportedLayoutOf, FirstInlineCycle, IsReferenceClass, SubclassAddsStorageOver, setStaticFieldResolver,
@@ -6249,7 +6249,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return shape.IndexSignatures.find((signature) => keyAdmittedBy(key, signature.Key))?.Value ?? null;
     };
     if (receiver?.Kind === 'union') {
-      const types = receiver.Members.map((arm) => sequencePropertyContribution(arm, key)
+      const types = receiver.Members.map((arm) => generatorPropertyType(arm, key) ?? sequencePropertyContribution(arm, key)
         ?? collectionMemberType(arm, key) ?? propertyType(structureOf(arm))
         ?? (typeof key === 'string' ? vectorAccessorType(arm, key) ?? VectorMaskMethodSignature(arm, key) : null));
       if (types.every((type) => type !== null)) {
@@ -6271,7 +6271,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       return null;
     }
-    const libraryMember = sequencePropertyContribution(receiver, key) ?? collectionMemberType(receiver, key);
+    const libraryMember = generatorPropertyType(receiver, key) ?? sequencePropertyContribution(receiver, key) ?? collectionMemberType(receiver, key);
     if (libraryMember) return libraryMember;
     if (typeof key === 'string') {
       const method = VectorMaskMethodSignature(receiver, key);
@@ -19428,6 +19428,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           if (!index?.set) checkPrimitiveConversion(m.Expression, 'string');
           const key = memberKey(m);
           const base = staticType(m.MemberExpression);
+          const generatorMember = key === undefined ? null : generatorPropertyType(base, key);
+          if (generatorMember) return generatorMember;
           const bound = operationalType(base);
           if (bound !== base && key !== undefined) {
             const read = memberReadType(bound, key);
@@ -19484,6 +19486,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           const receiver = staticType(m.MemberExpression);
+          const generatorMember = generatorPropertyType(receiver, m.IdentifierName.name);
+          if (generatorMember) return generatorMember;
           const rangeProperty = rangePropertyType(receiver, m.IdentifierName.name);
           if (rangeProperty) return rangeProperty;
           // A PROMISE receiver: its two arguments are the resolution and the

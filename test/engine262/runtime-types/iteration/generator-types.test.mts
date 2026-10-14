@@ -90,14 +90,18 @@ test('a yield expression evaluates to N', () => {
   `)).toBe(false);
 });
 
-test('a yield* evaluates to the DELEGATED generator\'s R', () => {
+test('a yield* includes the delegated body return and exhaustion', () => {
   // The rule everyone gets backwards. It follows from the run time: `yield*`
-  // drives the operand to completion and takes its RETURN value, while what it
-  // yields passes through to the enclosing generator's consumer.
+  // takes a terminal value, including undefined from an exhausted operand,
+  // while yielded values pass through to the enclosing generator's consumer.
   expect(ok(`
     function* inner(): Generator.<uint8, string, void> { return 'x'; }
-    function* outer(): uint8 { const r: string = yield* inner(); }
+    function* outer(): uint8 { const r: string | undefined = yield* inner(); }
   `)).toBe(true);
+
+  expect(ok(`
+    function* outer(it: Generator.<uint8, string, void>): uint8 { const r: string = yield* it; }
+  `)).toBe(false);
 
   // Not the yield type, which is what a reader expects and what would make the
   // delegation look like a loop over the values.

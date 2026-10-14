@@ -12,6 +12,8 @@ import type { TypeRecord } from './records.mts';
 import {
   anyType, makePrimitive, parameter, iterationArguments, libraryTypeRecord, iteratorCompletionValue,
 } from './records.mts';
+import { CanonicalizeType } from './intern.mts';
+import { SameType } from './relations.mts';
 import { wellKnownSymbols, Value, surroundingAgent } from '#self';
 
 const BUILTIN_INTERFACES = new Set([
@@ -204,12 +206,9 @@ function iteratorResult(T: TypeRecord, R: TypeRecord): TypeRecord {
 /**
  * Build one of the iteration interfaces, or null where the name is not one.
  *
- * A bare argument is the first and the rest default to ~void~, which is the
- * shorthand the generator families already use. The agreement is deliberate: it
- * is what makes a `Generator.<Y, R, N>` satisfy `IterableIterator.<Y, R, N>`,
- * and choosing the defaults apart would have made a generator NEARLY an
- * iterator - the failure TypeScript documented when its builtin iterator type
- * and its generators disagreed on this parameter.
+ * A bare argument is the first and the rest default to ~void~, as they do for
+ * generators. Full generator operation results additionally include exhaustion;
+ * generatorImplements derives their compatible structural views separately.
  */
 /**
  * The members of these interfaces are METHODS, and a method is an OUTPUT
@@ -223,9 +222,8 @@ export function iterationInterfaceRecord(name: string, args: readonly (TypeRecor
   if (!BUILTIN_INTERFACES.has(name)) {
     return null;
   }
-  // The shorthand comes from records.mts so that this family and the generator
-  // families default identically - the agreement is what makes a Generator an
-  // IterableIterator, and a second copy here is how it would drift.
+  // Keep shorthand defaults shared. The generator's body R and its completed
+  // operation result are distinct even when the default spellings agree.
   const [T, R, N] = iterationArguments(args);
 
   switch (name) {
@@ -293,6 +291,50 @@ function promiseOf(t: TypeRecord): TypeRecord {
   return libraryTypeRecord('Promise', [t, anyType])!;
 }
 
+/** #sec-generator-operation-results: an exhausted generator also completes with undefined. */
+export function generatorCompletionValue(type: TypeRecord): TypeRecord {
+  return CanonicalizeType({ Kind: 'union', Members: [iteratorCompletionValue(type), makePrimitive('undefined')] });
+}
+
+/** A generator's operation results include exhaustion; its body and inputs retain R. */
+export function generatorProtocolRecord(name: 'Generator' | 'AsyncGenerator', args: readonly (TypeRecord | number)[]): TypeRecord {
+  const [Y, R, N] = iterationArguments(args);
+  const asynchronous = name === 'AsyncGenerator';
+  const result = iteratorResult(Y, generatorCompletionValue(R));
+  const wrapped = asynchronous ? promiseOf(result) : result;
+  return objectType([
+    { key: 'next', type: fnType([N], wrapped) },
+    { key: 'return', type: fnType([R], wrapped) },
+    { key: 'throw', type: fnType([anyType], wrapped) },
+    { key: Symbol.for(asynchronous ? 'asyncIterator' : 'iterator'), type: fnType([], libraryTypeRecord(name, [Y, R, N])!) },
+  ]);
+}
+
+/** Read contract only: ordinary lookup, replacement and receiver binding still apply. */
+export function generatorPropertyType(type: TypeRecord | null, key: string | typeof wellKnownSymbols.iterator): TypeRecord | null {
+  if (type?.Kind !== 'nominal' || (type.LibraryName !== 'Generator' && type.LibraryName !== 'AsyncGenerator')) return null;
+  const shape = generatorProtocolRecord(type.LibraryName, type.Arguments);
+  return shape.Kind === 'object' ? shape.Properties.find((property) => property.key === key)?.type ?? null : null;
+}
+
+function generatorImplements(name: 'Generator' | 'AsyncGenerator', args: readonly (TypeRecord | number)[]): TypeRecord[] {
+  const [Y, R, N] = iterationArguments(args);
+  const prefix = name === 'AsyncGenerator' ? 'Async' : '';
+  const completed = generatorCompletionValue(R);
+  const result = [generatorProtocolRecord(name, args), iterationInterfaceRecord(`${prefix}Iterable`, [Y])!];
+  // Optional R already admits undefined. A protocol spelling either input
+  // domain is valid only when its completed value also matches this generator.
+  // The test matters for void and open R: R|undefined must not turn a discard
+  // contract into a false guarantee of undefined.
+  for (const terminal of [R, CanonicalizeType({ Kind: 'union', Members: [R, makePrimitive('undefined')] })]) {
+    if (SameType(completed, CanonicalizeType(iteratorCompletionValue(terminal)))) {
+      result.push(iterationInterfaceRecord(`${prefix}Iterator`, [Y, terminal, N])!,
+        iterationInterfaceRecord(`${prefix}IterableIterator`, [Y, terminal, N])!);
+    }
+  }
+  return result;
+}
+
 // REMAINDER — one symptom left.
 //
 // `IteratorResult` resolves bare in an evaluated position and applied in a
@@ -333,16 +375,8 @@ export function libraryExtends(name: string | undefined, target: string | undefi
 }
 
 const BUILTIN_IMPLEMENTS: Record<string, (args: readonly (TypeRecord | number)[]) => TypeRecord[]> = {
-  Generator: (a) => [
-    iterationInterfaceRecord('IterableIterator', a)!,
-    iterationInterfaceRecord('Iterator', a)!,
-    iterationInterfaceRecord('Iterable', [a[0]])!,
-  ],
-  AsyncGenerator: (a) => [
-    iterationInterfaceRecord('AsyncIterableIterator', a)!,
-    iterationInterfaceRecord('AsyncIterator', a)!,
-    iterationInterfaceRecord('AsyncIterable', [a[0]])!,
-  ],
+  Generator: (a) => generatorImplements('Generator', a),
+  AsyncGenerator: (a) => generatorImplements('AsyncGenerator', a),
   // The helper methods return the CLASS - which is what the run time returns -
   // and it satisfies the protocols through this table, so a chain stays on a
   // record that carries its element type and the next helper can find it.

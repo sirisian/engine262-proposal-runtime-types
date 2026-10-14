@@ -328,7 +328,10 @@ test("generator-result: yield-conditional", () => {
 });
 
 test("generator-result: yield-star", () => {
-  expectStaticTypeError("function* g():Generator.<uint8,true,undefined>{yield uint8(1);return true;} function* f(p:number){if(yield* g()){}}");
+  // A nominal delegate may already be exhausted: true | undefined has both answers.
+  evaluated("function* g():Generator.<uint8,true,undefined>{yield uint8(1);return true;} function* f(p:number){if(yield* g()){}}");
+  // Exhaustion does not hide an established constant answer: false | undefined is falsy.
+  expectStaticTypeError("function* g():Generator.<uint8,false,undefined>{yield uint8(1);return false;} function* f(p:number){if(yield* g()){}}");
 });
 
 test("generator-result: async-yield", () => {

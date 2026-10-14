@@ -34,5 +34,5 @@ test('unknown yields retain runtime enforcement', () => {
 });
 
 test('yield star contributes the delegated yield and has the delegated return', () => {
-  expect(evaluated('function* inner(): Generator.<uint8, string, void> { yield 1; return "done"; } const g: Generator.<uint8, string, void> = do * { return yield* inner(); }; const a = g.next(); const b = g.next(); String(a.value) + b.value;')).toBe('1done');
+  expect(evaluated('function* inner(): Generator.<uint8, string, void> { yield 1; return "done"; } const g: Generator.<uint8, string | undefined, void> = do * { return yield* inner(); }; const a = g.next(); const b = g.next(); String(a.value) + b.value;')).toBe('1done');
 });

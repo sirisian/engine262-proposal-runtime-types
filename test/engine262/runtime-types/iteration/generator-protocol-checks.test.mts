@@ -7,9 +7,10 @@ test.each(['Generator', 'AsyncGenerator'])('%s checks the next argument and prot
   expect(ok(`function unused(g: ${kind}.<uint8, uint8, uint8>) { g.next(); g.next(2); g.return(2); }`)).toBe(true);
 });
 
-test('the nominal generator result carries its value type', () => {
+test('the nominal generator result carries its value type and exhaustion', () => {
   expectStaticTypeError('function unused(g: Generator.<uint8, uint8, uint8>) { let s: string = g.next(1).value; }');
-  expect(ok('function unused(g: Generator.<uint8, uint8, uint8>) { let n: uint8 = g.next(1).value; }')).toBe(true);
+  expectStaticTypeError('function unused(g: Generator.<uint8, uint8, uint8>) { let n: uint8 = g.next(1).value; }');
+  expect(ok('function unused(g: Generator.<uint8, uint8, uint8>) { let n: uint8 | undefined = g.next(1).value; }')).toBe(true);
 });
 
 test('a bad dynamic next argument fails before entering the suspended body', () => {
