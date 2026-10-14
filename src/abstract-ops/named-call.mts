@@ -7,6 +7,19 @@ import type { ArgumentItem } from '../type-system/named-arguments.mts';
 const argumentItems = new WeakMap<Arguments, readonly ArgumentItem<Value>[]>();
 const parameterCounts = new WeakMap<Arguments, { target: Value, counts: readonly number[] }>();
 
+export type BuiltinNamedParameter = { readonly Name: string, readonly Optional?: boolean };
+// Declaration metadata belongs to the actual native function, never to the
+// caller's property spelling, mutable .name/.length, or a receiver's shape.
+const builtinParameters = new WeakMap<Value, readonly BuiltinNamedParameter[]>();
+
+export function SetBuiltinNamedParameters(func: Value, parameters: readonly BuiltinNamedParameter[]): void {
+  builtinParameters.set(func, parameters);
+}
+
+export function BuiltinNamedParametersOf(func: Value): readonly BuiltinNamedParameter[] | undefined {
+  return builtinParameters.get(func);
+}
+
 export function NamedCallArguments(items: readonly ArgumentItem<Value>[]): Arguments {
   const args = items.map((item) => item.value);
   argumentItems.set(args, items);

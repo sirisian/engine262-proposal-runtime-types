@@ -10,7 +10,7 @@ import { registerTemplateArgument } from '../type-system/template-argument.mts';
 import { TemplateStrings } from '../static-semantics/all.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { PrepareNamedArguments, CompleteNamedArguments, PositionalReferenceRuns, ReferenceRunsAdmitted, SetEmptyReferenceRuns, EmptyReferenceRunsOf, type ArgumentItem } from '../type-system/named-arguments.mts';
-import { NamedCallArguments, NamedCallItemsOf, SetNamedParameterCounts } from '../abstract-ops/named-call.mts';
+import { NamedCallArguments, NamedCallItemsOf, SetNamedParameterCounts, BuiltinNamedParametersOf } from '../abstract-ops/named-call.mts';
 import { assignArguments, resolveOverloadChecked } from '../type-system/overloads.mts';
 import { AssignRuntimeArguments } from '../abstract-ops/argument-distribution.mts';
 import { RuntimeTypeOf, SpecializedFunctionSignatureOf } from '../type-system/runtime.mts';
@@ -252,6 +252,11 @@ function parameterInfo(func: Value): { names: string[], omittable: boolean[], re
   // the original callee still owns ordinary parameter-default evaluation.
   const specialized = SpecializedFunctionSignatureOf(func);
   if (specialized) return parameterInfoOfSignature(specialized);
+  const builtin = BuiltinNamedParametersOf(func);
+  if (builtin) return {
+    names: builtin.map((p) => p.Name), omittable: builtin.map((p) => p.Optional === true),
+    rests: builtin.map(() => false), refs: builtin.map(() => false), restIndex: -1,
+  };
   const formals = ((func as { FormalParameters?: readonly ParseNode[] }).FormalParameters ?? []);
   const names: string[] = [];
   const omittable: boolean[] = [];
@@ -443,12 +448,18 @@ export function* BindCallArgumentItems(items: readonly ArgumentItem<Value>[], fu
     return Throw.TypeError('$1', Value('a ref rest binds no array: forward it into a ref rest parameter'));
   }
   const result: Value[] = [];
+  const nativeOmissions = !signature && BuiltinNamedParametersOf(func) !== undefined;
+  const lastSupplied = placed.groups.findLastIndex((group) => group.length > 0);
   for (let i = 0; i < names.length; i += 1) {
     const values = placed.groups[i];
     if (values.length === 0 && !rests[i]) {
       if (!omittable[i]) {
         return Throw.TypeError('no argument for the required parameter $1', Value(names[i]));
       }
+      // Native algorithms can distinguish absence from explicit undefined
+      // (reduce's initial accumulator). Only interior gaps need placeholders.
+      // A declared callable view still owns its existing default/arity rules.
+      if (nativeOmissions && i > lastSupplied) continue;
       // Positional forwarding supplies no placeholder for an omitted default.
       // Its zero count reaches ordinary final binding without changing arity.
       if (signature || items.some((item) => item.name !== undefined)) values.push(initials[i] ?? Value.undefined);

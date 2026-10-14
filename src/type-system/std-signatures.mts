@@ -401,11 +401,11 @@ export const iteratorMethodSignature = (name: string, element: TypeRecord, synch
     }] };
     case 'filter': return fn([cb(boolType) as TypeRecord], iteratorHelperType(element), ['callback']);
     case 'take':
-    case 'drop': return fn([index], iteratorOf(element));
+    case 'drop': return fn([index], iteratorOf(element), ['count']);
     case 'toArray': return fn([], { Kind: 'array', Element: element, Extent: 'dynamic' } as unknown as TypeRecord);
-    case 'forEach': return fn([cb(voidType) as TypeRecord], voidType);
+    case 'forEach': return fn([cb(voidType) as TypeRecord], voidType, ['callback']);
     case 'some':
-    case 'every': return fn([cb(boolType) as TypeRecord], boolType);
+    case 'every': return fn([cb(boolType) as TypeRecord], boolType, ['callback']);
     // `undefined`, NOT ~void~. `Iterator.prototype.find` answers *undefined*
     // where nothing matches, so the type that names that answer is the
     // `undefined` type - "the type of its one value" - while ~void~ is "the
@@ -414,7 +414,7 @@ export const iteratorMethodSignature = (name: string, element: TypeRecord, synch
     // the file's own note calls that `undefined` load-bearing; a `T | void` here
     // let `let x: uint8 = it.find(p)` through, where the same mistake through
     // `Map.prototype.get` is refused.
-    case 'find': return fn([cb(boolType) as TypeRecord], orUndefined(element));
+    case 'find': return fn([cb(boolType) as TypeRecord], orUndefined(element), ['callback']);
     case 'reduce': return { Kind: 'function', Signatures: [{
       Parameters: [parameter(fn([anyT, element, index], anyT) as TypeRecord, { Name: 'callback' }),
         parameter(anyT, { Name: 'initial', Optional: true })],

@@ -11,6 +11,7 @@ import {
   type NativeSteps,
 } from '../value.mts';
 import { X } from '../completion.mts';
+import { SetBuiltinNamedParameters, type BuiltinNamedParameter } from '../abstract-ops/named-call.mts';
 import {
   Assert,
   CreateBuiltinFunction,
@@ -28,7 +29,7 @@ type Accessor = [
 type Props = [
   name: string | JSStringValue | SymbolValue,
   value: Accessor | NativeSteps | Value,
-  fnLength?: number,
+  fnLength?: number | { length: number, parameters: readonly BuiltinNamedParameter[] },
   desc?: DescriptorInit,
   async?: boolean
 ];
@@ -88,8 +89,10 @@ export function assignProps(realmRec: Realm, obj: ObjectValue, props: readonly (
       // false, [[Configurable]]: true } unless otherwise specified.
       let value;
       if (typeof v === 'function') {
-        Assert(typeof len === 'number');
-        value = CreateBuiltinFunction(v, len, name, [], realmRec, undefined, undefined, async);
+        const length = typeof len === 'object' ? len.length : len;
+        Assert(typeof length === 'number');
+        value = CreateBuiltinFunction(v, length, name, [], realmRec, undefined, undefined, async);
+        if (typeof len === 'object') SetBuiltinNamedParameters(value, len.parameters);
       } else {
         value = v;
       }

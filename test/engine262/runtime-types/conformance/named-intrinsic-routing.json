@@ -1,0 +1,941 @@
+{
+  "cases": [
+    {
+      "name": "typed named bigint step",
+      "steps": [
+        {
+          "source": "const r=0n..<3001n;String(r.step(by:1000n).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0,1000,2000,3000"
+          }
+        }
+      ]
+    },
+    {
+      "name": "positional bigint step control",
+      "steps": [
+        {
+          "source": "const r=0n..<3001n;String(r.step(1000n).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0,1000,2000,3000"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named step object spread",
+      "steps": [
+        {
+          "source": "const r:any=0..<5;String(r.step(...{by:2}).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0,2,4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty spread retains native undefined-step validation",
+      "steps": [
+        {
+          "source": "const r:any=0..<3;r.step(...{});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "positive finite"
+        }
+      ]
+    },
+    {
+      "name": "undefined step retains native validation",
+      "steps": [
+        {
+          "source": "const r:any=0..<3;r.step(by:undefined);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "positive finite"
+        }
+      ]
+    },
+    {
+      "name": "contains value",
+      "steps": [
+        {
+          "source": "const r=1..<4;String(r.contains(value:2));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains omitted",
+      "steps": [
+        {
+          "source": "const r:any=1..<4;String(r.contains(...{}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect other",
+      "steps": [
+        {
+          "source": "const r=1..<5;String(r.intersect(other:3..<7).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3,4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale factor",
+      "steps": [
+        {
+          "source": "const r=1..<4;String(r.scale(factor:2).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2,3,4,5,6,7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range map callback",
+      "steps": [
+        {
+          "source": "String((1..<4).map(callback:v=>String(v)).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range filter callback",
+      "steps": [
+        {
+          "source": "String((1..<4).filter(callback:v=>v>1).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range flatMap callback",
+      "steps": [
+        {
+          "source": "String((1..<4).flatMap(callback:v=>[v,v]).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,1,2,2,3,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range take count",
+      "steps": [
+        {
+          "source": "String((1..<4).take(count:2).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range drop count",
+      "steps": [
+        {
+          "source": "String((1..<4).drop(count:2).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range some callback",
+      "steps": [
+        {
+          "source": "String((1..<4).some(callback:v=>v===2));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range every callback",
+      "steps": [
+        {
+          "source": "String((1..<4).every(callback:v=>v>0));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range find callback",
+      "steps": [
+        {
+          "source": "String((1..<4).find(callback:v=>v>1));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range reduce callback",
+      "steps": [
+        {
+          "source": "String((1..<4).reduce(callback:(a,b)=>a+b));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "6"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range reduce initial",
+      "steps": [
+        {
+          "source": "String((1..<4).reduce(initial:10,callback:(a,b)=>a+b));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "16"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range forEach callback",
+      "steps": [
+        {
+          "source": "let out=\"\";(1..<4).forEach(callback:v=>{out+=String(v);});out;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "123"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range reduce explicit undefined",
+      "steps": [
+        {
+          "source": "const r:any=(1..<4);let calls=0;const value=r.reduce(callback:(a,b)=>{calls++;return a===undefined?100+b:a+b;},initial:undefined);String(value)+\"/\"+String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "106/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range empty reduce explicit undefined",
+      "steps": [
+        {
+          "source": "const r:any=(1..<1);String(r.reduce(callback:(a,b)=>a+b,initial:undefined));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "range empty reduce omitted initial",
+      "steps": [
+        {
+          "source": "const r:any=(1..<1);r.reduce(callback:(a,b)=>a+b);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "already complete"
+        }
+      ]
+    },
+    {
+      "name": "iterator map callback",
+      "steps": [
+        {
+          "source": "String((1..<4).step(1).map(callback:v=>String(v)).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator filter callback",
+      "steps": [
+        {
+          "source": "String((1..<4).step(1).filter(callback:v=>v>1).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator flatMap callback",
+      "steps": [
+        {
+          "source": "String((1..<4).step(1).flatMap(callback:v=>[v,v]).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,1,2,2,3,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator take count",
+      "steps": [
+        {
+          "source": "String((1..<4).step(1).take(count:2).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator drop count",
+      "steps": [
+        {
+          "source": "String((1..<4).step(1).drop(count:2).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator some callback",
+      "steps": [
+        {
+          "source": "String((1..<4).step(1).some(callback:v=>v===2));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator every callback",
+      "steps": [
+        {
+          "source": "String((1..<4).step(1).every(callback:v=>v>0));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator find callback",
+      "steps": [
+        {
+          "source": "String((1..<4).step(1).find(callback:v=>v>1));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator reduce callback",
+      "steps": [
+        {
+          "source": "String((1..<4).step(1).reduce(callback:(a,b)=>a+b));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "6"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator reduce initial",
+      "steps": [
+        {
+          "source": "String((1..<4).step(1).reduce(initial:10,callback:(a,b)=>a+b));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "16"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator forEach callback",
+      "steps": [
+        {
+          "source": "let out=\"\";(1..<4).step(1).forEach(callback:v=>{out+=String(v);});out;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "123"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator reduce explicit undefined",
+      "steps": [
+        {
+          "source": "const r:any=(1..<4).step(1);let calls=0;const value=r.reduce(callback:(a,b)=>{calls++;return a===undefined?100+b:a+b;},initial:undefined);String(value)+\"/\"+String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "106/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator empty reduce explicit undefined",
+      "steps": [
+        {
+          "source": "const r:any=(1..<1).step(1);String(r.reduce(callback:(a,b)=>a+b,initial:undefined));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator empty reduce omitted initial",
+      "steps": [
+        {
+          "source": "const r:any=(1..<1).step(1);r.reduce(callback:(a,b)=>a+b);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "already complete"
+        }
+      ]
+    },
+    {
+      "name": "reordered names evaluate in source order",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;let log=\"\";function mark(s,v){log+=s;return v;}const out=r.reduce(initial:mark(\"i\",10),callback:mark(\"c\",(a,b)=>a+b));log+\"/\"+String(out);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ic/13"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object spread getter evaluated once",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;let log=\"\";const args={get initial(){log+=\"i\";return 10;},get callback(){log+=\"c\";return (a,b)=>a+b;}};const out=r.reduce(...args);log+\"/\"+String(out);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ic/13"
+          }
+        }
+      ]
+    },
+    {
+      "name": "repeated names retain last value and all effects",
+      "steps": [
+        {
+          "source": "const r:any=0..<5;let n=0;const args={get by(){n++;return 2;}};String(r.step(by:(n++,1),...args).toArray())+\"/\"+String(n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0,2,4/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterable spread remains positional",
+      "steps": [
+        {
+          "source": "const r:any=0..<5;String(r.step(...[2]).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0,2,4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "actual callable selected before argument mutation",
+      "steps": [
+        {
+          "source": "const r:any=0..<4;const p=Object.getPrototypeOf(r);function change(){p.step=function(wrong){return [99][Symbol.iterator]();};return 2;}String(r.step(by:change()).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement declaration owns names",
+      "steps": [
+        {
+          "source": "const r:any=0..<4;Object.getPrototypeOf(r).step=function(distance){return distance;};String(r.step(distance:7));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement does not inherit intrinsic names",
+      "steps": [
+        {
+          "source": "const r:any=0..<4;Object.getPrototypeOf(r).step=function(distance){return distance;};r.step(by:7);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "no parameter named"
+        }
+      ]
+    },
+    {
+      "name": "alias property uses function identity",
+      "steps": [
+        {
+          "source": "const r:any=0..<5;const p=Object.getPrototypeOf(r);p.advance=p.step;String(r.advance(by:2).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0,2,4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "public name and length do not supply parameters",
+      "steps": [
+        {
+          "source": "const r:any=0..<5;Object.defineProperty(r.step,\"name\",{value:\"wrong\"});Object.defineProperty(r.step,\"length\",{value:99});String(r.step(by:2).toArray());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0,2,4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "extracted method still checks receiver",
+      "steps": [
+        {
+          "source": "const f:any=(0..<5).step;f(by:2);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "not a range"
+        }
+      ]
+    },
+    {
+      "name": "selected getter evaluated once",
+      "steps": [
+        {
+          "source": "const r:any=0..<5;const p=Object.getPrototypeOf(r);const saved=p.step;let n=0;Object.defineProperty(p,\"step\",{get(){n++;return saved;}});String(r.step(by:2).toArray())+\"/\"+String(n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0,2,4/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown name fails after argument effects",
+      "steps": [
+        {
+          "source": "const r:any=0..<5;let n=0;try{r.step(wrong:(n++,2));}catch(e){if(!(e instanceof TypeError))throw e;}String(n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "argument throw wins over unknown name",
+      "steps": [
+        {
+          "source": "const r:any=0..<5;let out=\"\";function fail(){throw \"argument\";}try{r.step(wrong:fail());}catch(e){out=String(e);}out;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "argument"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown name does not consume iterator",
+      "steps": [
+        {
+          "source": "const it:any=(1..<4).step(1);try{it.reduce(wrong:1);}catch(e){if(!(e instanceof TypeError))throw e;}String(it.next().value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "required callback cannot be skipped",
+      "steps": [
+        {
+          "source": "const r:any=1..<4;r.reduce(initial:10);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "signature in view"
+        }
+      ]
+    },
+    {
+      "name": "native step rejects invalid count after routing",
+      "steps": [
+        {
+          "source": "const r:any=0..<5;r.step(by:0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "native intersect retains operand check",
+      "steps": [
+        {
+          "source": "const r:any=0..<5;r.intersect(other:{});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "native scale retains numeric check",
+      "steps": [
+        {
+          "source": "const r:any=0..<5;r.scale(factor:\"2\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value reference decays at native boundary",
+      "steps": [
+        {
+          "source": "const r:any=0..<5;let n:uint8=2;String(r.step(ref n,...{}).toArray())+\"/\"+String(n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0,2,4/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty ref run is not a native value parameter",
+      "steps": [
+        {
+          "source": "const r:any=0..<5;function f(ref ...xs:[].<uint8>){return r.step(...xs,by:2);}f();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "ref rest"
+        }
+      ]
+    },
+    {
+      "name": "native range delegation receives positional mapped list",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;const p=Object.getPrototypeOf(Object.getPrototypeOf(r.step(1)));p.reduce=function(first,second){return String(arguments.length)+\"/\"+String(second);};r.reduce(callback:(a,b)=>a+b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unregistered native remains positional only",
+      "steps": [
+        {
+          "source": "let out=\"\";try{Math.abs(value:-2);}catch(e){out=e instanceof TypeError?\"rejected\":\"wrong\";}out;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "rejected"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declared view provides renamed callback and initial default",
+      "steps": [
+        {
+          "source": "let i=0;const holder:{f:(op:any,seed:any=10)=>any,next:()=>any}={f:Iterator.prototype.reduce,next(){i++;return {done:i>2,value:i};}};String(holder.f(op:(a,b)=>a+b));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "13"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declared view optional position retains supplied undefined",
+      "steps": [
+        {
+          "source": "let i=0;const holder:{f:(op:any,seed?:any)=>any,next:()=>any}={f:Iterator.prototype.reduce,next(){i++;return {done:i>1,value:i};}};String(holder.f(op:(a,b)=>a===undefined?10+b:a+b));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "11"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested named calls retain their own mappings",
+      "steps": [
+        {
+          "source": "const outer:any=1..<3;const inner:any=5..<7;let n=0;function initial(){n++;return inner.reduce(initial:10,callback:(a,b)=>a+b);}String(outer.reduce(initial:initial(),callback:(a,b)=>a+b))+\"/\"+String(n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "24/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value reference is rechecked after argument effects",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;let a:[].<uint8>=[5];function callback(){a.reserve(32);return (x,y)=>x+y;}let out=\"missed\";try{r.reduce(ref a[0],callback:callback());}catch(e){out=e instanceof TypeError?\"stale\":\"wrong\";}out;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "stale"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static unknown intrinsic name remains an early error",
+      "steps": [
+        {
+          "source": "const r=0..<5;r.step(wrong:2);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_NAMED_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong native alias is rejected",
+      "steps": [
+        {
+          "source": "const it:any=(1..<4).step(1);it.map(mapper:v=>v);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "no parameter named"
+        }
+      ]
+    },
+    {
+      "name": "explicit generic intrinsic capability remains separate",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;r.map.<string>(callback:v=>String(v));",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    }
+  ]
+}
