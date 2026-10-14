@@ -1,7 +1,8 @@
+import type { ParseNode } from '../parser/ParseNode.mts';
 import { Value, NumberValue } from '../value.mts';
 import {
   type ParameterRecord, type TypeRecord, type Known,
-  anyType, builtinTypeRecord, libraryTypeRecord, rangeEnumRecord, makePrimitive, voidType, parameter,
+  anyType, neverType, substituteTypeParameters, builtinTypeRecord, libraryTypeRecord, rangeEnumRecord, makePrimitive, voidType, parameter,
 } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
 import { isFloatTypeName, isIntegerTypeName } from './numeric-signatures.mts';
@@ -154,6 +155,33 @@ export const rangeArithmeticResultType = (operator: string, left: Known, right?:
   return contribute(left, right);
 };
 
+/** Intersection selects existing endpoints from either operand. An erased
+ * full shape has no endpoints and is neutral; another erased view is not.
+ * An unknown argument keeps the known range-result shape with an any domain.
+ * This query is independent of contextual generic argument inference.
+ */
+export const rangeIntersectionResultType = (receiver: TypeRecord, other: Known): TypeRecord => {
+  const memo = new Map<TypeRecord, TypeRecord>();
+  const domain = (type: Known): TypeRecord => {
+    if (!type) return anyType;
+    if (memo.has(type)) return memo.get(type)!;
+    memo.set(type, anyType);
+    let result: TypeRecord;
+    if (type.Kind === 'union') {
+      result = type.Members.length ? type.Members.map(domain).reduce(joinTypes) : anyType;
+    } else {
+      const left = rangeElementType(receiver)!;
+      const right = rangeElementType(type) ?? anyType;
+      result = receiver.Kind === 'nominal' && receiver.LibraryName === 'RangeFull' && left.Kind === 'any' ? right
+        : type.Kind === 'nominal' && type.LibraryName === 'RangeFull' && right.Kind === 'any' ? left
+          : joinTypes(left, right);
+    }
+    memo.set(type, result);
+    return result;
+  };
+  return libraryTypeRecord('RangeBounds', [domain(other)])!;
+};
+
 /** The property and range-returning method surface of built-in ranges. This describes normal getter results,
  * not a new structural conversion or authority to bypass runtime boundaries.
  * It is shared by dot/computed reads and object-pattern contributions.
@@ -186,6 +214,28 @@ export const rangePropertyType = (receiver: Known, key: string): Known => {
       const low = boundOrdinalOf(args[1]);
       const high = boundOrdinalOf(args[2]);
       return (low === 0 || low === 1) && (high === 0 || high === 1) ? literal(low * 2 + high, interval) : interval;
+    }
+    case 'contains': return {
+      Kind: 'function',
+      Signatures: [{ Parameters: [parameter(anyType, { Name: 'value', Optional: true })],
+        Return: makePrimitive('boolean'), Untyped: false }],
+    } as unknown as Known;
+    case 'intersect': {
+      // A synthetic binder must not capture a free receiver parameter with
+      // the same spelling when this method view crosses a generic return.
+      let otherName = 'U';
+      while (!SameType(element, substituteTypeParameters(element, new Map([[otherName, neverType]]))!)) otherName += '_';
+      const declaration = { type: 'TypeParameter', BindingIdentifier: { name: otherName } } as ParseNode.TypeParameter;
+      const other: TypeRecord = { Kind: 'parameter', Name: otherName };
+      return {
+        Kind: 'function', Signatures: [{
+          RangeIntersectionReceiver: receiver,
+          TypeParameters: [{ Name: otherName, Kind: 'type', Variadic: false, Variance: 'invariant', Arity: 0,
+            ConstraintNode: null, DefaultNode: null, Declaration: declaration, Parameter: other }],
+          Parameters: [parameter(libraryTypeRecord('RangeBounds', [other])!, { Name: 'other' })],
+          Return: libraryTypeRecord('RangeBounds', [name === 'RangeFull' && element.Kind === 'any' ? other : joinTypes(element, other)]), Untyped: false,
+        }],
+      } as unknown as Known;
     }
     case 'isEmpty':
     case 'isFull': return makePrimitive('boolean');

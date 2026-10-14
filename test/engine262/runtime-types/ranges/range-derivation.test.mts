@@ -52,7 +52,7 @@ test('Module failed comparison stays a body-time failure', async () => {
 });
 
 test('Module repeated generic full selection retains each domain', async () => {
-  const result = await observeModuleGraph({ main: 'function f<T:type>():RangeFull.<T>{const a:RangeFull.<T>=(..);return a.intersect(a);}await 0;'
+  const result = await observeModuleGraph({ main: 'function f<T:type>():RangeBounds.<T>{const a:RangeFull.<T>=(..);return a.intersect(a);}await 0;'
     + 'if(Reflect.typeOf(f.<uint8>())!==(type RangeFull.<uint8>)||Reflect.typeOf(f.<number>())!==(type RangeFull.<number>))throw new Error("domain");' });
   expect(result).toMatchObject({ status: 'fulfilled', bodyEntries: ['main'] });
   expect(result.diagnostic).toBeUndefined();

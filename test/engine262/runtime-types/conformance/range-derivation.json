@@ -641,7 +641,7 @@
       "name": "same generic source retains each full activation",
       "steps": [
         {
-          "source": "function f<T:type>():RangeFull.<T>{const a:RangeFull.<T>=(..);return a.intersect(a);}const a=f.<uint8>();const b=f.<number>();`${Reflect.typeOf(a)===(type RangeFull.<uint8>)};${Reflect.typeOf(b)===(type RangeFull.<number>)}`;",
+          "source": "function f<T:type>():RangeBounds.<T>{const a:RangeFull.<T>=(..);return a.intersect(a);}const a=f.<uint8>();const b=f.<number>();`${Reflect.typeOf(a)===(type RangeFull.<uint8>)};${Reflect.typeOf(b)===(type RangeFull.<number>)}`;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

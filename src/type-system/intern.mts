@@ -424,6 +424,7 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
       Kind: 'function',
       Signatures: t.Signatures.map((g) => ({
         Parameters: g.Parameters.map((p) => ({ ...p, Type: CanonicalizeType(p.Type, copies) })),
+        ...(g.RangeIntersectionReceiver ? { RangeIntersectionReceiver: CanonicalizeType(g.RangeIntersectionReceiver, copies) } : {}),
         Return: g.Return === null ? null : CanonicalizeType(g.Return, copies),
         ThisType: g.ThisType === undefined || g.ThisType === null ? g.ThisType : CanonicalizeType(g.ThisType, copies),
         // #sec-declared-narrowing: a signature's [[Narrows]] is part of what it

@@ -346,6 +346,10 @@ export function typeParameterRecordsOf(list: readonly ParseNode.TypeParameter[] 
 }
 
 export interface SignatureRecord {
+  /** Engine-side normal-result contribution for the built-in intersection
+   * view. It does not assert that the replaceable method is the intrinsic.
+   */
+  readonly RangeIntersectionReceiver?: TypeRecord;
   readonly Parameters: readonly ParameterRecord[];
   readonly Return: TypeRecord | null;
   /** #sec-inferred-return-types: the published return when none was declared. */
@@ -2061,6 +2065,7 @@ export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): b
   if (withSignatures.Signatures?.some((sig) => (sig.Parameters ?? []).some((prm) => !!prm?.Type && mentionsTypeParameter(prm.Type, seen))
     || (!!sig.Return && mentionsTypeParameter(sig.Return, seen))
     || (!!sig.InferredReturn && mentionsTypeParameter(sig.InferredReturn, seen))
+    || (!!sig.RangeIntersectionReceiver && mentionsTypeParameter(sig.RangeIntersectionReceiver, seen))
     || (!!sig.ThisType && mentionsTypeParameter(sig.ThisType, seen))
     || sig.Narrows?.some((rule) => mentionsTypeParameter(rule.Type, seen))
     || sig.TypeParameters?.some((parameter) => mentionsTypeParameter(parameter.Constraint ?? null, seen)
@@ -2317,6 +2322,7 @@ const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string
             ? { ...prm, Type: apply(prm.Type) }
             : prm)),
           Return: sig.Return ? apply(sig.Return) : sig.Return,
+          ...(sig.RangeIntersectionReceiver ? { RangeIntersectionReceiver: apply(sig.RangeIntersectionReceiver)! } : {}),
           ...(sig.InferredReturn ? { InferredReturn: apply(sig.InferredReturn) } : {}),
           ...(sig.ThisType ? { ThisType: apply(sig.ThisType) } : {}),
           ...(sig.Narrows ? { Narrows: sig.Narrows.map((rule) => ({ ...rule, Type: apply(rule.Type)! })) } : {}),

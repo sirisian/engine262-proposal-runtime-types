@@ -1,0 +1,2125 @@
+{
+  "cases": [
+    {
+      "name": "ClosedRange contains result rejects String",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>){const x:string=r.contains(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange contains admits result view",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>):boolean{return r.contains(s);} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange intersect result rejects String",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>){const x:string=r.intersect(s).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange intersect admits result view",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>):RangeBounds.<uint8|uint16>{return r.intersect(s);} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange intersect ClosedRange retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange intersect RangeFrom retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:RangeFrom.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange intersect RangeTo retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:RangeTo.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange intersect RangeFull retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:RangeFull.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange intersect RangeBounds retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:RangeBounds.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom contains result rejects String",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>,s:ClosedRange.<uint16>){const x:string=r.contains(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom contains admits result view",
+      "steps": [
+        {
+          "source": "function f(r:RangeFrom.<uint8>,s:ClosedRange.<uint16>):boolean{return r.contains(s);} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom intersect result rejects String",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>,s:ClosedRange.<uint16>){const x:string=r.intersect(s).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom intersect admits result view",
+      "steps": [
+        {
+          "source": "function f(r:RangeFrom.<uint8>,s:ClosedRange.<uint16>):RangeBounds.<uint8|uint16>{return r.intersect(s);} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom intersect ClosedRange retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>,s:ClosedRange.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom intersect RangeFrom retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>,s:RangeFrom.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom intersect RangeTo retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>,s:RangeTo.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom intersect RangeFull retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>,s:RangeFull.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom intersect RangeBounds retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>,s:RangeBounds.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo contains result rejects String",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>,s:ClosedRange.<uint16>){const x:string=r.contains(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo contains admits result view",
+      "steps": [
+        {
+          "source": "function f(r:RangeTo.<uint8>,s:ClosedRange.<uint16>):boolean{return r.contains(s);} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo intersect result rejects String",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>,s:ClosedRange.<uint16>){const x:string=r.intersect(s).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo intersect admits result view",
+      "steps": [
+        {
+          "source": "function f(r:RangeTo.<uint8>,s:ClosedRange.<uint16>):RangeBounds.<uint8|uint16>{return r.intersect(s);} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo intersect ClosedRange retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>,s:ClosedRange.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo intersect RangeFrom retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>,s:RangeFrom.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo intersect RangeTo retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>,s:RangeTo.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo intersect RangeFull retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>,s:RangeFull.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo intersect RangeBounds retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>,s:RangeBounds.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull contains result rejects String",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>,s:ClosedRange.<uint16>){const x:string=r.contains(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull contains admits result view",
+      "steps": [
+        {
+          "source": "function f(r:RangeFull.<uint8>,s:ClosedRange.<uint16>):boolean{return r.contains(s);} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull intersect result rejects String",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>,s:ClosedRange.<uint16>){const x:string=r.intersect(s).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull intersect admits result view",
+      "steps": [
+        {
+          "source": "function f(r:RangeFull.<uint8>,s:ClosedRange.<uint16>):RangeBounds.<uint8|uint16>{return r.intersect(s);} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull intersect ClosedRange retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>,s:ClosedRange.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull intersect RangeFrom retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>,s:RangeFrom.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull intersect RangeTo retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>,s:RangeTo.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull intersect RangeFull retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>,s:RangeFull.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull intersect RangeBounds retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>,s:RangeBounds.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds contains result rejects String",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>,s:ClosedRange.<uint16>){const x:string=r.contains(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds contains admits result view",
+      "steps": [
+        {
+          "source": "function f(r:RangeBounds.<uint8>,s:ClosedRange.<uint16>):boolean{return r.contains(s);} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds intersect result rejects String",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>,s:ClosedRange.<uint16>){const x:string=r.intersect(s).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds intersect admits result view",
+      "steps": [
+        {
+          "source": "function f(r:RangeBounds.<uint8>,s:ClosedRange.<uint16>):RangeBounds.<uint8|uint16>{return r.intersect(s);} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds intersect ClosedRange retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>,s:ClosedRange.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds intersect RangeFrom retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>,s:RangeFrom.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds intersect RangeTo retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>,s:RangeTo.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds intersect RangeFull retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>,s:RangeFull.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds intersect RangeBounds retains both domains",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>,s:RangeBounds.<uint16>){const x:RangeBounds.<uint8>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains access r[\"contains\"](s)",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>){const x:string=r[\"contains\"](s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains access r?.contains(s)",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>){const x:string=r?.contains(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains access r.contains?.(s)",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>){const x:string=r.contains?.(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains access r[\"contains\"]?.(s)",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>){const x:string=r[\"contains\"]?.(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains extraction const f=r.contains;",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>){const f=r.contains;const x:string=f(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains extraction const {contains:f}=r;",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>){const {contains:f}=r;const x:string=f(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains receiver alternatives",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>|RangeTo.<uint16>,s:ClosedRange.<uint32>){const x:string=r.contains(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains untyped receiver stays gradual",
+      "steps": [
+        {
+          "source": "function unused(r,s){const x:string=r.contains(s);} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains whole any receiver stays gradual",
+      "steps": [
+        {
+          "source": "function unused(r:any,s:ClosedRange.<uint8>){const x:string=r.contains(s);} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains erased destination is explicit",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;r.contains=()=>\"wrong\";const x:any=r.contains(r);String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "wrong"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains replaced method checks inferred binding",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;r.contains=()=>\"wrong\";let ok=false;try{const x=r.contains(r);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains replaced method checks declared return",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>):boolean{return r.contains(r);}const r:ClosedRange.<uint8>=1..=3;r.contains=()=>\"wrong\";let ok=false;try{f(r);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains optional replacement checks result",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>|undefined){const x=r?.contains(r);return x;}const r:ClosedRange.<uint8>=1..=3;r.contains=()=>\"wrong\";let ok=false;try{f(r);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains optional short circuit skips argument",
+      "steps": [
+        {
+          "source": "let calls=0;function arg(){calls++;return 1..=3;}function f(r:ClosedRange.<uint8>|undefined){return r?.contains(arg());}String(f(undefined))+\":\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains extraction does not bind this",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;const f=r.contains;let ok=false;try{f(r);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains named argument",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>){const x:string=r.contains(value: s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains preserves argument effects on failure",
+      "steps": [
+        {
+          "source": "let events=\"\";const r:ClosedRange.<uint8>=1..=3;Object.defineProperty(r,\"contains\",{get(){events+=\"g\";return function(x){events+=\"c\";return \"wrong\";};}});function arg(){events+=\"a\";return r;}try{const x=r.contains(arg());}catch(e){events+=e instanceof TypeError?\"t\":\"x\";}events;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "gact"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains heterogeneous runtime uint16",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=5;const s:ClosedRange.<uint16>=2..=4;const x=r.contains(s);String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains heterogeneous runtime decimal64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=5;const s:ClosedRange.<decimal64>=2..=4;const x=r.contains(s);String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains heterogeneous runtime rational64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=5;const s:ClosedRange.<rational64>=2..=4;const x=r.contains(s);String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains heterogeneous runtime float128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=5;const s:ClosedRange.<float128>=2..=4;const x=r.contains(s);String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect access r[\"intersect\"](s)",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>){const x:string=r[\"intersect\"](s).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect access r?.intersect(s)",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>){const x:string=r?.intersect(s).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect access r.intersect?.(s)",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>){const x:string=r.intersect?.(s).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect access r[\"intersect\"]?.(s)",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>){const x:string=r[\"intersect\"]?.(s).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect extraction const f=r.intersect;",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>){const f=r.intersect;const x:string=f(s).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect extraction const {intersect:f}=r;",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>){const {intersect:f}=r;const x:string=f(s).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect receiver alternatives",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>|RangeTo.<uint16>,s:ClosedRange.<uint32>){const x:string=r.intersect(s).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect untyped receiver stays gradual",
+      "steps": [
+        {
+          "source": "function unused(r,s){const x:string=r.intersect(s).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect whole any receiver stays gradual",
+      "steps": [
+        {
+          "source": "function unused(r:any,s:ClosedRange.<uint8>){const x:string=r.intersect(s).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect erased destination is explicit",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;r.intersect=()=>\"wrong\";const x:any=r.intersect(r);String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "wrong"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect replaced method checks inferred binding",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;r.intersect=()=>\"wrong\";let ok=false;try{const x=r.intersect(r);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect replaced method checks declared return",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>):RangeBounds.<uint8>{return r.intersect(r);}const r:ClosedRange.<uint8>=1..=3;r.intersect=()=>\"wrong\";let ok=false;try{f(r);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect optional replacement checks result",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>|undefined){const x=r?.intersect(r);return x;}const r:ClosedRange.<uint8>=1..=3;r.intersect=()=>\"wrong\";let ok=false;try{f(r);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect optional short circuit skips argument",
+      "steps": [
+        {
+          "source": "let calls=0;function arg(){calls++;return 1..=3;}function f(r:ClosedRange.<uint8>|undefined){return r?.intersect(arg());}String(f(undefined))+\":\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect extraction does not bind this",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;const f=r.intersect;let ok=false;try{f(r);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect named argument",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>){const x:string=r.intersect(other: s).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect preserves argument effects on failure",
+      "steps": [
+        {
+          "source": "let events=\"\";const r:ClosedRange.<uint8>=1..=3;Object.defineProperty(r,\"intersect\",{get(){events+=\"g\";return function(x){events+=\"c\";return \"wrong\";};}});function arg(){events+=\"a\";return r;}try{const x=r.intersect(arg());}catch(e){events+=e instanceof TypeError?\"t\":\"x\";}events;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "gact"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect heterogeneous runtime uint16",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=5;const s:ClosedRange.<uint16>=2..=4;const x=r.intersect(s);String(x.start)+\":\"+String(x.end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2:4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect heterogeneous runtime decimal64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=5;const s:ClosedRange.<decimal64>=2..=4;const x=r.intersect(s);String(x.start)+\":\"+String(x.end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2:4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect heterogeneous runtime rational64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=5;const s:ClosedRange.<rational64>=2..=4;const x=r.intersect(s);String(x.start)+\":\"+String(x.end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2:4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect heterogeneous runtime float128",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=5;const s:ClosedRange.<float128>=2..=4;const x=r.intersect(s);String(x.start)+\":\"+String(x.end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2:4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "left full retains known domain",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<any>,s:ClosedRange.<uint8>){const x:string=r.intersect(s).end;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "left full admits byte view",
+      "steps": [
+        {
+          "source": "function f(r:RangeFull.<any>,s:ClosedRange.<uint8>):RangeBounds.<uint8>{return r.intersect(s);} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "right full retains known domain",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:RangeFull.<any>){const x:string=r.intersect(s).end;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "right full admits byte view",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>,s:RangeFull.<any>):RangeBounds.<uint8>{return r.intersect(s);} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erasure stays gradual RangeBounds.<any> ClosedRange.<uint8>",
+      "steps": [
+        {
+          "source": "function unused(r:RangeBounds.<any>,s:ClosedRange.<uint8>){const x:string=r.intersect(s).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased intersection still establishes range shape RangeBounds.<any> ClosedRange.<uint8>",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<any>,s:ClosedRange.<uint8>){const x:string=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "erasure stays gradual ClosedRange.<uint8> RangeBounds.<any>",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,s:RangeBounds.<any>){const x:string=r.intersect(s).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased intersection still establishes range shape ClosedRange.<uint8> RangeBounds.<any>",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:RangeBounds.<any>){const x:string=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "erasure stays gradual ClosedRange.<any> ClosedRange.<uint8>",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<any>,s:ClosedRange.<uint8>){const x:string=r.intersect(s).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased intersection still establishes range shape ClosedRange.<any> ClosedRange.<uint8>",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<any>,s:ClosedRange.<uint8>){const x:string=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "erasure stays gradual RangeFull.<any> RangeFull.<any>",
+      "steps": [
+        {
+          "source": "function unused(r:RangeFull.<any>,s:RangeFull.<any>){const x:string=r.intersect(s).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased intersection still establishes range shape RangeFull.<any> RangeFull.<any>",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<any>,s:RangeFull.<any>){const x:string=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "erasure stays gradual ClosedRange.<uint8> any",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,s:any){const x:string=r.intersect(s).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased intersection still establishes range shape ClosedRange.<uint8> any",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:any){const x:string=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "union other retains every domain",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>|RangeFrom.<uint32>){const x:RangeBounds.<uint8|uint16>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "union full-neutral alternatives",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>,s:RangeFull.<any>|ClosedRange.<uint8>){const x:string=r.intersect(s).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "union any alternative poisons endpoint",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,s:RangeFull.<any>|RangeBounds.<any>){const x:string=r.intersect(s).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite key methods retain intersection contribution",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>,k:\"intersect\"|\"take\"){const x:string=r[k](s).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite keys with Boolean contribution",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>,k:\"intersect\"|\"contains\"){const x:string=r[k](s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "unproved array iteration leaves intersection endpoint gradual",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>){const x:string=r.intersect(...[s]).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic returned method substitutes receiver U",
+      "steps": [
+        {
+          "source": "function method<U:type>(r:RangeBounds.<U>){return r.intersect;}const a:ClosedRange.<uint8>=1..=5;const b:ClosedRange.<uint16>=2..=4;const f=method.<uint8>(a);const c:RangeBounds.<uint8|uint16>=f.call(a,b);String(c.start);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic returned method retains domain",
+      "steps": [
+        {
+          "source": "function method<U:type>(r:RangeBounds.<U>){return r.intersect;}function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>){const f=method.<uint8>(r);const x:string=f(s).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic intersection returns both parameters",
+      "steps": [
+        {
+          "source": "function f<T:type,U:type>(r:RangeBounds.<T>,s:RangeBounds.<U>):RangeBounds.<T|U>{return r.intersect(s);}const a:ClosedRange.<uint8>=1..=5;const b:ClosedRange.<uint16>=2..=4;const c=f.<uint8,uint16>(a,b);String(c.start);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic intersection cannot discard independent U",
+      "steps": [
+        {
+          "source": "function bad<T:type,U:type>(r:RangeBounds.<T>,s:RangeBounds.<U>){const x:RangeBounds.<T>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "keeps complete domain uint64",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint64>,s:RangeFull.<any>){const x:RangeBounds.<uint32>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "keeps complete domain uint.<128>",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint.<128>>,s:RangeFull.<any>){const x:RangeBounds.<uint32>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "keeps complete domain decimal128",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<decimal128>,s:RangeFull.<any>){const x:RangeBounds.<uint32>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "keeps complete domain rational64",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<rational64>,s:RangeFull.<any>){const x:RangeBounds.<uint32>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "keeps complete domain float128",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<float128>,s:RangeFull.<any>){const x:RangeBounds.<uint32>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "keeps complete domain uint8.<{brand:\"A\"}>",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8.<{brand:\"A\"}>>,s:RangeFull.<any>){const x:RangeBounds.<uint32>=r.intersect(s);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "heterogeneous endpoints retain identity",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=5;const b:ClosedRange.<uint16>=2..=6;const c=a.intersect(b);String(Reflect.typeOf(c)===(type Range.<uint8|uint16,Range.Bound.Closed,Range.Bound.Closed>))+\":\"+String(Reflect.typeOf(c.start)===(type uint16))+\":\"+String(Reflect.typeOf(c.end)===(type uint8));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "full-any identity keeps reflected domain",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=5;const b=(..);const c=b.intersect(a);String(Reflect.typeOf(c)===Reflect.typeOf(a));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "full-specific remains in reflected domain",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=5;const b:RangeFull.<uint16>=(..);const c=b.intersect(a);String(Reflect.typeOf(c)===(type Range.<uint8|uint16,Range.Bound.Closed,Range.Bound.Closed>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "descending result keeps crossed endpoints",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=2;const b:ClosedRange.<uint16>=4..=5;const c=a.intersect(b);String(c.isEmpty)+\":\"+String(c.start)+\":\"+String(c.end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:4:2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersection does not read public endpoints",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=5;const b:ClosedRange.<uint16>=2..=6;Object.defineProperty(a,\"start\",{get(){throw new Error(\"public\");}});const c=a.intersect(b);String(c.start);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected class endpoint preserves value-copy semantics",
+      "steps": [
+        {
+          "source": "class C{n:number;constructor(n:number){this.n=n;}operator<(other:C):boolean{return this.n<other.n;}}const x=new C(1);const y=new C(5);const z=new C(2);const a:ClosedRange.<C>=x..=y;const b:RangeFrom.<C>=(z..);const c=a.intersect(b);z.n=3;String(c.start===z)+\":\"+String(c.start?.n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false:2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata intersection does not validate again",
+      "steps": [
+        {
+          "source": "let count=0;type M={v:number};meta M{default={v:0};subtype(a,b){return a.v===b.v;}validate(x,m){count++;return true;}}type T=uint8.<{v:1}>;const a:ClosedRange.<T>=(1:=T)..=(5:=T);const b:ClosedRange.<T>=(2:=T)..=(4:=T);const before=count;const c=a.intersect(b);String(count===before)+\":\"+String(Reflect.typeOf(c.start)===(type T));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains exact wide scalar",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint64>=9007199254740993..=9007199254740993;String(a.contains(9007199254740992n))+\":\"+String(a.contains(9007199254740993n));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains does not convert a typed candidate",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=5;String(a.contains(2:=uint16))+\":\"+String(a.contains(300:=uint16));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains does not convert numeric text",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=5;String(a.contains(\"2\"))+\":\"+String(a.contains(true))+\":\"+String(a.contains())+\":\"+String(a.contains(NaN));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false:false:false:false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains empty heterogeneous range",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=5;const b:ClosedRange.<uint16>=300..=299;String(a.contains(b));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains ignores public range getters",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=5;const b:ClosedRange.<uint16>=2..=3;Object.defineProperty(b,\"start\",{get(){throw new Error(\"public\");}});String(a.contains(b));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains incomparable object keeps runtime error",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=5;a.contains({valueOf(){throw new Error(\"coercion\");}});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "destination does not reconstruct argument endpoints",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=5;const c:RangeBounds.<uint8|number>=a.intersect(2..=4);String(Reflect.typeOf(c.start)===(type number))+\":\"+String(Reflect.typeOf(c.end)===(type number));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "destination cannot select argument domain",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=5;const c:RangeBounds.<uint8>=a.intersect(2..=4);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "known positional argument before unknown spread retains contract",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,s:ClosedRange.<uint16>,xs:any){const x:string=r.intersect(s,...xs).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored method with receiver named U retains generic endpoint",
+      "steps": [
+        {
+          "source": "function method<U:type>(r:RangeBounds.<U>){return r.intersect;}function use<U:type>(r:RangeBounds.<U>,s:RangeBounds.<U>):RangeBounds.<U>{const f=method.<U>(r);return f.call(r,s);}const r:ClosedRange.<uint8>=1..=3;String(use.<uint8>(r,r).start);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersection view does not promise full concrete shape",
+      "steps": [
+        {
+          "source": "function bad<T:type>(r:RangeFull.<T>):RangeFull.<T>{return r.intersect(r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "contains failed initializer and recovery",
+      "steps": [
+        {
+          "source": "let effects=0;const r:ClosedRange.<uint8>=1..=3;r.contains=()=>{effects++;return \"wrong\";};const rejected=r.contains(r);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "String(effects);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        },
+        {
+          "source": "rejected;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "ReferenceError"
+          }
+        },
+        {
+          "source": "const fresh:ClosedRange.<uint8>=1..=3;String(fresh.contains(fresh));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersect failed initializer and recovery",
+      "steps": [
+        {
+          "source": "let effects=0;const r:ClosedRange.<uint8>=1..=3;r.intersect=()=>{effects++;return \"wrong\";};const rejected=r.intersect(r);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "String(effects);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        },
+        {
+          "source": "rejected;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "ReferenceError"
+          }
+        },
+        {
+          "source": "const fresh:ClosedRange.<uint8>=1..=3;String(fresh.intersect(fresh).start);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    }
+  ]
+}

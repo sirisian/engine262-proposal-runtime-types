@@ -104,7 +104,7 @@ import {
   scopeOfNames, typeParameterNamesOf, mentionsTypeParameter, substituteTypeParameters, substituteFreeTypeParameters, bindTypeParametersFromArguments,
 } from './type-parameters.mts';
 import {
-  awaitedElementType, numericFamilyOf, isRangeFamilyName, rangePropertyType, rangeArithmeticResultType, boundOrdinalOf, spanElementOfReceiver, spanExtentOfReceiver, iteratorMethodSignature, collectionMethodSignature, promiseMethodSignature,
+  awaitedElementType, numericFamilyOf, isRangeFamilyName, rangePropertyType, rangeArithmeticResultType, rangeIntersectionResultType, boundOrdinalOf, spanElementOfReceiver, spanExtentOfReceiver, iteratorMethodSignature, collectionMethodSignature, promiseMethodSignature,
   libraryConstructParameters,
 } from './std-signatures.mts';
 import { memberKind, normalizedMemberType, addMemberContract, abstractMemberViolation, inheritedFieldViolation, type MemberContract, sameFieldContract, type FieldContract } from './member-contracts.mts';
@@ -19022,6 +19022,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const selected = callee?.Kind === 'function'
           ? selectCallSignature(node, expandValueSpreads(node.Arguments ?? []), callee, node, false) : null;
         if (selected) {
+          if (selected.RangeIntersectionReceiver) {
+            const name = patternExpression(node.CallExpression);
+            if (name?.type === 'IdentifierReference' && !immutablyBound(name.name, name)) return null;
+            const mapped = mapCallArguments(selected.Parameters, expandValueSpreads(node.Arguments ?? []));
+            const supplied = mapped.entries.filter((entry) => entry.slot === 0);
+            const other = supplied.length === 1 ? argumentStaticType(supplied[0]!.node) : null;
+            return rangeIntersectionResultType(selected.RangeIntersectionReceiver, other);
+          }
           // #sec-published-return-types: the Static Type of a call is the
           // DECLARED return where one is declared, and the published inferred
           // return otherwise. The two live in separate fields so that identity,
@@ -32586,7 +32594,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const callContextual = (n as unknown as { ContextualType?: Known }).ContextualType
             ?? (c.CallExpression as unknown as { ContextualType?: Known } | undefined)?.ContextualType;
           const declaredReturn = (chosen as { Return?: TypeRecord }).Return;
-          if (callContextual && declaredReturn) {
+          if (callContextual && declaredReturn && !chosen.RangeIntersectionReceiver) {
             bindTypeParametersFromArguments(
               [{ Type: declaredReturn as Known }],
               [callContextual as Known],
