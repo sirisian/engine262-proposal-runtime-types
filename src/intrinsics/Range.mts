@@ -1,3 +1,4 @@
+import { RegisterGenericMap, CallGenericMapDelegate } from '../abstract-ops/generic-map.mts';
 import {
   Value, ObjectValue, NumberValue, BigIntValue, TypedNumberValue, isTypedNumber, wellKnownSymbols,
   type Arguments, type FunctionCallContext,
@@ -267,7 +268,7 @@ function* RangeProto_scale([factor = Value.undefined]: Arguments, { thisValue }:
  * ordinary property access below; neither inheritance nor the method name
  * proves that the public method still holds the original built-in.
  */
-function* delegateToIterator(name: string, args: Arguments, thisValue: Value): ValueEvaluator {
+function* delegateToIterator(name: string, args: Arguments, thisValue: Value, output?: TypeRecord): ValueEvaluator {
   const self = thisRange(thisValue);
   if (!self) {
     return Throw.TypeError('$1 is not a range', thisValue);
@@ -298,12 +299,13 @@ function* delegateToIterator(name: string, args: Arguments, thisValue: Value): V
   if (!IsCallable(fn)) {
     return Throw.TypeError('$1 is not a function', fn);
   }
+  if (output) return yield* CallGenericMapDelegate(fn, it, args, output);
   return Q(yield* Call(fn, it, args));
 }
 
 /** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
-function* RangeProto_map(args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
-  return yield* delegateToIterator('map', args, thisValue);
+function* RangeProto_map(args: Arguments, { thisValue }: FunctionCallContext, output?: TypeRecord): ValueEvaluator {
+  return yield* delegateToIterator('map', args, thisValue, output);
 }
 
 /** https://sirisian.github.io/proposal-runtime-types/#sec-ranges */
@@ -431,4 +433,5 @@ export function bootstrapRangePrototype(realmRec: Realm): void {
     [wellKnownSymbols.iterator, RangeProto_iterator, 0],
   ], realmRec.Intrinsics['%Object.prototype%'], 'Range');
   realmRec.Intrinsics['%Range.prototype%'] = proto;
+  RegisterGenericMap(proto.properties.get('map')!.Value as ObjectValue, realmRec, RangeProto_map);
 }

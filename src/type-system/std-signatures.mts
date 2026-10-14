@@ -387,7 +387,8 @@ export const iteratorMethodSignature = (name: string, element: TypeRecord, synch
       // callback-result inference then binds U. Avoid capturing a free U in I.
       let resultName = 'U';
       while (!SameType(element, substituteTypeParameters(element, new Map([[resultName, neverType]]))!)) resultName += '_';
-      const declaration = { type: 'TypeParameter', BindingIdentifier: { name: resultName } } as ParseNode.TypeParameter;
+      // The internal name avoids capture; the public type-argument label is U.
+      const declaration = { type: 'TypeParameter', BindingIdentifier: { name: 'U' } } as ParseNode.TypeParameter;
       const result: TypeRecord = { Kind: 'parameter', Name: resultName };
       return { Kind: 'function', Signatures: [{
         TypeParameters: [{ Name: resultName, Kind: 'type', Variadic: false, Variance: 'invariant', Arity: 0,

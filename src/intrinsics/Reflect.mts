@@ -1032,7 +1032,7 @@ function recordToNode(t: TypeRecord, realm: Realm): ObjectValue {
         if (tpRecords && tpRecords.length > 0) {
           const tps = tpRecords.map((tp) => {
             const o = OrdinaryObjectCreate(realm.Intrinsics['%Object.prototype%']);
-            X(CreateDataProperty(o, Value('name'), Value(tp.Name)));
+            X(CreateDataProperty(o, Value('name'), Value(tp.Declaration.BindingIdentifier.name)));
             X(CreateDataProperty(o, Value('kind'), Value(tp.Kind)));
             X(CreateDataProperty(o, Value('variadic'), tp.Variadic ? Value.true : Value.false));
             X(CreateDataProperty(o, Value('variance'), Value(tp.Variance)));

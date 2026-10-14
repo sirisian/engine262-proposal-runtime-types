@@ -13925,7 +13925,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     const assigned = assignTypeArgumentsShared(
-      typeParams.map((t) => ({ Name: t.Name, Variadic: t.Variadic, HasDefault: !!validation || t.DefaultNode !== null })),
+      typeParams.map((t) => ({ Name: t.Declaration.BindingIdentifier.name, Variadic: t.Variadic, HasDefault: !!validation || t.DefaultNode !== null })),
       entries,
       entries.map((e) => e.name),
       (index, entry) => {

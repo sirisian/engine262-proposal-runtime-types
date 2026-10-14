@@ -1,3 +1,6 @@
+import { RegisterGenericMap } from '../abstract-ops/generic-map.mts';
+import { RequireType } from '../abstract-ops/runtime-types.mts';
+import type { TypeRecord } from '../type-system/records.mts';
 import {
   AbruptCompletion,
   EnsureCompletion,
@@ -417,7 +420,7 @@ function IteratorProto_iterator(_args: Arguments, { thisValue }: FunctionCallCon
 }
 
 /** https://tc39.es/ecma262/#sec-iterator.prototype.map */
-function* IteratorProto_map([mapper = Value.undefined]: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
+function* IteratorProto_map([mapper = Value.undefined]: Arguments, { thisValue }: FunctionCallContext, output?: TypeRecord): ValueEvaluator {
   // 1. Let O be the this value.
   const O = thisValue;
   // 2. If O is not an Object, throw a TypeError exception.
@@ -448,9 +451,16 @@ function* IteratorProto_map([mapper = Value.undefined]: Arguments, { thisValue }
         return ReturnCompletion(Value.undefined);
       }
       // iii. Let mapped be Completion(Call(mapper, undefined, « value, 𝔽(counter) »)).
-      const mapped: ValueCompletion = yield* Call(mapper, Value.undefined, [value, Value(counter)]);
+      let mapped: ValueCompletion = yield* Call(mapper, Value.undefined, [value, Value(counter)]);
       // iv. IfAbruptCloseIterator(mapped, iterated).
       IfAbruptCloseIterator(mapped, iterated);
+      // The explicit output contract belongs to this helper invocation. It
+      // survives erasure and admission failures take the ordinary close path.
+      if (output && output.Kind !== 'void') {
+        __ts_cast__<Value>(mapped);
+        mapped = yield* RequireType(mapped, output);
+        IfAbruptCloseIterator(mapped, iterated);
+      }
       // v. Let completion be Completion(Yield(mapped)).
       __ts_cast__<Value>(mapped);
       const completion = EnsureCompletion(yield* Yield(mapped));
@@ -749,4 +759,5 @@ export function bootstrapIteratorPrototype(realmRec: Realm) {
   ], realmRec.Intrinsics['%Object.prototype%']);
 
   realmRec.Intrinsics['%Iterator.prototype%'] = proto;
+  RegisterGenericMap(proto.properties.get('map')!.Value as ObjectValue, realmRec, IteratorProto_map);
 }

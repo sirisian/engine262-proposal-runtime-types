@@ -645,14 +645,15 @@ export function* SelectExplicitCase(
   name: string,
   evaluateArguments?: () => PlainEvaluator<readonly ArgumentItem<Value>[]>,
   classFrame: Map<string, TypeRecord> | null = null,
+  preparedTypes?: readonly TypeRecord[],
 ): PlainEvaluator<CaseChoice> {
   // A named argument's label, ordered per candidate by SelectCase.
   // The arguments, and every written type the group's lists name, resolved now.
   // A spread argument - `f.<...Rest>()` from a case that captured `...const
   // Rest` - contributes the elements of the tuple it is bound to, each
   // positional: the pack a `...` capture binds is that tuple.
-  const names: (string | undefined)[] = [];
-  const args: Argument[] = [];
+  const names: (string | undefined)[] = preparedTypes?.map(() => undefined) ?? [];
+  const args: Argument[] = preparedTypes ? [...preparedTypes] : [];
   for (const node of typeArguments) {
     const record = Q(yield* TypeNodeToTypeRecord(node as never)) as TypeRecord;
     if ((node as { IsSpread?: boolean }).IsSpread) {

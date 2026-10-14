@@ -1,3 +1,4 @@
+import { GenericMapTypeOf } from '../abstract-ops/generic-map.mts';
 import type { PrivateEnvironmentRecord } from '../execution-context/PrivateEnvironment.mts';
 import { EnvironmentRecord, DeclarativeEnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity } from '../execution-context/Environment.mts';
 import { TypeNameEnvironmentFor } from '../execution-context/TypeNames.mts';
@@ -2395,6 +2396,8 @@ export function SpecializedFunctionSignatureOf(value: Value): SignatureRecord | 
 }
 
 export function RuntimeTypeOf(value: Value): TypeRecord {
+  const genericMap = GenericMapTypeOf(value);
+  if (genericMap) return genericMap;
   if (value instanceof ObjectValue) {
     const specialized = specializedFunctionTypes.get(value as unknown as object);
     if (specialized) {

@@ -11,7 +11,7 @@ import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ObjectValue as ObjectValueClass } from '../value.mts';
 import { RuntimeTypeOf, BindTypeArgumentsInto } from '../type-system/runtime.mts';
-import { MarkTypeArgumentsCallee, ClearTypeArgumentsCallee, Evaluate_TypeArgumentsExpression } from './RuntimeTypesDeclarations.mts';
+import { MarkTypeArgumentsCallee, ClearTypeArgumentsCallee, Evaluate_TypeArgumentsExpression, type TypeArgumentsCallTarget } from './RuntimeTypesDeclarations.mts';
 import { CaseGroupMembers, SelectExplicitCase, WithSelectedInvocation } from '../abstract-ops/callable-selection.mts';
 import { DereferenceReferenceValue } from '../abstract-ops/reference-operations.mts';
 import { EvaluatePropertyAccessWithExpressionKey, EvaluatePropertyAccessWithIdentifierKey } from './EvaluatePropertyAccess.mts';
@@ -239,8 +239,9 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
   // A `TypeArgumentsExpression` callee evaluates to the BARE function
   // here - this call binds the arguments itself - and to its specialization
   // value everywhere else (#sec-generic-function-values).
+  const preparedCallee: TypeArgumentsCallTarget = {};
   if (memberExpr.type === 'TypeArgumentsExpression') {
-    MarkTypeArgumentsCallee();
+    MarkTypeArgumentsCallee(preparedCallee);
   }
   let ref;
   try {
@@ -254,6 +255,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
   }
   // 5. Let func be ? GetValue(ref).
   let func = Q(yield* GetValue(ref));
+  if (preparedCallee.reference) ref = preparedCallee.reference;
   // proposal-runtime-types #sec-higher-kinded-parameters: "A higher-kinded
   // parameter is bound only by explicit application. It is never inferred from
   // an argument's type."

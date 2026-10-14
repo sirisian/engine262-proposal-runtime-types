@@ -1,3 +1,4 @@
+import { ApplyGenericMap, GenericMapTypeOf } from '../abstract-ops/generic-map.mts';
 import { CreateGenericAliasRecord } from '../type-system/generic-alias-context.mts';
 import { InstallTypeLayoutProperties } from '../type-system/layout-properties.mts';
 import { RememberArrayCapacity } from '../type-system/array-capacity-origin.mts';
@@ -2718,9 +2719,10 @@ const genericFunctionSpecializations = new WeakMap<object, Map<string, Value>>()
  * the callee must evaluate to the bare function there, not to a specialization
  * that would be bound twice.
  */
-let evaluatingTypeArgumentsCallee = false;
-export function MarkTypeArgumentsCallee(): void {
-  evaluatingTypeArgumentsCallee = true;
+export type TypeArgumentsCallTarget = { reference?: Value | ReferenceRecord };
+let evaluatingTypeArgumentsCallee: boolean | TypeArgumentsCallTarget = false;
+export function MarkTypeArgumentsCallee(target?: TypeArgumentsCallTarget): void {
+  evaluatingTypeArgumentsCallee = target ?? true;
 }
 export function ClearTypeArgumentsCallee(): void {
   evaluatingTypeArgumentsCallee = false;
@@ -2859,6 +2861,15 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
     return ref;
   }
   const value = peeked.Value;
+  if (surroundingAgent.feature('runtime-types') && value instanceof Value && GenericMapTypeOf(value)) {
+    const specialized = Q(yield* ApplyGenericMap(value, node.TypeArguments.TypeArgumentList));
+    // The call owns this handoff. The one-shot marker was consumed before
+    // evaluating the callee or type arguments, so nested evaluation cannot
+    // steal it. Keep the already selected receiver without reading a getter twice.
+    if (typeof asCallee === 'object') asCallee.reference = inspected.Value as Value | ReferenceRecord;
+    return specialized;
+  }
+
   // complex's concrete default and family declaration share their public
   // spelling. Reapplication of that unshadowed intrinsic spelling binds the
   // family, without creating an identity-distinct default Type Object.
