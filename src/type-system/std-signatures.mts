@@ -155,7 +155,7 @@ export const rangeIteratorItemType = (domain: TypeRecord, endpointView = false):
  * IteratorHelper is not a global constructor. Keep exhaustion undefined on
  * both next and the self-iteration protocol, independently of public defaults.
  */
-const iteratorHelperType = (element: TypeRecord): TypeRecord => {
+export const iteratorHelperType = (element: TypeRecord): TypeRecord => {
   const args = [element, makePrimitive('undefined'), anyType];
   const iterator = iterationInterfaceRecord('Iterator', args)! as Extract<TypeRecord, { Kind: 'object' }>;
   return {
@@ -293,6 +293,7 @@ export const rangePropertyType = (receiver: Known, key: string): Known => {
     case 'length': return makePrimitive('bigint');
     case 'map':
     case 'filter':
+    case 'flatMap':
     case 'toArray':
     case 'forEach':
     case 'some':
@@ -392,10 +393,13 @@ export const iteratorMethodSignature = (name: string, element: TypeRecord): Know
         Parameters: [parameter(cb(result) as TypeRecord, { Name: 'callback' })], Return: iteratorHelperType(result),
       }] };
     }
+    case 'flatMap': return { Kind: 'function', Signatures: [{
+      Parameters: [parameter(cb(anyT) as TypeRecord, { Name: 'callback' })],
+      Return: iteratorHelperType(anyT), IteratorFlattening: true,
+    }] };
     case 'filter': return fn([cb(boolType) as TypeRecord], iteratorHelperType(element), ['callback']);
     case 'take':
     case 'drop': return fn([index], iteratorOf(element));
-    case 'flatMap': return fn([cb(anyT) as TypeRecord], iteratorOf(anyT), ['callback']);
     case 'toArray': return fn([], { Kind: 'array', Element: element, Extent: 'dynamic' } as unknown as TypeRecord);
     case 'forEach': return fn([cb(voidType) as TypeRecord], voidType);
     case 'some':

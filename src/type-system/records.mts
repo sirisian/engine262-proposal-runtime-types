@@ -350,6 +350,11 @@ export interface SignatureRecord {
    * view. It does not assert that the replaceable method is the intrinsic.
    */
   readonly RangeIntersectionReceiver?: TypeRecord;
+  /** Derive normal items from the callback's established result, without
+   * imposing that inferred result as a new callback return obligation.
+   * This is an operation contribution, not proof of intrinsic identity.
+   */
+  readonly IteratorFlattening?: true;
   readonly Parameters: readonly ParameterRecord[];
   readonly Return: TypeRecord | null;
   /** #sec-inferred-return-types: the published return when none was declared. */

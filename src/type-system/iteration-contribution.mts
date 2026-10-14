@@ -1,5 +1,5 @@
 import { CanonicalizeType } from './intern.mts';
-import type { TypeRecord } from './records.mts';
+import type { TypeRecord, SignatureRecord } from './records.mts';
 import { wellKnownSymbols, Value } from '#self';
 
 export interface IterationContribution {
@@ -15,6 +15,79 @@ const valueRead = (property: { type: TypeRecord, optional?: boolean } | undefine
     { Kind: 'primitive', Name: 'undefined', Arguments: [] }] }) : property.type : null;
 const join = (types: readonly TypeRecord[]): TypeRecord | null => types.length === 0 ? null
   : types.length === 1 ? types[0]! : CanonicalizeType({ Kind: 'union', Members: types });
+
+/** #sec-static-flattening-contribution: normal items reached by
+ * GetIteratorFlattenable with reject-primitives. Unknown is not empty.
+ * This walk neither reads live properties nor assumes that an open shape's
+ * undeclared @@iterator is absent. Arrays' indexed storage is not evidence.
+ */
+export function StaticFlatteningContribution(
+  type: TypeRecord | null,
+  structureOf: (type: TypeRecord | null) => TypeRecord | null,
+  normalize: (type: TypeRecord | null) => TypeRecord | null,
+  nonObject: (type: TypeRecord | null) => boolean,
+  signatureResult: (signature: SignatureRecord) => TypeRecord | null,
+  signatureFails: (signature: SignatureRecord, receiver: TypeRecord) => boolean,
+): IterationContribution {
+  const never: TypeRecord = { Kind: 'union', Members: [] };
+  const combine = (types: readonly (TypeRecord | null)[]): TypeRecord | null => types.every((t) => t !== null)
+    ? join(types as TypeRecord[]) ?? never : null;
+  const active = new Map<string, Set<TypeRecord>>();
+  const visit = (raw: TypeRecord | null, stage: string, read: (t: TypeRecord) => TypeRecord | null): TypeRecord | null => {
+    const t = normalize(raw);
+    if (!t) return null;
+    const seen = active.get(stage) ?? new Set<TypeRecord>();
+    if (seen.has(t)) return null;
+    active.set(stage, seen);
+    seen.add(t);
+    try {
+      return t.Kind === 'union' ? combine(t.Members.map((arm) => visit(arm, stage, read))) : read(t);
+    } finally {
+      seen.delete(t);
+    }
+  };
+  const member = (t: TypeRecord, key: string | typeof wellKnownSymbols.iterator): TypeRecord | null => {
+    const shape = structureOf(t);
+    return shape?.Kind === 'object' ? valueRead(shape.Properties.find((p) => p.key === key)) : null;
+  };
+  // A void-returning callable type can hide an Object result; void is an
+  // unusable-result contract, not evidence for a primitive value category.
+  const impossible = (t: TypeRecord): boolean => nonObject(t);
+  const call = (raw: TypeRecord | null, receiver: TypeRecord, stage: string, result: (t: TypeRecord | null) => TypeRecord | null): TypeRecord | null => visit(raw, stage, (fn) => {
+    if (impossible(fn)) return never;
+    return fn.Kind === 'function' && fn.Signatures.length > 0
+      ? combine(fn.Signatures.map((s) => signatureFails(s, receiver) ? never : result(signatureResult(s)))) : null;
+  });
+  const step = (raw: TypeRecord | null): TypeRecord | null => visit(raw, 'step', (t) => {
+    if (impossible(t)) return never;
+    const shape = structureOf(t);
+    if (shape?.Kind !== 'object') return null;
+    const done = shape.Properties.find((p) => p.key === 'done');
+    if (!done?.optional && done?.type.Kind === 'literal' && done.type.Value === Value.true) return never;
+    return valueRead(shape.Properties.find((p) => p.key === 'value'));
+  });
+  const iterator = (raw: TypeRecord | null): TypeRecord | null => visit(raw, 'iterator', (t) => {
+    if (impossible(t)) return never;
+    if (t.Kind === 'nominal' && t.LibraryName === 'Generator') {
+      const yielded = t.Arguments[0];
+      return typeof yielded === 'object' ? yielded : null;
+    }
+    return call(member(t, 'next'), t, 'next', step);
+  });
+  return { element: visit(type, 'source', (t) => {
+    if (impossible(t)) return never;
+    if (t.Kind === 'primitive' && t.Name === 'Composite') {
+      const shape = t.Arguments[0];
+      return typeof shape === 'object' && shape?.Kind === 'tuple'
+        && shape.Elements.every((p) => !p.Rest && !p.DeclaredDefault)
+        ? combine(shape.Elements.map((p) => p.Type)) : null;
+    }
+    if (t.Kind === 'nominal' && t.LibraryName === 'Generator') return iterator(t);
+    return visit(member(t, wellKnownSymbols.iterator), 'hook', (hook) =>
+      hook.Kind === 'primitive' && ['null', 'undefined'].includes(hook.Name)
+        ? iterator(t) : call(hook, t, 'method', iterator));
+  }) };
+}
 
 /** #sec-static-iteration-contribution: infer from the iteration protocol, not indexed storage. */
 export function StaticIterationContribution(

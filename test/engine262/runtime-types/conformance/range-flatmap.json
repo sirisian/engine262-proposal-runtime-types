@@ -1,0 +1,1563 @@
+{
+  "cases": [
+    {
+      "name": "ClosedRange result",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.flatMap(function*(v){yield v;}).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeFrom.<uint8>){const x:string=r.flatMap(function*(v){yield v;}).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeTo.<uint8>){const x:string=r.flatMap(function*(v){yield v;}).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeFull.<uint8>){const x:string=r.flatMap(function*(v){yield v;}).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeBounds.<uint8>){const x:string=r.flatMap(function*(v){yield v;}).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "member r.flatMap(cb)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const cb=function*(v:uint8){yield v;};const f=r.flatMap;const x:string=r.flatMap(cb).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "member r[\"flatMap\"](cb)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const cb=function*(v:uint8){yield v;};const f=r.flatMap;const x:string=r[\"flatMap\"](cb).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "member r?.flatMap(cb)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const cb=function*(v:uint8){yield v;};const f=r.flatMap;const x:string=r?.flatMap(cb).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "member r.flatMap?.(cb)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const cb=function*(v:uint8){yield v;};const f=r.flatMap;const x:string=r.flatMap?.(cb).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "member f(cb)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const cb=function*(v:uint8){yield v;};const f=r.flatMap;const x:string=f(cb).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "destructured method result",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const {flatMap:f}=r;const x:string=f(function*(v){yield v;}).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "contextual v",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.flatMap((v,i)=>{const wrong:string=v;return [];});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "contextual i",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.flatMap((v,i)=>{const wrong:string=i;return [];});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "includes exhaustion function*(v){yield v;}",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:uint8=r.flatMap(function*(v){yield v;}).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "includes exhaustion v=>r.map(x=>x)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:uint8=r.flatMap(v=>r.map(x=>x)).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "includes exhaustion v=>r.filter(x=>true)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:uint8=r.flatMap(v=>r.filter(x=>true)).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "self iteration item",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.flatMap(function*(v){yield v;})[Symbol.iterator]().next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "chain sees flattened item",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.flatMap(v=>r.map(x=>\"text\")).map(v=>{const x:boolean=v;return x;});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ineligible v=>\"text\"",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.flatMap(v=>\"text\");}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_BUILTIN_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ineligible v=>1",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.flatMap(v=>1);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_BUILTIN_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ineligible v=>null",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.flatMap(v=>null);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_BUILTIN_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ineligible v=>undefined",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.flatMap(v=>undefined);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_BUILTIN_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ineligible v=>true",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.flatMap(v=>true);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_BUILTIN_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ineligible v=>{}",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.flatMap(v=>{});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_BUILTIN_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ineligible v=>v?1:\"s\"",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.flatMap(v=>v?1:\"s\");}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_BUILTIN_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ineligible v=>{return v?1:\"s\";}",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.flatMap(v=>{return v?1:\"s\";});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_BUILTIN_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ineligible member r.flatMap(cb)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>string){const f=r.flatMap;r.flatMap(cb);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_BUILTIN_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ineligible member r[\"flatMap\"](cb)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>string){const f=r.flatMap;r[\"flatMap\"](cb);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_BUILTIN_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ineligible member r?.flatMap(cb)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>string){const f=r.flatMap;r?.flatMap(cb);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_IMPOSSIBLE_TEST",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ineligible member r.flatMap?.(cb)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>string){const f=r.flatMap;r.flatMap?.(cb);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_IMPOSSIBLE_TEST",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ineligible member f(cb)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>string){const f=r.flatMap;f(cb);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_BUILTIN_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "protocol direct",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:undefined,next:()=>{done:false,value:string}|{done:true,value:boolean}}){const x:boolean=r.flatMap(cb).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "admit protocol direct",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:undefined,next:()=>{done:false,value:string}|{done:true,value:boolean}}){const x:string|uint8|undefined=r.flatMap(cb)[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "protocol null hook",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:null,next:()=>{done:false,value:string}|{done:true,value:boolean}}){const x:boolean=r.flatMap(cb).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "admit protocol null hook",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:null,next:()=>{done:false,value:string}|{done:true,value:boolean}}){const x:string|uint8|undefined=r.flatMap(cb)[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "protocol iterable",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:()=>{next:()=>{done:false,value:string}|{done:true,value:boolean}}}){const x:boolean=r.flatMap(cb).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "admit protocol iterable",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:()=>{next:()=>{done:false,value:string}|{done:true,value:boolean}}}){const x:string|uint8|undefined=r.flatMap(cb)[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "protocol optional hook",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]?:()=>{next:()=>{done:false,value:string}|{done:true,value:boolean}},next:()=>{done:false,value:string}|{done:true,value:boolean}}){const x:boolean=r.flatMap(cb).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "admit protocol optional hook",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]?:()=>{next:()=>{done:false,value:string}|{done:true,value:boolean}},next:()=>{done:false,value:string}|{done:true,value:boolean}}){const x:string|uint8|undefined=r.flatMap(cb)[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "protocol union hook",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:(()=>{next:()=>{done:false,value:string}|{done:true,value:boolean}})|null,next:()=>{done:false,value:string}|{done:true,value:boolean}}){const x:boolean=r.flatMap(cb).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "admit protocol union hook",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:(()=>{next:()=>{done:false,value:string}|{done:true,value:boolean}})|null,next:()=>{done:false,value:string}|{done:true,value:boolean}}){const x:string|uint8|undefined=r.flatMap(cb)[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "protocol optional next",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:null,next?:()=>{done:false,value:string}|{done:true,value:boolean}}){const x:boolean=r.flatMap(cb).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "admit protocol optional next",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:null,next?:()=>{done:false,value:string}|{done:true,value:boolean}}){const x:string|uint8|undefined=r.flatMap(cb)[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "protocol optional value",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:null,next:()=>{done:false,value?:string}}){const x:boolean=r.flatMap(cb).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "admit protocol optional value",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:null,next:()=>{done:false,value?:string}}){const x:string|uint8|undefined=r.flatMap(cb)[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "protocol optional done",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:null,next:()=>{done?:true,value:string}}){const x:boolean=r.flatMap(cb).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "admit protocol optional done",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:null,next:()=>{done?:true,value:string}}){const x:string|uint8|undefined=r.flatMap(cb)[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "protocol nullable next result",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:null,next:()=>null|{done:false,value:string}}){const x:boolean=r.flatMap(cb).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "admit protocol nullable next result",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:null,next:()=>null|{done:false,value:string}}){const x:string|uint8|undefined=r.flatMap(cb)[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "protocol primitive or iterable",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>string|{[Symbol.iterator]:()=>{next:()=>{done:false,value:string}|{done:true,value:boolean}}}){const x:boolean=r.flatMap(cb).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "admit protocol primitive or iterable",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>string|{[Symbol.iterator]:()=>{next:()=>{done:false,value:string}|{done:true,value:boolean}}}){const x:string|uint8|undefined=r.flatMap(cb)[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "protocol two items",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:null,next:()=>{done:false,value:string}|{done:false,value:uint8}|{done:true,value:boolean}}){const x:boolean=r.flatMap(cb).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "admit protocol two items",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:null,next:()=>{done:false,value:string}|{done:false,value:uint8}|{done:true,value:boolean}}){const x:string|uint8|undefined=r.flatMap(cb)[Symbol.iterator]().next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "completion only",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:null,next:()=>{done:true,value:string}}){const x:undefined=r.flatMap(cb).next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty callback",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>never){const x:undefined=r.flatMap(cb).next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown open hook",
+      "steps": [
+        {
+          "source": "function unused<T: type>(r:ClosedRange.<uint8>,cb:()=>{next:()=>{done:false,value:string}}){const x:boolean=r.flatMap(cb).next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown open next",
+      "steps": [
+        {
+          "source": "function unused<T: type>(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:()=>object}){const x:boolean=r.flatMap(cb).next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown open value",
+      "steps": [
+        {
+          "source": "function unused<T: type>(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:null,next:()=>{done:false}}){const x:boolean=r.flatMap(cb).next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown unknown union",
+      "steps": [
+        {
+          "source": "function unused<T: type>(r:ClosedRange.<uint8>,cb:()=>object|{[Symbol.iterator]:()=>{next:()=>{done:false,value:string}|{done:true,value:boolean}}}){const x:boolean=r.flatMap(cb).next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown array",
+      "steps": [
+        {
+          "source": "function unused<T: type>(r:ClosedRange.<uint8>,cb:()=>[].<string>){const x:boolean=r.flatMap(cb).next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown tuple",
+      "steps": [
+        {
+          "source": "function unused<T: type>(r:ClosedRange.<uint8>,cb:()=>[string,uint8]){const x:boolean=r.flatMap(cb).next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown any",
+      "steps": [
+        {
+          "source": "function unused<T: type>(r:ClosedRange.<uint8>,cb:()=>any){const x:boolean=r.flatMap(cb).next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown unknown callback generic",
+      "steps": [
+        {
+          "source": "function unused<T: type>(r:ClosedRange.<uint8>,cb:()=>T){const x:boolean=r.flatMap(cb).next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "noncallable next",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:null,next:uint8}){r.flatMap(cb);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_BUILTIN_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nonobject step",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:undefined,next:()=>uint8}){r.flatMap(cb);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_BUILTIN_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "noncallable hook",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:uint8}){r.flatMap(cb);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_BUILTIN_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nonobject iterator",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:()=>uint8}){r.flatMap(cb);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_BUILTIN_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "normal generator result",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const it=r.flatMap(function*(v){yield v;return \"terminal\";});const a:uint8|undefined=it.next().value;const b:uint8|undefined=it[Symbol.iterator]().next().value;const c:undefined=it.next().done===true?undefined:undefined;if(a!==1||b!==2||it.next().value!==undefined)throw new Error(\"items\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "normal direct iterator result",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const it=r.flatMap(v=>{let done=false;return {[Symbol.iterator]:null,next():{done:false,value:uint8}|{done:true,value:string}{if(done)return {done:true,value:\"terminal\"};done=true;return {done:false,value:v};}};});const a:uint8|undefined=it.next().value;const b:uint8|undefined=it.next().value;if(a!==1||b!==2||it.next().value!==undefined)throw new Error(\"items\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "lazy one level and order",
+      "steps": [
+        {
+          "source": "let events=\"\";const r:ClosedRange.<uint8>=1..=2;const it=r.flatMap(v=>{events+=\"m\"+v;return (function*(){events+=\"y\";yield [v];events+=\"d\";})();});if(events!==\"\")throw new Error(\"eager\");const a:any=it.next().value;if(events!==\"m1y\"||!Array.isArray(a)||a[0]!==1)throw new Error(\"first\");it.next();if(events!==\"m1ydm2y\")throw new Error(events);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "early close closes inner and source",
+      "steps": [
+        {
+          "source": "let closed=0;const r:ClosedRange.<uint8>=1..=2;const it=r.flatMap(function*(v){try{yield v;yield v;}finally{closed++;}});it.next();it.return();if(closed!==1)throw new Error(\"closing\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "callback index uses uint64",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const it=r.flatMap((v,i)=>{const vv:any=v;const ii:any=i;if(!(vv is uint8)||!(ii is uint64))throw new Error(\"context\");return [i];});const xs=it.toArray();if(xs[0]!==0||xs[1]!==1)throw new Error(\"index\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "array iterator remains replaceable",
+      "steps": [
+        {
+          "source": "const xs:[].<uint8>=[1];xs[Symbol.iterator]=function*(){yield \"text\";};const r:ClosedRange.<uint8>=1..=1;const v:string=r.flatMap(x=>xs).next().value;if(v!==\"text\")throw new Error(\"item\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "no checking effects",
+      "steps": [
+        {
+          "source": "let effects=0;function unused(r:ClosedRange.<uint8>){r.flatMap(v=>({get [Symbol.iterator](){effects++;throw new Error(\"get\");}}));}if(effects!==0)throw new Error(\"effects\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gradual string fails lazily",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;const cb:any=v=>\"text\";const it=r.flatMap(cb);it.next();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async callback promise is not awaited",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;const it=r.flatMap(async v=>[v]);it.next();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "saved contextual callback item admission",
+      "steps": [
+        {
+          "source": "let saved:any;const r:ClosedRange.<uint8>=1..=1;r.flatMap=function(cb){saved=cb;};r.flatMap((v,i)=>[v]);saved(\"wrong\",0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "saved contextual callback index admission",
+      "steps": [
+        {
+          "source": "let saved:any;const r:ClosedRange.<uint8>=1..=1;r.flatMap=function(cb){saved=cb;};r.flatMap((v,i)=>[v]);saved(1,\"wrong\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit any input remains gradual",
+      "steps": [
+        {
+          "source": "let saved:any;const r:ClosedRange.<uint8>=1..=1;r.flatMap=function(cb){saved=cb;};r.flatMap((v:any)=>[v]);if(saved(\"text\")[0]!==\"text\")throw new Error(\"any\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "existing callback keeps identity",
+      "steps": [
+        {
+          "source": "let saved:any;const r:ClosedRange.<uint8>=1..=1;const cb=v=>[v];r.flatMap=function(f){saved=f;};r.flatMap(cb);if(saved!==cb||saved(\"text\")[0]!==\"text\")throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gradual receiver gains no participation",
+      "steps": [
+        {
+          "source": "function unused(r:any){const x:string=r.flatMap(v=>1).next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary same name remains ordinary",
+      "steps": [
+        {
+          "source": "function unused(r:{flatMap:(cb:()=>uint8)=>uint8}){const x:uint8=r.flatMap(()=>1);}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "helper receiver result",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:boolean=r.map(v=>v).flatMap(function*(v){yield \"text\";}).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "collection helper result",
+      "steps": [
+        {
+          "source": "function unused(m:Map.<string,uint8>){const x:boolean=m.values().flatMap(function*(v){yield v;}).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic captured input stays separate",
+      "steps": [
+        {
+          "source": "function outer<U: type>(r:ClosedRange.<uint8>,value:U){return r.flatMap(function*(v){yield value;});}const it=outer(1..=1,\"text\");if(it.next().value!==\"text\")throw new Error(\"capture\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh helper result admits structural iterator",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;const it:Iterator.<uint8,undefined,any>=r.flatMap(function*(v){yield v;});const x:uint8|undefined=it.next().value;if(x!==1)throw new Error(\"admit\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement failure state",
+      "steps": [
+        {
+          "source": "let effects=0;const r:ClosedRange.<uint8>=1..=1;r.flatMap=function(cb){effects++;return 3;};const result=r.flatMap(function*(v){yield v;});",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "if(effects!==1)throw new Error(\"effects\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        },
+        {
+          "source": "result;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "ReferenceError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nullable optional eligibility",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>|undefined,cb:()=>string){r?.flatMap(cb);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_BUILTIN_ARGUMENT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct completion terminal excluded",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;const it=r.flatMap(v=>({[Symbol.iterator]:null,next():{done:true,value:string}{return {done:true,value:\"ignored\"};}}));const x:undefined=it.next().value;\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inference adds no iterator getter read",
+      "steps": [
+        {
+          "source": "let n=0;const r:ClosedRange.<uint8>=1..=1;const it=r.flatMap(v=>({get [Symbol.iterator](){n++;return undefined;},next(){return {done:true,value:3};}}));if(n!==0)throw new Error(\"early\");it.next();if(n!==1)throw new Error(\"reads \"+n);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "symbolic yielded parameter preserved",
+      "steps": [
+        {
+          "source": "function f<T:type>(r:ClosedRange.<uint8>,cb:()=>Generator.<T,string,any>){const value:T|undefined=r.flatMap(cb).next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mutable extracted replacement defers",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){let g=r.flatMap;g=()=>\"text\";const v:string=g(v=>[v]);}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Composite positions contribute items",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>,cb:()=>Composite.<[uint8,string]>){const x:boolean=r.flatMap(cb).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty Composite contributes never",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>,cb:()=>Composite.<[]>){const x:undefined=r.flatMap(cb).next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator getter failure preserves preceding effect",
+      "steps": [
+        {
+          "source": "let n=0;const r:ClosedRange.<uint8>=1..=1;const it=r.flatMap(v=>({get [Symbol.iterator](){n++;throw new Error(\"hook\");}}));try{it.next();}catch(e){if(n!==1)throw new Error(\"count\");}if(n!==1)throw new Error(\"not invoked\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contextual any result permits async callback",
+      "steps": [
+        {
+          "source": "function accept(cb:(v:uint8)=>any){}accept(async v=>v);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written nonpromise async annotation still rejected",
+      "steps": [
+        {
+          "source": "async function f():any{return 1;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "SyntaxError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "void next result stays unknown",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;const inner:{[Symbol.iterator]:null,next:()=>void}={[Symbol.iterator]:null,next(){return {done:false,value:\"text\"};}};const it=r.flatMap(v=>inner);const x:string=it.next().value;if(x!==\"text\")throw new Error(\"item\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "void hook result stays unknown",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:()=>void}){const x:string=r.flatMap(cb).next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "void protocol arm poisons known yield",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:null,next:()=>void|{done:false,value:uint8}}){const x:string=r.flatMap(cb).next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "impossible next arity contributes no item",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:null,next:(required:boolean)=>{done:false,value:string}}|{[Symbol.iterator]:null,next:()=>{done:false,value:uint8}}){const value:uint8|undefined=r.flatMap(cb).next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "impossible hook arity contributes no item",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:(required:boolean)=>{next:()=>{done:false,value:string}}}|{[Symbol.iterator]:null,next:()=>{done:false,value:uint8}}){const value:uint8|undefined=r.flatMap(cb).next().value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional next argument remains viable",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>,cb:()=>{[Symbol.iterator]:null,next:(optional?:boolean)=>{done:false,value:string}}|{[Symbol.iterator]:null,next:()=>{done:false,value:uint8}}){const value:uint8|undefined=r.flatMap(cb).next().value;}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

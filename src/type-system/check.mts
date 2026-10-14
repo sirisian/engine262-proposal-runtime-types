@@ -30,7 +30,7 @@ import { specializedVectorMethod, vectorSpecialization, SetVectorConstantIndex, 
 import { BlockCapturesOf, MatchSpecializationList, SpecializationPatternError, NestedComponentCapturesOf, PrimitiveDeclaresParameters, SpecializationPatternsOf, ValidateSpecializationList } from './specialization-patterns.mts';
 import { AnalyzeCallableGroup, SelectSpecialization } from './specialization-selection.mts';
 import { IsUnknownMetadataCapture, MatchComponentListRaw, MatchComponentOperand, InstantiateComponentType, BindMetadataCaptures, CallableGroupHostFor, PrimitiveSlotParameters, MatchStandaloneCase, FixedTypeSubtrees } from './component-patterns.mts';
-import { StaticIterationContribution, AsyncIterationContribution, StaticDelegationContribution } from './iteration-contribution.mts';
+import { StaticIterationContribution, AsyncIterationContribution, StaticDelegationContribution, StaticFlatteningContribution } from './iteration-contribution.mts';
 import { FirstClassInlineCycle, type InlineField } from './inline-layout.mts';
 import { MissingLiteralSymbol, OrdinaryPrototypeLacks } from './literal-prototype.mts';
 import { ProvenLibraryBoundaries } from './library-boundary-origin.mts';
@@ -105,7 +105,7 @@ import {
 } from './type-parameters.mts';
 import {
   awaitedElementType, numericFamilyOf, isRangeFamilyName, rangePropertyType, rangeArithmeticResultType, rangeIntersectionResultType, boundOrdinalOf, spanElementOfReceiver, spanExtentOfReceiver, iteratorMethodSignature, collectionMethodSignature, promiseMethodSignature,
-  libraryConstructParameters,
+  libraryConstructParameters, iteratorHelperType,
 } from './std-signatures.mts';
 import { memberKind, normalizedMemberType, addMemberContract, abstractMemberViolation, inheritedFieldViolation, type MemberContract, sameFieldContract, type FieldContract } from './member-contracts.mts';
 import { intrinsicDeclarationRecord } from './records.mts';
@@ -17252,6 +17252,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     return argumentStaticType(argument);
   };
+  const flatteningSignatureResult = (signature: SignatureRecord): Known => {
+    if (signature.TypeParameters?.length) return null;
+    const only = signature as SignatureRecord & { ProvisionalReturn?: Known };
+    if (!only.Return && only.ProvisionalReturn === undefined && !only.InferredReturn && !inferencesInProgress.has(only)) driveInference(only);
+    observeInferenceInputs(only);
+    return only.Return ?? only.InferredReturn ?? (inferenceDepth > 0
+      ? only.ProvisionalReturn === undefined && inferencesInProgress.has(only) ? neverType : only.ProvisionalReturn ?? null
+      : null);
+  };
+  const flatteningCallbackResult = (argument: ParseNode, formal: TypeRecord): Known => {
+    const node = patternExpression(argument.type === 'NamedArgument' ? argument.AssignmentExpression : argument)!;
+    if (node.type === 'IdentifierReference' && !immutablyBound(node.name, node)) return null;
+    const callback = argumentStaticType(argument, formal);
+    const resultOf = (type: Known): Known => {
+      if (type?.Kind === 'union') {
+        const results = type.Members.map(resultOf);
+        return results.every((result) => result !== null) ? CanonicalizeType({ Kind: 'union', Members: results as TypeRecord[] }) : null;
+      }
+      const fn = effectiveFunctionType(callableForm(type));
+      if (fn?.Kind !== 'function' || fn.Signatures.length === 0) return null;
+      const results = fn.Signatures.map(flatteningSignatureResult);
+      return results.every((result) => result !== null) ? CanonicalizeType({ Kind: 'union', Members: results as TypeRecord[] }) : null;
+    };
+    return resultOf(callback);
+  };
   // A call decays in value positions. Location consumers explicitly request
   // its undegraded return contract, including unions of reference returns.
   /**
@@ -18945,9 +18970,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // q: Promise.<string, Error> = p.then((v) => (1 := uint8))` would pass
         // with the handler's uint8 never compared against the target.
         //
-        // #table-promise-prototype-signatures: `then` resolves with U | V, its
-        // two handlers returning INDEPENDENTLY, and `catch` with R | U - the
-        // receiver's value where it fulfilled, the handler's where it rejected.
+        // #table-promise-prototype-signatures: `then` joins its independent
+        // handlers' assimilated results; `catch` joins that contribution with
+        // R, the receiver's value where it fulfilled.
         // Every result rejects with `any`, a handler being a function and
         // anything being throwable.
         if (calledName === 'then' || calledName === 'catch') {
@@ -18971,7 +18996,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // A handler whose return cannot be read - a block body, which this
               // checker does not infer through - leaves the whole result unknown
               // rather than a union missing an arm.
-              const returned = inferredReturnType(arg, [takes]);
+              // Handler results are assimilated. Carry the known fulfillment
+              // contribution, not a Promise inside the next Promise's value.
+              const returned = awaitedType(inferredReturnType(arg, [takes]));
               if (!returned) {
                 unknownHandler = true;
                 return;
@@ -19042,6 +19069,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const selected = callee?.Kind === 'function'
           ? selectCallSignature(node, expandValueSpreads(node.Arguments ?? []), callee, node, false) : null;
         if (selected) {
+          if (selected.IteratorFlattening) {
+            const name = patternExpression(node.CallExpression);
+            if (name?.type === 'IdentifierReference' && !immutablyBound(name.name, name)) return null;
+            const mapped = mapCallArguments(selected.Parameters, expandValueSpreads(node.Arguments ?? []));
+            const supplied = mapped.certainEntries.filter((entry) => entry.slot === 0);
+            const result = supplied.length === 1 ? flatteningCallbackResult(supplied[0].node, selected.Parameters[0].Type) : null;
+            return iteratorHelperType(StaticFlatteningContribution(result, structureOf,
+              erasedForJudgment, knownNonObject, flatteningSignatureResult,
+              (signature, receiver) => protocolReceiverFails(signature, receiver)
+                || protocolArgumentsFail(signature.Parameters, [])).element ?? anyTypeRecord);
+          }
           if (selected.RangeIntersectionReceiver) {
             const name = patternExpression(node.CallExpression);
             if (name?.type === 'IdentifierReference' && !immutablyBound(name.name, name)) return null;
@@ -30898,6 +30936,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // that `undefined` there means a promise that never rejects is a claim no
     // body supports".
     if (resumable && !generatorType && declaredForReturn
+      && (returnAnnotation || declaredForReturn.Kind !== 'any')
       && (declaredForReturn as { LibraryName?: string }).LibraryName !== 'Promise') {
       const completion = Throw.SyntaxError(
         'an async function\'s return annotation types the promise it returns; write $1',
@@ -31213,7 +31252,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   });
   const iteratorContract = (member: ParseNode, element: TypeRecord, name: string): Known => {
     const signature = iteratorMethodSignature(name, element);
-    if (signature?.Kind !== 'function' || !['reduce', 'flatMap'].includes(name)) return signature;
+    if (signature?.Kind !== 'function' || name !== 'reduce') return signature;
     let parent = member.parent;
     while (parent?.type === 'ParenthesizedExpression') parent = parent.parent;
     if (parent?.type !== 'CallExpression') return signature;
@@ -31246,9 +31285,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const callback = make([parameter(type), parameter(element), parameter(indexTypeRecord())], type);
       return make([parameter(callback, { Name: 'callback' }), parameter(type, { Name: 'initial', Optional: !initial })], type);
     }
-    if (!checkedFlatteningCallbacks.has(parent)) {
-      checkedFlatteningCallbacks.add(parent);
-      const callback = staticTypeIn(callbackArgument, signature.Signatures[0].Parameters[0].Type);
+
+    return signature;
+  };
+
+  const checkFlatteningCallback = (call: ParseNode, signature: SignatureRecord, callbackArgument: ParseNode): void => {
+    const callbackType = signature.Parameters[0].Type;
+    const element = callbackType.Kind === 'function' ? callbackType.Signatures[0].Parameters[0].Type : anyTypeRecord;
+    if (!checkedFlatteningCallbacks.has(call)) {
+      checkedFlatteningCallbacks.add(call);
+      const callback = argumentStaticType(callbackArgument, signature.Parameters[0].Type);
       // #sec-iterator-helper-contracts: "It is a type error when every
       // established callback result alternative fails the reached flattening
       // protocol." A concise body that is a conditional has one alternative
@@ -31295,10 +31341,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return !!armType && armType.Kind !== 'any' && flatteningResultFails(armType);
       });
       if (protocolCallFails(callback, flatteningResultFails, [element, indexTypeRecord()], undefinedType) || everyArmFails) {
-        reportType('rt-builtin-argument', member, 'an iterator flatMap callback must return a flattenable object');
+        reportType('rt-builtin-argument', call, 'an iterator flatMap callback must return a flattenable object');
       }
     }
-    return signature;
   };
 
   /**
@@ -32362,6 +32407,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const chosen = sig;
       let effectiveBindings: ReadonlyMap<string, TypeRecord> | undefined;
       const mapped = mapCallArguments(chosen.Parameters, supplied);
+      if (chosen.IteratorFlattening) {
+        const callback = mapped.certainEntries.find((entry) => entry.slot === 0)?.node;
+        if (callback) checkFlatteningCallback(n, chosen, callback);
+      }
       if (mapped.spread && !mapped.named && chosen.Parameters.at(-1)?.Rest && chosen.Parameters.every((parameter) => !parameter.Optional)) {
         let minimumPosition = 0;
         let uncertain = false;

@@ -2,7 +2,7 @@ import { expect } from 'vitest';
 import {
   Agent, ManagedRealm, setSurroundingAgent, FinishLoadingImportedModule,
   EnsureCompletion, ObjectValue,
-  TypeDiagnosticOf,
+  TypeDiagnosticOf, runJobOn,
 } from '#self';
 
 /**
@@ -62,20 +62,18 @@ export function settledAfterJobs(source: string): string {
   const agent = new Agent({ features: ['runtime-types'] });
   setSurroundingAgent(agent);
   const realm = new ManagedRealm();
-  realm.evaluateScriptSkipDebugger(source);
+  const initial = EnsureCompletion(realm.evaluateScriptSkipDebugger(source));
+  expect(initial.Type, (initial.Value as { HostDefinedMessageString?: string })?.HostDefinedMessageString).toBe('normal');
   // A promise reaction schedules further jobs, so drain until empty rather than
   // a fixed number of turns.
   for (let i = 0; i < 1000; i += 1) {
-    const job = agent.jobQueue?.shift?.();
+    const job = agent.jobQueue.shift();
     if (!job) {
       break;
     }
-    try {
-      (job as { callback?: () => unknown }).callback?.();
-    } catch {
-      // A job that throws has already settled its promise.
-    }
+    runJobOn(agent, job);
   }
+  expect(agent.jobQueue.length, 'promise observation exceeded its job limit').toBe(0);
   const c = realm.evaluateScriptSkipDebugger('String(globalThis.settled);');
   return normalValueString(c, source);
 }
