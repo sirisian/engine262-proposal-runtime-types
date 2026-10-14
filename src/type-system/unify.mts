@@ -1,7 +1,7 @@
 import { joinTypes } from './logical-types.mts';
 import { CanonicalizeType } from './intern.mts';
 import { iterationInterfaceRecord } from './iteration-types.mts';
-import { makePrimitive, type TypeRecord } from './records.mts';
+import { makePrimitive, substituteTypeParameters, type TypeRecord } from './records.mts';
 import { IsAssignable, SameType } from './relations.mts';
 
 /**
@@ -121,6 +121,7 @@ export function substituteParametersNamed(t: TypeRecord | null, bindings: Readon
   if (t.Kind === 'parameter') {
     return bindings.get((t as { Name: string }).Name) ?? t;
   }
+  if (t.Kind === 'deferred' && t.Operator === 'iterator-completion') return substituteTypeParameters(t, bindings);
   const r = t as {
     Members?: readonly TypeRecord[],
     Arguments?: readonly (TypeRecord | number)[],

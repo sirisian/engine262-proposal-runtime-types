@@ -1,0 +1,932 @@
+{
+  "cases": [
+    {
+      "name": "result undefined void",
+      "steps": [
+        {
+          "source": "const x:IteratorResult.<uint8,void>={value:undefined,done:true};String(x.done);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "result undefined undefined",
+      "steps": [
+        {
+          "source": "const x:IteratorResult.<uint8,undefined>={value:undefined,done:true};String(x.done);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "result undefined any",
+      "steps": [
+        {
+          "source": "const x:IteratorResult.<uint8,any>={value:undefined,done:true};String(x.done);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "result payload void",
+      "steps": [
+        {
+          "source": "const x:IteratorResult.<uint8,void>={value:\"terminal\",done:true};if(x.value!==\"terminal\")throw new Error(\"payload\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default result void",
+      "steps": [
+        {
+          "source": "type Completion=IteratorResult.<uint8,void>;const raw:any={value:\"terminal\",done:true};const x:Completion=raw;if(x.value!==\"terminal\")throw new Error(\"payload\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "result payload any",
+      "steps": [
+        {
+          "source": "const x:IteratorResult.<uint8,any>={value:\"terminal\",done:true};if(x.value!==\"terminal\")throw new Error(\"payload\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default result any",
+      "steps": [
+        {
+          "source": "type Completion=IteratorResult.<uint8,any>;const raw:any={value:\"terminal\",done:true};const x:Completion=raw;if(x.value!==\"terminal\")throw new Error(\"payload\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "undefined result rejects wrong payload",
+      "steps": [
+        {
+          "source": "const x:IteratorResult.<uint8,undefined>={value:\"terminal\",done:true};",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "concrete result rejects wrong payload",
+      "steps": [
+        {
+          "source": "const x:IteratorResult.<uint8,string>={value:1,done:true};",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "yield arm still typed",
+      "steps": [
+        {
+          "source": "const x:IteratorResult.<uint8,void>={value:\"wrong\",done:false};",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "gradual result checks receiving destination",
+      "steps": [
+        {
+          "source": "const x:IteratorResult.<uint8,void>={value:\"wrong\",done:true};const y:uint8=x.value;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary void property stays uninhabitable",
+      "steps": [
+        {
+          "source": "const x:{value:void}={value:undefined};",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "result shorthand completion",
+      "steps": [
+        {
+          "source": "const x:IteratorResult.<uint8>={value:\"terminal\",done:true};\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generator completes void",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,void,void>{yield 1;}const it=f();const a=it.next();const b=it.next();if(b.done!==true)throw new Error(\"done\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generator completes undefined",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,undefined,void>{yield 1;}const it=f();const a=it.next();const b=it.next();if(b.done!==true)throw new Error(\"done\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generator shorthand completes",
+      "steps": [
+        {
+          "source": "function* f():uint8{yield 1;}const it=f();it.next();const b=it.next();if(b.done!==true)throw new Error(\"done\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written void body rejects known return",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,void,void>{return \"wrong\";}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "written void body rejects gradual return",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,void,void>{const x:any=\"wrong\";return x;}f().next();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written void body accepts bare return",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,void,void>{return;}const b=f().next();if(b.done!==true)throw new Error(\"done\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inferred undefined completion remains precise",
+      "steps": [
+        {
+          "source": "function* f(){yield 1;}const it=f();it.next();const b=it.next();if(b.done===true){const x:undefined=b.value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inferred undefined refuses wrong receiving type",
+      "steps": [
+        {
+          "source": "function* f(x:uint8){yield x;}function h(){const b=f(1).next();if(b.done===true){const x:string=b.value;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "narrowed yielded arm retains uint8",
+      "steps": [
+        {
+          "source": "function h(it:Generator.<uint8,void,void>){const b=it.next();if(b.done===false){const x:string=b.value;}}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "next input void remains restrictive",
+      "steps": [
+        {
+          "source": "function* f():uint8{yield 1;}f().next(1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "return input void remains restrictive",
+      "steps": [
+        {
+          "source": "function* f():uint8{yield 1;}f().return(1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "return without argument completes",
+      "steps": [
+        {
+          "source": "function* f():uint8{yield 1;}const it=f();it.next();const b=it.return();if(b.done!==true)throw new Error(\"done\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "throw caught then completes",
+      "steps": [
+        {
+          "source": "function* f():uint8{try{yield 1;}catch(e){return;}}const it=f();it.next();const b=it.throw(new Error(\"x\"));if(b.done!==true)throw new Error(\"done\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic alias completion void",
+      "steps": [
+        {
+          "source": "type Result<R:type>=IteratorResult.<uint8,R>;const x:Result.<void>={value:\"terminal\",done:true};\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic function result void",
+      "steps": [
+        {
+          "source": "function id<R:type>(x:IteratorResult.<uint8,R>){return x;}const raw:any={value:\"terminal\",done:true};const result=id.<void>(raw);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic alias completion undefined",
+      "steps": [
+        {
+          "source": "type Result<R:type>=IteratorResult.<uint8,R>;const x:Result.<undefined>={value:undefined,done:true};\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic function result undefined",
+      "steps": [
+        {
+          "source": "function id<R:type>(x:IteratorResult.<uint8,R>){return x;}const raw:any={value:undefined,done:true};const result=id.<undefined>(raw);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic alias completion string",
+      "steps": [
+        {
+          "source": "type Result<R:type>=IteratorResult.<uint8,R>;const x:Result.<string>={value:\"terminal\",done:true};\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic function result string",
+      "steps": [
+        {
+          "source": "function id<R:type>(x:IteratorResult.<uint8,R>){return x;}const raw:any={value:\"terminal\",done:true};const result=id.<string>(raw);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic closed results stay independent",
+      "steps": [
+        {
+          "source": "type Result<R:type>=IteratorResult.<uint8,R>;const a:Result.<void>={value:\"x\",done:true};const b:Result.<undefined>={value:undefined,done:true};const c:Result.<void>={value:1,done:true};\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic alias preserves concrete refusal",
+      "steps": [
+        {
+          "source": "type Result<R:type>=IteratorResult.<uint8,R>;const x:Result.<undefined>={value:\"wrong\",done:true};",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic function keeps concrete receiving backstop",
+      "steps": [
+        {
+          "source": "function id<R:type>(x:IteratorResult.<uint8,R>){return x;}const raw:any={value:\"wrong\",done:true};id.<undefined>(raw);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator method completion",
+      "steps": [
+        {
+          "source": "const it:Iterator.<uint8,void,void>={next(){return {value:\"terminal\",done:true};}};const b=it.next();if(b.done!==true)throw new Error(\"done\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "structural delegation completion",
+      "steps": [
+        {
+          "source": "const it:IterableIterator.<uint8,void,void>={next(){return {done:true,value:\"terminal\"};},[Symbol.iterator](){return this;}};function* g(){return yield* it;}const b=g().next();if(b.value!==\"terminal\")throw new Error(\"completion\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nominal delegation completion is gradual",
+      "steps": [
+        {
+          "source": "function* f():uint8{}const it=f();it.next=()=>({done:true,value:\"terminal\"});function* g(){return yield* it;}const b=g().next();if(b.value!==\"terminal\")throw new Error(\"completion\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delegation completed value keeps receiving check",
+      "steps": [
+        {
+          "source": "function* f():uint8{}const it=f();it.next=()=>({done:true,value:\"wrong\"});function* g(){const x:uint8=yield* it;}g().next();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "method extraction retains completed shape",
+      "steps": [
+        {
+          "source": "function* f():uint8{}const next=f().next;const b=next.call(f());if(b.done!==true)throw new Error(\"done\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary function void behavior unchanged",
+      "steps": [
+        {
+          "source": "function f():void{return;}f();\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async completion reaches typed Promise callback",
+      "steps": [
+        {
+          "source": "async function* f():AsyncGenerator.<uint8,void,void>{}f().next().then(v=>globalThis.result=String(v.done),e=>globalThis.result=e.constructor.name);\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "String(globalThis.result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async return without argument completes",
+      "steps": [
+        {
+          "source": "async function* f():uint8{yield 1;}const it=f();it.return().then(v=>globalThis.result=String(v.done),e=>globalThis.result=e.constructor.name);\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "String(globalThis.result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async written void body still rejects",
+      "steps": [
+        {
+          "source": "async function* f():uint8{const x:any=\"wrong\";return x;}f().next().then(v=>globalThis.result=\"unexpected\",e=>globalThis.result=e.constructor.name);\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "String(globalThis.result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async nominal delegation keeps terminal payload",
+      "steps": [
+        {
+          "source": "async function* f():uint8{}const it=f();it.next=()=>Promise.resolve({done:true,value:\"terminal\"});async function* g(){return yield* it;}g().next().then(v=>globalThis.result=String(v.value),e=>globalThis.result=e.constructor.name);\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "String(globalThis.result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "terminal"
+          }
+        }
+      ]
+    },
+    {
+      "name": "async from sync delegation assimilates terminal",
+      "steps": [
+        {
+          "source": "function* f():uint8{}const it=f();it.next=()=>({done:true,value:Promise.resolve(\"terminal\")});async function* g(){return yield* it;}g().next().then(v=>globalThis.result=String(v.value),e=>globalThis.result=e.constructor.name);\"scheduled\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "scheduled"
+          }
+        },
+        {
+          "source": "String(globalThis.result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "terminal"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured completion parameter closes to void",
+      "steps": [
+        {
+          "source": "function make<R:type>(){return (x:IteratorResult.<uint8,R>)=>x;}const f=make.<void>();const raw:any={value:\"terminal\",done:true};const result=f(raw);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured completion parameter closes independently",
+      "steps": [
+        {
+          "source": "function make<R:type>(){return (x:IteratorResult.<uint8,R>)=>x;}const a=make.<void>();const b=make.<undefined>();const raw:any={value:\"terminal\",done:true};a(raw);b({value:undefined,done:true});a(raw);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured concrete completion keeps admission",
+      "steps": [
+        {
+          "source": "function make<R:type>(){return (x:IteratorResult.<uint8,R>)=>x;}const f=make.<undefined>();const raw:any={value:\"wrong\",done:true};f(raw);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic interface closes completion projection",
+      "steps": [
+        {
+          "source": "interface Box<R:type>{result:IteratorResult.<uint8,R>;}const x:Box.<void>={result:{value:\"terminal\",done:true}};\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic interface preserves concrete completion",
+      "steps": [
+        {
+          "source": "interface Box<R:type>{result:IteratorResult.<uint8,R>;}const raw:any={result:{value:\"wrong\",done:true}};const x:Box.<undefined>=raw;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic getter result closes projection",
+      "steps": [
+        {
+          "source": "function read<R:type>(x:IteratorResult.<uint8,R>){return x.value;}const raw:any={value:\"terminal\",done:true};const x=read.<void>(raw);if(x!==\"terminal\")throw new Error(\"result\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "discarded result structural identity equals any result",
+      "steps": [
+        {
+          "source": "String(IteratorResult.<uint8,void>===IteratorResult.<uint8,any>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "discarded protocol retains distinct return input",
+      "steps": [
+        {
+          "source": "String((type Iterator.<uint8,void,void>)===(type Iterator.<uint8,any,void>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic aliases share normalized identity",
+      "steps": [
+        {
+          "source": "type Result<R:type>=IteratorResult.<uint8,R>;String(Result.<void>===IteratorResult.<uint8,any>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "void normalization does not erase yielded void",
+      "steps": [
+        {
+          "source": "const x:IteratorResult.<void,void>={value:undefined,done:false};",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "return concrete input remains restrictive",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"end\";}f().return(true);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "concrete completion remains precise",
+      "steps": [
+        {
+          "source": "function* f():Generator.<uint8,string,void>{return \"end\";}const x=f().next();if(x.done===true){const v:string=x.value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gradual next replacement preserves terminal payload",
+      "steps": [
+        {
+          "source": "function* f():uint8{}const it=f();it.next=()=>({done:true,value:\"terminal\"});const x=it.next();if(x.value!==\"terminal\")throw new Error(\"result\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong yielded record still fails receiving admission",
+      "steps": [
+        {
+          "source": "const raw:any={value:\"bad\",done:false};const x:IteratorResult.<uint8,void>=raw;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "structural self iteration preserves concrete completion",
+      "steps": [
+        {
+          "source": "function* f(it:IterableIterator.<uint8,string,void>){const x:uint8=yield* it;}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "async structural self iteration preserves concrete completion",
+      "steps": [
+        {
+          "source": "async function* f(it:AsyncIterableIterator.<uint8,string,void>){const x:uint8=yield* it;}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "structural explicit undefined completion remains precise",
+      "steps": [
+        {
+          "source": "function* f(it:IterableIterator.<uint8,undefined,void>){const x:undefined=yield* it;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "structural explicit string completion runs",
+      "steps": [
+        {
+          "source": "const it:IterableIterator.<uint8,string,void>={next(){return {done:true,value:\"terminal\"};},[Symbol.iterator](){return this;}};function* g(){return yield* it;}const b=g().next();if(b.done===true){const x:string=b.value;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    }
+  ]
+}

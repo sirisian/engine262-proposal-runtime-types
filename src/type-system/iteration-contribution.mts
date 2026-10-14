@@ -1,6 +1,6 @@
 import { CanonicalizeType } from './intern.mts';
 import { rangePropertyType } from './std-signatures.mts';
-import type { TypeRecord, SignatureRecord } from './records.mts';
+import { iteratorCompletionValue, type TypeRecord, type SignatureRecord } from './records.mts';
 import { wellKnownSymbols, Value } from '#self';
 
 export interface IterationContribution {
@@ -219,7 +219,7 @@ export function StaticDelegationContribution(
   if (type.Kind === 'union') return combine(type.Members.map((arm) => StaticDelegationContribution(arm, asynchronous, structureOf, awaitedType)));
   if (type.Kind === 'nominal' && (type.LibraryName === 'Generator' || (asynchronous && type.LibraryName === 'AsyncGenerator'))) {
     const [yielded, terminal] = type.Arguments;
-    return { yielded: typeof yielded === 'object' ? yielded : null, terminal: typeof terminal === 'object' ? terminal : null };
+    return { yielded: typeof yielded === 'object' ? yielded : null, terminal: typeof terminal === 'object' ? iteratorCompletionValue(terminal) : null };
   }
   // Indexed array/tuple storage does not prove a replaceable iterator's results.
   if (type.Kind === 'array' || type.Kind === 'tuple') return unknown;

@@ -10,7 +10,7 @@
 
 import type { TypeRecord } from './records.mts';
 import {
-  anyType, makePrimitive, parameter, iterationArguments, libraryTypeRecord,
+  anyType, makePrimitive, parameter, iterationArguments, libraryTypeRecord, iteratorCompletionValue,
 } from './records.mts';
 import { wellKnownSymbols, Value, surroundingAgent } from '#self';
 
@@ -188,15 +188,15 @@ const booleanLiteral = (v: boolean): TypeRecord => ({
  * `IteratorResult.<T, R>` — a union of two object types discriminated by `done`.
  *
  * This is the shape a `match` reads without a narrowing rule of its own: one arm
- * binds `value` at T, the other at R. TypeScript needed a compiler flag to stop
- * the same shape leaking `any`; here the discriminant does that work.
+ * binds `value` at T, the other at IteratorCompletionValue(R). A discarded
+ * completion is gradual; an explicit undefined completion remains precise.
  */
 function iteratorResult(T: TypeRecord, R: TypeRecord): TypeRecord {
   return {
     Kind: 'union',
     Members: [
       objectType([{ key: 'value', type: T }, { key: 'done', type: booleanLiteral(false) }]),
-      objectType([{ key: 'value', type: R }, { key: 'done', type: booleanLiteral(true) }]),
+      objectType([{ key: 'value', type: iteratorCompletionValue(R) }, { key: 'done', type: booleanLiteral(true) }]),
     ],
   } as unknown as TypeRecord;
 }
@@ -270,7 +270,7 @@ export function iterationInterfaceRecord(name: string, args: readonly (TypeRecor
     case 'IterableIterator':
       return objectType([
         ...(iterationInterfaceRecord('Iterator', [T, R, N]) as unknown as { Properties: never[] }).Properties,
-        ...(iterationInterfaceRecord('Iterable', [T]) as unknown as { Properties: never[] }).Properties,
+        { key: Symbol.for('iterator'), type: fnType([], iterationInterfaceRecord('Iterator', [T, R, N])!) },
       ] as never);
 
     case 'AsyncIterable':
@@ -280,7 +280,7 @@ export function iterationInterfaceRecord(name: string, args: readonly (TypeRecor
     case 'AsyncIterableIterator':
       return objectType([
         ...(iterationInterfaceRecord('AsyncIterator', [T, R, N]) as unknown as { Properties: never[] }).Properties,
-        ...(iterationInterfaceRecord('AsyncIterable', [T]) as unknown as { Properties: never[] }).Properties,
+        { key: Symbol.for('asyncIterator'), type: fnType([], iterationInterfaceRecord('AsyncIterator', [T, R, N])!) },
       ] as never);
     default:
       return null;

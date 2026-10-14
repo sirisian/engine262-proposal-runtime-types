@@ -200,9 +200,8 @@ export function generatorDeclaredType(annotation: TypeRecord | null, isAsync: bo
   // `function* g() { yield 1; return "done"; }`, ordinary JavaScript, with
   // `"a literal type of string" is not assignable to "void"`.
   //
-  // Only where a return contribution was found. A generator that returns
-  // nothing keeps the `void` the shorthand gives it, which is the same answer
-  // an ordinary function's empty contribution set reaches.
+  // A found return contribution wins over shorthand, including undefined
+  // from normal completion. An absent inference answer keeps the default.
   return libraryTypeRecord(want, [Y, inferredReturn ?? R, N]);
 }
 
@@ -224,6 +223,16 @@ export function iterationArguments(args: readonly (TypeRecord | number)[]): [Typ
     return a;
   };
   return [at(0), at(1), at(2)];
+}
+
+/** #sec-iterator-completion-value: a discarded terminal contract is not a value type. */
+export function iteratorCompletionValue(type: TypeRecord): TypeRecord {
+  if (type.Kind === 'void') return anyType;
+  if (type.Kind === 'deferred' && type.Operator === 'iterator-completion') return type;
+  if (type.Kind === 'parameter' || type.Kind === 'deferred') {
+    return { Kind: 'deferred', Operator: 'iterator-completion', Operands: [type] };
+  }
+  return type;
 }
 
 /** The Y, R, and N of a generator type, or null where the type is not one. */
@@ -883,11 +892,11 @@ const libraryTypeNames = new Set([
  */
 /**
  * What a deferred record will apply once its operands close: a core operator
- * tag, or a builder - the function value of a |ComputedType|. Two operators are
+ * tag, a built-in iteration-result projection, or a builder - the function value of a |ComputedType|. Two operators are
  * the same by `===`: tags by their spelling, builders by identity, which is
  * what "the same function" means for a builder.
  */
-export type DeferredOperator = 'keyof' | 'indexed' | object;
+export type DeferredOperator = 'keyof' | 'indexed' | 'iterator-completion' | object;
 
 /** Whether a deferred record's operator is a core one rather than a builder. */
 export function isCoreOperator(operator: DeferredOperator): operator is 'keyof' | 'indexed' {
@@ -1803,6 +1812,7 @@ export function displayType(t: TypeRecord, seen: readonly TypeRecord[] = []): st
         const r = a as TypeRecord;
         return r.Kind === 'parameter' ? (r as { Name: string }).Name : displayType(r);
       };
+      if (t.Operator === 'iterator-completion') return `IteratorCompletionValue<${show(t.Operands[0]!)}>`;
       if (t.Operator === 'keyof') {
         return `keyof ${show(t.Operands[0]!)}`;
       }
@@ -2199,6 +2209,7 @@ const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string
         ? walk(a as TypeRecord) as TypeRecord
         : a));
     const still = Operands.some((a) => a && typeof a === 'object' && 'Kind' in a && mentionsTypeParameter(a as TypeRecord));
+    if (t.Operator === 'iterator-completion') return iteratorCompletionValue(Operands[0] as TypeRecord);
     // An ALIAS application (#sec-specialization-lists) - its operator the alias
     // declaration - selects its right-hand side once its arguments close;
     // until then it stays deferred, and relates only to itself.
