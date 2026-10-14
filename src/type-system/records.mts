@@ -355,6 +355,10 @@ export interface SignatureRecord {
    * This is an operation contribution, not proof of intrinsic identity.
    */
   readonly IteratorFlattening?: true;
+  /** Select one recurrence contract at the call, also after method extraction.
+   * The item contribution is the callback's second parameter.
+   */
+  readonly IteratorReduction?: true;
   readonly Parameters: readonly ParameterRecord[];
   readonly Return: TypeRecord | null;
   /** #sec-inferred-return-types: the published return when none was declared. */

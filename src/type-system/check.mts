@@ -19623,9 +19623,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             const first = receiver.Arguments[0];
             if (first !== undefined && typeof first !== 'number') {
-              const sig = receiver.LibraryName.startsWith('Async')
-                ? iteratorMethodSignature((m.IdentifierName as { name: string }).name, first)
-                : iteratorContract(node, first, (m.IdentifierName as { name: string }).name);
+              const sig = iteratorMethodSignature((m.IdentifierName as { name: string }).name, first, !receiver.LibraryName.startsWith('Async'));
               if (sig) {
                 return sig;
               }
@@ -31250,43 +31248,48 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return everyProtocolAlternative(protocolMember(arm, wellKnownSymbols.iterator), (hook) =>
       nullishOnly(hook) ? directFails(arm) : protocolCallFails(hook, directFails, [], arm));
   });
-  const iteratorContract = (member: ParseNode, element: TypeRecord, name: string): Known => {
-    const signature = iteratorMethodSignature(name, element);
-    if (signature?.Kind !== 'function' || name !== 'reduce') return signature;
-    let parent = member.parent;
-    while (parent?.type === 'ParenthesizedExpression') parent = parent.parent;
-    if (parent?.type !== 'CallExpression') return signature;
-    const args = parent.Arguments;
-    const mapped = mapCallArguments(signature.Signatures[0].Parameters, args);
+  const reductionSignature = (signature: SignatureRecord, args: readonly ParseNode[], call: ParseNode): SignatureRecord => {
+    const mapped = mapCallArguments(signature.Parameters, args);
+    // Presence selects the recurrence. An uncertain spread must not be
+    // mistaken for either an omitted initial value or a supplied undefined.
     if (mapped.spread) return signature;
     const callbackArgument = mapped.certainEntries.find((entry) => entry.slot === 0)?.node;
     const initial = mapped.certainEntries.find((entry) => entry.slot === 1)?.node;
     if (!callbackArgument) return signature;
-    const make = (Parameters: readonly ParameterRecord[], Return: Known): TypeRecord => ({ Kind: 'function', Signatures: [{ Parameters, Return }] });
-    if (name === 'reduce') {
-      // #sec-iterator-helper-contracts: U is shared by the initial value,
-      // callback input and result, and the completed reduction. Without an
-      // initial value, the first iterated T is the accumulator.
-      let accumulator: Known = element;
-      if (initial) {
-        const callback = patternExpression(callbackArgument)!;
-        const formals = (callback as { ArrowParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[] }).ArrowParameters
-          ?? (callback as { FormalParameters?: readonly ParseNode[] }).FormalParameters;
-        const written = (formals?.[0] as { TypeAnnotation?: ParseNode.TypeAnnotation } | undefined)?.TypeAnnotation;
-        const known = isFunctionLiteral(callback) ? null : callableForm(staticType(callback));
-        const declaredInput = written ? resolveType(written.Type) : known?.Kind === 'function' && known.Signatures.length === 1
-          ? known.Signatures[0].Parameters[0]?.Type ?? null : null;
-        const input = declaredInput ?? contextualCallTypes.get(parent) ?? null;
-        accumulator = argumentStaticType(initial, input);
-        if (accumulator) accumulator = input && accumulator.Kind === 'literal' && literalFitsNumericType(accumulator, input)
-          ? input : widenForBinding(accumulator);
-      }
-      const type = accumulator ?? anyTypeRecord;
-      const callback = make([parameter(type), parameter(element), parameter(indexTypeRecord())], type);
-      return make([parameter(callback, { Name: 'callback' }), parameter(type, { Name: 'initial', Optional: !initial })], type);
+    const callbackType = signature.Parameters[0].Type;
+    if (callbackType.Kind !== 'function') return signature;
+    const element = callbackType.Signatures[0].Parameters[1].Type;
+    let accumulator: Known = element;
+    if (initial) {
+      const callback = patternExpression(callbackArgument.type === 'NamedArgument' ? callbackArgument.AssignmentExpression : callbackArgument)!;
+      const formals = (callback as { ArrowParameters?: readonly ParseNode[], FormalParameters?: readonly ParseNode[] }).ArrowParameters
+        ?? (callback as { FormalParameters?: readonly ParseNode[] }).FormalParameters;
+      const first = formals?.[0] as (ParseNode & { TypeAnnotation?: ParseNode.TypeAnnotation, Optional?: boolean, Initializer?: ParseNode }) | undefined;
+      const written = first?.TypeAnnotation ? resolveType(first.TypeAnnotation.Type) : null;
+      const known = isFunctionLiteral(callback) ? null : callableForm(staticType(callback));
+      const declared = written ? parameter(written, { Rest: first?.type === 'BindingRestElement', Optional: first?.Optional || !!first?.Initializer })
+        : known?.Kind === 'function' && known.Signatures.length === 1 && !known.Signatures[0].TypeParameters?.length
+          ? known.Signatures[0].Parameters[0] : undefined;
+      // The accumulator is one supplied argument, not the collection bound
+      // by a rest. Optional/default inputs admit undefined before binding.
+      const position = declared?.Rest && declared.Type.Kind === 'tuple' ? declared.Type.Elements[0] : undefined;
+      const declaredInput = declared?.Rest ? declared.Type.Kind === 'array' ? declared.Type.Element
+        : position && !position.Rest ? position.Initial !== 'none' || position.DeclaredDefault ? joinTypes(position.Type, undefinedType) : position.Type : null
+        : declared ? declared.Optional || declared.DeclaredDefault || declared.Initial !== undefined ? joinTypes(declared.Type, undefinedType) : declared.Type : null;
+      // A non-gradual callback input anchors U, including a deliberately
+      // wider union. Otherwise the initial value anchors U; a receiving
+      // context can adopt a numeric literal but cannot erase a known type.
+      const anchor = declaredInput?.Kind === 'any' ? null : declaredInput;
+      const input = anchor ?? contextualCallTypes.get(call) ?? null;
+      const supplied = argumentStaticType(initial, input);
+      accumulator = anchor ?? (supplied && (input && supplied.Kind === 'literal' && literalFitsNumericType(supplied, input)
+        ? input : widenForBinding(supplied)));
     }
-
-    return signature;
+    const type = accumulator ?? anyTypeRecord;
+    return { ...signature, Parameters: [
+      parameter({ Kind: 'function', Signatures: [{ Parameters: [parameter(type), parameter(element), parameter(indexTypeRecord())], Return: type }] }, { Name: 'callback' }),
+      parameter(type, { Name: 'initial', Optional: !initial }),
+    ], Return: type };
   };
 
   const checkFlatteningCallback = (call: ParseNode, signature: SignatureRecord, callbackArgument: ParseNode): void => {
@@ -32082,7 +32085,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
     }
-    return sig;
+    return sig?.IteratorReduction ? reductionSignature(sig, supplied, n) : sig;
   };
 
   /**
@@ -33040,12 +33043,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (argType?.Kind === 'function' && argType.Signatures.some((signature) => signature.Return?.Kind === 'any')
             && param?.Kind === 'function') {
           const member = patternExpression(c.CallExpression);
-          if (member?.type === 'MemberExpression') {
-            const receiver = staticType(member.MemberExpression);
-            const key = memberKey(member);
-            const dynamicResult = receiver?.Kind === 'nominal' && (
-              (slotIndex === 1 && key === 'getOrInsertComputed' && ['Map', 'WeakMap'].includes(receiver.LibraryName ?? ''))
-              || (slotIndex === 0 && key === 'reduce' && ['Generator', 'IteratorHelper'].includes(receiver.LibraryName ?? '')));
+          if (chosen.IteratorReduction || member?.type === 'MemberExpression') {
+            const receiver = member?.type === 'MemberExpression' ? staticType(member.MemberExpression) : null;
+            const key = member?.type === 'MemberExpression' ? memberKey(member) : null;
+            const dynamicResult = (slotIndex === 0 && chosen.IteratorReduction)
+              || (receiver?.Kind === 'nominal' && slotIndex === 1 && key === 'getOrInsertComputed' && ['Map', 'WeakMap'].includes(receiver.LibraryName ?? ''));
             if (dynamicResult) checkedParam = { ...param, Signatures: param.Signatures.map((signature) => ({ ...signature, Return: anyTypeRecord })) };
           }
         }

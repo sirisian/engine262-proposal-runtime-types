@@ -294,6 +294,7 @@ export const rangePropertyType = (receiver: Known, key: string): Known => {
     case 'map':
     case 'filter':
     case 'flatMap':
+    case 'reduce':
     case 'toArray':
     case 'forEach':
     case 'some':
@@ -305,7 +306,7 @@ export const rangePropertyType = (receiver: Known, key: string): Known => {
       const signature = iteratorMethodSignature(key, rangeIteratorItemType(element, view));
       if (signature?.Kind !== 'function') return null;
       return { ...signature, Signatures: signature.Signatures.map((s) => ({ ...s,
-        Parameters: s.Parameters.map((p) => ({ ...p, Name: 'callback' })),
+        Parameters: s.Parameters.map((p, i) => ({ ...p, Name: i === 0 ? 'callback' : p.Name })),
       })) };
     }
     case 'step':
@@ -364,7 +365,7 @@ export const spanExtentOfReceiver = (r: TypeRecord | null): number | undefined =
  * is what every downstream step infers from; `toArray` is the one that leaves
  * the family. The rest keep the element and follow those two.
  */
-export const iteratorMethodSignature = (name: string, element: TypeRecord): Known => {
+export const iteratorMethodSignature = (name: string, element: TypeRecord, synchronous = true): Known => {
   const boolType = makePrimitive('boolean');
   const index = indexTypeRecord();
   const anyT = { Kind: 'any' as const } as TypeRecord;
@@ -413,7 +414,11 @@ export const iteratorMethodSignature = (name: string, element: TypeRecord): Know
     // let `let x: uint8 = it.find(p)` through, where the same mistake through
     // `Map.prototype.get` is refused.
     case 'find': return fn([cb(boolType) as TypeRecord], orUndefined(element));
-    case 'reduce': return fn([fn([anyT, element, index], anyT) as TypeRecord, anyT], anyT, ['callback', 'initial']);
+    case 'reduce': return { Kind: 'function', Signatures: [{
+      Parameters: [parameter(fn([anyT, element, index], anyT) as TypeRecord, { Name: 'callback' }),
+        parameter(anyT, { Name: 'initial', Optional: true })],
+      Return: anyT, ...(synchronous ? { IteratorReduction: true as const } : {}),
+    }] };
     default: return null;
   }
 };

@@ -1,0 +1,1292 @@
+{
+  "cases": [
+    {
+      "name": "ClosedRange result",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const x:string=r.reduce((a,v)=>a);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeFrom.<uint8>){const x:string=r.reduce((a,v)=>a);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeTo.<uint8>){const x:string=r.reduce((a,v)=>a);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeFull.<uint8>){const x:string=r.reduce((a,v)=>a);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds result",
+      "steps": [
+        {
+          "source": "function unused(r:RangeBounds.<uint8>){const x:string=r.reduce((a,v)=>a);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "member r.reduce(cb)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const cb=(a:uint8,v:uint8):uint8=>a;const f=r.reduce;const {reduce:g}=r;const x:string=r.reduce(cb);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "member initial r.reduce(cb)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const cb=(a:string,v:uint8):string=>a;const f=r.reduce;const {reduce:g}=r;const x:string=r.reduce(cb,\"\");}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "member r[\"reduce\"](cb)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const cb=(a:uint8,v:uint8):uint8=>a;const f=r.reduce;const {reduce:g}=r;const x:string=r[\"reduce\"](cb);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "member initial r[\"reduce\"](cb)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const cb=(a:string,v:uint8):string=>a;const f=r.reduce;const {reduce:g}=r;const x:string=r[\"reduce\"](cb,\"\");}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "member f(cb)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const cb=(a:uint8,v:uint8):uint8=>a;const f=r.reduce;const {reduce:g}=r;const x:string=f(cb);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "member initial f(cb)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const cb=(a:string,v:uint8):string=>a;const f=r.reduce;const {reduce:g}=r;const x:string=f(cb,\"\");}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "member g(cb)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const cb=(a:uint8,v:uint8):uint8=>a;const f=r.reduce;const {reduce:g}=r;const x:string=g(cb);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "member initial g(cb)",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){const cb=(a:string,v:uint8):string=>a;const f=r.reduce;const {reduce:g}=r;const x:string=g(cb,\"\");}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contextual a",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.reduce((a,v,i)=>{const wrong:string=a;return a;});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "contextual v",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.reduce((a,v,i)=>{const wrong:string=v;return a;});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "contextual i",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.reduce((a,v,i)=>{const wrong:string=i;return a;});}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong recurrence (a:string,v:uint8):string=>a",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.reduce((a:string,v:uint8):string=>a);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong recurrence (a:uint8,v:string):uint8=>a",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.reduce((a:uint8,v:string):uint8=>a);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong recurrence (a:uint8,v:uint8,i:string):uint8=>a",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.reduce((a:uint8,v:uint8,i:string):uint8=>a);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong recurrence (a:uint8,v:uint8):string=>\"s\"",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.reduce((a:uint8,v:uint8):string=>\"s\");}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong recurrence (a,v)=>\"s\"",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.reduce((a,v)=>\"s\");}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong initial",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.reduce((a:string)=>a,1);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "known initial not erased by any input",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.reduce((a:any):string=>\"s\",1);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "known initial not erased by result context",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,n:uint8){const s:string=r.reduce((a,v)=>a,n);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "anchored unknown initial still has known result",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>,n:any){const s:uint8=r.reduce((a:string)=>a,n);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "wider accumulator union",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const x:string|boolean=r.reduce((a:string|boolean,v):string|boolean=>true,\"\");if(x!==true)throw new Error(\"union\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "existing wider callback",
+      "steps": [
+        {
+          "source": "const cb=(a:string|boolean,v:uint8):string|boolean=>true;const r:ClosedRange.<uint8>=1..=2;const x:string|boolean=r.reduce(cb,\"\");if(x!==true)throw new Error(\"union\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "initial string and contextual inputs",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const x:string=r.reduce((a,v,i)=>a+v+\":\"+i+\";\",\"\");if(x!==\"1:0;2:1;\")throw new Error(x);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "no initial index starts one",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;let seen=\"\";const x:uint8=r.reduce((a,v,i)=>{seen+=i;return a+v;});if(x!==6||seen!==\"12\")throw new Error(\"reduce\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "adopted bindings have their carriers",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;r.reduce((a,v,i)=>{const aa:any=a;const vv:any=v;const ii:any=i;if(!(aa is uint8)||!(vv is uint8)||!(ii is uint64))throw new Error(\"types\");return a;});\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric literal adopts written accumulator",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const x:uint16=r.reduce((a:uint16,v)=>a+uint16(v),1);if(x!==4)throw new Error(\"sum\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric literal adopts receiving context",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const x:uint16=r.reduce((a,v)=>a,1);if(x!==1)throw new Error(\"initial\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty with initial invokes no callback",
+      "steps": [
+        {
+          "source": "let calls=0;const r:ClosedRange.<uint8>=2..=1;const x:string=r.reduce((a,v)=>{calls++;return a;},\"empty\");if(calls!==0||x!==\"empty\")throw new Error(\"empty\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty without initial",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=2..=1;r.reduce((a,v)=>a);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "singleton no callback",
+      "steps": [
+        {
+          "source": "let calls=0;const r:ClosedRange.<uint8>=7..=7;const x:uint8=r.reduce(()=>{calls++;return 1;});if(x!==7||calls!==0)throw new Error(\"singleton\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit undefined is present",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let calls=0;const x:undefined=r.reduce((a,v,i)=>{calls++;if(i!==0)throw new Error(\"index\");return a;},undefined);if(calls!==1)throw new Error(\"presence\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "undefined initial is not omission",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){const x:uint8=r.reduce((a,v)=>a,undefined);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ignored parameters",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const x:uint8=r.reduce(()=>1);if(x!==1)throw new Error(\"ignored\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reference initial decays",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;let n:uint8=3;const x:uint8=r.reduce((a,v)=>a,ref n);if(x!==3||n!==3)throw new Error(\"ref\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit any return defers",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>,cb:(a:uint8,v:uint8)=>any){const x:uint8=r.reduce(cb);}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "extracted explicit any return defers",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>,cb:(a:uint8,v:uint8)=>any){const g=r.reduce;const x:uint8=g(cb);}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any return retains source parameter obligation",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>,cb:(a:uint8,v:string)=>any){r.reduce(cb);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "any callback result checked by receiving binding",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const cb=(a:uint8,v:uint8):any=>\"wrong\";const x=r.reduce(cb);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any callback result checked before next body entry",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;const cb=(a:uint8,v:uint8):any=>\"wrong\";r.reduce(cb);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ignored dynamic final result remains gradual",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const cb=(a:uint8,v:uint8):any=>\"wrong\";r.reduce(cb);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown initial and untyped callback remain gradual",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>,n:any){const x:string=r.reduce((a,v)=>a,n);}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown range cursor stays gradual",
+      "steps": [
+        {
+          "source": "function f<T:type>(r:ClosedRange.<T>){const x:string=r.reduce((a,v)=>a);}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "custom same name unaffected",
+      "steps": [
+        {
+          "source": "function f(r:{reduce:(cb:(a:string)=>string)=>string}){const x:string=r.reduce(a=>a);}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "whole any receiver unaffected",
+      "steps": [
+        {
+          "source": "function f(r:any){const x:string=r.reduce((a,v)=>false);}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "saved callback accumulator",
+      "steps": [
+        {
+          "source": "let saved:any;const r:ClosedRange.<uint8>=1..=1;r.reduce=function(cb){saved=cb;};r.reduce((a,v,i)=>a);saved(\"wrong\",1,0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "saved callback value",
+      "steps": [
+        {
+          "source": "let saved:any;const r:ClosedRange.<uint8>=1..=1;r.reduce=function(cb){saved=cb;};r.reduce((a,v,i)=>a);saved(1,\"wrong\",0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "saved callback index",
+      "steps": [
+        {
+          "source": "let saved:any;const r:ClosedRange.<uint8>=1..=1;r.reduce=function(cb){saved=cb;};r.reduce((a,v,i)=>a);saved(1,1,\"wrong\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "saved callback identity",
+      "steps": [
+        {
+          "source": "let saved:any;const r:ClosedRange.<uint8>=1..=1;const cb=(a,v)=>a;r.reduce=function(f){saved=f;};r.reduce(cb);if(saved!==cb||saved(\"text\",1,0)!==\"text\")throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written any parameter remains gradual",
+      "steps": [
+        {
+          "source": "let saved:any;const r:ClosedRange.<uint8>=1..=1;r.reduce=function(cb){saved=cb;};r.reduce((a:any,v:any,i:any):any=>a);if(saved(\"text\",\"item\",\"index\")!==\"text\")throw new Error(\"any\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contextual return admission",
+      "steps": [
+        {
+          "source": "let saved:any;const r:ClosedRange.<uint8>=1..=1;r.reduce=function(cb){saved=cb;};let value:any=\"wrong\";r.reduce((a,v,i)=>value);saved(1,1,0);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "callback not run during checking",
+      "steps": [
+        {
+          "source": "let effects=0;function f(r:ClosedRange.<uint8>){r.reduce((a,v)=>{effects++;return a;});}if(effects!==0)throw new Error(\"effects\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unbounded reduce preserves runtime refusal",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint8>=1..;r.reduce((a,v)=>a,1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named static slots",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){const x:string=r.reduce(initial:\"\",callback:(a,v)=>a);}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named static wrong initial",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){r.reduce(initial:1,callback:(a:string)=>a);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "helper recurrence",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){const x:string=r.map(v=>v).reduce((a,v)=>a);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "extracted iterator recurrence",
+      "steps": [
+        {
+          "source": "function f(m:Map.<string,uint8>){const g=m.values().reduce;g((a:string)=>a);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator broader accumulator",
+      "steps": [
+        {
+          "source": "function f(m:Map.<string,uint8>){const x:string|boolean=m.values().reduce((a:string|boolean):string|boolean=>true,\"\");}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mutable extracted replacement remains gradual",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){let g=r.reduce;g=()=>\"text\";const x:string=g((a,v)=>a);}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nullable optional result",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>|undefined){const x:string=r?.reduce((a,v)=>a);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nullable optional short circuit",
+      "steps": [
+        {
+          "source": "function run(r:ClosedRange.<uint8>|undefined){let calls=0;const x=r?.reduce((a,v)=>{calls++;return a;});if(x!==undefined||calls!==0)throw new Error(\"optional\");}run(undefined);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic accumulator symbolic return",
+      "steps": [
+        {
+          "source": "function f<U:type>(r:ClosedRange.<uint8>,u:U){return r.reduce((a:U,v)=>a,u);}const x:string=f(1..=1,\"text\");if(x!==\"text\")throw new Error(\"generic\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic item in extracted signature",
+      "steps": [
+        {
+          "source": "function extract<T:type>(g:Generator.<T,undefined,any>){return g.reduce;}function unused(g:Generator.<uint8,undefined,any>){const f=extract(g);const x:uint8=f((a,v)=>a);}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement failure preserves effects and TDZ",
+      "steps": [
+        {
+          "source": "let effects=0;const r:ClosedRange.<uint8>=1..=1;r.reduce=function(cb){effects++;return \"wrong\";};const result=r.reduce((a,v)=>a);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "if(effects!==1)throw new Error(\"effects\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        },
+        {
+          "source": "result;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "ReferenceError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal endpoints widen recurrence",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<1|3>){const x:1|3=r.reduce((a,v)=>v);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain bigint cursor carrier",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<bigint>=1n..=2n;const x:bigint=r.reduce((a,v)=>a+v);if(x!==3n)throw new Error(\"bigint\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "separate invocations choose separate accumulators",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){const g=r.reduce;const s:string=g((a,v)=>a,\"\");const n:uint8=g((a:uint8,v)=>a,1);}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "extraction does not bind receiver",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const g=r.reduce;g((a,v)=>a);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uncertain spread preserves gradual recurrence",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>,xs:any){const x:string=r.reduce(...xs);}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written return cannot widen recurrence",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){r.reduce((a,v):uint8|string=>a,1);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "initial must fit written union",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){r.reduce((a:string|boolean)=>a,1);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown initial is admitted on callback entry",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;const value:any=\"text\";const x:string=r.reduce((a:string,v)=>a,value);if(x!==\"text\")throw new Error(\"value\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown wrong initial checked at callback",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;const value:any=\"wrong\";r.reduce((a:uint8,v)=>a,value);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty unknown wrong initial checked at result",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=2..=1;const value:any=\"wrong\";const x=r.reduce((a:uint8,v)=>a,value);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty discarded initial executes no invented boundary",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=2..=1;const value:any=\"wrong\";r.reduce((a:uint8,v)=>a,value);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "callback default not run by checking",
+      "steps": [
+        {
+          "source": "let defaults=0;function f(r:ClosedRange.<uint8>){r.reduce((a=(():uint8=>{defaults++;return 1;})(),v)=>a);}if(defaults!==0)throw new Error(\"defaults\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic callback retains existing assignability gate",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>,cb:<T:type>(a:T,v:uint8)=>T){r.reduce(cb,1);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh rest tuple anchors one argument",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const x:uint8=r.reduce((...xs:[uint8,uint8,uint64]):uint8=>xs[0],1);if(x!==1)throw new Error(\"rest\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "existing rest tuple anchors one argument",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const cb=(...xs:[uint8,uint8,uint64]):uint8=>xs[0];const x:uint8=r.reduce(cb,1);if(x!==1)throw new Error(\"rest\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest string accumulator",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const x:string=r.reduce((...xs:[string,uint8,uint64]):string=>xs[0],\"\");if(x!==\"\")throw new Error(\"rest\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional accumulator admits explicit undefined",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){const x:uint8|undefined=r.reduce((a?:uint8)=>a,undefined);}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default accumulator input includes undefined",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=1;const x:uint8|undefined=r.reduce((a:uint8=3)=>a,undefined);const value:any=x;if(value!==3)throw new Error(\"default\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty default callback not invoked",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=2..=1;const x:uint8|undefined=r.reduce((a:uint8=3)=>a,undefined);const value:any=x;if(value!==undefined)throw new Error(\"empty\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional recurrence includes empty undefined",
+      "steps": [
+        {
+          "source": "function f(r:ClosedRange.<uint8>){const x:uint8=r.reduce((a?:uint8)=>a,undefined);}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
