@@ -1,8 +1,9 @@
-import { Value, NumberValue, TypedNumberValue, isTypedNumber } from '../value.mts';
+import { Value, NumberValue, BigIntValue, TypedBigInt, TypedNumberValue, isTypedNumber } from '../value.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { Q } from '../completion.mts';
+import { R } from '../abstract-ops/spec-types.mts';
 import { Throw } from '../host-defined/error-messages.mts';
-import { RequireType } from '../abstract-ops/runtime-types.mts';
+import { RequireType, StampFamilyValue } from '../abstract-ops/runtime-types.mts';
 import { exactNumericValue, exactNumericEquals } from '../abstract-ops/testing-comparison.mts';
 import { type RangeEndpoint, type RangeObject } from '../intrinsics/Range.mts';
 import { CreateRationalValue } from '../intrinsics/Rational.mts';
@@ -83,10 +84,10 @@ function roundEdge(x: Fraction, upper: boolean, radix: 2 | 10, precision: number
   return { coefficient: negative ? -coefficient : coefficient, exponent, rounded };
 }
 
-/** Admission may attach the promised type, but cannot rescale, requantize,
- * change zero sign, or choose a different decimal cohort for a computed edge.
+/** Admit and carry the promised type, without rescaling, requantizing,
+ * changing zero sign, or choosing a different decimal cohort for a computed edge.
  */
-function* admit(value: RangeEndpoint, domain: TypeRecord): PlainEvaluator<RangeEndpoint> {
+export function* AdmitNumericRangeEndpoint(value: RangeEndpoint, domain: TypeRecord): PlainEvaluator<RangeEndpoint> {
   if (domain.Kind !== 'parameterized') return value;
   const result = Q(yield* RequireType(value, domain)) as RangeEndpoint;
   const before = exactNumericValue(value);
@@ -95,7 +96,15 @@ function* admit(value: RangeEndpoint, domain: TypeRecord): PlainEvaluator<RangeE
       || (isDecimalObject(value) && (!isDecimalObject(result) || value.DecimalSignificand !== result.DecimalSignificand || value.DecimalExponent !== result.DecimalExponent))) {
     return Throw.RangeError('range endpoint admission must preserve its computed representation');
   }
-  return result;
+  // Membership can admit a bare numeric value by validate without stamping
+  // it. A manufactured endpoint must carry its agreed domain so a subsequent
+  // boundary or arithmetic operation can recognize that completed admission.
+  if (SameType(RuntimeTypeOf(result), domain)) return result;
+  if (isTypedNumber(result)) return new TypedNumberValue(result.value, domain);
+  if (result instanceof BigIntValue) return TypedBigInt(R(result), domain);
+  // Preserve the stored sign of zero rather than reading a mathematical value.
+  if (result instanceof NumberValue) return new TypedNumberValue(result.numberValue(), domain); // eslint-disable-line @engine262/mathematical-value
+  return (Q(StampFamilyValue(result, domain)) ?? result) as RangeEndpoint;
 }
 
 export function* numericRangeValue(domain: TypeRecord, product: Fraction, upper: boolean, negative: boolean, realm: Realm, original?: RangeEndpoint, reflection = false): PlainEvaluator<{ value: RangeEndpoint; rounded: boolean }> {
@@ -134,7 +143,7 @@ export function* numericRangeValue(domain: TypeRecord, product: Fraction, upper:
     }
     rounded = result.rounded;
   }
-  return { value: Q(yield* admit(value, domain)), rounded };
+  return { value: Q(yield* AdmitNumericRangeEndpoint(value, domain)), rounded };
 }
 
 /** Existing infinity, with checked admission; finite overflow never enters here. */
@@ -143,5 +152,5 @@ export function* numericRangeInfinity(domain: TypeRecord, sign: -1 | 1, realm: R
   const endpoint = base.Name === 'float128' ? CreateFloat128Value(0n, 0, realm, 'infinity', sign)
     : base.Name.startsWith('decimal') ? CreateDecimalSpecial(sign < 0 ? '-Infinity' : 'Infinity', Number(base.Name.slice(7)) as 32 | 64 | 128, realm, base)
       : base.Name === 'number' ? Value(sign * Infinity) : new TypedNumberValue(sign * Infinity, base);
-  return Q(yield* admit(endpoint, domain));
+  return Q(yield* AdmitNumericRangeEndpoint(endpoint, domain));
 }

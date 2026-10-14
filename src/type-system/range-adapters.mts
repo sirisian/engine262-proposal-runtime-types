@@ -2,7 +2,6 @@ import { Value, TypedNumberValue } from '../value.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { Q } from '../completion.mts';
 import { F } from '../abstract-ops/spec-types.mts';
-import { RequireType } from '../abstract-ops/runtime-types.mts';
 import { Throw } from '../host-defined/error-messages.mts';
 import { CreateRangeObject, type RangeObject, type RangeEndpoint } from '../intrinsics/Range.mts';
 import type { Realm } from '../execution-context/Realm.mts';
@@ -11,6 +10,7 @@ import { RuntimeTypeOf, fitsNumericType } from './runtime.mts';
 import { SameType } from './relations.mts';
 import { wrapToType } from './arithmetic.mts';
 import { NumericRangeBase, NumericRangeValue, NumericRangeItemDomain } from './range-iteration.mts';
+import { AdmitNumericRangeEndpoint } from './range-numeric.mts';
 
 function finiteInteger(value: number | bigint | undefined): value is number | bigint {
   return typeof value === 'bigint' || (typeof value === 'number' && Number.isInteger(value));
@@ -40,14 +40,7 @@ function* boundary(integer: bigint, domain: TypeRecord): PlainEvaluator<RangeEnd
     if (!Number.isFinite(rounded) || BigInt(rounded) !== integer) return Throw.RangeError('range adapter boundary is not exactly representable');
     result = base.Name === 'number' ? F(rounded) : new TypedNumberValue(rounded, base);
   }
-  if (domain !== base) {
-    result = Q(yield* RequireType(result, domain)) as RangeEndpoint;
-    const admitted = NumericRangeValue(result);
-    if (!finiteInteger(admitted) || BigInt(admitted) !== integer || Object.is(admitted, -0)) {
-      return Throw.RangeError('range adapter admission must preserve its numeric value');
-    }
-  }
-  return result;
+  return Q(yield* AdmitNumericRangeEndpoint(result, domain));
 }
 
 /** sec-numeric-range-adapters: pure boundary arithmetic, then publication. */

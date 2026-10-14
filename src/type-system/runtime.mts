@@ -2329,7 +2329,7 @@ export function CarriedTypeRecordOf(value: unknown): TypeRecord | undefined {
   if ((value as { BrandTypeRecord?: unknown })?.BrandTypeRecord !== undefined) {
     return (value as { BrandTypeRecord?: unknown }).BrandTypeRecord as TypeRecord;
   }
-  if (isDecimalObject(value as Value)
+  if (isDecimalObject(value as Value) || isFloat128Object(value as Value)
       || (value as { RationalNumerator?: bigint })?.RationalNumerator !== undefined) {
     return (value as unknown as { TypeRecord?: unknown }).TypeRecord as TypeRecord | undefined;
   }

@@ -1,0 +1,4787 @@
+{
+  "cases": [
+    {
+      "name": "ClosedRange scale rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r.scale(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange scale does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:ClosedRange.<uint8>=r.scale(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange scale exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>):uint8|undefined{return r.scale(2).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange take rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r.take(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange take does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:ClosedRange.<uint8>=r.take(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange take exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>):uint8|undefined{return r.take(2).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange drop rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r.drop(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange drop does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:ClosedRange.<uint8>=r.drop(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange drop exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>):uint8|undefined{return r.drop(2).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange add rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=(r+r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange add does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:ClosedRange.<uint8>=(r+r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange add exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>):uint8|undefined{return (r+r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange subtract rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=(r-r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange subtract does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:ClosedRange.<uint8>=(r-r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange subtract exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>):uint8|undefined{return (r-r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange multiply rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=(r*r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange multiply does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:ClosedRange.<uint8>=(r*r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange multiply exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>):uint8|undefined{return (r*r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange divide rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=(r/r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange divide does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:ClosedRange.<uint8>=(r/r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange divide exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>):uint8|undefined{return (r/r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange negate rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=(-r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange negate does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:ClosedRange.<uint8>=(-r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClosedRange negate exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>):uint8|undefined{return (-r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom scale rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:string=r.scale(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom scale does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:ClosedRange.<uint8>=r.scale(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom scale exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeFrom.<uint8>):uint8|undefined{return r.scale(2).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom take rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:string=r.take(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom take does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:ClosedRange.<uint8>=r.take(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom take exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeFrom.<uint8>):uint8|undefined{return r.take(2).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom drop rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:string=r.drop(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom drop does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:ClosedRange.<uint8>=r.drop(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom drop exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeFrom.<uint8>):uint8|undefined{return r.drop(2).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom add rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:string=(r+r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom add does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:ClosedRange.<uint8>=(r+r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom add exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeFrom.<uint8>):uint8|undefined{return (r+r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom subtract rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:string=(r-r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom subtract does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:ClosedRange.<uint8>=(r-r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom subtract exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeFrom.<uint8>):uint8|undefined{return (r-r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom multiply rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:string=(r*r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom multiply does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:ClosedRange.<uint8>=(r*r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom multiply exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeFrom.<uint8>):uint8|undefined{return (r*r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom divide rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:string=(r/r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom divide does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:ClosedRange.<uint8>=(r/r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom divide exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeFrom.<uint8>):uint8|undefined{return (r/r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom negate rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:string=(-r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom negate does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFrom.<uint8>){const x:ClosedRange.<uint8>=(-r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFrom negate exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeFrom.<uint8>):uint8|undefined{return (-r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo scale rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:string=r.scale(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo scale does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:ClosedRange.<uint8>=r.scale(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo scale exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeTo.<uint8>):uint8|undefined{return r.scale(2).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo take rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:string=r.take(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo take does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:ClosedRange.<uint8>=r.take(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo take exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeTo.<uint8>):uint8|undefined{return r.take(2).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo drop rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:string=r.drop(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo drop does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:ClosedRange.<uint8>=r.drop(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo drop exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeTo.<uint8>):uint8|undefined{return r.drop(2).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo add rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:string=(r+r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo add does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:ClosedRange.<uint8>=(r+r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo add exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeTo.<uint8>):uint8|undefined{return (r+r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo subtract rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:string=(r-r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo subtract does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:ClosedRange.<uint8>=(r-r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo subtract exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeTo.<uint8>):uint8|undefined{return (r-r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo multiply rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:string=(r*r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo multiply does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:ClosedRange.<uint8>=(r*r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo multiply exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeTo.<uint8>):uint8|undefined{return (r*r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo divide rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:string=(r/r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo divide does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:ClosedRange.<uint8>=(r/r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo divide exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeTo.<uint8>):uint8|undefined{return (r/r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo negate rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:string=(-r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo negate does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeTo.<uint8>){const x:ClosedRange.<uint8>=(-r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeTo negate exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeTo.<uint8>):uint8|undefined{return (-r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull scale rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:string=r.scale(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull scale does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:ClosedRange.<uint8>=r.scale(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull scale exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeFull.<uint8>):uint8|undefined{return r.scale(2).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull take rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:string=r.take(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull take does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:ClosedRange.<uint8>=r.take(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull take exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeFull.<uint8>):uint8|undefined{return r.take(2).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull drop rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:string=r.drop(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull drop does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:ClosedRange.<uint8>=r.drop(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull drop exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeFull.<uint8>):uint8|undefined{return r.drop(2).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull add rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:string=(r+r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull add does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:ClosedRange.<uint8>=(r+r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull add exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeFull.<uint8>):uint8|undefined{return (r+r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull subtract rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:string=(r-r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull subtract does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:ClosedRange.<uint8>=(r-r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull subtract exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeFull.<uint8>):uint8|undefined{return (r-r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull multiply rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:string=(r*r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull multiply does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:ClosedRange.<uint8>=(r*r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull multiply exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeFull.<uint8>):uint8|undefined{return (r*r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull divide rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:string=(r/r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull divide does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:ClosedRange.<uint8>=(r/r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull divide exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeFull.<uint8>):uint8|undefined{return (r/r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull negate rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:string=(-r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull negate does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeFull.<uint8>){const x:ClosedRange.<uint8>=(-r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeFull negate exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeFull.<uint8>):uint8|undefined{return (-r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds scale rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:string=r.scale(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds scale does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:ClosedRange.<uint8>=r.scale(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds scale exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeBounds.<uint8>):uint8|undefined{return r.scale(2).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds take rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:string=r.take(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds take does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:ClosedRange.<uint8>=r.take(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds take exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeBounds.<uint8>):uint8|undefined{return r.take(2).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds drop rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:string=r.drop(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds drop does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:ClosedRange.<uint8>=r.drop(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds drop exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeBounds.<uint8>):uint8|undefined{return r.drop(2).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds add rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:string=(r+r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds add does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:ClosedRange.<uint8>=(r+r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds add exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeBounds.<uint8>):uint8|undefined{return (r+r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds subtract rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:string=(r-r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds subtract does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:ClosedRange.<uint8>=(r-r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds subtract exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeBounds.<uint8>):uint8|undefined{return (r-r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds multiply rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:string=(r*r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds multiply does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:ClosedRange.<uint8>=(r*r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds multiply exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeBounds.<uint8>):uint8|undefined{return (r*r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds divide rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:string=(r/r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds divide does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:ClosedRange.<uint8>=(r/r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds divide exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeBounds.<uint8>):uint8|undefined{return (r/r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds negate rejects String endpoint",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:string=(-r).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds negate does not promise concrete shape",
+      "steps": [
+        {
+          "source": "function bad(r:RangeBounds.<uint8>){const x:ClosedRange.<uint8>=(-r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RangeBounds negate exposes optional endpoint",
+      "steps": [
+        {
+          "source": "function read(r:RangeBounds.<uint8>):uint8|undefined{return (-r).end;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale access r[\"scale\"](2)",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r[\"scale\"](2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale access r?.scale(2)",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r?.scale(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale access r.scale?.(2)",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r.scale?.(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale plain alias",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const f=r.scale;const x:string=f(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale extracted alias",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const {scale:f}=r;const x:string=f(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale captured result",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const s=r.scale(2);function read():string{return s.start;}} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale receiver union",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>|RangeFrom.<uint8>){const x:string=r.scale(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale runtime receiving replacement",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;r.scale=()=>\"wrong\";let ok=false;try{const x=r.scale(2);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale return replacement",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>):RangeBounds.<uint8>{return r.scale(2);}const r:ClosedRange.<uint8>=1..=3;r.scale=()=>\"wrong\";let ok=false;try{read(r);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale optional replacement",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>|undefined){const x=r?.scale(2);return x;}const r:ClosedRange.<uint8>=1..=3;r.scale=()=>\"wrong\";let ok=false;try{read(r);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale erased binding remains gradual",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;r.scale=()=>\"wrong\";const x:any=r.scale(2);String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "wrong"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale valid generic return",
+      "steps": [
+        {
+          "source": "function read<T:type>(r:ClosedRange.<T>):RangeBounds.<T>{return r.scale(2);}const r:ClosedRange.<uint64>=2..=4;String(read.<uint64>(r).start);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale generic identity",
+      "steps": [
+        {
+          "source": "function bad<T:type,U:type>(r:ClosedRange.<T>){const x:RangeBounds.<U>=r.scale(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale wrong argument in unused body remains deferred",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.scale(\"wrong\");} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale invalid argument runtime",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;r.scale(\"wrong\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take access r[\"take\"](2)",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r[\"take\"](2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "take access r?.take(2)",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r?.take(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "take access r.take?.(2)",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r.take?.(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "take plain alias",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const f=r.take;const x:string=f(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "take extracted alias",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const {take:f}=r;const x:string=f(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "take captured result",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const s=r.take(2);function read():string{return s.start;}} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "take receiver union",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>|RangeFrom.<uint8>){const x:string=r.take(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "take runtime receiving replacement",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;r.take=()=>\"wrong\";let ok=false;try{const x=r.take(2);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take return replacement",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>):RangeBounds.<uint8>{return r.take(2);}const r:ClosedRange.<uint8>=1..=3;r.take=()=>\"wrong\";let ok=false;try{read(r);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take optional replacement",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>|undefined){const x=r?.take(2);return x;}const r:ClosedRange.<uint8>=1..=3;r.take=()=>\"wrong\";let ok=false;try{read(r);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take erased binding remains gradual",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;r.take=()=>\"wrong\";const x:any=r.take(2);String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "wrong"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take valid generic return",
+      "steps": [
+        {
+          "source": "function read<T:type>(r:ClosedRange.<T>):RangeBounds.<T>{return r.take(2);}const r:ClosedRange.<uint64>=2..=4;String(read.<uint64>(r).start);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take generic identity",
+      "steps": [
+        {
+          "source": "function bad<T:type,U:type>(r:ClosedRange.<T>){const x:RangeBounds.<U>=r.take(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "take wrong argument in unused body remains deferred",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.take(\"wrong\");} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take invalid argument runtime",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;r.take(\"wrong\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop access r[\"drop\"](2)",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r[\"drop\"](2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop access r?.drop(2)",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r?.drop(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop access r.drop?.(2)",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=r.drop?.(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop plain alias",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const f=r.drop;const x:string=f(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop extracted alias",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const {drop:f}=r;const x:string=f(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop captured result",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const s=r.drop(2);function read():string{return s.start;}} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop receiver union",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>|RangeFrom.<uint8>){const x:string=r.drop(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop runtime receiving replacement",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;r.drop=()=>\"wrong\";let ok=false;try{const x=r.drop(2);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop return replacement",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>):RangeBounds.<uint8>{return r.drop(2);}const r:ClosedRange.<uint8>=1..=3;r.drop=()=>\"wrong\";let ok=false;try{read(r);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop optional replacement",
+      "steps": [
+        {
+          "source": "function read(r:ClosedRange.<uint8>|undefined){const x=r?.drop(2);return x;}const r:ClosedRange.<uint8>=1..=3;r.drop=()=>\"wrong\";let ok=false;try{read(r);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop erased binding remains gradual",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;r.drop=()=>\"wrong\";const x:any=r.drop(2);String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "wrong"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop valid generic return",
+      "steps": [
+        {
+          "source": "function read<T:type>(r:ClosedRange.<T>):RangeBounds.<T>{return r.drop(2);}const r:ClosedRange.<uint64>=2..=4;String(read.<uint64>(r).start);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop generic identity",
+      "steps": [
+        {
+          "source": "function bad<T:type,U:type>(r:ClosedRange.<T>){const x:RangeBounds.<U>=r.drop(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop wrong argument in unused body remains deferred",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<uint8>){r.drop(\"wrong\");} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop invalid argument runtime",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;r.drop(\"wrong\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale wider endpoint mismatch",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint64>){const x:RangeBounds.<uint32>=r.scale(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves numeric metadata",
+      "steps": [
+        {
+          "source": "type A=uint8.<{brand:\"A\"}>;type B=uint8.<{brand:\"B\"}>;function bad(r:ClosedRange.<A>){const x:RangeBounds.<B>=r.scale(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale preserves endpoint class identity",
+      "steps": [
+        {
+          "source": "class A{operator<(other:A):boolean{return false;}}class B{operator<(other:B):boolean{return false;}}function bad(r:ClosedRange.<A>){const x:RangeBounds.<B>=r.scale(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale any endpoint remains erased",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<any>){const x:string=r.scale(2).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale gradual receiver remains gradual",
+      "steps": [
+        {
+          "source": "function unused(r){const x:string=r.scale(2).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take wider endpoint mismatch",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint64>){const x:RangeBounds.<uint32>=r.take(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "take preserves numeric metadata",
+      "steps": [
+        {
+          "source": "type A=uint8.<{brand:\"A\"}>;type B=uint8.<{brand:\"B\"}>;function bad(r:ClosedRange.<A>){const x:RangeBounds.<B>=r.take(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "take preserves endpoint class identity",
+      "steps": [
+        {
+          "source": "class A{operator<(other:A):boolean{return false;}}class B{operator<(other:B):boolean{return false;}}function bad(r:ClosedRange.<A>){const x:RangeBounds.<B>=r.take(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "take any endpoint remains erased",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<any>){const x:string=r.take(2).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take gradual receiver remains gradual",
+      "steps": [
+        {
+          "source": "function unused(r){const x:string=r.take(2).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop wider endpoint mismatch",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint64>){const x:RangeBounds.<uint32>=r.drop(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop preserves numeric metadata",
+      "steps": [
+        {
+          "source": "type A=uint8.<{brand:\"A\"}>;type B=uint8.<{brand:\"B\"}>;function bad(r:ClosedRange.<A>){const x:RangeBounds.<B>=r.drop(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop preserves endpoint class identity",
+      "steps": [
+        {
+          "source": "class A{operator<(other:A):boolean{return false;}}class B{operator<(other:B):boolean{return false;}}function bad(r:ClosedRange.<A>){const x:RangeBounds.<B>=r.drop(2);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop any endpoint remains erased",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<any>){const x:string=r.drop(2).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop gradual receiver remains gradual",
+      "steps": [
+        {
+          "source": "function unused(r){const x:string=r.drop(2).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "add wider endpoint mismatch",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint64>){const x:RangeBounds.<uint32>=(r+r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "add preserves numeric metadata",
+      "steps": [
+        {
+          "source": "type A=uint8.<{brand:\"A\"}>;type B=uint8.<{brand:\"B\"}>;function bad(r:ClosedRange.<A>){const x:RangeBounds.<B>=(r+r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "add preserves endpoint class identity",
+      "steps": [
+        {
+          "source": "class A{operator<(other:A):boolean{return false;}}class B{operator<(other:B):boolean{return false;}}function bad(r:ClosedRange.<A>){const x:RangeBounds.<B>=(r+r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "add any endpoint remains erased",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<any>){const x:string=(r+r).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "add gradual receiver remains gradual",
+      "steps": [
+        {
+          "source": "function unused(r){const x:string=(r+r).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "subtract wider endpoint mismatch",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint64>){const x:RangeBounds.<uint32>=(r-r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "subtract preserves numeric metadata",
+      "steps": [
+        {
+          "source": "type A=uint8.<{brand:\"A\"}>;type B=uint8.<{brand:\"B\"}>;function bad(r:ClosedRange.<A>){const x:RangeBounds.<B>=(r-r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "subtract preserves endpoint class identity",
+      "steps": [
+        {
+          "source": "class A{operator<(other:A):boolean{return false;}}class B{operator<(other:B):boolean{return false;}}function bad(r:ClosedRange.<A>){const x:RangeBounds.<B>=(r-r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "subtract any endpoint remains erased",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<any>){const x:string=(r-r).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "subtract gradual receiver remains gradual",
+      "steps": [
+        {
+          "source": "function unused(r){const x:string=(r-r).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "multiply wider endpoint mismatch",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint64>){const x:RangeBounds.<uint32>=(r*r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "multiply preserves numeric metadata",
+      "steps": [
+        {
+          "source": "type A=uint8.<{brand:\"A\"}>;type B=uint8.<{brand:\"B\"}>;function bad(r:ClosedRange.<A>){const x:RangeBounds.<B>=(r*r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "multiply preserves endpoint class identity",
+      "steps": [
+        {
+          "source": "class A{operator<(other:A):boolean{return false;}}class B{operator<(other:B):boolean{return false;}}function bad(r:ClosedRange.<A>){const x:RangeBounds.<B>=(r*r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "multiply any endpoint remains erased",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<any>){const x:string=(r*r).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "multiply gradual receiver remains gradual",
+      "steps": [
+        {
+          "source": "function unused(r){const x:string=(r*r).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "divide wider endpoint mismatch",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint64>){const x:RangeBounds.<uint32>=(r/r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "divide preserves numeric metadata",
+      "steps": [
+        {
+          "source": "type A=uint8.<{brand:\"A\"}>;type B=uint8.<{brand:\"B\"}>;function bad(r:ClosedRange.<A>){const x:RangeBounds.<B>=(r/r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "divide preserves endpoint class identity",
+      "steps": [
+        {
+          "source": "class A{operator<(other:A):boolean{return false;}}class B{operator<(other:B):boolean{return false;}}function bad(r:ClosedRange.<A>){const x:RangeBounds.<B>=(r/r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "divide any endpoint remains erased",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<any>){const x:string=(r/r).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "divide gradual receiver remains gradual",
+      "steps": [
+        {
+          "source": "function unused(r){const x:string=(r/r).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negate wider endpoint mismatch",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint64>){const x:RangeBounds.<uint32>=(-r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "negate preserves numeric metadata",
+      "steps": [
+        {
+          "source": "type A=uint8.<{brand:\"A\"}>;type B=uint8.<{brand:\"B\"}>;function bad(r:ClosedRange.<A>){const x:RangeBounds.<B>=(-r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "negate preserves endpoint class identity",
+      "steps": [
+        {
+          "source": "class A{operator<(other:A):boolean{return false;}}class B{operator<(other:B):boolean{return false;}}function bad(r:ClosedRange.<A>){const x:RangeBounds.<B>=(-r);} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "negate any endpoint remains erased",
+      "steps": [
+        {
+          "source": "function unused(r:ClosedRange.<any>){const x:string=(-r).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "negate gradual receiver remains gradual",
+      "steps": [
+        {
+          "source": "function unused(r){const x:string=(-r).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary + shape union",
+      "steps": [
+        {
+          "source": "function bad(a:ClosedRange.<uint8>|RangeFrom.<uint8>,b:RangeTo.<uint8>|RangeFull.<uint8>){const x:string=(a+b).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary + erasure uint8 any",
+      "steps": [
+        {
+          "source": "function bad(a:RangeBounds.<uint8>,b:RangeBounds.<any>){const x:string=(a+b).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary + erasure any uint8",
+      "steps": [
+        {
+          "source": "function bad(a:RangeBounds.<any>,b:RangeBounds.<uint8>){const x:string=(a+b).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary + matching generic contract",
+      "steps": [
+        {
+          "source": "function f<T:type>(a:ClosedRange.<T>,b:ClosedRange.<T>):RangeBounds.<T>{return a+b;}const a:ClosedRange.<float64>=2..=4;const b:ClosedRange.<float64>=1..=2;String(f.<float64>(a,b).start);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary + mismatched domains still runtime",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=2;const b:ClosedRange.<uint16>=1..=2;a+b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary + empty mismatched domains still runtime",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=2..=1;const b:ClosedRange.<uint16>=1..=2;a+b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary + unknown right retains runtime dispatch",
+      "steps": [
+        {
+          "source": "function unused(a:ClosedRange.<uint8>,b){const x:string=(a+b).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary - shape union",
+      "steps": [
+        {
+          "source": "function bad(a:ClosedRange.<uint8>|RangeFrom.<uint8>,b:RangeTo.<uint8>|RangeFull.<uint8>){const x:string=(a-b).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary - erasure uint8 any",
+      "steps": [
+        {
+          "source": "function bad(a:RangeBounds.<uint8>,b:RangeBounds.<any>){const x:string=(a-b).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary - erasure any uint8",
+      "steps": [
+        {
+          "source": "function bad(a:RangeBounds.<any>,b:RangeBounds.<uint8>){const x:string=(a-b).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary - matching generic contract",
+      "steps": [
+        {
+          "source": "function f<T:type>(a:ClosedRange.<T>,b:ClosedRange.<T>):RangeBounds.<T>{return a-b;}const a:ClosedRange.<float64>=2..=4;const b:ClosedRange.<float64>=1..=2;String(f.<float64>(a,b).start);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary - mismatched domains still runtime",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=2;const b:ClosedRange.<uint16>=1..=2;a-b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary - empty mismatched domains still runtime",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=2..=1;const b:ClosedRange.<uint16>=1..=2;a-b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary - unknown right retains runtime dispatch",
+      "steps": [
+        {
+          "source": "function unused(a:ClosedRange.<uint8>,b){const x:string=(a-b).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary * shape union",
+      "steps": [
+        {
+          "source": "function bad(a:ClosedRange.<uint8>|RangeFrom.<uint8>,b:RangeTo.<uint8>|RangeFull.<uint8>){const x:string=(a*b).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary * erasure uint8 any",
+      "steps": [
+        {
+          "source": "function bad(a:RangeBounds.<uint8>,b:RangeBounds.<any>){const x:string=(a*b).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary * erasure any uint8",
+      "steps": [
+        {
+          "source": "function bad(a:RangeBounds.<any>,b:RangeBounds.<uint8>){const x:string=(a*b).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary * matching generic contract",
+      "steps": [
+        {
+          "source": "function f<T:type>(a:ClosedRange.<T>,b:ClosedRange.<T>):RangeBounds.<T>{return a*b;}const a:ClosedRange.<float64>=2..=4;const b:ClosedRange.<float64>=1..=2;String(f.<float64>(a,b).start);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary * mismatched domains still runtime",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=2;const b:ClosedRange.<uint16>=1..=2;a*b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary * empty mismatched domains still runtime",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=2..=1;const b:ClosedRange.<uint16>=1..=2;a*b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary * unknown right retains runtime dispatch",
+      "steps": [
+        {
+          "source": "function unused(a:ClosedRange.<uint8>,b){const x:string=(a*b).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary / shape union",
+      "steps": [
+        {
+          "source": "function bad(a:ClosedRange.<uint8>|RangeFrom.<uint8>,b:RangeTo.<uint8>|RangeFull.<uint8>){const x:string=(a/b).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary / erasure uint8 any",
+      "steps": [
+        {
+          "source": "function bad(a:RangeBounds.<uint8>,b:RangeBounds.<any>){const x:string=(a/b).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary / erasure any uint8",
+      "steps": [
+        {
+          "source": "function bad(a:RangeBounds.<any>,b:RangeBounds.<uint8>){const x:string=(a/b).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary / matching generic contract",
+      "steps": [
+        {
+          "source": "function f<T:type>(a:ClosedRange.<T>,b:ClosedRange.<T>):RangeBounds.<T>{return a/b;}const a:ClosedRange.<float64>=2..=4;const b:ClosedRange.<float64>=1..=2;String(f.<float64>(a,b).start);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary / mismatched domains still runtime",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=1..=2;const b:ClosedRange.<uint16>=1..=2;a/b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary / empty mismatched domains still runtime",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<uint8>=2..=1;const b:ClosedRange.<uint16>=1..=2;a/b;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary / unknown right retains runtime dispatch",
+      "steps": [
+        {
+          "source": "function unused(a:ClosedRange.<uint8>,b){const x:string=(a/b).start;} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale swaps shape and bounds",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<int8>=1..;const s=r.scale(-1);`${s.start};${s.end};${s.endBound}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined;-1;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero scale creates a closed point",
+      "steps": [
+        {
+          "source": "const r:RangeFull.<uint8>=..;const s=r.scale(0);`${s.start};${s.end};${s.interval}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0;0;0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "division can be full",
+      "steps": [
+        {
+          "source": "const a:ClosedRange.<float64>=1..=2;const b:ClosedRange.<float64>=-1..=1;const s=a/b;`${s.start};${s.end};${s.isFull}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "undefined;undefined;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take changes one ended to bounded",
+      "steps": [
+        {
+          "source": "const r:RangeFrom.<uint8>=1..;const s=r.take(2);`${s.start};${s.end};${s.length}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;2;2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop removes all values",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=2;const s=r.drop(2);`${s.start};${s.end};${s.isEmpty}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1;1;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "chained range operations",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=5;const s=r.take(3).drop(1).scale(2);`${s.start};${s.end};${s.startBound}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2;6;1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unary negation wide exact values",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<int64>=9007199254740993..=9007199254740995;const s=-r;`${s.start};${s.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "-9007199254740995;-9007199254740993"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unary shape union domain",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<int8>|RangeFrom.<int8>){const x:string=(-r).end;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite method key joins returns",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,k:\"scale\"|\"take\"|\"drop\"){const x:string=r[k](2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite extracted method key joins returns",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>,k:\"scale\"|\"take\"){const {[k]:f}=r;const x:string=f(2).start;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite key retains method this",
+      "steps": [
+        {
+          "source": "function run(r:ClosedRange.<uint8>,k:\"scale\"|\"take\"):RangeBounds.<uint8>{return r[k](2);}const r:ClosedRange.<uint8>=1..=3;`${run(r,\"scale\").start};${run(r,\"take\").end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2;2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional short circuit suppresses argument",
+      "steps": [
+        {
+          "source": "let effects=0;function read(r:ClosedRange.<uint8>|undefined){return r?.take(effects++);}read(undefined);String(effects);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "method getter and argument run once before receiving failure",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;let log=\"\";Object.defineProperty(r,\"take\",{get(){log+=\"g\";return (x)=>{log+=\"c\";return \"wrong\";};}});function arg(){log+=\"a\";return 2;}let ok=false;try{const x=r.take(arg());}catch(e){ok=e instanceof TypeError;}`${ok};${log}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true;gac"
+          }
+        }
+      ]
+    },
+    {
+      "name": "method extraction does not bind this",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;const {take}=r;let ok=false;try{take(2);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement extracted callable retains result check",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;r.take=()=>\"wrong\";let ok=false;try{const {take}=r;const x=take(2);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement prototype retains result check",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;Object.getPrototypeOf(r).take=()=>\"wrong\";let ok=false;try{const x=r.take(2);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "user class spelling retains own method",
+      "steps": [
+        {
+          "source": "class Range{take(x):string{return \"own\";}}const r:Range=new Range();const x:string=r.take(2);String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "own"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declared operator precedes built in result",
+      "steps": [
+        {
+          "source": "class A{operator+(other:ClosedRange.<uint8>):string{return \"own\";}}const a:A=new A();const r:ClosedRange.<uint8>=1..=2;const x:string=a+r;String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "own"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unrelated arithmetic unchanged",
+      "steps": [
+        {
+          "source": "const a:uint8=2,b:uint8=3;String(a+b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "5"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iterator take stays iterator",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;String(r.step(1).take(2).toArray().join(\",\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "runtime range overflow remains failure",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=200..=201;let ok=false;try{const s=r.scale(2);}catch(e){ok=e instanceof RangeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed inferred result leaves TDZ and retains effects",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;let calls=0;r.take=()=>{calls++;return \"wrong\";};const failed=r.take(2);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1"
+          }
+        },
+        {
+          "source": "String(failed);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "errorClass": "ReferenceError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "result contract persists across Scripts",
+      "steps": [
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;const computed=r.take(2);\"bound\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "bound"
+          }
+        },
+        {
+          "source": "function bad(){const x:string=computed.start;}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "String(computed.end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "early failure recovery",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<uint8>){const x:string=(r*r).start;}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "const r:ClosedRange.<uint8>=1..=3;String(r.take(2).end);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scale stale reference keeps liveness check",
+      "steps": [
+        {
+          "source": "let a:[].<ClosedRange.<uint8>>=[1..=3];let ref r=a[0];const x=r.scale(2);a.length=0;let ok=false;try{r.scale(2);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "take stale reference keeps liveness check",
+      "steps": [
+        {
+          "source": "let a:[].<ClosedRange.<uint8>>=[1..=3];let ref r=a[0];const x=r.take(2);a.length=0;let ok=false;try{r.take(2);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "drop stale reference keeps liveness check",
+      "steps": [
+        {
+          "source": "let a:[].<ClosedRange.<uint8>>=[1..=3];let ref r=a[0];const x=r.drop(2);a.length=0;let ok=false;try{r.drop(2);}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float16 computed domain",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<float16>){const x:RangeBounds.<uint8>=r+r;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 computed domain",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<float128>){const x:RangeBounds.<uint8>=r+r;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 computed domain",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<decimal128>){const x:RangeBounds.<uint8>=r+r;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 computed domain",
+      "steps": [
+        {
+          "source": "function bad(r:ClosedRange.<rational64>){const x:RangeBounds.<uint8>=r+r;} \"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "binary stale reference keeps liveness check",
+      "steps": [
+        {
+          "source": "let a:[].<ClosedRange.<uint8>>=[1..=3];let ref r=a[0];const x=r+r;a.length=0;let ok=false;try{r+r;}catch(e){ok=e instanceof TypeError;}String(ok);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "int16 admitted endpoint carrier scale",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=int16.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a.scale(2);`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,;4;8;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "int16 admitted endpoint carrier addition",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=int16.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a+b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,6,;4;6;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "int16 admitted endpoint carrier product",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=int16.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a*b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,;4;8;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "int16 admitted endpoint carrier division",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=int16.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a/b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,;1;2;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "int16 admitted carrier permits chained product",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=int16.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a*b;const d=c*b;`${log};${d.start};${d.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,8,16,;8;16"
+          }
+        }
+      ]
+    },
+    {
+      "name": "int16 identity copy does not repeat validation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=int16.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a.scale(1);`${log};${c.start};${Reflect.typeOf(c.start)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";2;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 admitted endpoint carrier scale",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=uint64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a.scale(2);`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,;4;8;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 admitted endpoint carrier addition",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=uint64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a+b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,6,;4;6;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 admitted endpoint carrier product",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=uint64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a*b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,;4;8;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 admitted endpoint carrier division",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=uint64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a/b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,;1;2;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 admitted carrier permits chained product",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=uint64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a*b;const d=c*b;`${log};${d.start};${d.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,8,16,;8;16"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 identity copy does not repeat validation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=uint64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a.scale(1);`${log};${c.start};${Reflect.typeOf(c.start)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";2;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float32 admitted endpoint carrier scale",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float32.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a.scale(2);`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,;4;8;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float32 admitted endpoint carrier addition",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float32.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a+b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,6,;4;6;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float32 admitted endpoint carrier product",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float32.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a*b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,;4;8;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float32 admitted endpoint carrier division",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float32.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a/b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,;1;2;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float32 admitted carrier permits chained product",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float32.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a*b;const d=c*b;`${log};${d.start};${d.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,8,16,;8;16"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float32 identity copy does not repeat validation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float32.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a.scale(1);`${log};${c.start};${Reflect.typeOf(c.start)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";2;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 admitted endpoint carrier scale",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a.scale(2);`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,;4;8;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 admitted endpoint carrier addition",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a+b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,6,;4;6;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 admitted endpoint carrier product",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a*b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,;4;8;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 admitted endpoint carrier division",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a/b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,;1;2;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 admitted carrier permits chained product",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a*b;const d=c*b;`${log};${d.start};${d.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,8,16,;8;16"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 identity copy does not repeat validation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a.scale(1);`${log};${c.start};${Reflect.typeOf(c.start)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";2;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 admitted endpoint carrier scale",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float128.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a.scale(2);`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,;4;8;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 admitted endpoint carrier addition",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float128.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a+b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,6,;4;6;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 admitted endpoint carrier product",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float128.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a*b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,;4;8;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 admitted endpoint carrier division",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float128.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a/b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,;1;2;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 admitted carrier permits chained product",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float128.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a*b;const d=c*b;`${log};${d.start};${d.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,8,16,;8;16"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 identity copy does not repeat validation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float128.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a.scale(1);`${log};${c.start};${Reflect.typeOf(c.start)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";2;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 admitted endpoint carrier scale",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}primitive decimal64{operator decimal64.<M>(){return this;}}type T=decimal64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a.scale(2);`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,;4;8;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 admitted endpoint carrier addition",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}primitive decimal64{operator decimal64.<M>(){return this;}}type T=decimal64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a+b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,6,;4;6;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 admitted endpoint carrier product",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}primitive decimal64{operator decimal64.<M>(){return this;}}type T=decimal64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a*b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,;4;8;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 admitted endpoint carrier division",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}primitive decimal64{operator decimal64.<M>(){return this;}}type T=decimal64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a/b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,;1;2;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 admitted carrier permits chained product",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}primitive decimal64{operator decimal64.<M>(){return this;}}type T=decimal64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a*b;const d=c*b;`${log};${d.start};${d.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,8,16,;8;16"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 identity copy does not repeat validation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}primitive decimal64{operator decimal64.<M>(){return this;}}type T=decimal64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a.scale(1);`${log};${c.start};${Reflect.typeOf(c.start)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";2;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 admitted endpoint carrier scale",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=rational64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a.scale(2);`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,;4;8;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 admitted endpoint carrier addition",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=rational64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a+b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,6,;4;6;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 admitted endpoint carrier product",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=rational64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a*b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,;4;8;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 admitted endpoint carrier division",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=rational64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a/b;`${log};${c.start};${c.end};${Reflect.typeOf(c.start)===T};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "1,2,;1;2;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 admitted carrier permits chained product",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=rational64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a*b;const d=c*b;`${log};${d.start};${d.end}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "4,8,8,16,;8;16"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 identity copy does not repeat validation",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=rational64.<{flag:true}>;const a:ClosedRange.<T>=(2:=T)..=(4:=T);const b:ClosedRange.<T>=(2:=T)..=(2:=T);recording=true;const c=a.scale(1);`${log};${c.start};${Reflect.typeOf(c.start)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": ";2;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "int16 take cut carries admission once",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=int16.<{flag:true}>;const r:ClosedRange.<T>=(1:=T)..=(5:=T);recording=true;const c=r.take(3);`${log};${c.end};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3,;3;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "int16 drop cut carries admission once",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=int16.<{flag:true}>;const r:ClosedRange.<T>=(1:=T)..=(5:=T);recording=true;const c=r.drop(3);`${log};${c.start};${Reflect.typeOf(c.start)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3,;3;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 take cut carries admission once",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=uint64.<{flag:true}>;const r:ClosedRange.<T>=(1:=T)..=(5:=T);recording=true;const c=r.take(3);`${log};${c.end};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3,;3;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "uint64 drop cut carries admission once",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=uint64.<{flag:true}>;const r:ClosedRange.<T>=(1:=T)..=(5:=T);recording=true;const c=r.drop(3);`${log};${c.start};${Reflect.typeOf(c.start)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3,;3;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float32 take cut carries admission once",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float32.<{flag:true}>;const r:ClosedRange.<T>=(1:=T)..=(5:=T);recording=true;const c=r.take(3);`${log};${c.end};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3,;3;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float32 drop cut carries admission once",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float32.<{flag:true}>;const r:ClosedRange.<T>=(1:=T)..=(5:=T);recording=true;const c=r.drop(3);`${log};${c.start};${Reflect.typeOf(c.start)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3,;3;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 take cut carries admission once",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float64.<{flag:true}>;const r:ClosedRange.<T>=(1:=T)..=(5:=T);recording=true;const c=r.take(3);`${log};${c.end};${Reflect.typeOf(c.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3,;3;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float64 drop cut carries admission once",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float64.<{flag:true}>;const r:ClosedRange.<T>=(1:=T)..=(5:=T);recording=true;const c=r.drop(3);`${log};${c.start};${Reflect.typeOf(c.start)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "3,;3;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "number zero singleton carries admitted domain",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=number.<{flag:true}>;const r:RangeFull.<T>=..;recording=true;const s=r.scale(0);`${log};${Reflect.typeOf(s.start)===T};${Reflect.typeOf(s.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bigint zero singleton carries admitted domain",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=bigint.<{flag:true}>;const r:RangeFull.<T>=..;recording=true;const s=r.scale(0);`${log};${Reflect.typeOf(s.start)===T};${Reflect.typeOf(s.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 zero singleton carries admitted domain",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=float128.<{flag:true}>;const r:RangeFull.<T>=..;recording=true;const s=r.scale(0);`${log};${Reflect.typeOf(s.start)===T};${Reflect.typeOf(s.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,;true;true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal64 zero singleton carries admitted domain",
+      "steps": [
+        {
+          "source": "let log=\"\";let recording=false;type M={flag:boolean};meta M{default={flag:false};subtype(a,b){return a.flag===b.flag;}validate(v,m){if(recording)log+=String(v)+\",\";return true;}}type T=decimal64.<{flag:true}>;const r:RangeFull.<T>=..;recording=true;const s=r.scale(0);`${log};${Reflect.typeOf(s.start)===T};${Reflect.typeOf(s.end)===T}`;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "value": "0,;true;true"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -7,6 +7,7 @@ import { CanonicalizeType } from './intern.mts';
 import { isFloatTypeName, isIntegerTypeName } from './numeric-signatures.mts';
 import { indexTypeRecord } from './index-type.mts';
 import { joinTypes } from './logical-types.mts';
+import { SameType } from './relations.mts';
 import { R } from '#self';
 
 /**
@@ -107,7 +108,53 @@ export const boundOrdinalOf = (arg: TypeRecord | number | undefined): number | n
   return null;
 };
 
-/** The read surface of built-in ranges. This describes normal getter results,
+/** The declared endpoint domain, without inspecting or evaluating endpoints. */
+const rangeElementType = (receiver: Known): Known => {
+  if (receiver?.Kind !== 'nominal' || !isRangeFamilyName(receiver.LibraryName)) return null;
+  const element = receiver.Arguments[0];
+  return element !== undefined && typeof element !== 'number' ? element : anyType;
+};
+
+/** Normal built-in interval results. Runtime domain validation is independent
+ * of this judgment; neither shape nor a common numeric carrier is guessed.
+ * Unknown alternatives poison a union contribution, as at other consumers.
+ */
+export const rangeArithmeticResultType = (operator: string, left: Known, right?: Known): Known => {
+  if (right === undefined ? operator !== '-' : !['+', '-', '*', '/'].includes(operator)) return null;
+  const memo = new Map<Known, Map<Known | undefined, Known>>();
+  const contribute = (a: Known, b?: Known): Known => {
+    const prior = memo.get(a);
+    if (prior?.has(b)) return prior.get(b)!;
+    const entries = prior ?? new Map<Known | undefined, Known>();
+    memo.set(a, entries);
+    // A cyclic/open alternative supplies no independent normal-result proof.
+    entries.set(b, null);
+    let result: Known = null;
+    if (a?.Kind === 'union' || b?.Kind === 'union') {
+      const results = a?.Kind === 'union' ? a.Members.map((arm) => contribute(arm, b))
+        : (b as Extract<TypeRecord, { Kind: 'union' }>).Members.map((arm) => contribute(a, arm));
+      if (results.length && results.every((type) => type !== null)) {
+        result = CanonicalizeType({ Kind: 'union', Members: results as TypeRecord[] });
+      }
+    } else {
+      const leftElement = rangeElementType(a);
+      const rightElement = b === undefined ? leftElement : rangeElementType(b);
+      if (leftElement && rightElement) {
+        // An erased range contributes no competing domain. A normal binary
+        // result must inhabit the other's domain; NumericRangeDomain still
+        // checks every contribution before any empty/full shortcut.
+        const element = leftElement.Kind === 'any' ? rightElement
+          : rightElement.Kind === 'any' || SameType(leftElement, rightElement) ? leftElement : null;
+        if (element) result = libraryTypeRecord('RangeBounds', [element]);
+      }
+    }
+    entries.set(b, result);
+    return result;
+  };
+  return contribute(left, right);
+};
+
+/** The property and range-returning method surface of built-in ranges. This describes normal getter results,
  * not a new structural conversion or authority to bypass runtime boundaries.
  * It is shared by dot/computed reads and object-pattern contributions.
  */
@@ -143,6 +190,15 @@ export const rangePropertyType = (receiver: Known, key: string): Known => {
     case 'isEmpty':
     case 'isFull': return makePrimitive('boolean');
     case 'length': return makePrimitive('bigint');
+    // Parameters retain their runtime numeric validation. This return view
+    // neither coerces counts/factors nor claims every domain can complete.
+    case 'scale':
+    case 'take':
+    case 'drop': return {
+      Kind: 'function',
+      Signatures: [{ Parameters: [parameter(anyType, { Name: key === 'scale' ? 'factor' : 'count' })],
+        Return: libraryTypeRecord('RangeBounds', [element])!, Untyped: false }],
+    } as unknown as Known;
     default: return null;
   }
 };

@@ -104,7 +104,7 @@ import {
   scopeOfNames, typeParameterNamesOf, mentionsTypeParameter, substituteTypeParameters, substituteFreeTypeParameters, bindTypeParametersFromArguments,
 } from './type-parameters.mts';
 import {
-  awaitedElementType, numericFamilyOf, isRangeFamilyName, rangePropertyType, boundOrdinalOf, spanElementOfReceiver, spanExtentOfReceiver, iteratorMethodSignature, collectionMethodSignature, promiseMethodSignature,
+  awaitedElementType, numericFamilyOf, isRangeFamilyName, rangePropertyType, rangeArithmeticResultType, boundOrdinalOf, spanElementOfReceiver, spanExtentOfReceiver, iteratorMethodSignature, collectionMethodSignature, promiseMethodSignature,
   libraryConstructParameters,
 } from './std-signatures.mts';
 import { memberKind, normalizedMemberType, addMemberContract, abstractMemberViolation, inheritedFieldViolation, type MemberContract, sameFieldContract, type FieldContract } from './member-contracts.mts';
@@ -18209,6 +18209,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (unary.operator) deferOperatorCases(operand, `unary ${unary.operator}`);
         const declared = unary.operator ? declaredOperator(operand, `unary ${unary.operator}`) : null;
         if (declared) return operatorResult(declared, [], node);
+        const rangeResult = unary.operator ? rangeArithmeticResultType(unary.operator, operationalType(operand)) : null;
+        if (rangeResult) return rangeResult;
         // #sec-primitive-operator-blocks: a block's unary `-` gives the result
         // its type, as dispatch invokes or stamps it.
         if (unary.operator === '-' && operand) {
@@ -20529,6 +20531,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const argument = rightLit ? rightNode : typedExpressionView(rightNode, rightT);
           return operatorResult(declared, [argument], node);
         }
+        const rangeResult = token ? rangeArithmeticResultType(token, leftT, rightT) : null;
+        if (rangeResult) return rangeResult;
         // A literal operand is left untyped here to adopt its context; for this
         // judgment it is a number, which is all `literalOperand` recognizes.
         if (token && rightNode && checkUndeclaredClassOperator(node, token,
