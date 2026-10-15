@@ -1,4 +1,5 @@
 import { TupleBackingLength, TupleStorageTypeAt, TupleResizePreserves, type TupleStorageShape } from '../type-system/tuple-storage.mts';
+import { DefaultValueOf } from '../type-system/runtime.mts';
 import {
   surroundingAgent, Descriptor, ObjectValue, JSStringValue, Value, wellKnownSymbols, type ObjectInternalMethods,
   NumberValue, UndefinedValue,
@@ -21,6 +22,9 @@ import {
   IsConstructor,
   OrdinaryDefineOwnProperty,
   OrdinaryGetOwnProperty,
+  IsCompatiblePropertyDescriptor,
+  ValidateAndApplyPropertyDescriptor,
+  CopyValueClassInstance,
   LengthOfArrayLike,
   MakeBasicObject,
   SameValue,
@@ -219,6 +223,10 @@ export function* ArraySetLength(array: OrdinaryObject, Desc: Descriptor): ValueE
   Assert(IsDataDescriptor(oldLenDesc));
   Assert(oldLenDesc.Configurable === Value.false);
   const oldLen = R(oldLenDesc.Value as NumberValue);
+  if (newLen > oldLen && surroundingAgent.feature('runtime-types')
+      && (typed.TypedElement !== undefined || tuple !== undefined)) {
+    return yield* GrowInitializedArray(array, oldLen, newLen, newLenDesc);
+  }
   if (newLen >= oldLen) {
     return yield* OrdinaryDefineOwnProperty(array, Value('length'), newLenDesc);
   }
@@ -257,6 +265,61 @@ export function* ArraySetLength(array: OrdinaryObject, Desc: Descriptor): ValueE
   if (newWritable === false) {
     const s = yield* OrdinaryDefineOwnProperty(array, Value('length'), Descriptor({ Writable: Value.false }));
     Assert(s === Value.true);
+  }
+  return Value.true;
+}
+
+/** Prepare defaults before publishing an explicit typed length increase. */
+function* GrowInitializedArray(array: OrdinaryObject, oldLen: number, newLen: number, desc: Descriptor): ValueEvaluator<BooleanValue> {
+  const backing = array as OrdinaryObject & {
+    TypedElement?: Parameters<typeof DefaultValueOf>[0],
+    TypedTuple?: TupleStorageShape,
+    TypedExtent?: number,
+    TypedCapacity?: number,
+    TypedGeneration?: number,
+  };
+  const element = backing.TypedElement;
+  const tuple = backing.TypedTuple;
+  const extent = backing.TypedExtent;
+  const lengthKey = Value('length');
+  let current = OrdinaryGetOwnProperty(array, lengthKey);
+  if (array.Extensible === Value.false
+      || IsCompatiblePropertyDescriptor(array.Extensible, desc, current) === Value.false) {
+    return Value.false;
+  }
+  const values: Value[] = [];
+  for (let index = oldLen; index < newLen; index += 1) {
+    const target = tuple === undefined ? element : TupleStorageTypeAt(tuple, index, newLen);
+    Assert(target !== undefined);
+    const value = Q(yield* DefaultValueOf(target));
+    if (value === undefined) return Throw.TypeError('a new array position has no default value');
+    values.push(CopyValueClassInstance(value));
+    // Defaults can call metadata code. A plan is not permission to overwrite
+    // an independent resize or newly acquired backing contract.
+    if (TupleBackingLength(array) !== oldLen || backing.TypedElement !== element
+        || backing.TypedTuple !== tuple || backing.TypedExtent !== extent) {
+      return Throw.TypeError('array backing changed during length initialization');
+    }
+  }
+  current = OrdinaryGetOwnProperty(array, lengthKey);
+  if (array.Extensible === Value.false
+      || IsCompatiblePropertyDescriptor(array.Extensible, desc, current) === Value.false) {
+    return Value.false;
+  }
+  // No user code runs between this revalidation and publication. Define own
+  // data slots directly, without inherited setters or a second conversion.
+  for (let offset = 0; offset < values.length; offset += 1) {
+    const success = ValidateAndApplyPropertyDescriptor(array, Value(String(oldLen + offset)), array.Extensible, Descriptor({
+      Value: values[offset]!, Writable: Value.true, Enumerable: Value.true, Configurable: Value.true,
+    }), Value.undefined);
+    Assert(success === Value.true);
+  }
+  const success = ValidateAndApplyPropertyDescriptor(array, lengthKey, array.Extensible, desc, current);
+  Assert(success === Value.true);
+  const capacity = Math.max(backing.TypedCapacity ?? 0, oldLen);
+  if (newLen > capacity) {
+    backing.TypedCapacity = Math.max(newLen, capacity * 2, 4);
+    backing.TypedGeneration = (backing.TypedGeneration ?? 0) + 1;
   }
   return Value.true;
 }

@@ -27,6 +27,7 @@ import { Evaluate, type PlainEvaluator, type ValueEvaluator } from '../evaluator
 import { ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, OrdinaryGetPrototypeOf, CreateArrayFromList, SetIntegrityLevel, PrivateFieldAdd, IsArray, LengthOfArrayLike } from '../abstract-ops/all.mts';
 import { EnsureCompletion } from '../completion.mts';
 import { isArrayExoticObject } from '../abstract-ops/array-objects.mts';
+import { CopyValueClassInstance } from '../abstract-ops/testing-comparison.mts';
 import { ConvertValue, DeclaredInverseOf, OverloadSignatureOf, SignaturesOf, MetadataAsObject, RequireType, ApplyMetaHook, MetadataShape, MetadataRangeElementShape, MetadataSatisfiesShape, NormalizeMetadataRecord, CheckMetadataRecord, SnapshotMetadataValue, IsMetadataAtom } from '../abstract-ops/runtime-types.mts';
 import { SelectClassCase, SelectionOfValue } from '../abstract-ops/callable-selection.mts';
 import { metadataAsObjectRecord } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
@@ -3246,10 +3247,6 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
         (out as ObjectValue & { TypedExtent?: number }).TypedExtent = 0;
         return out;
       }
-      const element = Q(yield* DefaultValueOf(t.Element));
-      if (element === undefined) {
-        return undefined;
-      }
       for (let i = 0; i < t.Extent; i += 1) {
         // Each element is its own instance, not the same one shared: a class
         // default is an object, and `d[0].a = 1` must not be visible at `d[1]`.
@@ -3295,6 +3292,13 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
         }
         X(CreateDataPropertyOrThrow(out, Value(String(i)), value));
       }
+      // A default is already a value of its declared type. Retain its backing
+      // even when no later conversion boundary visits this fresh aggregate.
+      const rest = t.Elements.find((e) => e.Rest);
+      (out as { TypedTuple?: TupleStorageShape }).TypedTuple = TupleStorageShapeOf(t) ?? {
+        Positions: positions.map((e) => e.Type),
+        Rest: rest === undefined ? undefined : restElementType(rest.Type),
+      };
       return out;
     }
     case 'parameterized': {
@@ -3348,7 +3352,7 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       // the memberwise zero working for almost every class.
       const zero = DeclaredZeroOf(t as { Declaration?: object });
       if (zero !== undefined) {
-        return zero;
+        return CopyValueClassInstance(zero);
       }
       // #sec-rational-types is a numeric type too, but it resolves through the
       // library type names rather than as a ~primitive~ record, so its zero is

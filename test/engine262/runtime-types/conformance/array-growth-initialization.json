@@ -1,0 +1,900 @@
+{
+  "cases": [
+    {
+      "name": "growth initializes uint8",
+      "steps": [
+        {
+          "source": "let a:[].<uint8>=[];a.length=2;const raw:any=a;String(Object.hasOwn(raw,\"0\"))+\"/\"+String(Object.hasOwn(raw,\"1\"))+\"/\"+String(raw[0])+\"/\"+String(raw[1]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "growth initializes number",
+      "steps": [
+        {
+          "source": "let a:[].<number>=[];a.length=2;const raw:any=a;String(Object.hasOwn(raw,\"0\"))+\"/\"+String(Object.hasOwn(raw,\"1\"))+\"/\"+String(raw[0])+\"/\"+String(raw[1]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "growth initializes string",
+      "steps": [
+        {
+          "source": "let a:[].<string>=[];a.length=2;const raw:any=a;String(Object.hasOwn(raw,\"0\"))+\"/\"+String(Object.hasOwn(raw,\"1\"))+\"/\"+String(raw[0])+\"/\"+String(raw[1]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true//"
+          }
+        }
+      ]
+    },
+    {
+      "name": "growth initializes boolean",
+      "steps": [
+        {
+          "source": "let a:[].<boolean>=[];a.length=2;const raw:any=a;String(Object.hasOwn(raw,\"0\"))+\"/\"+String(Object.hasOwn(raw,\"1\"))+\"/\"+String(raw[0])+\"/\"+String(raw[1]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/false/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "growth initializes bigint",
+      "steps": [
+        {
+          "source": "let a:[].<bigint>=[];a.length=2;const raw:any=a;String(Object.hasOwn(raw,\"0\"))+\"/\"+String(Object.hasOwn(raw,\"1\"))+\"/\"+String(raw[0])+\"/\"+String(raw[1]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "growth initializes null",
+      "steps": [
+        {
+          "source": "let a:[].<null>=[];a.length=2;const raw:any=a;String(Object.hasOwn(raw,\"0\"))+\"/\"+String(Object.hasOwn(raw,\"1\"))+\"/\"+String(raw[0])+\"/\"+String(raw[1]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/null/null"
+          }
+        }
+      ]
+    },
+    {
+      "name": "growth initializes undefined",
+      "steps": [
+        {
+          "source": "let a:[].<undefined>=[];a.length=2;const raw:any=a;String(Object.hasOwn(raw,\"0\"))+\"/\"+String(Object.hasOwn(raw,\"1\"))+\"/\"+String(raw[0])+\"/\"+String(raw[1]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/undefined/undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "growth initializes any",
+      "steps": [
+        {
+          "source": "let a:[].<any>=[];a.length=2;const raw:any=a;String(Object.hasOwn(raw,\"0\"))+\"/\"+String(Object.hasOwn(raw,\"1\"))+\"/\"+String(raw[0])+\"/\"+String(raw[1]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/undefined/undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "growth initializes number|null",
+      "steps": [
+        {
+          "source": "let a:[].<number|null>=[];a.length=2;const raw:any=a;String(Object.hasOwn(raw,\"0\"))+\"/\"+String(Object.hasOwn(raw,\"1\"))+\"/\"+String(raw[0])+\"/\"+String(raw[1]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/null/null"
+          }
+        }
+      ]
+    },
+    {
+      "name": "growth initializes number|undefined",
+      "steps": [
+        {
+          "source": "let a:[].<number|undefined>=[];a.length=2;const raw:any=a;String(Object.hasOwn(raw,\"0\"))+\"/\"+String(Object.hasOwn(raw,\"1\"))+\"/\"+String(raw[0])+\"/\"+String(raw[1]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/undefined/undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "growth initializes \"ready\"",
+      "steps": [
+        {
+          "source": "let a:[].<\"ready\">=[];a.length=2;const raw:any=a;String(Object.hasOwn(raw,\"0\"))+\"/\"+String(Object.hasOwn(raw,\"1\"))+\"/\"+String(raw[0])+\"/\"+String(raw[1]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/ready/ready"
+          }
+        }
+      ]
+    },
+    {
+      "name": "length entry raw.length=3",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[7];const raw:any=a;raw.length=3;raw.join(\",\")+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7,0,0/0,1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "length entry Reflect.set(raw,\"length\",3)",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[7];const raw:any=a;Reflect.set(raw,\"length\",3);raw.join(\",\")+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7,0,0/0,1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "length entry Object.defineProperty(raw,\"length\",{value:3})",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[7];const raw:any=a;Object.defineProperty(raw,\"length\",{value:3});raw.join(\",\")+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7,0,0/0,1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "length entry Reflect.defineProperty(raw,\"length\",{value:3})",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[7];const raw:any=a;Reflect.defineProperty(raw,\"length\",{value:3});raw.join(\",\")+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7,0,0/0,1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "no default symbol",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<symbol>=[];const raw:any=a;attempt(()=>{raw.length=2;})+\"/\"+raw.length+\"/\"+Object.keys(raw).length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "no default ()=>number",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<()=>number>=[];const raw:any=a;attempt(()=>{raw.length=2;})+\"/\"+raw.length+\"/\"+Object.keys(raw).length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "no default number|string",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<number|string>=[];const raw:any=a;attempt(()=>{raw.length=2;})+\"/\"+raw.length+\"/\"+Object.keys(raw).length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "no default never",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<never>=[];const raw:any=a;attempt(()=>{raw.length=2;})+\"/\"+raw.length+\"/\"+Object.keys(raw).length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reference class has no default",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}dynamic class R {x=1;}const a:[].<R>=[];const raw:any=a;attempt(()=>{raw.length=2;})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "growth creates fresh nested arrays",
+      "steps": [
+        {
+          "source": "const a:[].<[].<uint8>>=[];const raw:any=a;raw.length=2;raw[0].push(7);String(raw[0]===raw[1])+\"/\"+raw[0].join(\",\")+\"/\"+raw[1].length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "growth creates fresh value class defaults",
+      "steps": [
+        {
+          "source": "class V {x:uint8;}const a:[].<V>=[];const raw:any=a;raw.length=2;raw[0].x=9;String(raw[0].x)+\"/\"+raw[1].x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "9/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "growth bypasses value class constructor",
+      "steps": [
+        {
+          "source": "let calls=0;class V {x:uint8;constructor(){calls++;this.x=9;}}const a:[].<V>=[];const raw:any=a;raw.length=2;String(calls)+\"/\"+raw[0].x+\"/\"+raw[1].x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "growth copies declared zero",
+      "steps": [
+        {
+          "source": "class V {x:uint8;static default=new V();static {V.default.x=(7:=uint8);}}const a:[].<V>=[];const raw:any=a;raw.length=2;raw[0].x=9;String(raw[0].x)+\"/\"+raw[1].x+\"/\"+V.default.x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "9/7/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "growth initializes private value fields",
+      "steps": [
+        {
+          "source": "class V {#x:uint8;get(){return this.#x;}}const a:[].<V>=[];const raw:any=a;raw.length=2;String(raw[0].get())+\"/\"+raw[1].get();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "descriptor refusal Object.preventExtensions(raw)",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[7];const raw:any=a;Object.preventExtensions(raw);String(Reflect.defineProperty(raw,\"length\",{value:3}))+\"/\"+raw.length+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/1/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "descriptor refusal Object.defineProperty(raw,\"length\",{writable:false})",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[7];const raw:any=a;Object.defineProperty(raw,\"length\",{writable:false});String(Reflect.defineProperty(raw,\"length\",{value:3}))+\"/\"+raw.length+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/1/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "incompatible length attributes refuse before growth",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[7];const raw:any=a;String(Reflect.defineProperty(raw,\"length\",{value:3,enumerable:true}))+\"/\"+raw.length+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/1/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "readonly final length follows initialized elements",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[7];const raw:any=a;Object.defineProperty(raw,\"length\",{value:3,writable:false});raw.join(\",\")+\"/\"+Object.getOwnPropertyDescriptor(raw,\"length\").writable+\"/\"+Object.getOwnPropertyDescriptor(raw,\"1\").writable;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7,0,0/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default slots are own ordinary data descriptors",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[];const raw:any=a;raw.length=1;const d=Object.getOwnPropertyDescriptor(raw,\"0\");String(d.value)+\"/\"+d.writable+\"/\"+d.enumerable+\"/\"+d.configurable;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "growth bypasses inherited index setters",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[];const raw:any=a;let calls=0;const proto=Object.create(Object.getPrototypeOf(raw));Object.defineProperty(proto,\"0\",{set(v){calls++;},configurable:true});Object.setPrototypeOf(raw,proto);raw.length=2;String(calls)+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/0,0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest tuple growth initializes required type",
+      "steps": [
+        {
+          "source": "const raw:any=[true];const t:[boolean,...[].<string>]=raw;raw.length=3;raw.join(\"/\")+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true///0,1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "equal rest suffix growth initializes exact suffix",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\"];const t:[...[].<string>,string]=raw;raw.length=3;raw.join(\"/\")+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a///0,1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "suffix survivor type rejects growth",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[true];const t:[...[].<string>,boolean]=raw;attempt(()=>{raw.length=3;})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed array extent rejects growth",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[1].<uint8>=[7];const raw:any=a;attempt(()=>{raw.length=3;})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero growth does not require a default",
+      "steps": [
+        {
+          "source": "const a:[].<symbol>=[];const raw:any=a;String(Reflect.defineProperty(raw,\"length\",{value:0}))+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shortening does not require a default",
+      "steps": [
+        {
+          "source": "const a:[].<symbol>=[Symbol()];const raw:any=a;raw.length=0;String(raw.length);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "growth within reserved capacity preserves reference",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[7];a.reserve(8);let ref b=a[0];const raw:any=a;raw.length=3;String(b)+\"/\"+a.capacity+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/8/7,0,0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "growth beyond capacity invalidates reference",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];a.shrinkToFit();let ref b=a[0];const raw:any=a;raw.length=3;attempt(()=>{String(b);})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7,0,0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed growth retains capacity and reference",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<symbol>=[Symbol(\"x\")];a.shrinkToFit();let ref b=a[0];const raw:any=a;attempt(()=>{raw.length=3;})+\"/\"+a.capacity+\"/\"+String(b)+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/Symbol(x)/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "untyped array retains holes",
+      "steps": [
+        {
+          "source": "const raw:any=[];raw.length=3;String(raw.length)+\"/\"+Object.keys(raw).length+\"/\"+Object.hasOwn(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3/0/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value supplied insertion needs no default push(f,f)",
+      "steps": [
+        {
+          "source": "function f(){return 7;}const a:[].<()=>number>=[f];const raw:any=a;raw.push(f,f);String(raw.length)+\"/\"+raw[0]()+\"/\"+raw[2]();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3/7/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value supplied insertion needs no default unshift(f,f)",
+      "steps": [
+        {
+          "source": "function f(){return 7;}const a:[].<()=>number>=[f];const raw:any=a;raw.unshift(f,f);String(raw.length)+\"/\"+raw[0]()+\"/\"+raw[2]();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3/7/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value supplied insertion needs no default splice(0,0,f,f)",
+      "steps": [
+        {
+          "source": "function f(){return 7;}const a:[].<()=>number>=[f];const raw:any=a;raw.splice(0,0,f,f);String(raw.length)+\"/\"+raw[0]()+\"/\"+raw[2]();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3/7/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "count check rejects string before growth",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];const raw:any=a;attempt(()=>{raw.length=\"3\";})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata default uses declared cast",
+      "steps": [
+        {
+          "source": "type Dim={m:number};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float64{operator float64.<{m:1}>():float64.<{m:1}>{return this;}}const a:[].<float64.<{m:1}>>=[];const raw:any=a;raw.length=2;String(Number(raw[0]))+\"/\"+Number(raw[1]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata missing default preserves state",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type Dim={m:number};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}const a:[].<float64.<{m:1}>>=[];const raw:any=a;attempt(()=>{raw.length=2;})+\"/\"+raw.length+\"/\"+Object.keys(raw).length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "defaults run once per new position before publication",
+      "steps": [
+        {
+          "source": "type Dim={m:number};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float64{operator float64.<{m:1}>():float64.<{m:1}>{globalThis.onDefault();return this;}}const a:[].<float64.<{m:1}>>=[];const raw:any=a;let calls=0;let seen=\"\";globalThis.onDefault=()=>{calls++;seen+=raw.length+\":\"+Object.keys(raw).length+\";\";};raw.length=3;String(calls)+\"/\"+raw.length+\"/\"+Object.keys(raw).length+\"/\"+seen;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3/3/3/0:0;0:0;0:0;"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later missing default publishes no prefix",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type Dim={m:number};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float64{operator float64.<{m:1}>():float64.<{m:1}>{globalThis.onDefault();return this;}}const a:[].<float64.<{m:1}>>=[];const raw:any=a;let calls=0;let seen=\"\";globalThis.onDefault=()=>{calls++;if(calls===2)throw new Error(\"stop\");};attempt(()=>{raw.length=3;})+\"/\"+calls+\"/\"+raw.length+\"/\"+Object.keys(raw).length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/2/0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "revalidate extensibility",
+      "steps": [
+        {
+          "source": "type Dim={m:number};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float64{operator float64.<{m:1}>():float64.<{m:1}>{globalThis.onDefault();return this;}}const a:[].<float64.<{m:1}>>=[];const raw:any=a;let calls=0;let seen=\"\";globalThis.onDefault=()=>{calls++;Object.preventExtensions(raw);};String(Reflect.defineProperty(raw,\"length\",{value:3}))+\"/\"+calls+\"/\"+raw.length+\"/\"+Object.keys(raw).length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/3/0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "preflight extensibility",
+      "steps": [
+        {
+          "source": "type Dim={m:number};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float64{operator float64.<{m:1}>():float64.<{m:1}>{globalThis.onDefault();return this;}}const a:[].<float64.<{m:1}>>=[];const raw:any=a;let calls=0;let seen=\"\";globalThis.onDefault=()=>{calls++;};Object.preventExtensions(raw);String(Reflect.defineProperty(raw,\"length\",{value:3}))+\"/\"+calls+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "revalidate writability",
+      "steps": [
+        {
+          "source": "type Dim={m:number};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float64{operator float64.<{m:1}>():float64.<{m:1}>{globalThis.onDefault();return this;}}const a:[].<float64.<{m:1}>>=[];const raw:any=a;let calls=0;let seen=\"\";globalThis.onDefault=()=>{calls++;Object.defineProperty(raw,\"length\",{writable:false});};String(Reflect.defineProperty(raw,\"length\",{value:3}))+\"/\"+calls+\"/\"+raw.length+\"/\"+Object.keys(raw).length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/3/0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "preflight writability",
+      "steps": [
+        {
+          "source": "type Dim={m:number};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float64{operator float64.<{m:1}>():float64.<{m:1}>{globalThis.onDefault();return this;}}const a:[].<float64.<{m:1}>>=[];const raw:any=a;let calls=0;let seen=\"\";globalThis.onDefault=()=>{calls++;};Object.defineProperty(raw,\"length\",{writable:false});String(Reflect.defineProperty(raw,\"length\",{value:3}))+\"/\"+calls+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reentrant shrink survives stale outer growth",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type Dim={m:number};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float64{operator float64.<{m:1}>():float64.<{m:1}>{globalThis.onDefault();return this;}}const a:[].<float64.<{m:1}>>=[];const raw:any=a;let calls=0;let seen=\"\";globalThis.onDefault=()=>{};raw.length=1;globalThis.onDefault=()=>{calls++;raw.length=0;};attempt(()=>{raw.length=3;})+\"/\"+calls+\"/\"+raw.length+\"/\"+Object.keys(raw).length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "compatible reentrant view retains established backing",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type Dim={m:number};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float64{operator float64.<{m:1}>():float64.<{m:1}>{globalThis.onDefault();return this;}}const a:[].<float64.<{m:1}>>=[];const raw:any=a;let calls=0;let seen=\"\";globalThis.onDefault=()=>{calls++;const t:[...[].<float64.<{m:1}>>]=raw;};attempt(()=>{raw.length=3;})+\"/\"+calls+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/3/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reentrant reservation retained",
+      "steps": [
+        {
+          "source": "type Dim={m:number};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float64{operator float64.<{m:1}>():float64.<{m:1}>{globalThis.onDefault();return this;}}const a:[].<float64.<{m:1}>>=[];const raw:any=a;let calls=0;let seen=\"\";globalThis.onDefault=()=>{calls++;a.reserve(8);};raw.length=3;String(calls)+\"/\"+a.capacity+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3/8/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "existing element value write does not cancel growth",
+      "steps": [
+        {
+          "source": "type Dim={m:number};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float64{operator float64.<{m:1}>():float64.<{m:1}>{globalThis.onDefault();return this;}}const a:[].<float64.<{m:1}>>=[];const raw:any=a;let calls=0;let seen=\"\";globalThis.onDefault=()=>{};raw.length=1;const seed:any=raw[0];globalThis.onDefault=()=>{calls++;raw[0]=seed;};raw.length=3;String(calls)+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed default preserves independent reservation",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type Dim={m:number};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float64{operator float64.<{m:1}>():float64.<{m:1}>{globalThis.onDefault();return this;}}const a:[].<float64.<{m:1}>>=[];const raw:any=a;let calls=0;let seen=\"\";globalThis.onDefault=()=>{calls++;a.reserve(8);throw new Error(\"stop\");};attempt(()=>{raw.length=3;})+\"/\"+calls+\"/\"+a.capacity+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/8/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested tuple default retains its backing",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<[uint8]>=[];const raw:any=a;raw.length=2;attempt(()=>{raw[0][0]=\"wrong\";})+\"/\"+raw[0].join(\",\")+\"/\"+raw[1].join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested rest tuple default retains suffix backing",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<[...[].<string>,boolean]>=[];const raw:any=a;raw.length=1;attempt(()=>{raw[0][0]=\"wrong\";})+\"/\"+raw[0].join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested declared zeros remain independent",
+      "steps": [
+        {
+          "source": "class V {x:uint8;static default=new V();static{V.default.x=(7:=uint8);}}const a:[].<[V]>=[];const raw:any=a;raw.length=2;raw[0][0].x=9;String(raw[0][0].x)+\"/\"+raw[1][0].x+\"/\"+V.default.x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "9/7/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class fields receive independent declared zeros",
+      "steps": [
+        {
+          "source": "class V {x:uint8;static default=new V();static{V.default.x=(7:=uint8);}}class Pair{a:V;b:V;}const a:[].<Pair>=[];const raw:any=a;raw.length=1;raw[0].a.x=9;String(raw[0].a.x)+\"/\"+raw[0].b.x+\"/\"+V.default.x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "9/7/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary tuple default retains its backing",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let t:[uint8];const raw:any=t;attempt(()=>{raw[0]=\"wrong\";})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested fixed array defaults evaluate once per element",
+      "steps": [
+        {
+          "source": "type Dim={m:number};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float64{operator float64.<{m:1}>():float64.<{m:1}>{globalThis.onDefault();return this;}}const a:[].<[2].<float64.<{m:1}>>>=[];const raw:any=a;let calls=0;globalThis.onDefault=()=>{calls++;};raw.length=2;String(calls)+\"/\"+raw.length+\"/\"+raw[0].length+\"/\"+raw[1].length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "4/2/2/2"
+          }
+        }
+      ]
+    }
+  ]
+}
