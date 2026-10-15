@@ -1,0 +1,1055 @@
+{
+  "cases": [
+    {
+      "name": "reverse rejects incompatible backing plan",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];function run(a:any){let e=\"none\";try{a.reverse();}catch(x){e=x.name;}return e+\"/\"+String(a[0])+\",\"+String(a[1])+\"/\"+String(a.length);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,258/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "sort rejects incompatible backing plan",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];function run(a:any){let e=\"none\";try{a.sort();}catch(x){e=x.name;}return e+\"/\"+String(a[0])+\",\"+String(a[1])+\"/\"+String(a.length);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,258/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "copyWithin rejects incompatible backing plan",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];function run(a:any){let e=\"none\";try{a.copyWithin(0,1,2);}catch(x){e=x.name;}return e+\"/\"+String(a[0])+\",\"+String(a[1])+\"/\"+String(a.length);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,258/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fill rejects incompatible backing plan",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];function run(a:any){let e=\"none\";try{a.fill(7);}catch(x){e=x.name;}return e+\"/\"+String(a[0])+\",\"+String(a[1])+\"/\"+String(a.length);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,258/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pop rejects incompatible backing plan",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];function run(a:any){let e=\"none\";try{a.pop();}catch(x){e=x.name;}return e+\"/\"+String(a[0])+\",\"+String(a[1])+\"/\"+String(a.length);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,258/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shift rejects incompatible backing plan",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];function run(a:any){let e=\"none\";try{a.shift();}catch(x){e=x.name;}return e+\"/\"+String(a[0])+\",\"+String(a[1])+\"/\"+String(a.length);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,258/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "splice shrink rejects incompatible backing plan",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];function run(a:any){let e=\"none\";try{a.splice(0,1);}catch(x){e=x.name;}return e+\"/\"+String(a[0])+\",\"+String(a[1])+\"/\"+String(a.length);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,258/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "splice grow rejects incompatible backing plan",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];function run(a:any){let e=\"none\";try{a.splice(0,0,3);}catch(x){e=x.name;}return e+\"/\"+String(a[0])+\",\"+String(a[1])+\"/\"+String(a.length);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,258/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "push rejects incompatible backing plan",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];function run(a:any){let e=\"none\";try{a.push(3);}catch(x){e=x.name;}return e+\"/\"+String(a[0])+\",\"+String(a[1])+\"/\"+String(a.length);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,258/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unshift rejects incompatible backing plan",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];function run(a:any){let e=\"none\";try{a.unshift(3);}catch(x){e=x.name;}return e+\"/\"+String(a[0])+\",\"+String(a[1])+\"/\"+String(a.length);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,258/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "symmetric heterogeneous reverse",
+      "steps": [
+        {
+          "source": "const t:[uint8,string,uint8]=[1,\"x\",2];function run(a:any){a.reverse();return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2,x,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "copyWithin within equal positions",
+      "steps": [
+        {
+          "source": "const t:[uint8,string,uint8]=[1,\"x\",2];function run(a:any){a.copyWithin(2,0,1);return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,x,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "copyWithin empty",
+      "steps": [
+        {
+          "source": "const t:[uint8,string,uint8]=[1,\"x\",2];function run(a:any){a.copyWithin(0,2,1);return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,x,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "copyWithin same location",
+      "steps": [
+        {
+          "source": "const t:[uint8,string,uint8]=[1,\"x\",2];function run(a:any){a.copyWithin(1,1,2);return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,x,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fill one position",
+      "steps": [
+        {
+          "source": "const t:[uint8,string,uint8]=[1,\"x\",2];function run(a:any){a.fill(\"y\",1,2);return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,y,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fill empty",
+      "steps": [
+        {
+          "source": "const t:[uint8,string,uint8]=[1,\"x\",2];function run(a:any){a.fill(\"bad\",2,1);return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,x,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "splice replaces without moving",
+      "steps": [
+        {
+          "source": "const t:[uint8,string,uint8]=[1,\"x\",2];function run(a:any){a.splice(1,1,\"y\");return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,y,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "splice no arguments",
+      "steps": [
+        {
+          "source": "const t:[uint8,string,uint8]=[1,\"x\",2];function run(a:any){a.splice();return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,x,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "push no arguments",
+      "steps": [
+        {
+          "source": "const t:[uint8,string,uint8]=[1,\"x\",2];function run(a:any){a.push();return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,x,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unshift no arguments",
+      "steps": [
+        {
+          "source": "const t:[uint8,string,uint8]=[1,\"x\",2];function run(a:any){a.unshift();return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,x,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "homogeneous reverse",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint8,uint8]=[1,2,3];function run(a:any){a.reverse();return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3,2,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "homogeneous sort",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint8,uint8]=[1,2,3];function run(a:any){a.sort((x,y)=>Number(x)-Number(y));return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "homogeneous overlap copy",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint8,uint8]=[1,2,3];function run(a:any){a.copyWithin(1,0,2);return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "homogeneous fill",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint8,uint8]=[1,2,3];function run(a:any){a.fill(9,1);return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,9,9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "homogeneous same-length splice",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint8,uint8]=[1,2,3];function run(a:any){a.splice(1,1,9);return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,9,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tail pop",
+      "steps": [
+        {
+          "source": "const t:[uint8,...[].<string>]=[1,\"x\",\"y\"];function run(a:any){a.pop();return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,x"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tail push",
+      "steps": [
+        {
+          "source": "const t:[uint8,...[].<string>]=[1,\"x\",\"y\"];function run(a:any){a.push(\"z\");return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,x,y,z"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tail fill",
+      "steps": [
+        {
+          "source": "const t:[uint8,...[].<string>]=[1,\"x\",\"y\"];function run(a:any){a.fill(\"z\",1);return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,z,z"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tail copy",
+      "steps": [
+        {
+          "source": "const t:[uint8,...[].<string>]=[1,\"x\",\"y\"];function run(a:any){a.copyWithin(2,1,2);return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,x,x"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tail splice shrink",
+      "steps": [
+        {
+          "source": "const t:[uint8,...[].<string>]=[1,\"x\",\"y\"];function run(a:any){a.splice(1,1);return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,y"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tail splice grow",
+      "steps": [
+        {
+          "source": "const t:[uint8,...[].<string>]=[1,\"x\",\"y\"];function run(a:any){a.splice(2,0,\"z\");return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,x,z,y"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest reverse",
+      "steps": [
+        {
+          "source": "const t:[uint8,...[].<string>]=[1,\"x\",\"y\"];function run(a:any){let e=\"none\";try{a.reverse();}catch(x){e=x.name;}return e+\"/\"+a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,x,y"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest shift",
+      "steps": [
+        {
+          "source": "const t:[uint8,...[].<string>]=[1,\"x\",\"y\"];function run(a:any){let e=\"none\";try{a.shift();}catch(x){e=x.name;}return e+\"/\"+a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,x,y"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest unshift",
+      "steps": [
+        {
+          "source": "const t:[uint8,...[].<string>]=[1,\"x\",\"y\"];function run(a:any){let e=\"none\";try{a.unshift(2);}catch(x){e=x.name;}return e+\"/\"+a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,x,y"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest splice crossing prefix",
+      "steps": [
+        {
+          "source": "const t:[uint8,...[].<string>]=[1,\"x\",\"y\"];function run(a:any){let e=\"none\";try{a.splice(0,1);}catch(x){e=x.name;}return e+\"/\"+a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,x,y"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest fill across prefix",
+      "steps": [
+        {
+          "source": "const t:[uint8,...[].<string>]=[1,\"x\",\"y\"];function run(a:any){let e=\"none\";try{a.fill(\"z\");}catch(x){e=x.name;}return e+\"/\"+a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,x,y"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tail cannot remove required prefix",
+      "steps": [
+        {
+          "source": "const t:[uint8,...[].<string>]=[1];function run(a:any){let e=\"none\";try{a.pop();}catch(x){e=x.name;}return e+\"/\"+a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed array pop",
+      "steps": [
+        {
+          "source": "const t:[2].<uint8>=[1,2];function run(a:any){let e=\"none\";try{a.pop();}catch(x){e=x.name;}return e+\"/\"+String(a[0])+\",\"+String(a[1])+\"/\"+String(a.length);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,2/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed array shift",
+      "steps": [
+        {
+          "source": "const t:[2].<uint8>=[1,2];function run(a:any){let e=\"none\";try{a.shift();}catch(x){e=x.name;}return e+\"/\"+String(a[0])+\",\"+String(a[1])+\"/\"+String(a.length);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,2/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed array splice",
+      "steps": [
+        {
+          "source": "const t:[2].<uint8>=[1,2];function run(a:any){let e=\"none\";try{a.splice(0,1);}catch(x){e=x.name;}return e+\"/\"+String(a[0])+\",\"+String(a[1])+\"/\"+String(a.length);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,2/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty fixed pop",
+      "steps": [
+        {
+          "source": "const t:[]=[];function run(a:any){a.pop();return String(a.length);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty fixed shift",
+      "steps": [
+        {
+          "source": "const t:[]=[];function run(a:any){a.shift();return String(a.length);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same-type prefix permits shift",
+      "steps": [
+        {
+          "source": "const t:[uint8,...[].<uint8>]=[1,2,3];function run(a:any){a.shift();return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same-type prefix permits unshift",
+      "steps": [
+        {
+          "source": "const t:[uint8,...[].<uint8>]=[1,2];function run(a:any){a.unshift(3);return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3,1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same-type prefix permits splice movement",
+      "steps": [
+        {
+          "source": "const t:[uint8,...[].<uint8>]=[1,2,3];function run(a:any){a.splice(0,1);return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plan precedes element access reverse()",
+      "steps": [
+        {
+          "source": "let gets=0;const t:[uint8,uint16]=[1,258];Object.defineProperty(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.reverse();}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plan precedes element access copyWithin(0,1,2)",
+      "steps": [
+        {
+          "source": "let gets=0;const t:[uint8,uint16]=[1,258];Object.defineProperty(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.copyWithin(0,1,2);}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plan precedes element access sort()",
+      "steps": [
+        {
+          "source": "let gets=0;const t:[uint8,uint16]=[1,258];Object.defineProperty(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.sort();}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plan precedes element access pop()",
+      "steps": [
+        {
+          "source": "let gets=0;const t:[uint8,uint16]=[1,258];Object.defineProperty(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.pop();}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plan precedes element access shift()",
+      "steps": [
+        {
+          "source": "let gets=0;const t:[uint8,uint16]=[1,258];Object.defineProperty(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.shift();}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plan precedes element access splice(0,1)",
+      "steps": [
+        {
+          "source": "let gets=0;const t:[uint8,uint16]=[1,258];Object.defineProperty(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.splice(0,1);}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plan precedes element access fill(7)",
+      "steps": [
+        {
+          "source": "let gets=0;const t:[uint8,uint16]=[1,258];Object.defineProperty(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.fill(7);}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "sort plan precedes comparator",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];function run(a:any){let n=0;let e=\"none\";try{a.sort(()=>{n++;return 0;});}catch(x){e=x.name;}return e+\"/\"+String(n);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "sort comparator validation precedes plan",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];function run(a:any){try{a.sort(1);}catch(x){return String(x.message).includes(\"not a function\")?\"ok\":\"wrong\";}return \"missed\";}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "splice plan precedes species",
+      "steps": [
+        {
+          "source": "let n=0;const t:[uint8,uint16]=[1,258];Object.defineProperty(t,\"constructor\",{get(){n++;throw \"species\";}});function run(a:any){let e=\"none\";try{a.splice(0,1);}catch(x){e=x.name||x;}return e+\"/\"+String(n);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "argument normalization precedes plan",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];function run(a:any){let n=0;let e=\"none\";try{a.copyWithin({valueOf(){n++;return 0;}},1,2);}catch(x){e=x.name;}return e+\"/\"+String(n);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "argument failure precedes plan",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];function run(a:any){try{a.fill(7,{valueOf(){throw \"argument\";}});}catch(x){return String(x);}return \"missed\";}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "argument"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier argument effects survive plan failure",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];function run(a:any){try{a.copyWithin({valueOf(){a[0]=5;return 0;}},1,2);}catch(x){}return a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "5,258"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later ordinary write failure preserves earlier writes",
+      "steps": [
+        {
+          "source": "let n=0;const t:[uint8,uint8]=[1,2];Object.defineProperty(t,\"1\",{get(){return (2:=uint8);},set(v){n++;throw \"setter\";}});function run(a:any){let e=\"none\";try{a.fill(9);}catch(x){e=String(x);}return e+\"/\"+String(a[0])+\"/\"+String(n);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "setter/9/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "allowed movement retains getter order",
+      "steps": [
+        {
+          "source": "let log=\"\";const t:[uint8,uint8]=[1,2];Object.defineProperty(t,\"0\",{get(){log+=\"a\";return (1:=uint8);},set(v){log+=\"A\";}});Object.defineProperty(t,\"1\",{get(){log+=\"b\";return (2:=uint8);},set(v){log+=\"B\";}});function run(a:any){a.reverse();return log;}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "abAB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rejected pop leaves reference live",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];let ref r=t[1];function run(a:any){try{a.pop();}catch(x){}}run(t);String(r);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "258"
+          }
+        }
+      ]
+    },
+    {
+      "name": "accepted tail removal invalidates reference",
+      "steps": [
+        {
+          "source": "const t:[uint8,...[].<string>]=[1,\"x\"];let ref r=t[1];function run(a:any){a.pop();}run(t);let e=\"none\";try{String(r);}catch(x){e=x.name;}e;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same-contract movement preserves reference location",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint8]=[1,2];let ref r=t[0];function run(a:any){a.reverse();}run(t);String(r);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary array remains untyped",
+      "steps": [
+        {
+          "source": "const a=[1,\"x\"];a.reverse();a.pop();a.push(true);a.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "x,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "copying reverse remains available",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];function run(a:any){return a.toReversed().join(\",\")+\"/\"+a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "258,1/1,258"
+          }
+        }
+      ]
+    },
+    {
+      "name": "copying sort remains available",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];function run(a:any){return a.toSorted().join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,258"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement method is not planned",
+      "steps": [
+        {
+          "source": "Array.prototype.reverse=function(){return \"replacement\";};const t:[uint8,uint16]=[1,258];t.reverse();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "replacement"
+          }
+        }
+      ]
+    },
+    {
+      "name": "borrowed intrinsic checks backing",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];function run(a:any){let e=\"none\";try{Array.prototype.reverse.call(a);}catch(x){e=x.name;}return e+\"/\"+a.join(\",\");}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,258"
+          }
+        }
+      ]
+    },
+    {
+      "name": "proven invalid move remains static",
+      "steps": [
+        {
+          "source": "const t:[uint8,string]=[1,\"x\"];t.reverse();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "proved numeric plan reverse()",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];t.reverse();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "proved numeric plan sort()",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];t.sort();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "proved numeric plan copyWithin(0,1,2)",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];t.copyWithin(0,1,2);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "proved numeric plan fill(7)",
+      "steps": [
+        {
+          "source": "const t:[uint8,uint16]=[1,258];t.fill(7);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "proved symmetric reverse allowed",
+      "steps": [
+        {
+          "source": "const t:[uint8,string,uint8]=[1,\"x\",2];t.reverse();t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2,x,1"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -31856,12 +31856,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       : CreateTypeDiagnostic('rt-fixed-extent-store', call, diagnosticPhase, 'this intrinsic mutation changes a fixed array extent')).Value as ObjectValue);
   };
 
-  /** #sec-intrinsic-array-contracts: simulate only established destination stores. */
+  /** #sec-intrinsic-array-contracts: check established movement plans and destination stores. */
   const checkTupleMutation = (call: ParseNode.CallExpression): void => {
     const member = patternExpression(call.CallExpression);
     if (member?.type !== 'MemberExpression') return;
     const name = memberKey(member);
-    if (typeof name !== 'string' || !['reverse', 'copyWithin', 'fill', 'splice'].includes(name)) return;
+    if (typeof name !== 'string' || !['reverse', 'sort', 'copyWithin', 'fill', 'splice'].includes(name)) return;
     provenArrayMembers ??= ProvenArrayMembers(root, surroundingAgent.currentRealmRecord);
     if (!provenArrayMembers.has(member)) return;
     const receiver = staticType(member.MemberExpression);
@@ -31887,22 +31887,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         reportType('rt-typed-array-store', call, 'an intrinsic array store cannot convert $1 to slot type $2', Value(displayType(source)), Value(displayType(receiver.Elements[index].Type)));
         return true;
       }
-      // A successful write has the destination's contract, including any
-      // conversion; an overlapping later read sees that stored value.
-      slots[index] = receiver.Elements[index].Type;
       return false;
     };
+    const move = (from: number, to: number): boolean => {
+      if (!SameType(slots[from], slots[to])) {
+        reportType('rt-typed-array-store', call, 'an intrinsic tuple mutation requires the same backing type at its participating positions');
+        return true;
+      }
+      return false;
+    };
+    if (name === 'sort') {
+      for (let index = 1; index < length; index += 1) if (move(0, index)) return;
+      return;
+    }
     if (name === 'reverse') {
       for (let low = 0; low < Math.floor(length / 2); low += 1) {
         const high = length - low - 1;
-        const lower = slots[low]; const upper = slots[high];
-        if (store(low, upper) || store(high, lower)) return;
+        if (move(low, high)) return;
       }
       return;
     }
     if (name === 'fill') {
       const start = integer(args[1], 0); const end = integer(args[2], length);
       if (start === null || end === null) return;
+      for (let index = relative(start) + 1; index < relative(end); index += 1) if (move(relative(start), index)) return;
       const value = args[0] ? staticType(args[0]) : undefinedType;
       for (let index = relative(start); index < relative(end); index += 1) if (store(index, value)) return;
       return;
@@ -31920,7 +31928,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         source += count - 1;
       }
       while (count > 0) {
-        if (store(target, slots[source])) return;
+        if (move(source, target)) return;
         target += direction; source += direction; count -= 1;
       }
       return;
@@ -31932,7 +31940,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const inserted = Math.max(args.length - 2, 0);
     if (inserted < removed) {
       for (let index = from; index < length - removed; index += 1) {
-        if (store(index + inserted, slots[index + removed])) return;
+        if (move(index + removed, index + inserted)) return;
       }
       // Deleting the tail precedes insertion and has its own storage rules.
       return;

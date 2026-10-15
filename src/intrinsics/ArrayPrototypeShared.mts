@@ -1,3 +1,4 @@
+import { ValidateArrayMutation } from '../abstract-ops/array-mutation.mts';
 import {
   NormalCompletion,
   Q, ThrowCompletion, X, type ValueEvaluator,
@@ -542,6 +543,8 @@ export function bootstrapArrayPrototypeShared(realmRec: Realm, proto: ObjectValu
     Q(Validate?.(thisValue));
     const O = Q(ToObject(thisValue));
     const len = Q(yield* ToLength(O));
+    if (kind === 'Array') Q(ValidateArrayMutation(O, { length: len,
+      moves: [{ from: 0, to: len - 1, count: Math.floor(len / 2), reverse: true }] }));
     const middle = Math.floor(len / 2);
     let lower = 0;
     while (lower !== middle) {

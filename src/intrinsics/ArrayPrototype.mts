@@ -1,3 +1,4 @@
+import { ValidateArrayMutation } from '../abstract-ops/array-mutation.mts';
 import {
   BooleanValue,
   Descriptor,
@@ -124,6 +125,7 @@ function* ArrayProto_copyWithin([target = Value.undefined, start = Value.undefin
     final = Math.min(relativeEnd, len);
   }
   let count = Math.min(final - from, len - to);
+  Q(ValidateArrayMutation(O, { length: len, moves: [{ from, to, count }] }));
   let direction;
   if (from < to && to < from + count) {
     direction = -1;
@@ -178,6 +180,7 @@ function* ArrayProto_fill([value = Value.undefined, start = Value.undefined, end
   } else {
     final = Math.min(relativeEnd, len);
   }
+  Q(ValidateArrayMutation(O, { length: len, uniform: [{ start: k, count: Math.max(0, final - k) }] }));
   while (k < final) {
     const Pk: JSStringValue = X(ToString(F(k)));
     Q(yield* Set(O, Pk, value, Value.true));
@@ -309,6 +312,7 @@ function* ArrayProto_map([callbackfn = Value.undefined, thisArg = Value.undefine
 function* ArrayProto_pop(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const O = Q(ToObject(thisValue));
   const len = Q(yield* LengthOfArrayLike(O));
+  Q(ValidateArrayMutation(O, { length: Math.max(0, len - 1) }));
   if (len === 0) {
     Q(yield* Set(O, Value('length'), F(+0), Value.true));
     return Value.undefined;
@@ -606,6 +610,7 @@ function* ArrayProto_push(_items: Arguments, { thisValue }: FunctionCallContext)
   if (len + argCount > (2 ** 53) - 1) {
     return Throw.TypeError('Cannot make length of array-like object surpass the bounds of an integer index');
   }
+  Q(ValidateArrayMutation(O, { length: len + argCount }));
   while (items.length > 0) {
     const E = items.shift()!;
     Q(yield* Set(O, X(ToString(F(len))), E, Value.true));
@@ -619,6 +624,8 @@ function* ArrayProto_push(_items: Arguments, { thisValue }: FunctionCallContext)
 function* ArrayProto_shift(_args: Arguments, { thisValue }: FunctionCallContext): ValueEvaluator {
   const O = Q(ToObject(thisValue));
   const len = Q(yield* LengthOfArrayLike(O));
+  Q(ValidateArrayMutation(O, { length: Math.max(0, len - 1),
+    moves: [{ from: 1, to: 0, count: Math.max(0, len - 1) }] }));
   if (len === 0) {
     Q(yield* Set(O, Value('length'), F(+0), Value.true));
     return Value.undefined;
@@ -699,6 +706,7 @@ function* ArrayProto_sort([comparator = Value.undefined]: Arguments, { thisValue
   }
   const obj = Q(ToObject(thisValue));
   const len = Q(yield* LengthOfArrayLike(obj));
+  Q(ValidateArrayMutation(obj, { length: len, uniform: [{ start: 0, count: len }] }));
 
   const SortCompare = function* SortCompare(x: Value, y: Value) {
     return yield* CompareArrayElements(x, y, comparator);
@@ -775,6 +783,9 @@ function* ArrayProto_splice(args: Arguments, { thisValue }: FunctionCallContext)
   if (len + insertCount - actualDeleteCount > (2 ** 53) - 1) {
     return Throw.TypeError('Cannot make length of array-like object surpass the bounds of an integer index');
   }
+  Q(ValidateArrayMutation(O, { length: len + insertCount - actualDeleteCount,
+    moves: insertCount === actualDeleteCount ? [] : [{ from: actualStart + actualDeleteCount,
+      to: actualStart + insertCount, count: len - actualStart - actualDeleteCount }] }));
   const A = Q(yield* ArraySpeciesCreate(O, actualDeleteCount));
   let k = 0;
   while (k < actualDeleteCount) {
@@ -980,6 +991,7 @@ function* ArrayProto_unshift(args: Arguments, { thisValue }: FunctionCallContext
     if (len + argCount > (2 ** 53) - 1) {
       return Throw.TypeError('Cannot make length of array-like object surpass the bounds of an integer index');
     }
+    Q(ValidateArrayMutation(O, { length: len + argCount, moves: [{ from: 0, to: argCount, count: len }] }));
     let k = len;
     while (k > 0) {
       const from = X(ToString(F(k - 1)));
