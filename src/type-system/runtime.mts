@@ -3837,7 +3837,27 @@ export type StructuralStorageAdmission = {
   value: Value, admittedType: TypeRecord,
 } | {
   kind: 'array', object: ObjectValue, element: TypeRecord, extent: number | 'dynamic',
+} | {
+  kind: 'tuple', object: ObjectValue, shape: TupleStorageShape,
 };
+
+export type TupleStorageShape = { Positions: readonly TypeRecord[], Rest: TypeRecord | undefined };
+
+/** These tuple positions are determined by index alone, independently of a
+ * successful partition or current length. Optional/complex rests need their
+ * own mutation contract; do not turn an admission witness into a frozen shape. */
+export function StableTupleStorageShape(type: TypeRecord): TupleStorageShape | undefined {
+  if (type.Kind !== 'tuple' || type.Elements.some((e) => e.Initial !== 'none')) return undefined;
+  const positions: TypeRecord[] = [];
+  let rest: TypeRecord | undefined;
+  for (let i = 0; i < type.Elements.length; i += 1) {
+    const e = type.Elements[i]!;
+    if (!e.Rest) positions.push(e.Type);
+    else if (i === type.Elements.length - 1 && e.Type.Kind === 'array' && e.Type.Extent === 'dynamic') rest = e.Type.Element;
+    else return undefined;
+  }
+  return { Positions: positions, Rest: rest };
+}
 
 /** A backing contract can prove membership without proving materialization. */
 export function MayRequireCallableMaterialization(source: TypeRecord, target: TypeRecord): boolean {
@@ -4229,6 +4249,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       // `[number, ...[].<string>, boolean]` with the required boolean missing;
       // and a rest element's Type is the ARRAY it stands for, so comparing an
       // element against it directly meant no rest ever matched anything.
+      const tupleShape = StableTupleStorageShape(t);
       const restCount = t.Elements.filter((e) => e.Rest).length;
       if (restCount === 0) {
         // #sec-array-membership: an element's slot "is optional exactly when its
@@ -4243,10 +4264,15 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         }
         for (let i = 0; i < len; i += 1) {
           const el = Q(yield* Get(value, Value(String(i))));
-          if (!Q(yield* IsOfType(el, t.Elements[i].Type, storage))) {
+          const admitted: UnionMemberAdmission | undefined = storage && tupleShape ? {} : undefined;
+          const type = t.Elements[i].Type;
+          if (!Q(yield* IsOfType(el, type, storage, admitted))) {
             return false;
           }
+          if (tupleShape) storage?.push({ kind: 'element', object: value, key: String(i), type,
+            value: el, admittedType: admitted?.member ?? type });
         }
+        if (tupleShape) storage?.push({ kind: 'tuple', object: value, shape: tupleShape });
         return true;
       }
       // The predicate SequenceAssignment takes is synchronous and IsOfType is
@@ -4263,8 +4289,13 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         const row: boolean[] = [];
         const records: StructuralStorageAdmission[][] = [];
         for (const e of t.Elements) {
-          const candidate = storage ? [] : undefined;
-          row.push(Q(yield* IsOfType(items[i], e.Rest ? restElementType(e.Type) : e.Type, candidate)));
+          const candidate: StructuralStorageAdmission[] | undefined = storage ? [] : undefined;
+          const type = e.Rest ? restElementType(e.Type) : e.Type;
+          const selection: UnionMemberAdmission | undefined = candidate && tupleShape ? {} : undefined;
+          const ok = Q(yield* IsOfType(items[i], type, candidate, selection));
+          row.push(ok);
+          if (ok && tupleShape) candidate?.push({ kind: 'element', object: value, key: String(i), type,
+            value: items[i], admittedType: selection?.member ?? type });
           records.push(candidate ?? []);
         }
         admitted.push(row);
@@ -4280,6 +4311,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
             for (const record of evidence[at++][k]) storage.push(record);
           }
         }
+        if (tupleShape) storage.push({ kind: 'tuple', object: value, shape: tupleShape });
       }
       return true;
     }

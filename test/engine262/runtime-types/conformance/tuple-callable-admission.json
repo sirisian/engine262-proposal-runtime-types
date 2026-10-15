@@ -1,0 +1,1030 @@
+{
+  "cases": [
+    {
+      "name": "fixed tuple literal",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const t:[F]=[id];String(t[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased tuple alias",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const t:[F]=raw;String(t===raw)+\"/\"+String(raw[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "assignment",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];let t:[F]=[id.<string>];t=raw;String(t[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "parameter",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;function use(t:[F]):boolean{return t[0]===id.<string>;}use([id])?\"true\":\"false\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "return",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;function make():[F]{return [id];}String(make()[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "field",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;class C{t:[F]=[id];}String(new C().t[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit conversion",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const t=raw:=[F];String(t===raw)+\"/\"+String(t[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nullable tuple",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const t:[F]|undefined=raw;String(raw[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nullable element",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const t:[F|undefined]=raw;String(raw[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested tuple",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[[id]];const t:[[F]]=raw;String(raw[0][0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple under array",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[[id]];const a:[].<[F]>=raw;String(raw[0][0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple under object",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any={t:[id]};const o:{t:[F]}=raw;String(raw.t[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "trailing rest",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[true,id,id];const t:[boolean,...[].<F>]=raw;String(raw[1]===id.<string>)+\"/\"+String(raw[1]===raw[2]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty rest future store",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[true];const t:[boolean,...[].<F>]=raw;raw.push(id);String(raw[1]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest-only tuple",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const t:[...[].<F>]=raw;String(raw[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty rest-only tuple",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[];const t:[...[].<F>]=raw;raw.push(id);String(raw[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest leaf union",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id,undefined];const t:[...[].<F|undefined>]=raw;String(raw[0]===id.<string>)+\"/\"+String(raw[1]===undefined);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic tuple receiving contract",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const t:[<T:type>(x:T)=>T]=[id];String(t[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pure tuple membership",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];String(raw is [F])+\"/\"+String(raw[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pure rest membership",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];String(raw instanceof (type [...[].<F>]))+\"/\"+String(raw[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "subsequent direct store",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;function other<T:type>(x:T):T{return x;}const raw:any=[id];const t:[F]=raw;raw[0]=other;String(raw[0]===other.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "subsequent reflective store",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;function other<T:type>(x:T):T{return x;}const raw:any=[id];const t:[F]=raw;Object.defineProperty(raw,\"0\",{value:other});String(raw[0]===other.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "subsequent bad store",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const t:[F]=raw;let result=\"missed\";try{raw[0]=1;}catch(e){result=e.name;}result+\"/\"+String(raw[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed tuple rejects growth",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const t:[F]=raw;let result=\"missed\";try{raw.push(id);}catch(e){result=e.name;}result+\"/\"+String(raw.length);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest prefix type remains fixed",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[true,id];const t:[boolean,...[].<F>]=raw;let result=\"missed\";try{raw[0]=id;}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest rejects shrinking prefix",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[true,id];const t:[boolean,...[].<F>]=raw;let result=\"missed\";try{raw.length=0;}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest can shrink tail",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[true,id,id];const t:[boolean,...[].<F>]=raw;raw.length=1;raw.push(id);String(raw[1]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "backing generic tuple refuses replacement",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const t:[<T:type>(x:T)=>T]=[id];const raw:any=t;let result=\"missed\";try{const c:[F]=raw;}catch(e){result=e.name;}result+\"/\"+String(raw[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "backing generic array refuses replacement",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const a:[].<<T:type>(x:T)=>T>=[id];const raw:any=a;let result=\"missed\";try{const t:[F]=raw;}catch(e){result=e.name;}result+\"/\"+String(raw[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "broad array backing retained",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const a:[].<any>=[id];const raw:any=a;const t:[F]=raw;raw[0]=1;raw.push(2);String(raw[0])+\"/\"+String(raw.length);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "broad tuple backing retained",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const a:[any]=[id];const raw:any=a;const t:[F]=raw;raw[0]=id;const c:[F]=t;String(raw[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wider tuple view preserves backing",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const t:[F]=raw;const wide:[any]=raw;let result=\"missed\";try{raw[0]=1;}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "custom prototype retained",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const proto:any=Object.create(Array.prototype);Object.setPrototypeOf(raw,proto);const t:[F]=raw;String(Object.getPrototypeOf(t)===proto)+\"/\"+String(raw[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested selected union",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any={t:[id]};const o:{t:[F]}|undefined=raw;String(raw.t[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "accessor reads once writes once",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;let writes=0;let held:any=id;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});const t:[F]=raw;String(reads)+\"/\"+String(writes)+\"/\"+String(held===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shared tuple paths coalesce writes",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;let writes=0;let held:any=id;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});const o:{a:[F],b:[F]}={a:raw,b:raw};String(reads)+\"/\"+String(writes)+\"/\"+String(held===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unchanged accessor needs no write",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;let writes=0;let held:any=id.<string>;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});const t:[F]=raw;String(reads)+\"/\"+String(writes);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "getter-only element refuses changed value",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return id;}});let result=\"missed\";try{const t:[F]=raw;}catch(e){result=e.name;}result+\"/\"+String(reads);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "frozen changed element refuses",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=Object.freeze([id]);let result=\"missed\";try{const t:[F]=raw;}catch(e){result=e.name;}result+\"/\"+String(raw[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "frozen unchanged tuple admitted",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=Object.freeze([id.<string>]);const t:[F]=raw;String(t===raw);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "throwing setter preserves exception",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;let writes=0;let held:any=id;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return held;},set(v){throw new RangeError(\"setter\");},configurable:true});let result=\"missed\";try{const t:[F]=raw;}catch(e){result=e.name;}result+\"/\"+String(reads);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "proxy Set true",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let lengths=0;let reads=0;let writes=0;let received:any;const raw:any=new Proxy([id],{get(o,k){if(k===\"length\")lengths++;if(k===\"0\")reads++;return Reflect.get(o,k);},set(o,k,v){writes++;received=v;return true;}});let result=\"ok\";try{const t:[F]=raw;}catch(e){result=e.name;}result+\"/\"+String(lengths)+\"/\"+String(reads)+\"/\"+String(writes)+\"/\"+String(received===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/1/1/1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "proxy Set false",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let lengths=0;let reads=0;let writes=0;let received:any;const raw:any=new Proxy([id],{get(o,k){if(k===\"length\")lengths++;if(k===\"0\")reads++;return Reflect.get(o,k);},set(o,k,v){writes++;received=v;return false;}});let result=\"ok\";try{const t:[F]=raw;}catch(e){result=e.name;}result+\"/\"+String(lengths)+\"/\"+String(reads)+\"/\"+String(writes)+\"/\"+String(received===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/1/1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed specialization keeps destination",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;function bad<T:type>(x:T):T where T===uint8{return x;}const old:any=[id.<string>];let t:[F]=old;const raw:any=[bad];let result=\"missed\";try{t=raw;}catch(e){result=e.name;}result+\"/\"+String(t===old)+\"/\"+String(raw[0]===bad);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed second write publishes no new tuple",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id,id];Object.defineProperty(raw,\"1\",{writable:false});let result=\"missed\";try{const t:[F,F]=raw;}catch(e){result=e.name;}const first=raw[0]===id.<string>;raw[0]=1;raw.push(2);result+\"/\"+String(first)+\"/\"+String(raw[0])+\"/\"+String(raw.length);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true/1/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed second specialization keeps first write",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;function bad<T:type>(x:T):T where T===uint8{return x;}const raw:any=[id,bad];let result=\"missed\";try{const t:[F,F]=raw;}catch(e){result=e.name;}const first=raw[0]===id.<string>;raw[0]=1;result+\"/\"+String(first)+\"/\"+String(raw[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed union path discards tuple evidence",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;function bad<T:type>(x:T):T where T===uint8{return x;}const raw:any={t:[bad],z:\"ok\"};const o:{t:[F],z:number}|{z:string}=raw;String(raw.t[0]===bad);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unselected tuple candidate discards nested evidence",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;function bad<T:type>(x:T):T where T===uint8{return x;}const raw:any=[[bad]];raw[0].z=\"ok\";const t:[...[].<[F]>,{z:string}]=raw;String(raw[0][0]===bad);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected tuple candidate retains nested evidence",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[[id],{z:\"ok\"}];const t:[...[].<[F]>,{z:string}]=raw;String(raw[0][0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pure membership never evaluates where",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;function bad<T:type>(x:T):T where T===uint8{return x;}const raw:any=[bad];String(raw is [F])+\"/\"+String(raw[0]===bad);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "all reads precede specialization",
+      "steps": [
+        {
+          "source": "let trace=\"\";const gate:any={get value(){trace+=\"w\";return true;}};function id<T:type>(x:T):T where gate.value{return x;}const raw:any=[];Object.defineProperty(raw,\"0\",{get(){trace+=\"a\";return id;},set(v){trace+=\"A\";}});Object.defineProperty(raw,\"1\",{get(){trace+=\"b\";return id;},set(v){trace+=\"B\";}});const t:[(x:string)=>string,...[].<(x:string)=>string>]=raw;trace;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "abwAB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reentrant boundary retains broad backing",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let held:any=id;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){return held;},set(v){held=v;const inner:[any]=raw;},configurable:true});const t:[F]=raw;raw[0]=1;String(raw[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overlapping fixed and rest contracts",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const o:{a:[F],b:[...[].<F>]}={a:raw,b:raw};let result=\"missed\";try{raw.push(id);}catch(e){result=e.name;}result+\"/\"+String(raw[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overlapping array and tuple contracts",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const o:{a:[].<F>,b:[F]}={a:raw,b:raw};let result=\"missed\";try{raw.push(id);}catch(e){result=e.name;}result+\"/\"+String(raw[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overlapping rest prefix domains",
+      "steps": [
+        {
+          "source": "type F=(x:string)=>string;function id<T:type>(x:T):T{return x;}const raw:any=[true,id];const o:{a:[boolean,...[].<F>],b:[boolean,F,...[].<F>]}={a:raw,b:raw};let result=\"missed\";try{raw.length=1;}catch(e){result=e.name;}raw.push(id);result+\"/\"+String(raw[2]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "conflicting observed lengths reject before writes",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const src:any={get a(){return raw;},get b(){raw.push(id);return raw;}};let result=\"missed\";try{const o:{a:[F],b:[F,F]}=src;}catch(e){result=e.name;}const unchanged=raw[0]===id;raw[0]=1;result+\"/\"+String(unchanged)+\"/\"+String(raw.length)+\"/\"+String(raw[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true/2/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source output survives erasure",
+      "steps": [
+        {
+          "source": "function make<T:type>():T{const x:any=1;return x;}const t:[()=>string]=[make];const f:any=t[0];typeof f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "native output specialization",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;const raw:any=[r.map];const t:[(callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>]=raw;const f:any=raw[0];const cb:any=v=>v;const it:any=f.call(r,cb);String(f===r.map.<string>)+\"/\"+typeof it.next().value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured generic context",
+      "steps": [
+        {
+          "source": "function make<A:type>(){function id<T:type>(x:T):T{return x;}const t:[(x:A)=>A]=[id];return t;}const raw:any=make.<string>();typeof raw[0](1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reference callable parameter",
+      "steps": [
+        {
+          "source": "function id<T:type>(ref x:T):T{return x;}const t:[(ref x:string)=>string]=[id];let v:string=\"ok\";t[0](ref v);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value copy at tuple acquisition",
+      "steps": [
+        {
+          "source": "class P{value:uint8=1;}const p:P=new P();const raw:any=[p];const t:[P]=raw;p.value=2;String(raw[0].value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value copy retains accessor observation",
+      "steps": [
+        {
+          "source": "class P{value:uint8=1;}const p:P=new P();let reads=0;let writes=0;let held:any=p;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});const t:[P]=raw;const again:[P]=raw;p.value=2;String(reads)+\"/\"+String(writes)+\"/\"+String(held.value)+\"/\"+String(typeof Object.getOwnPropertyDescriptor(raw,\"0\").get);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/1/1/function"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value copy refuses nonwritable tuple",
+      "steps": [
+        {
+          "source": "class P{value:uint8=1;}const p:P=new P();const raw:any=Object.freeze([p]);let result=\"missed\";try{const t:[P]=raw;}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "early incompatible bound",
+      "steps": [
+        {
+          "source": "function id<T:type extends number>(x:T):T{return x;}const t:[(x:string)=>string]=[id];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "reference store uses tuple backing",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const t:[F]=raw;function update(ref f:F){f=id;}update(ref raw[0]);String(raw[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "removed rest reference is not revived",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[true,id];const t:[boolean,...[].<F>]=raw;let ref f=raw[1];raw.length=1;let result=\"missed\";try{String(f);}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prefix reference survives tail shrink",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[true,id];const t:[boolean,...[].<F>]=raw;let ref b=raw[0];raw.length=1;String(b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reference viability does not materialize tuple",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];function inspect(ref a:[F]){}inspect(ref raw);String(raw[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "array and tuple store checks survive reflective definition",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const o:{a:[].<F>,b:[F]}={a:raw,b:raw};let result=\"missed\";try{Object.defineProperty(raw,\"0\",{value:1});}catch(e){result=e.name;}result+\"/\"+String(raw[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed array bounds a rest",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const o:{a:[1].<F>,b:[...[].<F>]}={a:raw,b:raw};let result=\"missed\";try{raw.push(id);}catch(e){result=e.name;}result+\"/\"+String(raw[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "regrowing rest does not revive removed reference",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[true,id];const t:[boolean,...[].<F>]=raw;let ref f=raw[1];raw.length=1;raw.push(id);let result=\"missed\";try{String(f);}catch(e){result=e.name;}result+\"/\"+String(raw[1]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reborrowing removed rest stays invalid",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[true,id];const t:[boolean,...[].<F>]=raw;let ref f=raw[1];raw.length=1;raw.push(id);let result=\"missed\";try{let ref again=f;String(again);}catch(e){result=e.name;}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement retains element reference",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;function other<T:type>(x:T):T{return x;}const raw:any=[id];const t:[F]=raw;let ref f=raw[0];raw[0]=other;String(f===other.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -440,7 +440,8 @@ export function* OrdinaryDelete(O: ObjectValue, P: PropertyKeyValue): ValueEvalu
     return Value.true;
   }
   if (desc.Configurable === Value.true) {
-    if (P instanceof JSStringValue && (O as { TypedElement?: unknown }).TypedElement !== undefined) {
+    const typed = O as { TypedElement?: unknown, TypedTuple?: unknown };
+    if (P instanceof JSStringValue && (typed.TypedElement !== undefined || typed.TypedTuple !== undefined)) {
       RemoveArrayElementIdentity(O, P.stringValue());
     }
     O.properties.delete(P);

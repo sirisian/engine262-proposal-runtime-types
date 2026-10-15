@@ -2,7 +2,7 @@ import { MetadataStorageKey, MetadataKey, MetadataKeys, MetadataEntries } from '
 import { isRegExpObject } from '../intrinsics/RegExp.mts';
 import type { CapturedTypeContext } from '../type-system/runtime.mts';
 import { RawOperatorResultType } from '../type-system/operator-result.mts';
-import { publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, MayRequireCallableMaterialization, type StructuralStorageAdmission } from '../type-system/runtime.mts';
+import { publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, MayRequireCallableMaterialization, StableTupleStorageShape, type TupleStorageShape, type StructuralStorageAdmission } from '../type-system/runtime.mts';
 import { primitiveMembership } from '../type-system/runtime.mts';
 import { currentTypeParameterFrame, SpecializedFunctionSignatureOf } from '../type-system/runtime.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
@@ -167,28 +167,36 @@ function carryStringType(value: Value, t: TypeRecord): Value {
 /** Complete retained structural admission without replaying a Get. Existing
  * backing contracts remain authoritative; ordinary Set owns write effects. */
 function* CompleteStructuralAdmission(storage: readonly StructuralStorageAdmission[]): PlainEvaluator<void> {
-  type ArrayStorage = ObjectValue & { TypedElement?: TypeRecord, TypedExtent?: number, TypedTuple?: unknown };
-  type ArrayGroup = { elements: TypeRecord[], type?: TypeRecord, extent?: number, acquire: boolean };
+  type SequenceStorage = ObjectValue & { TypedElement?: TypeRecord, TypedExtent?: number, TypedTuple?: TupleStorageShape };
+  type SequenceGroup = { elements: TypeRecord[], type?: TypeRecord, extent?: number,
+    shapes: TupleStorageShape[], shape?: TupleStorageShape, acquire: boolean };
   type Group = { types: TypeRecord[], targets: TypeRecord[], property: boolean, copy: boolean,
     type?: TypeRecord, target?: TypeRecord, previous?: Value };
-  const arrays = new Map<ObjectValue, ArrayGroup>();
+  const sequences = new Map<ObjectValue, SequenceGroup>();
   const groups = new Map<ObjectValue, Map<string | SymbolValue, Group>>();
   const together = (types: TypeRecord[]): TypeRecord => types.length === 1 ? types[0]!
     : CanonicalizeType({ Kind: 'intersection', Members: types });
   for (const entry of storage) {
-    if (entry.kind !== 'array') continue;
-    let array = arrays.get(entry.object);
-    if (!array) {
-      const target = entry.object as ArrayStorage;
-      array = { elements: [], acquire: Q(IsArray(target)) === Value.true
+    if (entry.kind !== 'array' && entry.kind !== 'tuple') continue;
+    let sequence = sequences.get(entry.object);
+    if (!sequence) {
+      const target = entry.object as SequenceStorage;
+      sequence = { elements: [], shapes: [], acquire: Q(IsArray(target)) === Value.true
         && target.TypedElement === undefined && target.TypedTuple === undefined };
-      arrays.set(entry.object, array);
+      sequences.set(entry.object, sequence);
     }
-    array.elements.push(entry.element);
-    if (entry.extent !== 'dynamic') array.extent = entry.extent;
+    if (entry.kind === 'array') {
+      sequence.elements.push(entry.element);
+      if (entry.extent !== 'dynamic') {
+        if (sequence.extent !== undefined && sequence.extent !== entry.extent) {
+          return Throw.TypeError('the admitted sequence contracts have incompatible length domains');
+        }
+        sequence.extent = entry.extent;
+      }
+    } else sequence.shapes.push(entry.shape);
   }
   for (const entry of storage) {
-    if (entry.kind === 'array') continue;
+    if (entry.kind === 'array' || entry.kind === 'tuple') continue;
     let properties = groups.get(entry.object);
     if (!properties) groups.set(entry.object, properties = new Map());
     let group = properties.get(entry.key);
@@ -196,9 +204,9 @@ function* CompleteStructuralAdmission(storage: readonly StructuralStorageAdmissi
     group.types.push(entry.type);
     group.targets.push(entry.admittedType);
     group.property ||= entry.kind === 'property';
-    // Acquiring owned element storage is a copy position. Passing an already
-    // typed array through another view is not a fresh store of all its values.
-    group.copy ||= entry.kind === 'element' && arrays.get(entry.object)?.acquire === true;
+    // Acquiring owned element storage is a copy position. Passing already
+    // typed sequence storage through another view is not a fresh store of all its values.
+    group.copy ||= entry.kind === 'element' && sequences.get(entry.object)?.acquire === true;
   }
   for (const properties of groups.values()) {
     for (const group of properties.values()) {
@@ -206,11 +214,29 @@ function* CompleteStructuralAdmission(storage: readonly StructuralStorageAdmissi
       group.target = together(group.targets);
     }
   }
-  for (const array of arrays.values()) array.type = together(array.elements);
+  for (const sequence of sequences.values()) {
+    if (sequence.elements.length) sequence.type = together(sequence.elements);
+    if (!sequence.shapes.length) continue;
+    const fixed = sequence.extent ?? sequence.shapes.find((shape) => shape.Rest === undefined)?.Positions.length;
+    const minimum = sequence.shapes.reduce((count, shape) => Math.max(count, shape.Positions.length), 0);
+    if (fixed !== undefined && (fixed < minimum
+        || sequence.shapes.some((shape) => shape.Rest === undefined && shape.Positions.length !== fixed))) {
+      return Throw.TypeError('the admitted sequence contracts have incompatible length domains');
+    }
+    const count = fixed ?? minimum;
+    const at = (i: number): TypeRecord => together([
+      ...sequence.shapes.map((shape) => shape.Positions[i] ?? shape.Rest!),
+      ...sequence.elements,
+    ]);
+    // Intersect complete stable domains, including an empty rest and future
+    // positions. An occupied-index map would lose the acquired tail contract.
+    sequence.shape = { Positions: Array.from({ length: count }, (_, i) => at(i)),
+      Rest: fixed === undefined ? at(count) : undefined };
+  }
   // Preserve observation order; repeated equal observations of a location share
   // its materialization/write even when other locations intervene.
   for (const entry of storage) {
-    if (entry.kind === 'array') continue;
+    if (entry.kind === 'array' || entry.kind === 'tuple') continue;
     const { object, key, value } = entry;
     const group = groups.get(object)!.get(key)!;
     if (group.previous === value) continue;
@@ -234,12 +260,14 @@ function* CompleteStructuralAdmission(storage: readonly StructuralStorageAdmissi
       if (!typed.has(key)) typed.set(key, { TypeRecord: group.type! });
     }
   }
-  for (const [object, array] of arrays) {
-    const target = object as ArrayStorage;
-    // A setter may have completed an independent boundary since planning.
-    if (array.acquire && target.TypedElement === undefined && target.TypedTuple === undefined) {
-      StampTypedArray(target, array.type!);
-      if (array.extent !== undefined) target.TypedExtent = array.extent;
+  for (const [object, sequence] of sequences) {
+    const target = object as SequenceStorage;
+    // Publish this admission's combined obligations together. A setter may
+    // instead have established independent backing since planning; retain it.
+    if (sequence.acquire && target.TypedElement === undefined && target.TypedTuple === undefined) {
+      if (sequence.shape) target.TypedTuple = sequence.shape;
+      if (sequence.type) StampTypedArray(target, sequence.type);
+      if (sequence.extent !== undefined) target.TypedExtent = sequence.extent;
     }
   }
 }
@@ -2134,22 +2162,14 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   if (already) {
     if (selection.member) value = Q(yield* MaterializeGenericCallable(value, selection.member));
     Q(yield* CompleteStructuralAdmission(storage));
-    // A TUPLE needs it for the same reason, and was missing for the same reason
-    // the empty array was: the conversion below builds a fresh array and stamps
-    // its positions there, so a tuple whose elements needed converting was
-    // checked ever after and one that ALREADY satisfied its type was not.
-    //
-    //   const x = (1 := uint8);
-    //   let a: [uint8, uint8] = [x, x];   // took this shortcut, unstamped
-    //   a[0] = "bad";                     // accepted - a String in a uint8 slot
-    //   let b: [uint8, uint8] = [1, 2];   // converted, stamped
-    //   b[0] = "bad";                     // refused, as both should be
-    //
-    // The ARITY was stamped either way, which is what made this hard to see: the
-    // tuple carried half its type, refusing a `push` while accepting a store.
-    if (t.Kind === 'tuple' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
+    // Stable tuple domains are acquired with the retained admission, including
+    // nested and union-selected tuples. Preserve existing backing for every
+    // view. Complex/defaulted tuple storage retains its separate legacy path.
+    if (t.Kind === 'tuple' && !StableTupleStorageShape(t) && value instanceof ObjectValue
+        && (value as { TypedElement?: unknown }).TypedElement === undefined
+        && (value as { TypedTuple?: unknown }).TypedTuple === undefined && Q(IsArray(value)) === Value.true) {
       const rest = t.Elements.find((e) => e.Rest);
-      (value as { TypedTuple?: { Positions: readonly TypeRecord[], Rest: TypeRecord | undefined } }).TypedTuple = {
+      (value as { TypedTuple?: TupleStorageShape }).TypedTuple = {
         Positions: t.Elements.filter((e) => !e.Rest).map((e) => e.Type),
         Rest: rest !== undefined ? restElementType(rest.Type) : undefined,
       };
