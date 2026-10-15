@@ -2,7 +2,7 @@ import { MetadataStorageKey, MetadataKey, MetadataKeys, MetadataEntries } from '
 import { isRegExpObject } from '../intrinsics/RegExp.mts';
 import type { CapturedTypeContext } from '../type-system/runtime.mts';
 import { RawOperatorResultType } from '../type-system/operator-result.mts';
-import { publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, type StructuralStorageAdmission } from '../type-system/runtime.mts';
+import { publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, MayRequireCallableMaterialization, type StructuralStorageAdmission } from '../type-system/runtime.mts';
 import { primitiveMembership } from '../type-system/runtime.mts';
 import { currentTypeParameterFrame, SpecializedFunctionSignatureOf } from '../type-system/runtime.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
@@ -164,14 +164,51 @@ function carryStringType(value: Value, t: TypeRecord): Value {
   return value;
 }
 
-/** Install only contracts admitted by this boundary; a view never replaces
- * the backing storage type. Evidence carries keys/objects, so this performs no
- * second property read, getter call, conversion or user-visible definition. */
-function InstallStructuralStorage(storage: readonly StructuralStorageAdmission[]): void {
-  for (const { object, key, type } of storage) {
+/** Complete the retained property admission without replaying a Get. All
+ * requirements of one location apply together; a later view cannot replace
+ * its backing contract. Ordinary Set owns setters, proxies and write refusal. */
+function* CompleteStructuralAdmission(storage: readonly StructuralStorageAdmission[]): PlainEvaluator<void> {
+  type Group = { types: TypeRecord[], targets: TypeRecord[], type?: TypeRecord, target?: TypeRecord, previous?: Value };
+  const groups = new Map<ObjectValue, Map<string | SymbolValue, Group>>();
+  for (const entry of storage) {
+    let properties = groups.get(entry.object);
+    if (!properties) groups.set(entry.object, properties = new Map());
+    let group = properties.get(entry.key);
+    if (!group) properties.set(entry.key, group = { types: [], targets: [] });
+    group.types.push(entry.type);
+    group.targets.push(entry.admittedType);
+  }
+  const together = (types: TypeRecord[]): TypeRecord => types.length === 1 ? types[0]!
+    : CanonicalizeType({ Kind: 'intersection', Members: types });
+  for (const properties of groups.values()) {
+    for (const group of properties.values()) {
+      group.type = together(group.types);
+      group.target = together(group.targets);
+    }
+  }
+  // Preserve admission order, including a location observed again through
+  // another path. Consecutive identical observations of that location share
+  // one materialization/write, rather than repeating a setter for each view.
+  for (const { object, key, value } of storage) {
+    const group = groups.get(object)!.get(key)!;
+    if (group.previous === value) continue;
+    group.previous = value;
+    const converted = Q(yield* MaterializeGenericCallable(value, group.target!));
+    if (converted !== value) {
+      const property = propertyKeyValue(key);
+      if (Q(yield* SetProperty(object, property, converted, Value.false)) === Value.false) {
+        return Throw.TypeError('$1 cannot be converted to $2 in place, because it is not writable', property, Value(displayType(group.type!)));
+      }
+    }
+  }
+  // A failed specialization or write publishes none of this admission's new
+  // contracts. Earlier completed ordinary writes retain their effects.
+  for (const [object, properties] of groups) {
     const target = object as ObjectValue & { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> };
     const typed = (target.TypedProperties ??= new Map());
-    if (!typed.has(key)) typed.set(key, { TypeRecord: type });
+    for (const [key, group] of properties) {
+      if (!typed.has(key)) typed.set(key, { TypeRecord: group.type! });
+    }
   }
 }
 
@@ -195,13 +232,15 @@ function StructuralStorageEstablished(value: Value, type: TypeRecord): boolean {
   }
   if (type.Kind === 'array' || type.Kind === 'tuple') {
     const storage = value as { TypedElement?: TypeRecord, TypedTuple?: { Positions: readonly TypeRecord[], Rest?: TypeRecord } };
-    if (type.Kind === 'array') return storage.TypedElement !== undefined && IsSubtype(storage.TypedElement, type.Element, []);
+    if (type.Kind === 'array') return storage.TypedElement !== undefined && IsSubtype(storage.TypedElement, type.Element, [])
+      && !MayRequireCallableMaterialization(storage.TypedElement, type.Element);
     return storage.TypedTuple !== undefined && type.Elements.every((element, i) => !element.Rest
-      && storage.TypedTuple!.Positions[i] !== undefined && IsSubtype(storage.TypedTuple!.Positions[i], element.Type, []));
+      && storage.TypedTuple!.Positions[i] !== undefined && IsSubtype(storage.TypedTuple!.Positions[i], element.Type, [])
+      && !MayRequireCallableMaterialization(storage.TypedTuple!.Positions[i], element.Type));
   }
   if (type.Kind !== 'object') return true;
   const carried = (value as { RuntimeType?: TypeRecord }).RuntimeType;
-  if (carried && IsSubtype(carried, type, [])) return true;
+  if (carried && IsSubtype(carried, type, []) && !MayRequireCallableMaterialization(carried, type)) return true;
   const typed = (value as { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> }).TypedProperties;
   for (const property of type.Properties) {
     const own = value.properties.get(propertyKeyValue(property.key));
@@ -210,7 +249,7 @@ function StructuralStorageEstablished(value: Value, type: TypeRecord): boolean {
       if (property.optional && !own && 'Prototype' in value && value.Prototype === Value.null) continue;
       return false;
     }
-    if (!IsSubtype(backing, property.type, [])) return false;
+    if (!IsSubtype(backing, property.type, []) || MayRequireCallableMaterialization(backing, property.type)) return false;
   }
   // An unrecorded index-domain property needs the ordinary membership walk;
   // no key-domain matcher or property getter runs just to decide elision.
@@ -875,10 +914,13 @@ export function* ConvertValueToUnion(value: Value, t: TypeRecord & { Members: re
   const members = t.Members;
   for (const m of members) {
     const selection: { member?: TypeRecord } = {};
-    if (Q(yield* IsOfType(value, m, undefined, selection))) {
+    const storage: StructuralStorageAdmission[] = [];
+    if (Q(yield* IsOfType(value, m, storage, selection))) {
       // Selection is complete. A declaration-check failure propagates rather
       // than selecting another body from a later member.
-      return yield* MaterializeGenericCallable(value, selection.member ?? m);
+      const converted = Q(yield* MaterializeGenericCallable(value, selection.member ?? m));
+      Q(yield* CompleteStructuralAdmission(storage));
+      return converted;
     }
   }
   const numericRank = NumericArmRank;
@@ -1190,7 +1232,7 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   const already = Q(yield* IsOfType(value, t, storage, selection));
   if (already) {
     if (selection.member) value = Q(yield* MaterializeGenericCallable(value, selection.member));
-    InstallStructuralStorage(storage);
+    Q(yield* CompleteStructuralAdmission(storage));
     // An array that is ALREADY of the type still has to carry its element type,
     // or the store check has nothing to read. This matters most for the EMPTY
     // array, which satisfies any element type vacuously and so always took this
@@ -2142,7 +2184,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   const already = shortOfADefault ? false : Q(yield* IsOfType(value, t, storage, selection));
   if (already) {
     if (selection.member) value = Q(yield* MaterializeGenericCallable(value, selection.member));
-    InstallStructuralStorage(storage);
+    Q(yield* CompleteStructuralAdmission(storage));
     // An array that is ALREADY of the type still has to carry its element type,
     // or the store check has nothing to read. This matters most for the EMPTY
     // array, which satisfies any element type vacuously and so always took this
@@ -2658,7 +2700,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     // Membership can still reject a dependent predicate after member
     // conversion. Publish this object's contracts only after that succeeds.
     const checked = Q(yield* requireMembership(value, t, storage));
-    InstallStructuralStorage(storage);
+    Q(yield* CompleteStructuralAdmission(storage));
     return checked;
   }
   // proposal-runtime-types #sec-array-and-tuple-types: a plain array in a TUPLE

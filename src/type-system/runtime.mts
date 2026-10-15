@@ -3831,7 +3831,33 @@ export function* CompleteCallableConstraints(type: TypeRecord, runtimeEnvironmen
 
 /** Successful structural membership can supply boundary-owned storage evidence.
  * Pure membership callers omit the collector and never acquire contracts. */
-export type StructuralStorageAdmission = { object: ObjectValue, key: string | SymbolValue, type: TypeRecord };
+export type StructuralStorageAdmission = {
+  object: ObjectValue, key: string | SymbolValue, type: TypeRecord,
+  value: Value, admittedType: TypeRecord,
+};
+
+/** A backing contract can prove membership without proving materialization. */
+export function MayRequireCallableMaterialization(source: TypeRecord, target: TypeRecord): boolean {
+  function contains(t: TypeRecord, generic: boolean, seen = new Set<TypeRecord>()): boolean {
+    if (seen.has(t)) return false;
+    seen.add(t);
+    switch (t.Kind) {
+      case 'any': case 'parameter': case 'deferred': return generic;
+      case 'function': return t.Signatures.some((s) => generic ? Boolean(s.TypeParameters?.length || (s as { Untyped?: boolean }).Untyped) : !s.TypeParameters?.length);
+      case 'union': case 'intersection': return t.Members.some((m) => contains(m, generic, seen));
+      case 'object': return t.Properties.some((p) => contains(p.type, generic, seen))
+        || t.IndexSignatures.some((i) => contains(i.Value, generic, seen));
+      case 'array': return contains(t.Element, generic, seen);
+      case 'tuple': return t.Elements.some((e) => contains(e.Type, generic, seen));
+      case 'nominal': return t.Structure !== undefined
+        && contains(SubstituteTypeArguments(t.Structure, t.Declaration, t.Arguments), generic, seen);
+      case 'shared': return contains(t.Target, generic, seen);
+      case 'parameterized': return contains(t.Base, generic, seen);
+      default: return false;
+    }
+  }
+  return contains(source, true) && contains(target, false);
+}
 
 /** Receiving operations retain a choice for this value, never its children. */
 export type UnionMemberAdmission = { member?: TypeRecord };
@@ -4553,7 +4579,8 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       // handler answering for one key answered for all of them. The proxy's type
       // is the one it was given, which is what the slot says.
       const carriedRuntime = (value as { RuntimeType?: TypeRecord }).RuntimeType;
-      if (carriedRuntime && IsSubtype(carriedRuntime, t, [])) {
+      if (carriedRuntime && IsSubtype(carriedRuntime, t, [])
+          && (!storage || !MayRequireCallableMaterialization(carriedRuntime, t))) {
         return true;
       }
       for (const p of t.Properties) {
@@ -4566,10 +4593,11 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           continue;
         }
         const pv = Q(yield* Get(value, key));
-        if (!Q(yield* IsOfType(pv, p.type, storage))) {
+        const admitted = storage ? {} as UnionMemberAdmission : undefined;
+        if (!Q(yield* IsOfType(pv, p.type, storage, admitted))) {
           return false;
         }
-        storage?.push({ object: value, key: p.key, type: p.type });
+        storage?.push({ object: value, key: p.key, type: p.type, value: pv, admittedType: admitted?.member ?? p.type });
       }
       // Index signatures constrain every own enumerable key not already named.
       if (t.IndexSignatures.length > 0) {
@@ -4586,10 +4614,11 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           for (const ix of t.IndexSignatures) {
             if (Q(yield* IsOfType(k, ix.Key))) {
               const kv = Q(yield* Get(value, k));
-              if (!Q(yield* IsOfType(kv, ix.Value, storage))) {
+              const admitted = storage ? {} as UnionMemberAdmission : undefined;
+              if (!Q(yield* IsOfType(kv, ix.Value, storage, admitted))) {
                 return false;
               }
-              storage?.push({ object: value, key: k.stringValue(), type: ix.Value });
+              storage?.push({ object: value, key: k.stringValue(), type: ix.Value, value: kv, admittedType: admitted?.member ?? ix.Value });
             }
           }
         }
