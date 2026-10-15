@@ -164,36 +164,59 @@ function carryStringType(value: Value, t: TypeRecord): Value {
   return value;
 }
 
-/** Complete the retained property admission without replaying a Get. All
- * requirements of one location apply together; a later view cannot replace
- * its backing contract. Ordinary Set owns setters, proxies and write refusal. */
+/** Complete retained structural admission without replaying a Get. Existing
+ * backing contracts remain authoritative; ordinary Set owns write effects. */
 function* CompleteStructuralAdmission(storage: readonly StructuralStorageAdmission[]): PlainEvaluator<void> {
-  type Group = { types: TypeRecord[], targets: TypeRecord[], type?: TypeRecord, target?: TypeRecord, previous?: Value };
+  type ArrayStorage = ObjectValue & { TypedElement?: TypeRecord, TypedExtent?: number, TypedTuple?: unknown };
+  type ArrayGroup = { elements: TypeRecord[], type?: TypeRecord, extent?: number, acquire: boolean };
+  type Group = { types: TypeRecord[], targets: TypeRecord[], property: boolean, copy: boolean,
+    type?: TypeRecord, target?: TypeRecord, previous?: Value };
+  const arrays = new Map<ObjectValue, ArrayGroup>();
   const groups = new Map<ObjectValue, Map<string | SymbolValue, Group>>();
+  const together = (types: TypeRecord[]): TypeRecord => types.length === 1 ? types[0]!
+    : CanonicalizeType({ Kind: 'intersection', Members: types });
   for (const entry of storage) {
+    if (entry.kind !== 'array') continue;
+    let array = arrays.get(entry.object);
+    if (!array) {
+      const target = entry.object as ArrayStorage;
+      array = { elements: [], acquire: Q(IsArray(target)) === Value.true
+        && target.TypedElement === undefined && target.TypedTuple === undefined };
+      arrays.set(entry.object, array);
+    }
+    array.elements.push(entry.element);
+    if (entry.extent !== 'dynamic') array.extent = entry.extent;
+  }
+  for (const entry of storage) {
+    if (entry.kind === 'array') continue;
     let properties = groups.get(entry.object);
     if (!properties) groups.set(entry.object, properties = new Map());
     let group = properties.get(entry.key);
-    if (!group) properties.set(entry.key, group = { types: [], targets: [] });
+    if (!group) properties.set(entry.key, group = { types: [], targets: [], property: false, copy: false });
     group.types.push(entry.type);
     group.targets.push(entry.admittedType);
+    group.property ||= entry.kind === 'property';
+    // Acquiring owned element storage is a copy position. Passing an already
+    // typed array through another view is not a fresh store of all its values.
+    group.copy ||= entry.kind === 'element' && arrays.get(entry.object)?.acquire === true;
   }
-  const together = (types: TypeRecord[]): TypeRecord => types.length === 1 ? types[0]!
-    : CanonicalizeType({ Kind: 'intersection', Members: types });
   for (const properties of groups.values()) {
     for (const group of properties.values()) {
       group.type = together(group.types);
       group.target = together(group.targets);
     }
   }
-  // Preserve admission order, including a location observed again through
-  // another path. Consecutive identical observations of that location share
-  // one materialization/write, rather than repeating a setter for each view.
-  for (const { object, key, value } of storage) {
+  for (const array of arrays.values()) array.type = together(array.elements);
+  // Preserve observation order; repeated equal observations of a location share
+  // its materialization/write even when other locations intervene.
+  for (const entry of storage) {
+    if (entry.kind === 'array') continue;
+    const { object, key, value } = entry;
     const group = groups.get(object)!.get(key)!;
     if (group.previous === value) continue;
     group.previous = value;
-    const converted = Q(yield* MaterializeGenericCallable(value, group.target!));
+    let converted = Q(yield* MaterializeGenericCallable(value, group.target!));
+    if (group.copy) converted = CopyValueClassInstance(converted);
     if (converted !== value) {
       const property = propertyKeyValue(key);
       if (Q(yield* SetProperty(object, property, converted, Value.false)) === Value.false) {
@@ -201,13 +224,22 @@ function* CompleteStructuralAdmission(storage: readonly StructuralStorageAdmissi
       }
     }
   }
-  // A failed specialization or write publishes none of this admission's new
-  // contracts. Earlier completed ordinary writes retain their effects.
+  // A failure publishes none of this admission's new contracts. Earlier
+  // ordinary effects and independently completed nested boundaries survive.
   for (const [object, properties] of groups) {
     const target = object as ObjectValue & { TypedProperties?: Map<unknown, { TypeRecord: TypeRecord }> };
-    const typed = (target.TypedProperties ??= new Map());
     for (const [key, group] of properties) {
+      if (!group.property) continue;
+      const typed = (target.TypedProperties ??= new Map());
       if (!typed.has(key)) typed.set(key, { TypeRecord: group.type! });
+    }
+  }
+  for (const [object, array] of arrays) {
+    const target = object as ArrayStorage;
+    // A setter may have completed an independent boundary since planning.
+    if (array.acquire && target.TypedElement === undefined && target.TypedTuple === undefined) {
+      StampTypedArray(target, array.type!);
+      if (array.extent !== undefined) target.TypedExtent = array.extent;
     }
   }
 }
@@ -1233,20 +1265,6 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   if (already) {
     if (selection.member) value = Q(yield* MaterializeGenericCallable(value, selection.member));
     Q(yield* CompleteStructuralAdmission(storage));
-    // An array that is ALREADY of the type still has to carry its element type,
-    // or the store check has nothing to read. This matters most for the EMPTY
-    // array, which satisfies any element type vacuously and so always took this
-    // shortcut: `let a: [].<uint8> = []` produced an array with no element
-    // type, so `a.push(65)` stored a plain Number and the typed surface
-    // silently switched off for the most common way to build an array. The
-    // same shape as the numeric crossing, swallowed by the same
-    // provenance-blind shortcut.
-    if (t.Kind === 'array' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
-      StampTypedArray(value as ObjectValue, t.Element);
-      if (t.Extent !== 'dynamic') {
-        (value as { TypedExtent?: number }).TypedExtent = t.Extent as number;
-      }
-    }
     // A typed COLLECTION needs the same stamp for the same reason, and needs it
     // more: an array acquires its element type from the conversion that builds
     // it, but `new Set()` is a CONSTRUCTION rather than a conversion, so
@@ -1658,83 +1676,14 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
   // stands, which is what the boundary would have done anyway - the difference
   // is that no user code runs, which is how the elision is observable at all.
   if (IsCheckElided(annotation)) {
-    // The elision returns the value
-    // AS IT STANDS, and for an array that is not the same value the boundary
-    // would have produced: the conversion is also where an array acquires its
-    // [[TypedElement]], so eliding it left `let b: [].<uint8> = [(1 := uint8)]`
-    // holding an array with NO element type - the store check had nothing to
-    // read, `b[0] = "no"` was accepted, and the capacity surface was absent.
-    //
-    // Only this literal form was affected, which is why it read as a missing
-    // surface rather than a hole: `[1]` and `[1, 2]` are not already of the
-    // type, so their conversion runs and stamps. `[(1 := uint8)]` IS already of
-    // it, the checker proves the boundary cannot fail, and the elision skips
-    // the stamp along with the check.
-    //
-    // #sec-elision-stability is the rule this breaks: eliding a check must not
-    // change what a value IS. So the stamp is applied here rather than the
-    // elision being abandoned - the check really is unnecessary, and only its
-    // side effect was load-bearing.
-    // Only where the array carries NO element type yet. Re-stamping would
-    // destroy the one it has, and the wider-view case is exactly where that
-    // bites: `const b: [].<any> = a` for a `[].<uint8>` is the same object seen
-    // through a wider reference, and overwriting its element type with `any`
-    // let `b[0] = 300` through - the store check reads the type the VALUE
-    // carries, which is the whole of why the covariance is sound.
+    // Elision needs both the storage contract and completed materialization.
+    // Unstamped arrays take the retained-admission path, including value copies.
     const elided = Q(yield* TypeNodeToTypeRecord(annotation.Type));
     value = Q(yield* MaterializeGenericCallable(value, elided));
     if (!StructuralStorageEstablished(value, elided)) return Q(yield* RequireType(value, elided));
-    // "HAS THIS VALUE BEEN THROUGH THE CONVERSION", which is the question this
-    // branch means to ask. It used to ask "does it have an element type", and
-    // the two came apart: `StampTypedArray` gives an array its element type AND
-    // the prototype carrying the capacity operations, so a value with the slot
-    // and the ORDINARY prototype has been half converted. One did exist -
-    // `ArrayTypeConstructor` stamped an array and then `SetPrototypeOf`-ed over
-    // its own swap - and the elided path skipped it, because the slot was set,
-    // so `rows.window` was *undefined* on a correctly typed array.
-    //
-    // That constructor is fixed and no path half-stamps today: instrumenting
-    // this branch across `arrays`, `memory-layout` and `enforcement` - 443 tests
-    // - finds none. The condition is widened anyway, because the ONLY thing
-    // between the old proxy and a wrong answer was that absence, and the failure
-    // it produces is a method silently disappearing rather than an error.
-    //
-    // No cost today: a fully converted value answers *false* on the first
-    // comparison, and the O(n) element copy below is reached exactly as before.
-    const prototypeSwapped = (value as unknown as { Prototype?: unknown }).Prototype
-      === surroundingAgent.currentRealmRecord.Intrinsics['%TypedArrayLike.prototype%'];
-    const unstamped = (value as { TypedElement?: unknown }).TypedElement === undefined
-      || !prototypeSwapped;
-    if (unstamped && elided.Kind === 'array' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
-      // The same store, on the ELIDED path. A DYNAMIC `[].<P>` annotation
-      // reaches `StampTypedArray` from here rather than through
-      // `CheckedConvertValue`, so the copy has to be said twice - the third
-      // near-identical array branch this rule has needed.
-      //
-      // #sec-elision-stability is the argument, and it is the one the stamp
-      // beside this already rests on: eliding a check must not change what a
-      // value IS, and an array whose elements alias their sources is a different
-      // value from one whose elements are copies.
-      const elidedLength = R(Q(yield* ToNumber(Q(yield* Get(value, Value('length')))))) as number;
-      for (let i = 0; i < elidedLength; i += 1) {
-        const key = Value(String(i));
-        const element = Q(yield* Get(value, key));
-        const copied = CopyValueClassInstance(element);
-        if (copied !== element) {
-          X(value.DefineOwnProperty(key, Descriptor({
-            Value: copied, Writable: Value.true, Enumerable: Value.true, Configurable: Value.true,
-          })));
-        }
-      }
-      StampTypedArray(value, elided.Element);
-      if (elided.Extent !== 'dynamic') {
-        (value as { TypedExtent?: number }).TypedExtent = elided.Extent as number;
-      }
-    }
     // A VALUE TYPE CLASS instance is copied on the elided path too.
     //
-    // The array branch above already says the copy here rather than leaving it
-    // to `CheckedConvertValue`, and gives the reason: #sec-elision-stability,
+    // #sec-elision-stability requires the copy even when checking is elided:
     // "eliding a check must not change what a value IS". A returned instance
     // that aliases its source is a different value from one that is a copy, by
     // exactly that argument.
@@ -2185,46 +2134,6 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   if (already) {
     if (selection.member) value = Q(yield* MaterializeGenericCallable(value, selection.member));
     Q(yield* CompleteStructuralAdmission(storage));
-    // An array that is ALREADY of the type still has to carry its element type,
-    // or the store check has nothing to read. This matters most for the EMPTY
-    // array, which satisfies any element type vacuously and so always took this
-    // shortcut: `let a: [].<uint8> = []` produced an array with no element
-    // type, so `a.push(65)` stored a plain Number and the typed surface
-    // silently switched off for the most common way to build an array. The
-    // same shape as the numeric crossing, swallowed by the same
-    // provenance-blind shortcut.
-    if (t.Kind === 'array' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
-      // #sec-value-type-copying names "storing into ... an array element" a COPY
-      // position, and a typed array literal IS that store:
-      // `const _arr_: [1].<P> = [_a_]` and `_arr_[0] = _a_` are one operation
-      // written two ways, and without this they disagreed.
-      //
-      // Reached where the elements ALREADY satisfy the element type, which a
-      // value type class instance always does - so `[_a_]` comes here every time
-      // while `[new P()]` needs no copy anyway. The clause's elision covers "an
-      // object-literal CONVERSION", a literal BECOMING a value type, not a
-      // literal whose ELEMENTS are value type instances.
-      //
-      // Written with `DefineOwnProperty` and NOT through `Set`: a `Set` on an
-      // array re-enters this conversion and overflows the stack. The property
-      // already exists and only its value changes, so defining it is both
-      // correct and the only form that terminates.
-      const literalLength = R(Q(yield* ToNumber(Q(yield* Get(value, Value('length')))))) as number;
-      for (let i = 0; i < literalLength; i += 1) {
-        const key = Value(String(i));
-        const element = Q(yield* Get(value, key));
-        const copied = CopyValueClassInstance(element);
-        if (copied !== element) {
-          X((value as ObjectValue).DefineOwnProperty(key, Descriptor({
-            Value: copied, Writable: Value.true, Enumerable: Value.true, Configurable: Value.true,
-          })));
-        }
-      }
-      StampTypedArray(value as ObjectValue, t.Element);
-      if (t.Extent !== 'dynamic') {
-        (value as { TypedExtent?: number }).TypedExtent = t.Extent as number;
-      }
-    }
     // A TUPLE needs it for the same reason, and was missing for the same reason
     // the empty array was: the conversion below builds a fresh array and stamps
     // its positions there, so a tuple whose elements needed converting was

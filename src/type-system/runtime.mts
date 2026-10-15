@@ -3832,8 +3832,11 @@ export function* CompleteCallableConstraints(type: TypeRecord, runtimeEnvironmen
 /** Successful structural membership can supply boundary-owned storage evidence.
  * Pure membership callers omit the collector and never acquire contracts. */
 export type StructuralStorageAdmission = {
+  kind: 'property' | 'element',
   object: ObjectValue, key: string | SymbolValue, type: TypeRecord,
   value: Value, admittedType: TypeRecord,
+} | {
+  kind: 'array', object: ObjectValue, element: TypeRecord, extent: number | 'dynamic',
 };
 
 /** A backing contract can prove membership without proving materialization. */
@@ -4204,10 +4207,16 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         }
         for (let i = 0; i < len; i += 1) {
           const el = Q(yield* Get(value, Value(String(i))));
-          if (!Q(yield* IsOfType(el, t.Element, storage))) {
+          const admitted: UnionMemberAdmission | undefined = storage ? {} : undefined;
+          if (!Q(yield* IsOfType(el, t.Element, storage, admitted))) {
             return false;
           }
+          storage?.push({ kind: 'element', object: value, key: String(i), type: t.Element,
+            value: el, admittedType: admitted?.member ?? t.Element });
         }
+        // Retain the container even when empty. Extent resolution and element
+        // observations belong to this admission, not a later Get walk.
+        storage?.push({ kind: 'array', object: value, element: t.Element, extent: extent as number | 'dynamic' });
         return true;
       }
       // Per #sec-array-membership.
@@ -4597,7 +4606,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         if (!Q(yield* IsOfType(pv, p.type, storage, admitted))) {
           return false;
         }
-        storage?.push({ object: value, key: p.key, type: p.type, value: pv, admittedType: admitted?.member ?? p.type });
+        storage?.push({ kind: 'property', object: value, key: p.key, type: p.type, value: pv, admittedType: admitted?.member ?? p.type });
       }
       // Index signatures constrain every own enumerable key not already named.
       if (t.IndexSignatures.length > 0) {
@@ -4618,7 +4627,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
               if (!Q(yield* IsOfType(kv, ix.Value, storage, admitted))) {
                 return false;
               }
-              storage?.push({ object: value, key: k.stringValue(), type: ix.Value, value: kv, admittedType: admitted?.member ?? ix.Value });
+              storage?.push({ kind: 'property', object: value, key: k.stringValue(), type: ix.Value, value: kv, admittedType: admitted?.member ?? ix.Value });
             }
           }
         }
