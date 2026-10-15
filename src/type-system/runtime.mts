@@ -3833,20 +3833,27 @@ export function* CompleteCallableConstraints(type: TypeRecord, runtimeEnvironmen
  * Pure membership callers omit the collector and never acquire contracts. */
 export type StructuralStorageAdmission = { object: ObjectValue, key: string | SymbolValue, type: TypeRecord };
 
-export function* IsOfType(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[]): PlainEvaluator<boolean> {
-  if (!storage) return yield* IsOfTypeWithStorage(value, t);
-  const checkpoint = storage.length;
+/** Receiving operations retain a choice for this value, never its children. */
+export type UnionMemberAdmission = { member?: TypeRecord };
+
+export function* IsOfType(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], selection?: UnionMemberAdmission): PlainEvaluator<boolean> {
+  if (!storage && !selection) return yield* IsOfTypeWithStorage(value, t);
+  const checkpoint = storage?.length;
+  const previousMember = selection?.member;
   let admitted = false;
   try {
-    admitted = Q(yield* IsOfTypeWithStorage(value, t, storage));
+    admitted = Q(yield* IsOfTypeWithStorage(value, t, storage, selection));
     return admitted;
   } finally {
     // Failed alternatives and abrupt checks publish no speculative contracts.
-    if (!admitted) storage.length = checkpoint;
+    if (!admitted) {
+      if (storage) storage.length = checkpoint!;
+      if (selection) selection.member = previousMember;
+    }
   }
 }
 
-function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[]): PlainEvaluator<boolean> {
+function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], selection?: UnionMemberAdmission): PlainEvaluator<boolean> {
   // proposal-runtime-types #sec-references-and-borrowing: a Reference Value is
   // of a `ref T` when the storage it borrows currently holds a T. The check
   // reads through to the referent rather than testing the reference itself,
@@ -3875,7 +3882,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
   // membership is membership in the target, in BOTH directions: it is how a value
   // is published into shared storage, and how one read out of it is still a T.
   if (t.Kind === 'shared') {
-    return Q(yield* IsOfType(value, t.Target, storage));
+    return Q(yield* IsOfType(value, t.Target, storage, selection));
   }
   // proposal-runtime-types `sec-composite-types`: the top composite type "is the
   // type of every composite", and a composite type over a shape is satisfied by
@@ -3994,7 +4001,9 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       return false;
     case 'union': {
       for (const m of t.Members) {
-        if (Q(yield* IsOfType(value, m, storage))) {
+        const nested: UnionMemberAdmission | undefined = selection ? {} : undefined;
+        if (Q(yield* IsOfType(value, m, storage, nested))) {
+          if (selection) selection.member = nested?.member ?? m;
           return true;
         }
       }
@@ -4293,7 +4302,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         // says why that matters: "Subtyping and membership are different
         // questions of the same record."
         const substituted = SubstituteTypeArguments(t.Structure, t.Declaration, t.Arguments);
-        const structurallyMatches = Q(yield* IsOfType(value, substituted, storage));
+        const structurallyMatches = Q(yield* IsOfType(value, substituted, storage, selection));
         if (!structurallyMatches) {
           return false;
         }

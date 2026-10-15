@@ -326,8 +326,21 @@ function parameterInfoOfSignature(sig: SignatureInView): { names: string[], omit
 
 /** Callable views supply candidate names/defaults, never a replacement callee. */
 export function signaturesInView(declaredType: unknown): readonly SignatureInView[] | undefined {
-  let t = declaredType as { Kind?: string, Structure?: unknown, Signatures?: readonly SignatureInView[] } | undefined;
-  if (t?.Kind === 'nominal') t = t.Structure as typeof t;
+  type ViewType = { Kind?: string, Name?: string, Structure?: ViewType, Members?: readonly ViewType[], Signatures?: readonly SignatureInView[] };
+  let t = declaredType as ViewType | undefined;
+  const seen = new Set<ViewType>();
+  while (t && !seen.has(t)) {
+    seen.add(t);
+    if (t.Kind === 'nominal') t = t.Structure;
+    else if (t.Kind === 'union') {
+      // Nullish members cannot supply a callable. The sole remaining view
+      // still owns names/defaults after the caller proves it is present.
+      // Several callable alternatives are not an overload group.
+      const members = t.Members?.filter((m) => !(m.Kind === 'primitive' && (m.Name === 'undefined' || m.Name === 'null')));
+      if (members?.length !== 1) return undefined;
+      [t] = members;
+    } else break;
+  }
   return t?.Kind === 'function' && t.Signatures?.length ? t.Signatures : undefined;
 }
 

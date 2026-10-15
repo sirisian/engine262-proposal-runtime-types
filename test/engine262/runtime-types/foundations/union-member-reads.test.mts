@@ -21,30 +21,38 @@ import { expectThrown, ok } from '../harness.mts';
  */
 
 test('a key SOME member declares is refused without narrowing', () => {
-  expectThrown('let u: { x: int32 } | { y: string } = { x: int32(1) }; let q = u.x;',
+  // Parameters retain the broad union; a successful initializer would narrow it.
+  expectThrown('function read(u: { x: int32 } | { y: string }) { let q = u.x; }',
     'is not declared by every member');
-  expectThrown('let u: { x: int32 } | { y: string } = { y: "s" }; let q = u.y;',
+  expectThrown('function read(u: { x: int32 } | { y: string }) { let q = u.y; }',
     'is not declared by every member');
   // Three members, one lacking it, is the same case.
-  expectThrown('let u: { x: int32 } | { x: int8 } | { y: string } = { x: int32(1) }; let q = u.x;',
+  expectThrown('function read(u: { x: int32 } | { x: int8 } | { y: string }) { let q = u.x; }',
     'is not declared by every member');
   // A `null` member declares nothing, which is what makes every read of a
   // nullable object this case.
-  expectThrown('let u: { x: int32 } | null = null; let q = u.x;',
+  expectThrown('function read(u: { x: int32 } | null) { let q = u.x; }',
     'is not declared by every member');
 });
 
 test('a key EVERY member declares reads, and reading it as one member does not', () => {
   // The discriminant is readable, which is what makes narrowing possible at all.
-  expect(ok('let u: { a: uint8 } | { a: string } = { a: uint8(1) }; let q = u.a; "ok";')).toBe(true);
+  expect(ok('function read(u: { a: uint8 } | { a: string }) { let q = u.a; } "ok";')).toBe(true);
   // ...but its type is the union, so reading it AS one member is refused.
-  expectThrown('let u: { x: int32 } | { x: int8 } = { x: int32(1) }; let q: int32 = u.x;');
+  expectThrown('function read(u: { x: int32 } | { x: int8 }) { let q: int32 = u.x; }');
   // Narrowing is the escape, for a discriminated union and for a member only one
   // arm declares.
-  expect(ok('let u: { k: "a", v: uint8 } | { k: "b", v: string } = { k: "a", v: uint8(1) };'
-    + ' if (u.k === "a") { let q: uint8 = u.v; } "ok";')).toBe(true);
-  expect(ok('let u: { x: int32 } | { y: string } = { x: int32(1) };'
-    + ' if (u is { x: int32 }) { let q = u.x; } "ok";')).toBe(true);
+  expect(ok('function read(u: { k: "a", v: uint8 } | { k: "b", v: string }) {'
+    + ' if (u.k === "a") { let q: uint8 = u.v; } } "ok";')).toBe(true);
+  expect(ok('function read(u: { x: int32 } | { y: string }) {'
+    + ' if (u is { x: int32 }) { let q = u.x; } } "ok";')).toBe(true);
+});
+
+test('successful initialization narrows the current read domain', () => {
+  expect(ok('let u: { x: int32 } | { y: string } = { x: int32(1) }; let q = u.x; "ok";')).toBe(true);
+  expect(ok('let u: { x: int32 } | { x: int8 } = { x: int32(1) }; let q: int32 = u.x; "ok";')).toBe(true);
+  expectThrown('let u: { k: "a", v: uint8 } | { k: "b", v: string } = { k: "a", v: uint8(1) };'
+    + ' if (u.k === "a") { let q: uint8 = u.v; }', 'test can never fail');
 });
 
 test('a key NO member declares is an ordinary absent read', () => {

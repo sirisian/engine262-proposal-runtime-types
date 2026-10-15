@@ -184,6 +184,10 @@ function StructuralStorageEstablished(value: Value, type: TypeRecord): boolean {
   if (type.Kind === 'intersection') return type.Members.every((member) => StructuralStorageEstablished(value, member));
   if (type.Kind === 'union') {
     const current = RuntimeTypeOf(value);
+    // Compatibility does not prove that the selected generic body was retained.
+    // Admission must choose in canonical order, even if another arm could keep
+    // the original callable unchanged.
+    if (current.Kind === 'function' && current.Signatures.some((signature) => signature.TypeParameters?.length)) return false;
     return type.Members.some((member) => IsSubtype(current, member, []) && StructuralStorageEstablished(value, member));
   }
   if (type.Kind === 'nominal' && type.Structure) {
@@ -870,8 +874,11 @@ function representsExactly(v: number | bigint, m: TypeRecord & { Kind: 'primitiv
 export function* ConvertValueToUnion(value: Value, t: TypeRecord & { Members: readonly TypeRecord[] }, convert: (v: Value, m: TypeRecord) => ValueEvaluator): ValueEvaluator {
   const members = t.Members;
   for (const m of members) {
-    if (Q(yield* IsOfType(value, m))) {
-      return value;
+    const selection: { member?: TypeRecord } = {};
+    if (Q(yield* IsOfType(value, m, undefined, selection))) {
+      // Selection is complete. A declaration-check failure propagates rather
+      // than selecting another body from a later member.
+      return yield* MaterializeGenericCallable(value, selection.member ?? m);
     }
   }
   const numericRank = NumericArmRank;
@@ -1179,8 +1186,10 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     }
   }
   const storage: StructuralStorageAdmission[] = [];
-  const already = Q(yield* IsOfType(value, t, storage));
+  const selection: { member?: TypeRecord } = {};
+  const already = Q(yield* IsOfType(value, t, storage, selection));
   if (already) {
+    if (selection.member) value = Q(yield* MaterializeGenericCallable(value, selection.member));
     InstallStructuralStorage(storage);
     // An array that is ALREADY of the type still has to carry its element type,
     // or the store check has nothing to read. This matters most for the EMPTY
@@ -2129,8 +2138,10 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     }
   }
   const storage: StructuralStorageAdmission[] = [];
-  const already = shortOfADefault ? false : Q(yield* IsOfType(value, t, storage));
+  const selection: { member?: TypeRecord } = {};
+  const already = shortOfADefault ? false : Q(yield* IsOfType(value, t, storage, selection));
   if (already) {
+    if (selection.member) value = Q(yield* MaterializeGenericCallable(value, selection.member));
     InstallStructuralStorage(storage);
     // An array that is ALREADY of the type still has to carry its element type,
     // or the store check has nothing to read. This matters most for the EMPTY

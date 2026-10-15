@@ -1,0 +1,1198 @@
+{
+  "cases": [
+    {
+      "name": "union source direct identity",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const f:((x:string)=>string)|undefined=id;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source erased identity",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const erased:any=id;const f:((x:string)=>string)|undefined=erased;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source held declaration identity",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}function other<T:type>(x:T):T{return x;}let v:any=other;const f:((x:string)=>string)|undefined=v;String(f===other.<string>)+\"/\"+String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source output survives erasure",
+      "steps": [
+        {
+          "source": "function make<T:type>():T{const x:any=1;return x;}const f:(()=>string)|undefined=make;const g:any=f;typeof g();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source output failure at call",
+      "steps": [
+        {
+          "source": "function make<T:type>():T{const x:any={};return x;}const f:(()=>string)|undefined=make;const g:any=f;let caught=false;try{g();}catch(e){caught=e instanceof TypeError;}String(caught);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source value parameters preserve inference",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const f:((x:string)=>string)|undefined=id;const g:any=f;typeof g(1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source concrete control",
+      "steps": [
+        {
+          "source": "function id(x:string):string{return x;}const f:((x:string)=>string)|undefined=id;String(f===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source untyped control",
+      "steps": [
+        {
+          "source": "function id(x){return x;}const f:((x:string)=>string)|undefined=id;String(f===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source parameter boundary",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}function use(f:((x:string)=>string)|undefined){return f===id.<string>;}String(use(id));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source return boundary",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}function get():((x:string)=>string)|undefined{return id;}String(get()===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source field boundary",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}class Box{f:((x:string)=>string)|undefined=id;}String(new Box().f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source later assignment",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}let f:((x:string)=>string)|undefined=(x:string)=>x;f=id;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source distinct concrete bindings",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const a:((x:string)=>string)|undefined=id;const b:((x:uint8)=>uint8)|undefined=id;String(a!==b)+\"/\"+String(a===id.<string>)+\"/\"+String(b===id.<uint8>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source repeated boundary cache",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}function get():((x:string)=>string)|undefined{return id;}String(get()===get());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source named view",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const f:((renamed:string)=>string)|undefined=id;if(f===undefined)throw new Error(\"missing\");f(renamed:\"a\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source target default",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const f:((renamed:string=\"b\")=>string)|undefined=id;if(f===undefined)throw new Error(\"missing\");f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source own default",
+      "steps": [
+        {
+          "source": "const fallback:any=\"a\";function id<T:type>(x:T=fallback):T{return x;}const f:((x:string=\"b\")=>string)|undefined=id;const g:any=f;String(g());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source result covariance",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const f:((x:string)=>any)|undefined=id;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source explicit before boundary",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const e:any=id.<string>;const f:((x:string)=>string)|undefined=id;String(f===e);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source no body at boundary",
+      "steps": [
+        {
+          "source": "let calls=0;function id<T:type>(x:T):T{calls++;return x;}const f:((x:string)=>string)|undefined=id;if(f===undefined)throw new Error(\"missing\");String(calls)+\"/\"+f(\"a\")+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/a/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source captured generic context",
+      "steps": [
+        {
+          "source": "function make<A:type>(){function id<T:type>(x:T):T{return x;}const f:((x:A)=>A)|undefined=id;return f;}const a:any=make.<string>();typeof a(1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source captured where environment",
+      "steps": [
+        {
+          "source": "function factory(){const limit=2;function id<T:type>(x:T):T where limit===2{return x;}return id;}const id:any=factory();const f:((x:string)=>string)|undefined=id;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union explicit captured where environment",
+      "steps": [
+        {
+          "source": "function factory(){const limit=2;function id<T:type>(x:T):T where limit===2{return x;}return id;}const id:any=factory();const e:any=id.<string>;const f:((x:string)=>string)|undefined=id;String(f===e);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source where failure before publication",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T where T===uint8{return x;}const erased:any=id;let reached=false;try{const f:((x:string)=>string)|undefined=erased;reached=true;}catch(e){}String(reached);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source failed where keeps old binding",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T where T===uint8{return x;}const erased:any=id;const old:any=(x:string)=>x;let f:((x:string)=>string)|undefined=old;try{f=erased;}catch(e){}String(f===old);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source failed crossing then valid crossing",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T where T===uint8{return x;}const erased:any=id;try{const bad:((x:string)=>string)|undefined=erased;}catch(e){}const good:((x:uint8)=>uint8)|undefined=erased;String(good===id.<uint8>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source bound accepted",
+      "steps": [
+        {
+          "source": "function id<T:type extends number>(x:T):T{return x;}const f:((x:number)=>number)|undefined=id;String(f===id.<number>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source bound refused gradually",
+      "steps": [
+        {
+          "source": "function id<T:type extends number>(x:T):T{return x;}const erased:any=id;const f:((x:string)=>string)|undefined=erased;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source bound refused early",
+      "steps": [
+        {
+          "source": "function id<T:type extends number>(x:T):T{return x;}const f:((x:string)=>string)|undefined=id;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source dependent constraints",
+      "steps": [
+        {
+          "source": "function id<T:type,U:type extends T>(a:T,b:U):U{return b;}const f:((a:number,b:number)=>number)|undefined=id;String(f===id.<number,number>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source reflection completed",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const f:((x:string)=>string)|undefined=id;String(Reflect.typeOf(f));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "(x: string) => string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source alias type identity",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type Text=string;const f:((x:Text)=>Text)|undefined=id;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source ref parameter identity",
+      "steps": [
+        {
+          "source": "function id<T:type>(ref x:T):T{return x;}const f:((ref x:string)=>string)|undefined=id;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source ref parameter use",
+      "steps": [
+        {
+          "source": "function id<T:type>(ref x:T):T{return x;}const f:((ref x:string)=>string)|undefined=id;let x:string=\"a\";if(f===undefined)throw new Error(\"missing\");f(ref x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source reference convention refused",
+      "steps": [
+        {
+          "source": "function id<T:type>(ref x:T):T{return x;}const erased:any=id;const f:((x:string)=>string)|undefined=erased;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source inferred binding overrides generic default",
+      "steps": [
+        {
+          "source": "function id<T:type=string>(x:T):T{return x;}const f:((x:number)=>number)|undefined=id;String(f===id.<number>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source body is fixed after variable mutation",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}let held:any=id;const f:((x:string)=>string)|undefined=held;held=(x:any)=>false;const g:any=f;typeof g(1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source getter evaluated once",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}let reads=0;const o:any={get f(){reads++;return id;}};const f:((x:string)=>string)|undefined=o.f;String(reads)+\"/\"+String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source throws from captured where before body",
+      "steps": [
+        {
+          "source": "function make(){const o:any={get check(){throw new RangeError(\"check\");}};function id<T:type>(x:T):T where o.check{return x;}return id;}const erased:any=make();const f:((x:string)=>string)|undefined=erased;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union membership does not specialize",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const alias:any=id;String(id is (((x:string)=>string)|undefined))+\"/\"+String(alias===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source same-spelled closures keep identity",
+      "steps": [
+        {
+          "source": "function make(){function id<T:type>(x:T):T{return x;}return id;}const a:any=make(),b:any=make();const f:((x:string)=>string)|undefined=a;const g:((x:string)=>string)|undefined=b;String(f!==g)+\"/\"+String(f===a.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union source cached where is not repeated",
+      "steps": [
+        {
+          "source": "function factory(){let allowed=true;function id<T:type>(x:T):T where allowed{return x;}return {id,stop(){allowed=false;}};}const o:any=factory();const first:((x:string)=>string)|undefined=o.id;o.stop();const second:((x:string)=>string)|undefined=o.id;String(first===second)+\"/\"+String(second===o.id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union range concrete identity",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;const f:((callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>)|undefined=r.map;String(f===r.map.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union range erased output",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;const f:((callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>)|undefined=r.map;const callback:any=v=>v;const it:any=f.call(r,callback);typeof it.next().value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union range lazy output failure",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;const f:((callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>)|undefined=r.map;let calls=0;const callback:any=()=>{calls++;return {};};const it:any=f.call(r,callback);let caught=false;const before=calls;try{it.next();}catch(e){caught=e instanceof TypeError;}String(before)+\"/\"+calls+\"/\"+caught+\"/\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/1/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union range borrowed receiver",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;const f:((callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>)|undefined=r.map;const other:any=1..<3;const callback:any=v=>v;const it:any=f.call(other,callback);typeof it.next().value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union range direct erased callee",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;const f:((callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>)|undefined=r.map;const g:any=f;let caught=false;try{g(v=>v);}catch(e){caught=e instanceof TypeError;}String(caught);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union range concrete application distinct",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;const f:((callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>)|undefined=r.map;String(f!==r.map);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union range selected before mutation",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;const selected:any=r.map;const f:((callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>)|undefined=selected;r.map=()=>\"replacement\";const callback:any=v=>v;const it:any=f.call(r,callback);typeof it.next().value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union range native reflection completed",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;const f:((callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>)|undefined=r.map;String(Reflect.typeOf(f)).startsWith(\"(callback:\")?\"concrete\":\"generic\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "concrete"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union range assignment to concrete field",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;class Box{f:((callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>)|undefined=r.map;}String(new Box().f===r.map.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union range return receiving boundary",
+      "steps": [
+        {
+          "source": "const r:any=1..<3;function get():((callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>)|undefined{return r.map;}String(get()===r.map.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union iterator concrete identity",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);const f:((callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>)|undefined=r.map;String(f===r.map.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union iterator erased output",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);const f:((callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>)|undefined=r.map;const callback:any=v=>v;const it:any=f.call(r,callback);typeof it.next().value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union iterator lazy output failure",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);const f:((callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>)|undefined=r.map;let calls=0;const callback:any=()=>{calls++;return {};};const it:any=f.call(r,callback);let caught=false;const before=calls;try{it.next();}catch(e){caught=e instanceof TypeError;}String(before)+\"/\"+calls+\"/\"+caught+\"/\"+it.next().done;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/1/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union iterator borrowed receiver",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);const f:((callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>)|undefined=r.map;const other:any=Iterator.from([1,2]);const callback:any=v=>v;const it:any=f.call(other,callback);typeof it.next().value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union iterator direct erased callee",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);const f:((callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>)|undefined=r.map;const g:any=f;let caught=false;try{g(v=>v);}catch(e){caught=e instanceof TypeError;}String(caught);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union iterator concrete application distinct",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);const f:((callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>)|undefined=r.map;String(f!==r.map);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union iterator selected before mutation",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);const selected:any=r.map;const f:((callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>)|undefined=selected;r.map=()=>\"replacement\";const callback:any=v=>v;const it:any=f.call(r,callback);typeof it.next().value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union iterator native reflection completed",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);const f:((callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>)|undefined=r.map;String(Reflect.typeOf(f)).startsWith(\"(callback:\")?\"concrete\":\"generic\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "concrete"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union iterator assignment to concrete field",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);class Box{f:((callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>)|undefined=r.map;}String(new Box().f===r.map.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union iterator return receiving boundary",
+      "steps": [
+        {
+          "source": "const r:any=Iterator.from([1,2]);function get():((callback:(value:any,index:uint64)=>string)=>Iterator.<string,undefined,any>)|undefined{return r.map;}String(get()===r.map.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "null callable boundary",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const f:null|((x:string)=>string)=id;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested union callable boundary",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const f:null|(undefined|((x:string)=>string))=id;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit union conversion",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=((x:string)=>string)|undefined;const f:any=id := F;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "callable interface union",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}interface Text{(x:string):string}const f:Text|undefined=id;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic callable union keeps identity",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const f:(<U:type>(x:U)=>U)|undefined=id;String(f===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "undefined member control",
+      "steps": [
+        {
+          "source": "const f:((x:string)=>string)|undefined=undefined;String(f===undefined);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric selection control",
+      "steps": [
+        {
+          "source": "const n:any=1;const v:string|uint8=n;String(Reflect.typeOf(v));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "uint.<8>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "structural getter control",
+      "steps": [
+        {
+          "source": "let reads=0;const o:any={get x(){reads++;return \"a\";}};const v:{x:string}|undefined=o;String(reads)+\"/\"+String(v===o);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "canonical callable permutation",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type A=((x:string)=>string)|((x:number)=>number);type B=((x:number)=>number)|((x:string)=>string);const a:A=id;const b:B=id;String(a===b)+\"/\"+String(a===id.<number>)+\"/\"+String((type A)===(type B));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected where failure does not fall back",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T where T===string{return x;}const erased:any=id;let caught=false;try{const f:((x:number)=>number)|((x:string)=>string)=erased;}catch(e){caught=e instanceof TypeError;}String(caught);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed choice permits later independent success",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T where T===string{return x;}const erased:any=id;try{const f:((x:number)=>number)|((x:string)=>string)=erased;}catch(e){}const g:((x:string)=>string)|undefined=erased;String(g===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pure membership does not evaluate where",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T where false{return x;}const erased:any=id;String(erased is (((x:string)=>string)|undefined))+\"/\"+String(erased===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "array competitor observed once",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}let reads=0;Object.defineProperty(id,\"length\",{get(){reads++;return \"bad\";}});const f:([].<string>)|((x:string)=>string)=id;String(reads)+\"/\"+String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object member precedes callable",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const erased:any=id;erased.tag=\"a\";const f:((x:string)=>string)|{tag:string}=erased;String(f===id)+\"/\"+String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object getter once before callable",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}let reads=0;Object.defineProperty(id,\"tag\",{get(){reads++;return \"a\";}});const erased:any=id;const f:((x:string)=>string)|{tag:string}=erased;String(reads)+\"/\"+String(f===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "abrupt earlier object member propagates",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}Object.defineProperty(id,\"tag\",{get(){throw new RangeError(\"tag\");}});const erased:any=id;const f:((x:string)=>string)|{tag:string}=erased;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rejected earlier object selects callable",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const erased:any=id;const f:((x:string)=>string)|{tag:string}=erased;String(f===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "primitive kind reflected before function",
+      "steps": [
+        {
+          "source": "type U=number|((x:string)=>string);String(String(type U).startsWith(\"number |\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple kind reflected before array",
+      "steps": [
+        {
+          "source": "type U=[string]|[].<number>;String(String(type U).startsWith(\"[string]\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested callable parameter kind order",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type O={tag:string};type F=(x:string)=>string;const f:((x:O)=>O)|((x:F)=>F)=id;String(f===id.<O>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary nullable view keeps name",
+      "steps": [
+        {
+          "source": "function id(x:string):string{return x;}function use(f:((renamed:string)=>string)|undefined):string{if(f===undefined)return \"missing\";return f(renamed:\"a\");}use(id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nullable view owns default",
+      "steps": [
+        {
+          "source": "function id(x:string=\"a\"):string{return x;}function use(f:((renamed:string=\"b\")=>string)|null):string{if(f===null)return \"missing\";return f();}use(id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nullable typed property keeps name",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}class Box{f:((renamed:string)=>string)|undefined=id;}const b=new Box();if(b.f===undefined)throw new Error(\"missing\");b.f(renamed:\"a\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a"
+          }
+        }
+      ]
+    }
+  ]
+}

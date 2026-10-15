@@ -1444,7 +1444,21 @@ export function orderKey(t: TypeRecord): string {
   return orderKeyWithin(t, []);
 }
 
+// #sec-canonical-total-order: different kinds follow the Type Record Kinds
+// table, not the spelling of their names. All ordering consumers share this
+// prefix, including recursive fields. Internal matcher forms retain their
+// existing relative keys after the specification's kinds.
+const canonicalKindRanks: Partial<Record<TypeRecord['Kind'], string>> = {
+  any: '00', void: '01', primitive: '02', literal: '03', parameterized: '04',
+  nominal: '05', union: '06', intersection: '07', tuple: '08', array: '09',
+  object: '10', function: '11', reference: '12', shared: '13', parameter: '14', deferred: '15',
+};
+
 function orderKeyWithin(t: TypeRecord, seen: readonly TypeRecord[]): string {
+  return `${canonicalKindRanks[t.Kind] ?? '99'}:${orderKeyFields(t, seen)}`;
+}
+
+function orderKeyFields(t: TypeRecord, seen: readonly TypeRecord[]): string {
   const revisited = seen.indexOf(t);
   if (revisited !== -1) {
     return `#${seen.length - revisited}`;
