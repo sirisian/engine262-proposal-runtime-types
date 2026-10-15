@@ -1,3 +1,4 @@
+import { TupleSearchTypes, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { ValidateArrayMutation } from '../abstract-ops/array-mutation.mts';
 import {
   NormalCompletion,
@@ -278,9 +279,9 @@ export function bootstrapArrayPrototypeShared(realmRec: Realm, proto: ObjectValu
     // contributing its element), as #sec-array-defaults-and-stores gives a
     // tuple's search methods: `t.includes(2)` on a
     // `[uint16, uint16]` then compares a `uint16` against `uint16`s.
-    const tuple = (O as { TypedTuple?: { Positions: readonly TypeRecord[], Rest: TypeRecord | undefined } }).TypedTuple;
-    if (element === undefined && tuple !== undefined) {
-      const members = [...tuple.Positions, ...(tuple.Rest ? [tuple.Rest.Kind === 'array' ? tuple.Rest.Element : tuple.Rest] : [])];
+    const tuple = (O as { TypedTuple?: TupleStorageShape }).TypedTuple;
+    if (tuple !== undefined) {
+      const members = TupleSearchTypes(tuple);
       if (members.length > 0) {
         element = members.length === 1 ? members[0] : CanonicalizeType({ Kind: 'union', Members: members } as TypeRecord);
       }

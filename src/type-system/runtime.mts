@@ -65,6 +65,7 @@ import {
 import { CanonicalizeType, GetTypeObject, isTypeObject, isClassTypeObject } from './intern.mts';
 import { invalidTupleRest } from './tuple-rests.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization, ClassTypeEnvironmentOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
+import { TupleStorageShapeOf, type TupleStorageShape } from './tuple-storage.mts';
 import { MetadataStorageKey, MetadataKey, MetadataEntries } from './metadata-keys.mts';
 import { GenericWhereVerified } from './generic-where.mts';
 import { GenericAliasContextOf } from './generic-alias-context.mts';
@@ -3841,24 +3842,6 @@ export type StructuralStorageAdmission = {
   kind: 'tuple', object: ObjectValue, shape: TupleStorageShape,
 };
 
-export type TupleStorageShape = { Positions: readonly TypeRecord[], Rest: TypeRecord | undefined };
-
-/** These tuple positions are determined by index alone, independently of a
- * successful partition or current length. Optional/complex rests need their
- * own mutation contract; do not turn an admission witness into a frozen shape. */
-export function StableTupleStorageShape(type: TypeRecord): TupleStorageShape | undefined {
-  if (type.Kind !== 'tuple' || type.Elements.some((e) => e.Initial !== 'none')) return undefined;
-  const positions: TypeRecord[] = [];
-  let rest: TypeRecord | undefined;
-  for (let i = 0; i < type.Elements.length; i += 1) {
-    const e = type.Elements[i]!;
-    if (!e.Rest) positions.push(e.Type);
-    else if (i === type.Elements.length - 1 && e.Type.Kind === 'array' && e.Type.Extent === 'dynamic') rest = e.Type.Element;
-    else return undefined;
-  }
-  return { Positions: positions, Rest: rest };
-}
-
 /** A backing contract can prove membership without proving materialization. */
 export function MayRequireCallableMaterialization(source: TypeRecord, target: TypeRecord): boolean {
   function contains(t: TypeRecord, generic: boolean, seen = new Set<TypeRecord>()): boolean {
@@ -4249,7 +4232,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       // `[number, ...[].<string>, boolean]` with the required boolean missing;
       // and a rest element's Type is the ARRAY it stands for, so comparing an
       // element against it directly meant no rest ever matched anything.
-      const tupleShape = StableTupleStorageShape(t);
+      const tupleShape = TupleStorageShapeOf(t);
       const restCount = t.Elements.filter((e) => e.Rest).length;
       if (restCount === 0) {
         // #sec-array-membership: an element's slot "is optional exactly when its
@@ -7251,3 +7234,5 @@ function* UsesIntrinsicDeclaration(node: ParseNode, name: string): PlainEvaluato
   const value = Q(yield* GetValue(reference));
   return isIntrinsicNamespace(surroundingAgent.currentRealmRecord, name, value);
 }
+
+export type { TupleStorageShape } from './tuple-storage.mts';

@@ -1,3 +1,4 @@
+import { TupleStorageTypeAt, TupleFixedPositions, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { ValidateArrayMutation } from '../abstract-ops/array-mutation.mts';
 import {
   BooleanValue,
@@ -693,8 +694,9 @@ function* ArrayProto_slice([start = Value.undefined, end = Value.undefined]: Arg
   // A slice is a WINDOW on the positions, and the indices are known here even
   // where they were not known statically, so the window is exact.
   const sliceShape = tupleShapeOf(O);
-  if (sliceShape !== undefined && sliceShape.Rest === undefined) {
-    propagateTupleShape(A, sliceShape.Positions.slice(windowStart, final));
+  const slicePositions = sliceShape && TupleFixedPositions(sliceShape);
+  if (slicePositions !== undefined) {
+    propagateTupleShape(A, slicePositions.slice(windowStart, final));
   }
   return A;
 }
@@ -748,9 +750,10 @@ function* ArrayProto_toSorted([comparator = Value.undefined]: Arguments, { thisV
   // tuple sorted by an arbitrary comparator has no position types this
   // operation can state, and stamping the source's would be a lie.
   const sortedShape = tupleShapeOf(O);
-  if (sortedShape !== undefined && sortedShape.Rest === undefined && sortedShape.Positions.length > 0
-      && sortedShape.Positions.every((position) => SameTypeRecord(position, sortedShape.Positions[0]!))) {
-    propagateTupleShape(A, sortedShape.Positions);
+  const sortedPositions = sortedShape && TupleFixedPositions(sortedShape);
+  if (sortedPositions !== undefined && sortedPositions.length > 0
+      && sortedPositions.every((position) => SameTypeRecord(position, sortedPositions[0]!))) {
+    propagateTupleShape(A, sortedPositions);
   }
   return A;
 }
@@ -934,14 +937,12 @@ function* ArrayProto_with([index = Value.undefined, value = Value.undefined]: Ar
   let inserted = value;
   if (surroundingAgent.feature('runtime-types')) {
     const typed = O as unknown as {
-      TypedTuple?: { Positions: readonly TypeRecord[], Rest: TypeRecord | undefined },
+      TypedTuple?: TupleStorageShape,
       TypedElement?: TypeRecord,
     };
     const tuple = typed.TypedTuple;
     if (tuple !== undefined) {
-      const positionType = actualIndex < tuple.Positions.length
-        ? tuple.Positions[actualIndex]!
-        : tuple.Rest;
+      const positionType = TupleStorageTypeAt(tuple, actualIndex, len);
       if (positionType !== undefined) {
         inserted = Q(yield* RequireType(value, positionType));
       }
@@ -966,8 +967,9 @@ function* ArrayProto_with([index = Value.undefined, value = Value.undefined]: Ar
   // `with` replaces one position with a value already checked against that
   // position's type, so the shape is the source's.
   const withShape = tupleShapeOf(O);
-  if (withShape !== undefined && withShape.Rest === undefined) {
-    propagateTupleShape(A, withShape.Positions);
+  const withPositions = withShape && TupleFixedPositions(withShape);
+  if (withPositions !== undefined) {
+    propagateTupleShape(A, withPositions);
   }
   return A;
 }
@@ -1075,7 +1077,7 @@ function propagateElementType(source: Value, copy: Value): void {
 }
 
 /** The tuple shape an array carries, where it carries one. */
-type TupleShape = { Positions: readonly TypeRecord[], Rest: TypeRecord | undefined };
+type TupleShape = TupleStorageShape;
 
 function tupleShapeOf(source: Value): TupleShape | undefined {
   if (!surroundingAgent.feature('runtime-types')) {
@@ -1122,8 +1124,9 @@ function* ArrayProto_toReversed(_args: Arguments, { thisValue }: FunctionCallCon
   // The reverse of `[uint8, string]` is `[string, uint8]`: the positions are
   // the source's, read backwards.
   const reversedShape = tupleShapeOf(O);
-  if (reversedShape !== undefined && reversedShape.Rest === undefined) {
-    propagateTupleShape(A, [...reversedShape.Positions].reverse());
+  const reversedPositions = reversedShape && TupleFixedPositions(reversedShape);
+  if (reversedPositions !== undefined) {
+    propagateTupleShape(A, [...reversedPositions].reverse());
   }
   return A;
 }

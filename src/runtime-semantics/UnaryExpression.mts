@@ -1,3 +1,4 @@
+import { TupleLengthRange, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { vectorShape } from '../type-system/vector-ops.mts';
 import { CheckedConvertValue } from '../abstract-ops/runtime-types.mts';
@@ -105,10 +106,10 @@ function* Evaluate_UnaryExpression_Delete({ UnaryExpression }: ParseNode.UnaryEx
     // is not a position at all. Neither is refused.
     if (surroundingAgent.feature('runtime-types')
         && isArrayIndex(ref.ReferencedName as Value)) {
-      const tuple = (baseObj as { TypedTuple?: { Positions: readonly unknown[], Rest: unknown } }).TypedTuple;
+      const tuple = (baseObj as { TypedTuple?: TupleStorageShape }).TypedTuple;
       if (tuple !== undefined) {
         const index = Number((ref.ReferencedName as JSStringValue).stringValue());
-        if (index < tuple.Positions.length || tuple.Rest !== undefined) {
+        if (index < TupleLengthRange(tuple).max) {
           return Throw.TypeError('$1 is a position of a tuple and cannot be deleted', ref.ReferencedName as Value);
         }
       }

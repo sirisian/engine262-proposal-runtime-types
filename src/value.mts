@@ -1,3 +1,4 @@
+import { TupleBackingLength, TupleStorageTypeAt, TupleResizePreserves, type TupleStorageShape } from './type-system/tuple-storage.mts';
 import { type GCMarker } from './host-defined/engine.mts';
 import { LayoutOf } from './type-system/layout.mts';
 import { PlacementBackingOf, ReadPlacedField, WritePlacedField } from './abstract-ops/placement.mts';
@@ -1300,20 +1301,16 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
       // #sec-issubtype: a `[uint8]` seen as a `[uint8 | string]` is the same
       // object, and a String written through the wider view would otherwise land
       // in a slot declared `uint8`.
-      const tuple = (Receiver as { TypedTuple?: { Positions: readonly TypeRecord[], Rest: TypeRecord | undefined } }).TypedTuple;
+      const tuple = (Receiver as { TypedTuple?: TupleStorageShape }).TypedTuple;
       if (tuple !== undefined && isArrayIndex(P)) {
         const index = Number((P as JSStringValue).stringValue());
-        if (index < tuple.Positions.length) {
-          V = Q(yield* RequireType(V, tuple.Positions[index]!));
-        } else if (tuple.Rest !== undefined) {
-          // A position the rest collects takes the rest's element type.
-          V = Q(yield* RequireType(V, tuple.Rest));
-        } else {
-          // A tuple's arity is part of its type, so there is no position here to
-          // store into, and growing it would leave the array outside the type it
-          // is declared to have.
-          return Throw.TypeError('a tuple of $1 positions has no position at index $2', Value(String(tuple.Positions.length)), P);
+        const length = TupleBackingLength(Receiver as ObjectValue);
+        const nextLength = Math.max(length, index + 1);
+        const target = TupleStorageTypeAt(tuple, index, nextLength);
+        if (!target || !TupleResizePreserves(tuple, length, nextLength)) {
+          return Throw.TypeError('a tuple store cannot change a surviving position contract');
         }
+        V = Q(yield* RequireType(V, target));
       }
       const elementType = (Receiver as { TypedElement?: unknown }).TypedElement;
       if (elementType !== undefined && isArrayIndex(P)) {

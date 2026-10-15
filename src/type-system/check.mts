@@ -20,6 +20,7 @@ import { firstUnreadableControl, readClassControls, readFieldControls } from '..
 import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
 import { isRangeObject, endpointOf, type RangeObject } from '../intrinsics/Range.mts';
 import type { EnvironmentRecord } from '../execution-context/Environment.mts';
+import { TupleStorageShapeOf, TupleStorageTypeAt, TupleLengthRange, TupleIndexType } from './tuple-storage.mts';
 import { MetadataKeys, MetadataEntries, MetadataKey } from './metadata-keys.mts';
 import { RawOperatorResultType } from './operator-result.mts';
 import { TypeDiagnosticOf, CreateTypeDiagnostic, ReportTypeDiagnostic } from './diagnostics.mts';
@@ -6221,8 +6222,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const element = receiver.Elements[Number(index)]!;
         return element.DeclaredDefault ? null : element.Type;
       }
-      return rest >= 0 && rest === receiver.Elements.length - 1
-        ? restElementType(receiver.Elements[rest]!.Type) : null;
+      return TupleIndexType(receiver, Number(index)) ?? (rest >= 0 && rest === receiver.Elements.length - 1
+        ? restElementType(receiver.Elements[rest]!.Type) : null);
     }
     return null;
   };
@@ -15464,13 +15465,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // Position by position: a fixed position's own type, and past the fixed
         // positions the rest's element type. After a spread the positions are not
         // known, so the walk stops there.
+        const shape = elements.every((el) => el?.type !== 'SpreadElement') ? TupleStorageShapeOf(memberType) : undefined;
         const positions = memberType.Elements;
         const rest = positions.find((position) => position.Rest);
         let index = 0;
         for (const el of elements) {
           if (el?.type === 'SpreadElement') break;
           const position = positions[index];
-          const type = position && !position.Rest ? position.Type : (rest ? restElementType(rest.Type) : undefined);
+          const type = shape ? TupleStorageTypeAt(shape, index, elements.length)
+            : position && !position.Rest ? position.Type : (rest ? restElementType(rest.Type) : undefined);
           if (el && el.type !== 'Elision' && type) typeCreationMembers(el, type);
           index += 1;
         }
@@ -19878,7 +19881,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 // Defaults/rest suffixes retain their runtime lookup boundary.
                 return literalIndex !== null || !position.DeclaredDefault ? position.Type : null;
               }
-              return literalIndex !== null ? restElementType(positions[restAt]!.Type) : null;
+              // Preserve the existing proof boundary for nonliteral rest keys.
+              return literalIndex !== null ? TupleIndexType(receiver, Number(index))
+                ?? (restAt === positions.length - 1 ? restElementType(positions[restAt]!.Type) : null) : null;
             }
           }
           // The third arm. A computed access
@@ -20954,6 +20959,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
       if (!rest && minimumPosition > target.Elements.length) report({ Kind: 'array', Element: anyTypeRecord, Extent: minimumPosition }, target);
+      return;
+    }
+    // One homogeneous rest has a unique partition at a known literal length,
+    // including a required suffix. Keep contextual typing on that exact index.
+    const shape = TupleStorageShapeOf(target);
+    if (shape?.Suffix?.length) {
+      if (elements.length < TupleLengthRange(shape).min) {
+        report({ Kind: 'tuple', Elements: elements.map(() => ({ Type: anyTypeRecord, Rest: false, Initial: 'none' })) }, target);
+        for (const element of elements) walk(element);
+        return;
+      }
+      elements.forEach((element, index) => {
+        const position = TupleStorageTypeAt(shape, index, elements.length)!;
+        requireAssignable(element.type === 'Elision' ? undefinedType : staticTypeIn(element, position), position, node);
+      });
       return;
     }
     // A REST in the TARGET makes the maximum unbounded - but not the minimum.
@@ -30108,7 +30128,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (t?.Kind === 'tuple') {
       const rest = t.Elements.findIndex((el) => el.Rest);
       if (rest >= 0 && index >= rest) {
-        return { type: restElementType(t.Elements[rest]!.Type) };
+        return { type: TupleIndexType(t, index) ?? (rest === t.Elements.length - 1 ? restElementType(t.Elements[rest]!.Type) : null) };
       }
       return { type: t.Elements[index]?.Type ?? undefinedType };
     }

@@ -1,6 +1,6 @@
+import { TupleBackingLength, TupleStorageTypeAt, TupleStorageRun, TupleResizePreserves, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { type ThrowCompletion } from '../completion.mts';
 import { SameType } from '../type-system/relations.mts';
-import type { TupleStorageShape } from '../type-system/runtime.mts';
 import { type ObjectValue } from '../value.mts';
 import { Throw, surroundingAgent } from '#self';
 
@@ -23,22 +23,21 @@ export function ValidateArrayMutation(object: ObjectValue, plan: ArrayMutationPl
   }
   const shape = typed.TypedTuple;
   if (!shape) return undefined;
-  const fixed = shape.Positions.length;
-  if (shape.Rest === undefined ? plan.length !== fixed : plan.length < fixed) {
-    return Throw.TypeError('the mutation would leave the tuple outside its length domain');
+  const length = TupleBackingLength(object);
+  if (!TupleResizePreserves(shape, length, plan.length)) {
+    return Throw.TypeError('the mutation would change a surviving tuple position contract');
   }
-  const at = (index: number) => shape.Positions[index] ?? shape.Rest;
   const same = (from: number, to: number) => {
-    const source = at(from);
-    const destination = at(to);
+    const source = TupleStorageTypeAt(shape, from, length);
+    const destination = TupleStorageTypeAt(shape, to, plan.length);
     return source !== undefined && destination !== undefined && SameType(source, destination);
   };
   for (const move of plan.moves ?? []) {
     let { from, to, count } = move;
     while (count > 0) {
       if (!same(from, to)) return Throw.TypeError('a tuple mutation cannot move between differently typed positions');
-      const sourceRun = from < fixed ? 1 : count;
-      const destinationRun = to < fixed ? 1 : move.reverse ? to - fixed + 1 : count;
+      const sourceRun = TupleStorageRun(shape, from, length);
+      const destinationRun = TupleStorageRun(shape, to, plan.length, move.reverse ? -1 : 1);
       const step = Math.min(count, sourceRun, destinationRun);
       from += step;
       to += move.reverse ? -step : step;
@@ -50,7 +49,7 @@ export function ValidateArrayMutation(object: ObjectValue, plan: ArrayMutationPl
     const end = range.start + range.count;
     while (index < end) {
       if (!same(range.start, index)) return Throw.TypeError('the mutation requires the same type at each participating tuple position');
-      index = index < fixed ? index + 1 : end;
+      index += Math.min(end - index, TupleStorageRun(shape, index, plan.length));
     }
   }
   return undefined;

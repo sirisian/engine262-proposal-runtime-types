@@ -1,3 +1,4 @@
+import { TupleBackingLength, TupleStorageTypeAt, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { Value, ReferenceValue, ObjectValue, JSStringValue, SymbolValue } from '../value.mts';
 import type { ReferenceRecord } from '../value.mts';
 import { EnvironmentRecord, RefBindingHolder } from '../execution-context/Environment.mts';
@@ -27,12 +28,12 @@ export function DeclaredReferenceLocationType(location: ReferenceRecord): TypeRe
       const key = location.ReferencedName instanceof JSStringValue ? location.ReferencedName.stringValue() : location.ReferencedName;
       const base = location.Base as ObjectValue & {
         TypedProperties?: Map<string | SymbolValue, { TypeRecord: TypeRecord }>, TypedElement?: TypeRecord,
-        TypedTuple?: { Positions: readonly TypeRecord[], Rest?: TypeRecord },
+        TypedTuple?: TupleStorageShape,
       };
       const index = typeof key === 'string' ? Number(key) : NaN;
       const indexed = String(index) === key && Number.isInteger(index) && index >= 0 && index < 0xFFFFFFFF;
       return base.TypedProperties?.get(key)?.TypeRecord
-        ?? (indexed ? base.TypedTuple?.Positions[index] ?? base.TypedTuple?.Rest ?? base.TypedElement : undefined);
+        ?? (indexed ? (base.TypedTuple ? TupleStorageTypeAt(base.TypedTuple, index, TupleBackingLength(base)) : undefined) ?? base.TypedElement : undefined);
     }
     break;
   }

@@ -1,8 +1,9 @@
+import { TupleStorageShapeOf, TupleLengthRange, TupleStorageTypeAt, TupleFixedPositions, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { MetadataStorageKey, MetadataKey, MetadataKeys, MetadataEntries } from '../type-system/metadata-keys.mts';
 import { isRegExpObject } from '../intrinsics/RegExp.mts';
 import type { CapturedTypeContext } from '../type-system/runtime.mts';
 import { RawOperatorResultType } from '../type-system/operator-result.mts';
-import { publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, MayRequireCallableMaterialization, StableTupleStorageShape, type TupleStorageShape, type StructuralStorageAdmission } from '../type-system/runtime.mts';
+import { publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, MayRequireCallableMaterialization, type StructuralStorageAdmission } from '../type-system/runtime.mts';
 import { primitiveMembership } from '../type-system/runtime.mts';
 import { currentTypeParameterFrame, SpecializedFunctionSignatureOf } from '../type-system/runtime.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
@@ -217,21 +218,20 @@ function* CompleteStructuralAdmission(storage: readonly StructuralStorageAdmissi
   for (const sequence of sequences.values()) {
     if (sequence.elements.length) sequence.type = together(sequence.elements);
     if (!sequence.shapes.length) continue;
-    const fixed = sequence.extent ?? sequence.shapes.find((shape) => shape.Rest === undefined)?.Positions.length;
-    const minimum = sequence.shapes.reduce((count, shape) => Math.max(count, shape.Positions.length), 0);
-    if (fixed !== undefined && (fixed < minimum
-        || sequence.shapes.some((shape) => shape.Rest === undefined && shape.Positions.length !== fixed))) {
+    const parts = [...sequence.shapes];
+    if (sequence.type) parts.push({ Positions: [], Rest: sequence.type });
+    const shape: TupleStorageShape = parts.length === 1 ? parts[0]!
+      : { Positions: [], Rest: undefined, Conjuncts: parts };
+    const range = TupleLengthRange(shape);
+    const fixed = sequence.extent ?? (Number.isFinite(range.max) ? range.max : undefined);
+    if (range.min > range.max || (fixed !== undefined && (fixed < range.min || fixed > range.max))) {
       return Throw.TypeError('the admitted sequence contracts have incompatible length domains');
     }
-    const count = fixed ?? minimum;
-    const at = (i: number): TypeRecord => together([
-      ...sequence.shapes.map((shape) => shape.Positions[i] ?? shape.Rest!),
-      ...sequence.elements,
-    ]);
-    // Intersect complete stable domains, including an empty rest and future
-    // positions. An occupied-index map would lose the acquired tail contract.
-    sequence.shape = { Positions: Array.from({ length: count }, (_, i) => at(i)),
-      Rest: fixed === undefined ? at(count) : undefined };
+    // A finite bound makes every index fixed. Otherwise retain all anchored
+    // domains; flattening would lose suffix alignment at another length.
+    sequence.shape = fixed === undefined ? shape : {
+      Positions: Array.from({ length: fixed }, (_, i) => TupleStorageTypeAt(shape, i, fixed)!), Rest: undefined,
+    };
   }
   // Preserve observation order; repeated equal observations of a location share
   // its materialization/write even when other locations intervene.
@@ -291,12 +291,13 @@ function StructuralStorageEstablished(value: Value, type: TypeRecord): boolean {
     return StructuralStorageEstablished(value, SubstituteTypeArguments(type.Structure, type.Declaration, type.Arguments));
   }
   if (type.Kind === 'array' || type.Kind === 'tuple') {
-    const storage = value as { TypedElement?: TypeRecord, TypedTuple?: { Positions: readonly TypeRecord[], Rest?: TypeRecord } };
+    const storage = value as { TypedElement?: TypeRecord, TypedTuple?: TupleStorageShape };
     if (type.Kind === 'array') return storage.TypedElement !== undefined && IsSubtype(storage.TypedElement, type.Element, [])
       && !MayRequireCallableMaterialization(storage.TypedElement, type.Element);
-    return storage.TypedTuple !== undefined && type.Elements.every((element, i) => !element.Rest
-      && storage.TypedTuple!.Positions[i] !== undefined && IsSubtype(storage.TypedTuple!.Positions[i], element.Type, [])
-      && !MayRequireCallableMaterialization(storage.TypedTuple!.Positions[i], element.Type));
+    const positions = storage.TypedTuple && TupleFixedPositions(storage.TypedTuple);
+    return positions !== undefined && type.Elements.every((element, i) => !element.Rest
+      && positions[i] !== undefined && IsSubtype(positions[i], element.Type, [])
+      && !MayRequireCallableMaterialization(positions[i], element.Type));
   }
   if (type.Kind !== 'object') return true;
   const carried = (value as { RuntimeType?: TypeRecord }).RuntimeType;
@@ -2165,7 +2166,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     // Stable tuple domains are acquired with the retained admission, including
     // nested and union-selected tuples. Preserve existing backing for every
     // view. Complex/defaulted tuple storage retains its separate legacy path.
-    if (t.Kind === 'tuple' && !StableTupleStorageShape(t) && value instanceof ObjectValue
+    if (t.Kind === 'tuple' && !TupleStorageShapeOf(t) && value instanceof ObjectValue
         && (value as { TypedElement?: unknown }).TypedElement === undefined
         && (value as { TypedTuple?: unknown }).TypedTuple === undefined && Q(IsArray(value)) === Value.true) {
       const rest = t.Elements.find((e) => e.Rest);
@@ -6276,6 +6277,7 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
   const lenValue = Q(yield* Get(value, Value('length')));
   const len = R(Q(yield* ToNumber(lenValue))) as number;
   const elements = t.Elements;
+  const shape = TupleStorageShapeOf(t);
   const rest = elements.find((e) => e.Rest);
   const fixedCount = elements.filter((e) => !e.Rest).length;
   // #sec-array-and-tuple-types: a trailing position with a default may be
@@ -6303,7 +6305,7 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
     }
     // A position past the declared ones belongs to the rest, whose [[Type]]
     // is the type of what it collects.
-    const declared = i < elements.length && !elements[i]!.Rest
+    const declared = shape ? TupleStorageTypeAt(shape, i, filled) : i < elements.length && !elements[i]!.Rest
       ? elements[i]!.Type
       : (rest !== undefined ? restElementType(rest.Type) : undefined);
     const el = Q(yield* Get(value, Value(String(i))));
@@ -6326,7 +6328,7 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
   // The positions are resolved here rather than at the store: value.mts holds
   // the store check and has no business unwrapping a rest element's collected
   // type, and resolving once per boundary is cheaper than once per write.
-  (out as { TypedTuple?: { Positions: readonly TypeRecord[], Rest: TypeRecord | undefined } }).TypedTuple = {
+  (out as { TypedTuple?: TupleStorageShape }).TypedTuple = shape ?? {
     Positions: elements.filter((e) => !e.Rest).map((e) => e.Type),
     Rest: rest !== undefined ? restElementType(rest.Type) : undefined,
   };

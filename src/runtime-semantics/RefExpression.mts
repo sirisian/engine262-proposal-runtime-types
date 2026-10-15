@@ -1,3 +1,4 @@
+import { TupleLengthRange, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import {
   Evaluate, type ValueEvaluator, type PlainEvaluator, type ReferenceEvaluator,
 } from '../evaluator.mts';
@@ -120,14 +121,14 @@ export function* SoAElementLocationFor(location: ReferenceRecord): PlainEvaluato
     // a growable `[].<T>` records the generation of its backing allocation, so
     // that a growth which relocates the allocation invalidates it.
     const typed = location.Base as unknown as { TypedElement?: unknown, TypedGeneration?: number,
-      TypedTuple?: { Positions: readonly unknown[], Rest?: unknown } };
+      TypedTuple?: TupleStorageShape };
     // Tuple positions also have removal identity. Shrinking a trailing rest
     // must not leave a borrow live or revive it when the index is filled again.
     if (typed.TypedElement !== undefined || typed.TypedTuple !== undefined) {
       const index = Number(location.ReferencedName.stringValue());
       if (String(index) === location.ReferencedName.stringValue()
           && Number.isInteger(index) && index >= 0 && index < 0xFFFFFFFF
-          && (typed.TypedElement !== undefined || index < typed.TypedTuple!.Positions.length || typed.TypedTuple!.Rest !== undefined)) {
+          && (typed.TypedElement !== undefined || index < TupleLengthRange(typed.TypedTuple!).max)) {
         return new ReferenceRecord({
           Base: location.Base,
           ReferencedName: location.ReferencedName,

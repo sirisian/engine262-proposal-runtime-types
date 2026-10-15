@@ -1,3 +1,4 @@
+import { TupleBackingLength, TupleStorageTypeAt, TupleResizePreserves, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import {
   surroundingAgent, Descriptor, ObjectValue, JSStringValue, Value, wellKnownSymbols, type ObjectInternalMethods,
   NumberValue, UndefinedValue,
@@ -64,23 +65,23 @@ const InternalMethods = {
     // element type. RequireType returns the value OF THE TYPE, so the descriptor
     // carries what it returned - a plain 7 redefining a `uint8` element becomes
     // that element's uint8, exactly as the store makes it.
-    if (surroundingAgent.feature('runtime-types') && Desc.Value !== undefined && isArrayIndex(P)) {
+    if (surroundingAgent.feature('runtime-types') && isArrayIndex(P)) {
       type PositionType = Parameters<typeof RequireType>[1];
       const typed = array as unknown as {
-        TypedTuple?: { Positions: readonly PositionType[], Rest: PositionType | undefined },
+        TypedTuple?: TupleStorageShape,
         TypedElement?: PositionType,
       };
       const tuple = typed.TypedTuple;
       if (tuple !== undefined) {
         const position = Number((P as JSStringValue).stringValue());
-        if (position < tuple.Positions.length) {
-          Desc = Descriptor({ ...Desc, Value: Q(yield* RequireType(Desc.Value, tuple.Positions[position]!)) });
-        } else if (tuple.Rest !== undefined) {
-          Desc = Descriptor({ ...Desc, Value: Q(yield* RequireType(Desc.Value, tuple.Rest)) });
-        } else {
-          return Throw.TypeError('a tuple of $1 positions has no position at index $2', Value(String(tuple.Positions.length)), P);
+        const length = TupleBackingLength(array);
+        const nextLength = Math.max(length, position + 1);
+        const target = TupleStorageTypeAt(tuple, position, nextLength);
+        if (!target || !TupleResizePreserves(tuple, length, nextLength)) {
+          return Throw.TypeError('a tuple definition cannot change a surviving position contract');
         }
-      } else if (typed.TypedElement !== undefined) {
+        if (Desc.Value !== undefined) Desc = Descriptor({ ...Desc, Value: Q(yield* RequireType(Desc.Value, target)) });
+      } else if (typed.TypedElement !== undefined && Desc.Value !== undefined) {
         Desc = Descriptor({ ...Desc, Value: Q(yield* RequireType(Desc.Value, typed.TypedElement)) });
       }
     }
@@ -206,21 +207,11 @@ export function* ArraySetLength(array: OrdinaryObject, Desc: Descriptor): ValueE
   if (extent !== undefined && newLen !== extent) {
     return Throw.TypeError('a fixed-extent array cannot be grown');
   }
-  // A tuple's ARITY is part of its type, as an
-  // array's extent is, and a tuple carries its positions rather than a
-  // [[TypedExtent]] - so `t.length = 1` on a `[uint8, string]` walked past the
-  // check above and left the value outside the type it is declared to have.
-  // The store rules already refuse a write past the arity; this is the same
-  // rule reached through `length`, which is how the array case reaches it too.
-  //
-  // A rest collects any number of positions, so a length at or above the fixed
-  // ones is within the type; without a rest the arity is exact.
-  const tuple = (array as { TypedTuple?: { Positions: readonly unknown[], Rest: unknown } }).TypedTuple;
-  if (tuple !== undefined) {
-    const fixed = tuple.Positions.length;
-    if (tuple.Rest === undefined ? newLen !== fixed : newLen < fixed) {
-      return Throw.TypeError('a tuple of $1 positions cannot be given a length of $2', Value(String(fixed)), Value(String(newLen)));
-    }
+  // Suffix positions are anchored at the end. Resizing must preserve the
+  // declared contract of every surviving index, including any live reference.
+  const tuple = (array as { TypedTuple?: TupleStorageShape }).TypedTuple;
+  if (tuple !== undefined && !TupleResizePreserves(tuple, TupleBackingLength(array), newLen)) {
+    return Throw.TypeError('a tuple length change cannot change a surviving position contract');
   }
   newLenDesc = Descriptor({ ...Desc, Value: F(newLen) });
   const oldLenDesc = OrdinaryGetOwnProperty(array, Value('length'));
