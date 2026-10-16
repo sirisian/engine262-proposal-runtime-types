@@ -603,10 +603,10 @@
       ]
     },
     {
-      "name": "deletion before the position is observed can supply undefined",
+      "name": "inherited deletion before the position is observed can supply undefined",
       "steps": [
         {
-          "source": "const raw:any=[undefined,undefined];Object.defineProperty(raw,\"0\",{get(){delete raw[1];return undefined;},configurable:true});const a:[].<undefined>=raw;String(Object.hasOwn(raw,\"1\"));",
+          "source": "const raw:any=[undefined,undefined];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,1);delete raw[0];Object.defineProperty(accessorPrototype,\"0\",{get(){delete raw[1];return undefined;},configurable:true});const a:[].<undefined>=raw;String(Object.hasOwn(raw,\"1\"));",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -757,15 +757,15 @@
       ]
     },
     {
-      "name": "existing generic accessor keeps its current effect order",
+      "name": "existing generic accessor refuses before materialization",
       "steps": [
         {
-          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;let writes=0;let held:any=id;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});const a:[].<F>=raw;String(reads)+\"/\"+writes+\"/\"+String(held===id.<string>);",
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;let writes=0;let held:any=id;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});let error=\"missed\";try{const a:[].<F>=raw;}catch(e){error=e.name;}error+\"/\"+String(reads)+\"/\"+writes+\"/\"+String(held===id.<string>);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
             "scriptBodies": 1,
-            "value": "1/1/true"
+            "value": "TypeError/1/0/false"
           }
         }
       ]

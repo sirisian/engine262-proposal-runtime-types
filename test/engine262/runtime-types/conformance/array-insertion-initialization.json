@@ -547,20 +547,6 @@
       ]
     },
     {
-      "name": "getter observes only the published extent",
-      "steps": [
-        {
-          "source": "const a:[].<uint8>=[1,2];const raw:any=a;let seen=\"\";Object.defineProperty(raw,\"0\",{get(){seen+=raw.length+\":\"+Object.keys(raw).join(\",\")+\";\";return 1;},set(v){}});raw.unshift(8,9);seen+\"/\"+raw.length+\"/\"+raw[2]+\"/\"+raw[3];",
-          "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "2:0,1;/4/1/2"
-          }
-        }
-      ]
-    },
-    {
       "name": "setter effects run while tail is private",
       "steps": [
         {
@@ -584,20 +570,6 @@
             "bodyEntered": true,
             "scriptBodies": 1,
             "value": "TypeError/1/1/0"
-          }
-        }
-      ]
-    },
-    {
-      "name": "callback append publishes independently and cancels stale insertion",
-      "steps": [
-        {
-          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1];const raw:any=a;Object.defineProperty(raw,\"0\",{get(){raw[1]=7;return 1;},set(v){}});attempt(()=>{raw.unshift(8,9);})+\"/\"+raw.length+\"/\"+raw[1]+\"/\"+Object.keys(raw).join(\",\");",
-          "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/2/7/0,1"
           }
         }
       ]
@@ -827,20 +799,6 @@
       ]
     },
     {
-      "name": "late nonextensibility retains writes and rejects tail",
-      "steps": [
-        {
-          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1];const raw:any=a;Object.defineProperty(raw,\"0\",{get(){return 1;},set(v){Object.preventExtensions(raw);}});attempt(()=>{raw.unshift(8,9);})+\"/\"+raw.length+\"/\"+Object.keys(raw).join(\",\");",
-          "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/1/0"
-          }
-        }
-      ]
-    },
-    {
       "name": "tail descriptors remain ordinary writable data",
       "steps": [
         {
@@ -864,20 +822,6 @@
             "bodyEntered": true,
             "scriptBodies": 1,
             "value": "1,0,7/3"
-          }
-        }
-      ]
-    },
-    {
-      "name": "conversion-created tail destination survives stale outer definition",
-      "steps": [
-        {
-          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type Dim={m:number};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float64{operator float64.<{m:1}>():float64.<{m:1}>{globalThis.onDefault();return this;}}globalThis.onDefault=()=>{};const a:[].<float64.<{m:1}>>=[];const raw:any=a;raw[0]=99;const seed:any=raw[0];Object.defineProperty(raw,\"0\",{get(){return 5;},set(v){}});let once=true;globalThis.onDefault=()=>{if(once){once=false;raw[1]=seed;}};attempt(()=>{raw.unshift(8);})+\"/\"+raw.length+\"/\"+Number(raw[1]);",
-          "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/2/99"
           }
         }
       ]

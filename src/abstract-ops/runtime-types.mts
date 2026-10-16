@@ -262,8 +262,11 @@ function* CompleteStructuralAdmission(storage: readonly StructuralStorageAdmissi
     }
     for (const [key, position] of plan.positions) {
       const desc = OrdinaryGetOwnProperty(object as OrdinaryObject, Value(key));
-      if (!(desc instanceof UndefinedValue) && IsDataDescriptor(desc) && !SameValue(desc.Value!, position.value)) {
-        return Throw.TypeError('an independent definition conflicts with element admission');
+      if (!(desc instanceof UndefinedValue)) {
+        if (!IsDataDescriptor(desc)) return Throw.TypeError('owned array admission requires own data elements');
+        if (!SameValue(desc.Value!, position.value)) {
+          return Throw.TypeError('an independent definition conflicts with element admission');
+        }
       }
     }
     initialization.set(object, plan);
@@ -320,8 +323,7 @@ function* CompleteStructuralAdmission(storage: readonly StructuralStorageAdmissi
         if (position.own || independentlyEstablished) return Throw.TypeError('an admitted own element was removed before publication');
         if ((object as OrdinaryObject).Extensible === Value.false) return Throw.TypeError('a nonextensible array cannot initialize missing own elements');
         missing.push({ object: object as OrdinaryObject, key: property, value: position.value });
-      } else if (!independentlyEstablished && ((!position.own && !IsDataDescriptor(desc))
-          || (IsDataDescriptor(desc) && !SameValue(desc.Value!, position.value)))) {
+      } else if (!IsDataDescriptor(desc) || (!independentlyEstablished && !SameValue(desc.Value!, position.value))) {
         return Throw.TypeError('an independent definition conflicts with element initialization');
       }
     }

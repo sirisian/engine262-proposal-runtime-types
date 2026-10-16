@@ -1,0 +1,380 @@
+{
+  "note": "Host-created invalid/legacy backing, not constructible through supported typed Array operations. These cases preserve defensive mutation checks without endorsing accessor storage.",
+  "cases": [
+    {
+      "name": "legacy host fixture: rejected plan precedes suffix getter",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,boolean]=raw;let reads=0;defineLegacyAccessor(raw,\"1\",{get(){reads++;return true;},configurable:true});function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>raw.pop())+\"/\"+reads+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/2"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/tuple-suffix-storage.json"
+    },
+    {
+      "name": "legacy host fixture: plan precedes element access reverse()",
+      "steps": [
+        {
+          "source": "let gets=0;const t:[uint8,uint16]=[1,258];defineLegacyAccessor(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.reverse();}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/tuple-mutation-plans.json"
+    },
+    {
+      "name": "legacy host fixture: plan precedes element access copyWithin(0,1,2)",
+      "steps": [
+        {
+          "source": "let gets=0;const t:[uint8,uint16]=[1,258];defineLegacyAccessor(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.copyWithin(0,1,2);}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/tuple-mutation-plans.json"
+    },
+    {
+      "name": "legacy host fixture: plan precedes element access sort()",
+      "steps": [
+        {
+          "source": "let gets=0;const t:[uint8,uint16]=[1,258];defineLegacyAccessor(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.sort();}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/tuple-mutation-plans.json"
+    },
+    {
+      "name": "legacy host fixture: plan precedes element access pop()",
+      "steps": [
+        {
+          "source": "let gets=0;const t:[uint8,uint16]=[1,258];defineLegacyAccessor(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.pop();}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/tuple-mutation-plans.json"
+    },
+    {
+      "name": "legacy host fixture: plan precedes element access shift()",
+      "steps": [
+        {
+          "source": "let gets=0;const t:[uint8,uint16]=[1,258];defineLegacyAccessor(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.shift();}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/tuple-mutation-plans.json"
+    },
+    {
+      "name": "legacy host fixture: plan precedes element access splice(0,1)",
+      "steps": [
+        {
+          "source": "let gets=0;const t:[uint8,uint16]=[1,258];defineLegacyAccessor(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.splice(0,1);}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/tuple-mutation-plans.json"
+    },
+    {
+      "name": "legacy host fixture: plan precedes element access fill(7)",
+      "steps": [
+        {
+          "source": "let gets=0;const t:[uint8,uint16]=[1,258];defineLegacyAccessor(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.fill(7);}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/tuple-mutation-plans.json"
+    },
+    {
+      "name": "legacy host fixture: later ordinary write failure preserves earlier writes",
+      "steps": [
+        {
+          "source": "let n=0;const t:[uint8,uint8]=[1,2];defineLegacyAccessor(t,\"1\",{get(){return (2:=uint8);},set(v){n++;throw \"setter\";}});function run(a:any){let e=\"none\";try{a.fill(9);}catch(x){e=String(x);}return e+\"/\"+String(a[0])+\"/\"+String(n);}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "setter/9/1"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/tuple-mutation-plans.json"
+    },
+    {
+      "name": "legacy host fixture: allowed movement retains getter order",
+      "steps": [
+        {
+          "source": "let log=\"\";const t:[uint8,uint8]=[1,2];defineLegacyAccessor(t,\"0\",{get(){log+=\"a\";return (1:=uint8);},set(v){log+=\"A\";}});defineLegacyAccessor(t,\"1\",{get(){log+=\"b\";return (2:=uint8);},set(v){log+=\"B\";}});function run(a:any){a.reverse();return log;}run(t);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "abAB"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/tuple-mutation-plans.json"
+    },
+    {
+      "name": "legacy host fixture: replacement callback sees old tail and live reference",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3,4];let ref tail=a[3];const raw:any=a;let seen=\"\";defineLegacyAccessor(raw,\"0\",{get(){return 1;},set(v){seen=raw.length+\":\"+Object.keys(raw).join(\",\")+\":\"+tail;}});raw.splice(0,3,9);seen+\"/\"+raw.length+\"/\"+attempt(()=>{String(tail);});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "4:0,1,2,3:4/2/TypeError"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/typed-storage-deletion.json"
+    },
+    {
+      "name": "legacy host fixture: callback cannot inherit removal permission",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3];const raw:any=a;let seen=\"\";defineLegacyAccessor(raw,\"0\",{get(){return 1;},set(v){seen=attempt(()=>{Reflect.deleteProperty(raw,\"2\");});}});raw.shift();seen+\"/\"+raw.length+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/2/0,1"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/typed-storage-deletion.json"
+    },
+    {
+      "name": "legacy host fixture: late descriptor change uses ordinary partial final truncation",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3,4];let ref tail=a[3];const raw:any=a;defineLegacyAccessor(raw,\"0\",{get(){return 1;},set(v){Object.defineProperty(raw,\"2\",{configurable:false});}});attempt(()=>{raw.splice(0,3,9);})+\"/\"+raw.length+\"/\"+Object.keys(raw).join(\",\")+\"/\"+attempt(()=>{String(tail);});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/3/0,1,2/TypeError"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/typed-storage-deletion.json"
+    },
+    {
+      "name": "legacy host fixture: pop getter append cancels stale removal",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2];const raw:any=a;defineLegacyAccessor(raw,\"1\",{get(){raw[2]=9;return 2;}});attempt(()=>{raw.pop();})+\"/\"+raw.length+\"/\"+raw[2]+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/3/9/0,1,2"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/typed-storage-deletion.json"
+    },
+    {
+      "name": "legacy host fixture: shift getter shrink cancels stale movement",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3];const raw:any=a;defineLegacyAccessor(raw,\"0\",{get(){raw.length=2;return 1;},set(v){throw new Error(\"stale\");}});attempt(()=>{raw.shift();})+\"/\"+raw.length+\"/\"+raw[1];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/2/2"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/typed-storage-deletion.json"
+    },
+    {
+      "name": "legacy host fixture: independent nested pop survives outer cancellation",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2];const raw:any=a;let once=true;defineLegacyAccessor(raw,\"1\",{get(){if(once){once=false;raw.pop();}return 2;}});attempt(()=>{raw.pop();})+\"/\"+raw.length+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/1/1"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/typed-storage-deletion.json"
+    },
+    {
+      "name": "legacy host fixture: earlier getter throw precedes conflict report",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2];const raw:any=a;defineLegacyAccessor(raw,\"1\",{get(){raw[2]=9;throw new RangeError(\"getter\");}});attempt(()=>{raw.pop();})+\"/\"+raw.length+\"/\"+raw[2];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/3/9"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/typed-storage-deletion.json"
+    },
+    {
+      "name": "legacy host fixture: capacity-only callback change does not cancel removal",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[1,2];const raw:any=a;defineLegacyAccessor(raw,\"1\",{get(){a.reserve(8);return 2;}});String(raw.pop())+\"/\"+raw.length+\"/\"+a.capacity;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/1/8"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/typed-storage-deletion.json"
+    },
+    {
+      "name": "legacy host fixture: value-only callback change remains observable",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[1,2];const raw:any=a;defineLegacyAccessor(raw,\"1\",{get(){raw[0]=9;return 2;}});String(raw.pop())+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/9"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/typed-storage-deletion.json"
+    },
+    {
+      "name": "legacy host fixture: removal scope is cleared after setter failure",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3];const raw:any=a;defineLegacyAccessor(raw,\"0\",{get(){return 1;},set(v){throw new Error(\"stop\");}});attempt(()=>{raw.shift();});raw[3]=7;String(raw.length)+\"/\"+raw[3]+\"/\"+attempt(()=>{delete raw[3];});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "4/7/TypeError"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/typed-storage-deletion.json"
+    },
+    {
+      "name": "legacy host fixture: fixed extent removal still fails before getter",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[2].<uint8>=[1,2];const raw:any=a;let hits=0;defineLegacyAccessor(raw,\"1\",{get(){hits++;return 2;}});attempt(()=>{raw.pop();})+\"/\"+hits+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/2"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/typed-storage-deletion.json"
+    },
+    {
+      "name": "legacy host fixture: getter observes only the published extent",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[1,2];const raw:any=a;let seen=\"\";defineLegacyAccessor(raw,\"0\",{get(){seen+=raw.length+\":\"+Object.keys(raw).join(\",\")+\";\";return 1;},set(v){}});raw.unshift(8,9);seen+\"/\"+raw.length+\"/\"+raw[2]+\"/\"+raw[3];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2:0,1;/4/1/2"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/array-insertion-initialization.json"
+    },
+    {
+      "name": "legacy host fixture: callback append publishes independently and cancels stale insertion",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1];const raw:any=a;defineLegacyAccessor(raw,\"0\",{get(){raw[1]=7;return 1;},set(v){}});attempt(()=>{raw.unshift(8,9);})+\"/\"+raw.length+\"/\"+raw[1]+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/2/7/0,1"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/array-insertion-initialization.json"
+    },
+    {
+      "name": "legacy host fixture: late nonextensibility retains writes and rejects tail",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1];const raw:any=a;defineLegacyAccessor(raw,\"0\",{get(){return 1;},set(v){Object.preventExtensions(raw);}});attempt(()=>{raw.unshift(8,9);})+\"/\"+raw.length+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/0"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/array-insertion-initialization.json"
+    },
+    {
+      "name": "legacy host fixture: conversion-created tail destination survives stale outer definition",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type Dim={m:number};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float64{operator float64.<{m:1}>():float64.<{m:1}>{globalThis.onDefault();return this;}}globalThis.onDefault=()=>{};const a:[].<float64.<{m:1}>>=[];const raw:any=a;raw[0]=99;const seed:any=raw[0];defineLegacyAccessor(raw,\"0\",{get(){return 5;},set(v){}});let once=true;globalThis.onDefault=()=>{if(once){once=false;raw[1]=seed;}};attempt(()=>{raw.unshift(8);})+\"/\"+raw.length+\"/\"+Number(raw[1]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/2/99"
+          }
+        }
+      ],
+      "origin": "test/engine262/runtime-types/conformance/array-insertion-initialization.json"
+    }
+  ]
+}

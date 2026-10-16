@@ -1,0 +1,704 @@
+{
+  "cases": [
+    {
+      "name": "own accessor admission [].<number>",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let reads=0;let writes=0;const raw:any=[7];const getter=()=>{reads++;return 7;};Object.defineProperty(raw,\"0\",{get:getter,set(v){writes++;},configurable:true});const result=attempt(()=>{const a:[].<number>=raw;});result+\"/\"+reads+\"/\"+writes+\"/\"+String(Object.getOwnPropertyDescriptor(raw,\"0\").get===getter)+\"/\"+Reflect.deleteProperty(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/0/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "own accessor admission [1].<number>",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let reads=0;let writes=0;const raw:any=[7];const getter=()=>{reads++;return 7;};Object.defineProperty(raw,\"0\",{get:getter,set(v){writes++;},configurable:true});const result=attempt(()=>{const a:[1].<number>=raw;});result+\"/\"+reads+\"/\"+writes+\"/\"+String(Object.getOwnPropertyDescriptor(raw,\"0\").get===getter)+\"/\"+Reflect.deleteProperty(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/0/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "own accessor admission [number]",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let reads=0;let writes=0;const raw:any=[7];const getter=()=>{reads++;return 7;};Object.defineProperty(raw,\"0\",{get:getter,set(v){writes++;},configurable:true});const result=attempt(()=>{const a:[number]=raw;});result+\"/\"+reads+\"/\"+writes+\"/\"+String(Object.getOwnPropertyDescriptor(raw,\"0\").get===getter)+\"/\"+Reflect.deleteProperty(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/0/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "own accessor admission [...[].<number>]",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let reads=0;let writes=0;const raw:any=[7];const getter=()=>{reads++;return 7;};Object.defineProperty(raw,\"0\",{get:getter,set(v){writes++;},configurable:true});const result=attempt(()=>{const a:[...[].<number>]=raw;});result+\"/\"+reads+\"/\"+writes+\"/\"+String(Object.getOwnPropertyDescriptor(raw,\"0\").get===getter)+\"/\"+Reflect.deleteProperty(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/0/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "own accessor admission [number=7]",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let reads=0;let writes=0;const raw:any=[7];const getter=()=>{reads++;return 7;};Object.defineProperty(raw,\"0\",{get:getter,set(v){writes++;},configurable:true});const result=attempt(()=>{const a:[number=7]=raw;});result+\"/\"+reads+\"/\"+writes+\"/\"+String(Object.getOwnPropertyDescriptor(raw,\"0\").get===getter)+\"/\"+Reflect.deleteProperty(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/0/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "own accessor admission [].<any>",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let reads=0;let writes=0;const raw:any=[7];const getter=()=>{reads++;return 7;};Object.defineProperty(raw,\"0\",{get:getter,set(v){writes++;},configurable:true});const result=attempt(()=>{const a:[].<any>=raw;});result+\"/\"+reads+\"/\"+writes+\"/\"+String(Object.getOwnPropertyDescriptor(raw,\"0\").get===getter)+\"/\"+Reflect.deleteProperty(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/0/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed element replacement {get(){return \"wrong\";}}",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];const raw:any=a;attempt(()=>{Reflect.defineProperty(raw,\"0\",{get(){return \"wrong\";}});})+\"/\"+raw[0]+\"/\"+String(Object.hasOwn(Object.getOwnPropertyDescriptor(raw,\"0\"),\"value\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed element replacement {set(v){}}",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];const raw:any=a;attempt(()=>{Reflect.defineProperty(raw,\"0\",{set(v){}});})+\"/\"+raw[0]+\"/\"+String(Object.hasOwn(Object.getOwnPropertyDescriptor(raw,\"0\"),\"value\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed element replacement {get:undefined}",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];const raw:any=a;attempt(()=>{Reflect.defineProperty(raw,\"0\",{get:undefined});})+\"/\"+raw[0]+\"/\"+String(Object.hasOwn(Object.getOwnPropertyDescriptor(raw,\"0\"),\"value\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed element replacement {set:undefined}",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];const raw:any=a;attempt(()=>{Reflect.defineProperty(raw,\"0\",{set:undefined});})+\"/\"+raw[0]+\"/\"+String(Object.hasOwn(Object.getOwnPropertyDescriptor(raw,\"0\"),\"value\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed element replacement {get(){return 7;},set(v){}}",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];const raw:any=a;attempt(()=>{Reflect.defineProperty(raw,\"0\",{get(){return 7;},set(v){}});})+\"/\"+raw[0]+\"/\"+String(Object.hasOwn(Object.getOwnPropertyDescriptor(raw,\"0\"),\"value\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "backing kind replacement [1].<uint8>",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[1].<uint8>=[7];const raw:any=a;attempt(()=>{Object.defineProperty(raw,\"0\",{get(){return 9;}});})+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "backing kind replacement [uint8]",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[uint8]=[7];const raw:any=a;attempt(()=>{Object.defineProperty(raw,\"0\",{get(){return 9;}});})+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "backing kind replacement [...[].<uint8>,uint8]",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[...[].<uint8>,uint8]=[7];const raw:any=a;attempt(()=>{Object.defineProperty(raw,\"0\",{get(){return 9;}});})+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "backing kind replacement [].<any>",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<any>=[7];const raw:any=a;attempt(()=>{Object.defineProperty(raw,\"0\",{get(){return 9;}});})+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "new accessor below fixed extent refuses",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[2].<uint8>=[1,2];const raw:any=a;attempt(()=>{Reflect.defineProperty(raw,\"1\",{get(){return 9;}});})+\"/\"+raw[1];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "new accessor beyond dynamic length refuses",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];const raw:any=a;attempt(()=>{Reflect.defineProperty(raw,\"1\",{get(){return 9;}});})+\"/\"+raw.length+\"/\"+Object.hasOwn(raw,\"1\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nonwritable length retains earlier ordinary refusal",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[7];const raw:any=a;Object.defineProperty(raw,\"length\",{writable:false});String(Reflect.defineProperty(raw,\"1\",{get(){return 9;}}))+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nonconfigurable data cannot become accessor",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];const raw:any=a;Object.defineProperty(raw,\"0\",{configurable:false});attempt(()=>{Reflect.defineProperty(raw,\"0\",{get(){return 9;}});})+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "descriptor conversion effects precede storage refusal",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];const raw:any=a;let reads=0;const desc={get get(){reads++;raw.extra=9;return ()=>8;}};attempt(()=>{Object.defineProperty(raw,\"0\",desc);})+\"/\"+reads+\"/\"+raw.extra+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/9/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid descriptor retains its earlier exception",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];const raw:any=a;let log=\"\";attempt(()=>{Object.defineProperty(raw,\"0\",{get get(){log+=\"g\";throw new RangeError(\"descriptor\");}});})+\"/\"+log+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/g/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "defineProperties preserves earlier successful definitions",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2];const raw:any=a;attempt(()=>{Object.defineProperties(raw,{\"0\":{value:7},\"1\":{get(){return 9;}}});})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed replacement leaves live element reference",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];const raw:any=a;let ref b=a[0];const error=attempt(()=>{Object.defineProperty(raw,\"0\",{get(){return 9;}});});b=8;error+\"/\"+String(b)+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/8/8"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary property accessor references still invoke both halves",
+      "steps": [
+        {
+          "source": "let held=7;let reads=0;let writes=0;const raw:any={get x(){reads++;return held;},set x(v){writes++;held=v;}};let ref b=raw.x;b=9;String(b)+\"/\"+reads+\"/\"+writes;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "9/1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary Array accessor reference remains ordinary before failed admission",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let held=7;let writes=0;const raw:any=[7];Object.defineProperty(raw,\"0\",{get(){return held;},set(v){writes++;held=v;},configurable:true});let ref b=raw[0];const error=attempt(()=>{const a:[].<number>=raw;});b=9;error+\"/\"+String(b)+\"/\"+writes;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/9/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named and noncanonical keys retain accessors",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[7];const raw:any=a;for(const key of [\"extra\",\"-0\",\"01\"]){Object.defineProperty(raw,key,{get(){return 9;},configurable:true});}String(raw.extra)+\"/\"+raw[\"-0\"]+\"/\"+raw[\"01\"]+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "9/9/9/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "symbol property accessor remains ordinary",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[7];const raw:any=a;const key=Symbol();Object.defineProperty(raw,key,{get(){return 9;}});String(raw[key]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic descriptor retains existing data",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[7];const raw:any=a;Object.defineProperty(raw,\"0\",{enumerable:false});raw[0]=9;String(raw[0])+\"/\"+Object.getOwnPropertyDescriptor(raw,\"0\").enumerable;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "9/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "read-only data is still admissible",
+      "steps": [
+        {
+          "source": "const raw:any=[7];Object.defineProperty(raw,\"0\",{writable:false,configurable:false});const a:[].<number>=raw;String(a===raw)+\"/\"+raw[0]+\"/\"+Object.getOwnPropertyDescriptor(raw,\"0\").writable;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/7/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nonconfigurable own accessor is not materialized",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let reads=0;const raw:any=[7];Object.defineProperty(raw,\"0\",{get(){reads++;return 7;},configurable:false});attempt(()=>{const a:[].<number>=raw;})+\"/\"+reads+\"/\"+String(typeof Object.getOwnPropertyDescriptor(raw,\"0\").get);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/function"
+          }
+        }
+      ]
+    },
+    {
+      "name": "getter-only and setter-only with undefined reject",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let writes=0;const raw:any=[undefined];Object.defineProperty(raw,\"0\",{set(v){writes++;},configurable:true});attempt(()=>{const a:[].<undefined>=raw;})+\"/\"+writes+\"/\"+String(raw[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pure membership keeps accessor observation",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[7];Object.defineProperty(raw,\"0\",{get(){reads++;return 7;},configurable:true});String(raw is [].<number>)+\"/\"+reads+\"/\"+String(typeof Object.getOwnPropertyDescriptor(raw,\"0\").get);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1/function"
+          }
+        }
+      ]
+    },
+    {
+      "name": "membership narrowing does not bypass accessor preflight",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[7];Object.defineProperty(raw,\"0\",{get(){return 7;},configurable:true});let error=\"missed\";if(raw is [].<number>){error=attempt(()=>{const a:[].<number>=raw;});}error;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any boundary does not acquire owned storage",
+      "steps": [
+        {
+          "source": "const raw:any=[7];Object.defineProperty(raw,\"0\",{get(){return 9;}});const a:any=raw;String(a===raw)+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic own accessor refuses before setter materialization",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;let writes=0;const raw:any=[id];Object.defineProperty(raw,\"0\",{get(){reads++;return id;},set(v){writes++;throw new RangeError(\"setter\");},configurable:true});attempt(()=>{const a:[].<F>=raw;})+\"/\"+reads+\"/\"+writes;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later membership exception precedes accessor preflight",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let reads=0;const raw:any=[7,7];Object.defineProperty(raw,\"0\",{get(){reads++;return 7;}});Object.defineProperty(raw,\"1\",{get(){throw new RangeError(\"later\");}});attempt(()=>{const a:[].<number>=raw;})+\"/\"+reads;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested preflight refuses before unrelated materialization writes",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let writes=0;const raw:any=[7];Object.defineProperty(raw,\"0\",{get(){return 7;}});const obj:any={get f(){return id;},set f(v){writes++;},a:raw};attempt(()=>{const a:{f:F,a:[].<number>}=obj;})+\"/\"+writes+\"/\"+Reflect.deleteProperty(obj,\"a\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected union does not retry after accessor preflight",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let reads=0;const raw:any=[7];Object.defineProperty(raw,\"0\",{get(){reads++;return 7;}});attempt(()=>{const a:[].<number>|null=raw;})+\"/\"+reads;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inherited accessor still initializes missing own data",
+      "steps": [
+        {
+          "source": "let reads=0;const proto=Object.create(Array.prototype);Object.defineProperty(proto,\"0\",{get(){reads++;return 7;}});const raw:any=[,];Object.setPrototypeOf(raw,proto);const a:[].<number>=raw;String(a===raw)+\"/\"+reads+\"/\"+Object.hasOwn(Object.getOwnPropertyDescriptor(raw,\"0\"),\"value\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit dense copy leaves source accessor untouched",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[7];Object.defineProperty(raw,\"0\",{get(){reads++;return 7;}});const copy:any=[...raw];const a:[].<number>=copy;String(a===raw)+\"/\"+reads+\"/\"+Object.hasOwn(Object.getOwnPropertyDescriptor(raw,\"0\"),\"get\")+\"/\"+Object.hasOwn(Object.getOwnPropertyDescriptor(copy,\"0\"),\"value\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/1/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "actual elementwise conversion copies accessor values",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[7];Object.defineProperty(raw,\"0\",{get(){reads++;return 7;}});const a:any=raw := [].<uint8>;String(a===raw)+\"/\"+reads+\"/\"+a[0]+\"/\"+Object.hasOwn(Object.getOwnPropertyDescriptor(raw,\"0\"),\"get\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/2/7/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "compatible explicit cast retains admission refusal",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[7];Object.defineProperty(raw,\"0\",{get(){return 7;}});attempt(()=>{const a:any=raw := [].<number>;});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "getter independently replaces itself with matching data",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[7];Object.defineProperty(raw,\"0\",{get(){reads++;Object.defineProperty(raw,\"0\",{value:7,writable:false,configurable:true});return 7;},configurable:true});const a:[].<number>=raw;String(a===raw)+\"/\"+reads+\"/\"+Object.getOwnPropertyDescriptor(raw,\"0\").writable;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later materialization installing accessor cancels all publication",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[7];const obj:any={a:raw,get f(){return id;},set f(v){Object.defineProperty(raw,\"0\",{get(){return 7;},configurable:true});}};attempt(()=>{const a:{a:[].<number>,f:F}=obj;})+\"/\"+String(typeof Object.getOwnPropertyDescriptor(raw,\"0\").get)+\"/\"+Reflect.deleteProperty(obj,\"a\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/function/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "late accessor leaves previously planned holes unpublished",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const left:any=[,];const right:any=[7];const obj:any={left,right,get f(){return id;},set f(v){Object.defineProperty(right,\"0\",{get(){return 7;},configurable:true});}};attempt(()=>{const a:{left:[].<undefined>,right:[].<number>,f:F}=obj;})+\"/\"+Object.hasOwn(left,\"0\")+\"/\"+Reflect.deleteProperty(obj,\"left\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "late accessor exception does not roll back ordinary materialization",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let writes=0;const raw:any=[7];const obj:any={a:raw,get f(){return id;},set f(v){writes++;Object.defineProperty(raw,\"0\",{get(){return 7;},configurable:true});}};attempt(()=>{const a:{a:[].<number>,f:F}=obj;})+\"/\"+writes+\"/\"+String(raw[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "legacy getter definition spelling also refuses typed elements",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];const raw:any=a;attempt(()=>{Object.prototype.__defineGetter__.call(raw,\"0\",()=>9);})+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "independent descriptor effects retain reference invalidation",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];const raw:any=a;let ref b=a[0];const desc={get get(){raw.length=0;return ()=>9;}};const error=attempt(()=>{Object.defineProperty(raw,\"0\",desc);});error+\"/\"+raw.length+\"/\"+attempt(()=>{String(b);});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "independent required property retains its accessor refusal",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[7];const a:{\"0\":number}=raw;attempt(()=>{Object.defineProperty(raw,\"0\",{get(){return 9;}});})+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "independent required property propagates data-value refusal",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[7];const a:{\"0\":number}=raw;attempt(()=>{Reflect.defineProperty(raw,\"0\",{value:\"wrong\"});})+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7"
+          }
+        }
+      ]
+    }
+  ]
+}

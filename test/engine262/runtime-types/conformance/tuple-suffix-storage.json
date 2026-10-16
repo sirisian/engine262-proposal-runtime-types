@@ -687,10 +687,10 @@
       ]
     },
     {
-      "name": "repeated callable observations materialize once per location",
+      "name": "inherited repeated callable observations materialize once per location",
       "steps": [
         {
-          "source": "function id<T:type>(x:T):T{return x;}let reads=0,writes=0;let saved:any=id;const raw:any=[\"a\",id];Object.defineProperty(raw,\"1\",{get(){reads++;return saved;},set(v){writes++;saved=v;},configurable:true});const t:[...[].<string>,(x:string)=>string]=raw;reads+\"/\"+writes+\"/\"+String(saved===id.<string>);",
+          "source": "function id<T:type>(x:T):T{return x;}let reads=0,writes=0;let saved:any=id;const raw:any=[\"a\",id];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,2);delete raw[1];Object.defineProperty(accessorPrototype,\"1\",{get(){reads++;return saved;},set(v){writes++;saved=v;},configurable:true});const t:[...[].<string>,(x:string)=>string]=raw;reads+\"/\"+writes+\"/\"+String(saved===id.<string>);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -864,20 +864,6 @@
             "bodyEntered": true,
             "scriptBodies": 1,
             "value": "TypeError/a,c"
-          }
-        }
-      ]
-    },
-    {
-      "name": "rejected plan precedes suffix getter",
-      "steps": [
-        {
-          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,boolean]=raw;let reads=0;Object.defineProperty(raw,\"1\",{get(){reads++;return true;},configurable:true});function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>raw.pop())+\"/\"+reads+\"/\"+raw.length;",
-          "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0/2"
           }
         }
       ]

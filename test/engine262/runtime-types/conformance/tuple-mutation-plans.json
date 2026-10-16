@@ -631,104 +631,6 @@
       ]
     },
     {
-      "name": "plan precedes element access reverse()",
-      "steps": [
-        {
-          "source": "let gets=0;const t:[uint8,uint16]=[1,258];Object.defineProperty(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.reverse();}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
-          "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
-          }
-        }
-      ]
-    },
-    {
-      "name": "plan precedes element access copyWithin(0,1,2)",
-      "steps": [
-        {
-          "source": "let gets=0;const t:[uint8,uint16]=[1,258];Object.defineProperty(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.copyWithin(0,1,2);}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
-          "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
-          }
-        }
-      ]
-    },
-    {
-      "name": "plan precedes element access sort()",
-      "steps": [
-        {
-          "source": "let gets=0;const t:[uint8,uint16]=[1,258];Object.defineProperty(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.sort();}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
-          "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
-          }
-        }
-      ]
-    },
-    {
-      "name": "plan precedes element access pop()",
-      "steps": [
-        {
-          "source": "let gets=0;const t:[uint8,uint16]=[1,258];Object.defineProperty(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.pop();}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
-          "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
-          }
-        }
-      ]
-    },
-    {
-      "name": "plan precedes element access shift()",
-      "steps": [
-        {
-          "source": "let gets=0;const t:[uint8,uint16]=[1,258];Object.defineProperty(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.shift();}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
-          "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
-          }
-        }
-      ]
-    },
-    {
-      "name": "plan precedes element access splice(0,1)",
-      "steps": [
-        {
-          "source": "let gets=0;const t:[uint8,uint16]=[1,258];Object.defineProperty(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.splice(0,1);}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
-          "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
-          }
-        }
-      ]
-    },
-    {
-      "name": "plan precedes element access fill(7)",
-      "steps": [
-        {
-          "source": "let gets=0;const t:[uint8,uint16]=[1,258];Object.defineProperty(t,\"0\",{get(){gets++;throw \"read\";},configurable:true});function run(a:any){let e=\"none\";try{a.fill(7);}catch(x){e=x.name||x;}return e+\"/\"+String(gets);}run(t);",
-          "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "TypeError/0"
-          }
-        }
-      ]
-    },
-    {
       "name": "sort plan precedes comparator",
       "steps": [
         {
@@ -808,34 +710,6 @@
             "bodyEntered": true,
             "scriptBodies": 1,
             "value": "5,258"
-          }
-        }
-      ]
-    },
-    {
-      "name": "later ordinary write failure preserves earlier writes",
-      "steps": [
-        {
-          "source": "let n=0;const t:[uint8,uint8]=[1,2];Object.defineProperty(t,\"1\",{get(){return (2:=uint8);},set(v){n++;throw \"setter\";}});function run(a:any){let e=\"none\";try{a.fill(9);}catch(x){e=String(x);}return e+\"/\"+String(a[0])+\"/\"+String(n);}run(t);",
-          "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "setter/9/1"
-          }
-        }
-      ]
-    },
-    {
-      "name": "allowed movement retains getter order",
-      "steps": [
-        {
-          "source": "let log=\"\";const t:[uint8,uint8]=[1,2];Object.defineProperty(t,\"0\",{get(){log+=\"a\";return (1:=uint8);},set(v){log+=\"A\";}});Object.defineProperty(t,\"1\",{get(){log+=\"b\";return (2:=uint8);},set(v){log+=\"B\";}});function run(a:any){a.reverse();return log;}run(t);",
-          "expected": {
-            "completion": "normal",
-            "bodyEntered": true,
-            "scriptBodies": 1,
-            "value": "abAB"
           }
         }
       ]

@@ -477,10 +477,10 @@
       ]
     },
     {
-      "name": "accessor reads once writes once",
+      "name": "inherited accessor reads once writes once",
       "steps": [
         {
-          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;let writes=0;let held:any=id;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});const t:[F]=raw;String(reads)+\"/\"+String(writes)+\"/\"+String(held===id.<string>);",
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;let writes=0;let held:any=id;const raw:any=[];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,1);delete raw[0];Object.defineProperty(accessorPrototype,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});const t:[F]=raw;String(reads)+\"/\"+String(writes)+\"/\"+String(held===id.<string>);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -491,10 +491,10 @@
       ]
     },
     {
-      "name": "shared tuple paths coalesce writes",
+      "name": "inherited shared tuple paths coalesce writes",
       "steps": [
         {
-          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;let writes=0;let held:any=id;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});const o:{a:[F],b:[F]}={a:raw,b:raw};String(reads)+\"/\"+String(writes)+\"/\"+String(held===id.<string>);",
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;let writes=0;let held:any=id;const raw:any=[];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,1);delete raw[0];Object.defineProperty(accessorPrototype,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});const o:{a:[F],b:[F]}={a:raw,b:raw};String(reads)+\"/\"+String(writes)+\"/\"+String(held===id.<string>);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -505,10 +505,10 @@
       ]
     },
     {
-      "name": "unchanged accessor needs no write",
+      "name": "inherited unchanged accessor needs no write",
       "steps": [
         {
-          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;let writes=0;let held:any=id.<string>;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});const t:[F]=raw;String(reads)+\"/\"+String(writes);",
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;let writes=0;let held:any=id.<string>;const raw:any=[];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,1);delete raw[0];Object.defineProperty(accessorPrototype,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});const t:[F]=raw;String(reads)+\"/\"+String(writes);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -519,10 +519,10 @@
       ]
     },
     {
-      "name": "getter-only element refuses changed value",
+      "name": "inherited getter-only element refuses changed value",
       "steps": [
         {
-          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return id;}});let result=\"missed\";try{const t:[F]=raw;}catch(e){result=e.name;}result+\"/\"+String(reads);",
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;const raw:any=[];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,1);delete raw[0];Object.defineProperty(accessorPrototype,\"0\",{get(){reads++;return id;}});let result=\"missed\";try{const t:[F]=raw;}catch(e){result=e.name;}result+\"/\"+String(reads);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -561,10 +561,10 @@
       ]
     },
     {
-      "name": "throwing setter preserves exception",
+      "name": "inherited throwing setter preserves exception",
       "steps": [
         {
-          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;let writes=0;let held:any=id;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return held;},set(v){throw new RangeError(\"setter\");},configurable:true});let result=\"missed\";try{const t:[F]=raw;}catch(e){result=e.name;}result+\"/\"+String(reads);",
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;let writes=0;let held:any=id;const raw:any=[];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,1);delete raw[0];Object.defineProperty(accessorPrototype,\"0\",{get(){reads++;return held;},set(v){throw new RangeError(\"setter\");},configurable:true});let result=\"missed\";try{const t:[F]=raw;}catch(e){result=e.name;}result+\"/\"+String(reads);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -701,10 +701,10 @@
       ]
     },
     {
-      "name": "all reads precede specialization",
+      "name": "inherited all reads precede specialization",
       "steps": [
         {
-          "source": "let trace=\"\";const gate:any={get value(){trace+=\"w\";return true;}};function id<T:type>(x:T):T where gate.value{return x;}const raw:any=[];Object.defineProperty(raw,\"0\",{get(){trace+=\"a\";return id;},set(v){trace+=\"A\";}});Object.defineProperty(raw,\"1\",{get(){trace+=\"b\";return id;},set(v){trace+=\"B\";}});const t:[(x:string)=>string,...[].<(x:string)=>string>]=raw;trace;",
+          "source": "let trace=\"\";const gate:any={get value(){trace+=\"w\";return true;}};function id<T:type>(x:T):T where gate.value{return x;}const raw:any=[];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,2);delete raw[0];delete raw[1];Object.defineProperty(accessorPrototype,\"0\",{get(){trace+=\"a\";return id;},set(v){trace+=\"A\";}});Object.defineProperty(accessorPrototype,\"1\",{get(){trace+=\"b\";return id;},set(v){trace+=\"B\";}});const t:[(x:string)=>string,...[].<(x:string)=>string>]=raw;trace;",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -715,10 +715,10 @@
       ]
     },
     {
-      "name": "reentrant boundary retains broad backing",
+      "name": "inherited reentrant boundary retains broad backing",
       "steps": [
         {
-          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let held:any=id;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){return held;},set(v){held=v;const inner:[any]=raw;},configurable:true});const t:[F]=raw;raw[0]=1;String(raw[0]);",
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let held:any=id;const raw:any=[];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,1);delete raw[0];Object.defineProperty(accessorPrototype,\"0\",{get(){return held;},set(v){held=v;const inner:[any]=raw;},configurable:true});const t:[F]=raw;raw[0]=1;String(raw[0]);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
@@ -855,15 +855,15 @@
       ]
     },
     {
-      "name": "value copy retains accessor observation",
+      "name": "inherited value copy retains accessor observation",
       "steps": [
         {
-          "source": "class P{value:uint8=1;}const p:P=new P();let reads=0;let writes=0;let held:any=p;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});const t:[P]=raw;const again:[P]=raw;p.value=2;String(reads)+\"/\"+String(writes)+\"/\"+String(held.value)+\"/\"+String(typeof Object.getOwnPropertyDescriptor(raw,\"0\").get);",
+          "source": "class P{value:uint8=1;}const p:P=new P();let reads=0;let writes=0;let held:any=p;const raw:any=[];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,1);delete raw[0];Object.defineProperty(accessorPrototype,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});const t:[P]=raw;const again:[P]=raw;p.value=2;String(reads)+\"/\"+String(writes)+\"/\"+String(held.value)+\"/\"+String(typeof Object.getOwnPropertyDescriptor(raw,\"0\").get);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
             "scriptBodies": 1,
-            "value": "2/1/1/function"
+            "value": "1/1/1/undefined"
           }
         }
       ]

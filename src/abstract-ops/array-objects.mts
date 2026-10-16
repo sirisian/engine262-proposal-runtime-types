@@ -128,9 +128,11 @@ const InternalMethods = {
       if (R(index) >= R(length) && lengthDesc.Writable === Value.false) {
         return Value.false;
       }
+      if (surroundingAgent.feature('runtime-types') && HasTypedArrayBacking(array) && IsAccessorDescriptor(Desc)) {
+        return Throw.TypeError('an owned typed array position requires a data property');
+      }
       if (surroundingAgent.feature('runtime-types') && HasTypedArrayBacking(array)
           && R(index) < R(length) && OrdinaryGetOwnProperty(array, P) === Value.undefined) {
-        if (IsAccessorDescriptor(Desc)) return Throw.TypeError('a new typed array position requires a data value');
         if (Desc.Value === undefined) {
           if (array.Extensible === Value.false) return Value.false;
           const backing = array as ArrayBacking;
@@ -149,7 +151,6 @@ const InternalMethods = {
         }
       }
       if (surroundingAgent.feature('runtime-types') && HasTypedArrayBacking(array) && R(index) >= R(length)) {
-        if (IsAccessorDescriptor(Desc)) return Throw.TypeError('a new typed array position requires a data value');
         if (insertion) {
           if (array.Extensible === Value.false) return Value.false;
           insertion.values.set(R(index), Desc);
@@ -158,7 +159,9 @@ const InternalMethods = {
         return yield* GrowInitializedArray(array, R(length), R(index) + 1,
           Descriptor({ Value: F(R(index) + 1) }), new Map([[R(index), Desc]]));
       }
-      let succeeded = X(OrdinaryDefineOwnProperty(array, P, Desc));
+      // Independently acquired object-property contracts can refuse this
+      // definition even on an otherwise untyped Array. Propagate that error.
+      let succeeded = Q(yield* OrdinaryDefineOwnProperty(array, P, Desc));
       if (succeeded === Value.false) {
         return Value.false;
       }
