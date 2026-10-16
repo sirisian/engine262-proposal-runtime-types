@@ -1,4 +1,4 @@
-import type { TypeRecord } from './records.mts';
+import type { TypeRecord, TupleElementRecord } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
 import { SameType } from './relations.mts';
 import { ObjectValue, NumberValue, Value, R } from '#self';
@@ -13,6 +13,63 @@ export type TupleStorageShape = {
 };
 
 type TupleStorageRunRecord = { Type: TypeRecord, Count: number };
+
+/** Placement is a property of the effective sequence, not written spread
+ * markers. An open operand defers its obligation until specialization. */
+export function TupleDefaultPlacementError(type: TypeRecord & { Kind: 'tuple' }): string | undefined {
+  let defaulted = false;
+  let unbounded = false;
+  let error: string | undefined;
+  const active = new Set<TypeRecord>();
+  const required = (count: number) => {
+    if (count > 0 && defaulted) error = 'a tuple position without a default may not follow one with a default';
+  };
+  const visit = (tuple: TypeRecord & { Kind: 'tuple' }): boolean => {
+    if (active.has(tuple)) return false;
+    active.add(tuple);
+    for (const element of tuple.Elements) {
+      if (!element.Rest) {
+        if (element.Initial !== 'none' || element.DeclaredDefault) {
+          if (unbounded) error = 'a tuple position with a default may not follow a rest';
+          defaulted = true;
+        } else required(1);
+      } else if (element.Type.Kind === 'tuple') {
+        if (!visit(element.Type)) return false;
+      } else if (element.Type.Kind === 'array') {
+        if (element.Type.Extent === 'dynamic') unbounded = true;
+        else if (typeof element.Type.Extent === 'number') required(element.Type.Extent);
+        else return false;
+      } else return false;
+      if (error) return true;
+    }
+    active.delete(tuple);
+    return true;
+  };
+  visit(type);
+  return error;
+}
+
+/** Locate construction metadata without expanding a finite array extent.
+ * No default is legal after an unbounded rest. */
+export function TuplePrefixElement(type: TypeRecord & { Kind: 'tuple' }, index: number): TupleElementRecord | undefined {
+  for (const element of type.Elements) {
+    if (!element.Rest) {
+      if (index === 0) return element;
+      index -= 1;
+    } else if (element.Type.Kind === 'array' && typeof element.Type.Extent === 'number') {
+      if (index < element.Type.Extent) return { Type: element.Type.Element, Rest: false, Initial: 'none' };
+      index -= element.Type.Extent;
+    } else if (element.Type.Kind === 'tuple') {
+      const shape = TupleStorageShapeOf(element.Type);
+      if (!shape) return undefined;
+      const prefix = TuplePrefixLength(shape);
+      if (index < prefix) return TuplePrefixElement(element.Type, index);
+      if (shape.Rest) return undefined;
+      index -= prefix;
+    } else return undefined;
+  }
+  return undefined;
+}
 
 export function TupleStorageShapeOf(type: TypeRecord): TupleStorageShape | undefined {
   if (type.Kind !== 'tuple') return undefined;
@@ -32,6 +89,8 @@ export function TupleStorageShapeOf(type: TypeRecord): TupleStorageShape | undef
     for (const element of tuple.Elements) {
       if (!element.Rest) {
         const optional = element.Initial !== 'none' || element.DeclaredDefault;
+        if (optional && rest) return false;
+        if (!optional && hasDefaults) return false;
         hasDefaults ||= !!optional;
         if (!optional) required += 1;
         append(element.Type, 1);
@@ -42,6 +101,7 @@ export function TupleStorageShapeOf(type: TypeRecord): TupleStorageShape | undef
         if (element.Type.Extent === 'dynamic' && !rest) rest = element.Type.Element;
         else if (typeof element.Type.Extent === 'number' && Number.isSafeInteger(element.Type.Extent) && element.Type.Extent >= 0) {
           expanded = true;
+          if (element.Type.Extent > 0 && hasDefaults) return false;
           required += element.Type.Extent;
           append(element.Type.Element, element.Type.Extent);
         } else return false;
@@ -51,11 +111,10 @@ export function TupleStorageShapeOf(type: TypeRecord): TupleStorageShape | undef
     return true;
   };
   if (!visit(type) || !Number.isSafeInteger(required)) return undefined;
-  // Expanded defaults need formation/provenance rules of their own. This
-  // compact representation covers required finite runs and one dynamic rest.
-  if (hasDefaults && (expanded || suffix.length)) return undefined;
+  if (hasDefaults && suffix.length) return undefined;
   if (expanded) return { Positions: [], Rest: rest, Runs: { Prefix: prefix, Suffix: suffix,
-    PrefixLength: prefix.reduce((n, run) => n + run.Count, 0), SuffixLength: suffix.reduce((n, run) => n + run.Count, 0) } };
+    PrefixLength: prefix.reduce((n, run) => n + run.Count, 0), SuffixLength: suffix.reduce((n, run) => n + run.Count, 0) },
+    ...(hasDefaults ? { MinimumLength: required } : {}) };
   return { Positions: prefix.map((run) => run.Type), Rest: rest,
     ...(suffix.length ? { Suffix: suffix.map((run) => run.Type) } : {}),
     ...(hasDefaults ? { MinimumLength: required } : {}) };

@@ -1,4 +1,4 @@
-import { TupleStorageShapeOf, TupleLengthRange, TupleStorageTypeAt, TupleFixedPositions, TupleBackingLength, type TupleStorageShape } from '../type-system/tuple-storage.mts';
+import { TupleStorageShapeOf, TupleLengthRange, TupleStorageTypeAt, TuplePrefixLength, TuplePrefixElement, TupleFixedPositions, TupleBackingLength, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { MetadataStorageKey, MetadataKey, MetadataKeys, MetadataEntries } from '../type-system/metadata-keys.mts';
 import { isRegExpObject } from '../intrinsics/RegExp.mts';
 import type { CapturedTypeContext } from '../type-system/runtime.mts';
@@ -171,14 +171,14 @@ function carryStringType(value: Value, t: TypeRecord): Value {
 function ValidateTupleDefaultConstruction(parts: readonly TupleDefaultConstruction[]): ThrowCompletion | undefined {
   const plans = parts.flatMap((part) => part.plans);
   const first = plans[0]!;
-  const length = first.type.Elements.length;
+  const length = first.length;
   for (const plan of plans) {
-    if (plan.object !== first.object || plan.values.length !== first.values.length || plan.type.Elements.length !== length) {
+    if (plan.object !== first.object || plan.values.length !== first.values.length || plan.length !== length) {
       return Throw.TypeError('the retained tuple constructions have incompatible lengths');
     }
     for (let i = plan.values.length; i < length; i += 1) {
-      const initial = plan.type.Elements[i]!.Initial;
-      const expected = first.type.Elements[i]!.Initial;
+      const initial = TuplePrefixElement(plan.type, i)!.Initial;
+      const expected = TuplePrefixElement(first.type, i)!.Initial;
       if (initial === 'none' || expected === 'none' || !SameValue(initial, expected)) {
         return Throw.TypeError('the retained tuple constructions have conflicting defaults');
       }
@@ -204,11 +204,11 @@ function* CompleteTupleDefaultConstruction(parts: readonly TupleDefaultConstruct
   const plans = parts.flatMap((part) => part.plans);
   const first = plans[0]!;
   const source = first.object;
-  const length = first.type.Elements.length;
+  const length = first.length;
   const supplied = first.values.length;
   const entries = parts.flatMap((part) => part.storage);
   const values = [...plans[plans.length - 1]!.values];
-  for (let i = supplied; i < length; i += 1) values.push(first.type.Elements[i]!.Initial as Value);
+  for (let i = supplied; i < length; i += 1) values.push(TuplePrefixElement(first.type, i)!.Initial as Value);
   const out = X(ArrayCreate(length));
   for (let i = 0; i < length; i += 1) {
     X(CreateDataPropertyOrThrow(out, Value(String(i)), values[i]!));
@@ -290,7 +290,7 @@ function* CompleteTupleDefaultConstruction(parts: readonly TupleDefaultConstruct
     }
     const type = types.length === 1 ? types[0]! : CanonicalizeType({ Kind: 'intersection', Members: types });
     storage.push({ kind: 'element', object: out, key: String(i), type, admittedType: type, value: values[i]!,
-      defaultCheck: !plans.every((plan) => SameType(plan.type.Elements[i]!.Type, type)) });
+      defaultCheck: !plans.every((plan) => SameType(TuplePrefixElement(plan.type, i)!.Type, type)) });
   }
   storage.push({ kind: 'sequence', object: out, length, positions: values.map((value) => ({ own: true, value })) });
   Q(yield* CompleteStructuralAdmission(storage));
@@ -2411,9 +2411,8 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   // a path that rebuilds one - which is what 481 failing tests were saying.
   let shortOfADefault = false;
   if (t.Kind === 'tuple' && t.Elements.some((e) => e.Initial !== 'none')
-      // A supported trailing rest uses retained construction evidence below;
-      // the rest declaration itself is not an unsupplied fixed position.
-      && TupleStorageShapeOf(t)?.Rest === undefined
+      // Supported domains use retained construction evidence below.
+      && !TupleStorageShapeOf(t)
       && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
     const lengthNow = R(Q(yield* ToNumber(Q(yield* Get(value, Value('length'))))) as NumberValue);
     shortOfADefault = lengthNow < t.Elements.length;
@@ -6556,7 +6555,7 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
   const elements = t.Elements;
   const shape = TupleStorageShapeOf(t);
   const rest = elements.find((e) => e.Rest);
-  const fixedCount = elements.filter((e) => !e.Rest).length;
+  const fixedCount = shape ? TuplePrefixLength(shape) : elements.filter((e) => !e.Rest).length;
   // #sec-array-and-tuple-types: a trailing position with a default may be
   // omitted, which is what lets a shorter array satisfy a longer tuple. The
   // floor is therefore the count of positions carrying NEITHER a rest nor a
@@ -6573,11 +6572,12 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
   const out = X(ArrayCreate(filled));
   for (let i = 0; i < filled; i += 1) {
     if (i >= len) {
-      const declaredDefault = elements[i]!.Initial;
+      const position = shape ? TuplePrefixElement(t, i)! : elements[i]!;
+      const declaredDefault = position.Initial;
       if (declaredDefault === 'none') {
         return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
       }
-      const convertedDefault = Q(yield* convertElement(declaredDefault, elements[i]!.Type));
+      const convertedDefault = Q(yield* convertElement(declaredDefault, position.Type));
       X(CreateDataPropertyOrThrow(out, Value(String(i)), convertedDefault));
       continue;
     }

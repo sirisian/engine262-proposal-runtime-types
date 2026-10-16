@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { nativeErrorClass } from '../error-observer.mts';
-import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf } from '#self';
+import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf, type Value as EngineValue } from '#self';
 
 const corpus = JSON.parse(readFileSync(new URL('../conformance/sparse-storage-admission.json', import.meta.url), 'utf8')) as {
   cases: { name: string; limits?: { steps?: number; records?: number; depth?: number }; steps: { source: string; expected: Record<string, unknown>; messageIncludes?: string }[] }[];
@@ -62,7 +62,7 @@ test('cross-realm incoming sparse storage preserves identity and custom prototyp
   const selected = EnsureCompletion(foreign.evaluateScriptSkipDebugger('const proto=Object.create(Array.prototype);proto[0]=7;const raw:any=[,];Object.setPrototypeOf(raw,proto);raw;'));
   expect(selected.Type).toBe('normal');
   const realm = new ManagedRealm();
-  X(CreateDataPropertyOrThrow(realm.GlobalObject, Value('foreignRaw'), selected.Value as Value));
+  X(CreateDataPropertyOrThrow(realm.GlobalObject, Value('foreignRaw'), selected.Value as EngineValue));
   const result = EnsureCompletion(realm.evaluateScriptSkipDebugger('const before=Object.getPrototypeOf(foreignRaw);const a:[].<number>=foreignRaw;String(a===foreignRaw)+"/"+Object.hasOwn(foreignRaw,"0")+"/"+foreignRaw[0]+"/"+String(before===Object.getPrototypeOf(foreignRaw));'));
   expect(result.Type).toBe('normal');
   expect((result.Value as { stringValue: () => string }).stringValue()).toBe('true/true/7/true');

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { nativeErrorClass } from '../error-observer.mts';
-import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf } from '#self';
+import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf, type Value as EngineValue } from '#self';
 
 const corpus = JSON.parse(readFileSync(new URL('../conformance/typed-array-accessors.json', import.meta.url), 'utf8')) as {
   cases: { name: string; limits?: { steps?: number; records?: number; depth?: number }; steps: { source: string; expected: Record<string, unknown>; messageIncludes?: string }[] }[];
@@ -62,7 +62,7 @@ test('cross-realm reflection refuses accessor replacement', async () => {
   const selected = EnsureCompletion(foreign.evaluateScriptSkipDebugger('Reflect.defineProperty;'));
   expect(selected.Type).toBe('normal');
   const realm = new ManagedRealm();
-  X(CreateDataPropertyOrThrow(realm.GlobalObject, Value('foreignDefine'), selected.Value as Value));
+  X(CreateDataPropertyOrThrow(realm.GlobalObject, Value('foreignDefine'), selected.Value as EngineValue));
   const result = EnsureCompletion(realm.evaluateScriptSkipDebugger('const a:[].<uint8>=[7];const raw:any=a;let error="";try{foreignDefine(raw,"0",{get(){return 9;}});}catch(e){error=e.name;}error+"/"+raw[0];'));
   expect(result.Type).toBe('normal');
   expect((result.Value as { stringValue: () => string }).stringValue()).toBe('TypeError/7');

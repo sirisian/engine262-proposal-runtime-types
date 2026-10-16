@@ -228,15 +228,15 @@ export function CanonicalizeType(t: TypeRecord, copies: Map<TypeRecord, TypeReco
     // string], T]` is `[uint8, string, T]` - which is what lets a spread of a
     // bound variadic parameter, `[...Ts, T]`, intern as the tuple it spells
     // rather than as a tuple holding a tuple.
-    const Elements: { Type: TypeRecord, Rest: boolean, Initial: typeof t.Elements[number]['Initial'] }[] = [];
+    const Elements: (typeof t.Elements)[number][] = [];
     for (const e of t.Elements) {
       const c = CanonicalizeType(e.Type, copies);
       if (e.Rest && c.Kind === 'tuple') {
         for (const n of c.Elements) {
-          Elements.push({ Type: n.Type, Rest: n.Rest, Initial: n.Initial });
+          Elements.push({ ...n });
         }
       } else {
-        Elements.push({ Type: c, Rest: e.Rest, Initial: e.Initial });
+        Elements.push({ ...e, Type: c });
       }
     }
     // #sec-canonicalizetype: a tuple is a product, so a REQUIRED position of

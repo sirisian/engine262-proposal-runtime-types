@@ -66,7 +66,7 @@ import {
 import { CanonicalizeType, GetTypeObject, isTypeObject, isClassTypeObject } from './intern.mts';
 import { invalidTupleRest } from './tuple-rests.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization, ClassTypeEnvironmentOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
-import { TupleStorageShapeOf, TupleLengthRange, TupleStorageTypeAt, type TupleStorageShape } from './tuple-storage.mts';
+import { TupleStorageShapeOf, TupleLengthRange, TupleStorageTypeAt, TuplePrefixLength, TupleSuffixLength, TuplePrefixElement, TupleDefaultPlacementError, type TupleStorageShape } from './tuple-storage.mts';
 import { MetadataStorageKey, MetadataKey, MetadataEntries } from './metadata-keys.mts';
 import { GenericWhereVerified } from './generic-where.mts';
 import { GenericAliasContextOf } from './generic-alias-context.mts';
@@ -3262,10 +3262,14 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
     case 'tuple': {
       const shape = TupleStorageShapeOf(t);
       if (shape?.Runs) {
-        const length = TupleLengthRange(shape).min;
+        const length = TuplePrefixLength(shape) + TupleSuffixLength(shape);
         const out = Q(ArrayCreate(length));
         for (let i = 0; i < length; i += 1) {
-          const value = Q(yield* DefaultValueOf(TupleStorageTypeAt(shape, i, length)!));
+          const type = TupleStorageTypeAt(shape, i, length)!;
+          const initial = TuplePrefixElement(t, i)?.Initial ?? 'none';
+          let value: Value | undefined;
+          if (initial === 'none') value = Q(yield* DefaultValueOf(type));
+          else value = Q(yield* CheckedConvertValue(initial, type));
           if (value === undefined) return undefined;
           X(CreateDataPropertyOrThrow(out, Value(String(i)), value));
         }
@@ -3906,7 +3910,7 @@ export function MayRequireTupleDefaults(t: TypeRecord, seen = new Set<TypeRecord
 
 /** Receiving operations retain a choice for this value, never its children. */
 export type TupleDefaultConstruction = {
-  plans: readonly { object: ObjectValue, type: TypeRecord & { Kind: 'tuple' }, values: readonly Value[] }[],
+  plans: readonly { object: ObjectValue, type: TypeRecord & { Kind: 'tuple' }, length: number, values: readonly Value[] }[],
   storage: readonly StructuralStorageAdmission[],
 };
 export type UnionMemberAdmission = { member?: TypeRecord, construction?: TupleDefaultConstruction };
@@ -4315,8 +4319,10 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       if (tupleShape?.Runs) {
         const range = TupleLengthRange(tupleShape);
         if (len < range.min || len > range.max) return false;
+        const values: Value[] = [];
         for (let i = 0; i < len; i += 1) {
           const el = Q(yield* observe(i));
+          values.push(el);
           const type = TupleStorageTypeAt(tupleShape, i, len)!;
           const admitted: UnionMemberAdmission | undefined = storage ? {} : undefined;
           const childStart = storage?.length;
@@ -4326,6 +4332,10 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         }
         storage?.push({ kind: 'tuple', object: value, shape: tupleShape });
         retainSequence();
+        const length = TuplePrefixLength(tupleShape);
+        if (storage && selection && tupleShape.MinimumLength !== undefined && len < length && Q(IsArray(value)) === Value.true) {
+          selection.construction = { plans: [{ object: value, type: t, length, values }], storage: [] };
+        }
         return true;
       }
       const restCount = t.Elements.filter((e) => e.Rest).length;
@@ -4360,7 +4370,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         if (storage && selection && tupleShape && len < fixed.length && Q(IsArray(value)) === Value.true) {
           // The construction plan contains the positions to fill. The retained
           // tuple evidence above carries the complete domain, including rest.
-          selection.construction = { plans: [{ object: value, type: { ...t, Elements: fixed }, values }], storage: [] };
+          selection.construction = { plans: [{ object: value, type: { ...t, Elements: fixed }, length: fixed.length, values }], storage: [] };
         }
         return true;
       }
@@ -6259,17 +6269,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
     }
     case 'TupleType': {
       const Elements: { Type: TypeRecord, Rest: boolean, Initial: Value | 'none' }[] = [];
-      let sawDefault = false;
-      let sawRest = false;
       for (const e of node.TupleElementList) {
-        // Defaults may finish the fixed prefix before a rest. They cannot
-        // precede a required non-rest position or follow a rest.
-        if (sawDefault && !e.Initializer && !e.Rest) {
-          return Throw.TypeError('$1 is not a type', Value('a tuple position without a default may not follow one with a default'));
-        }
-        if (sawRest && e.Initializer) {
-          return Throw.TypeError('$1 is not a type', Value('a tuple position with a default may not follow a rest'));
-        }
         const Type = Q(yield* TypeNodeToTypeRecord(e.Type));
         let Initial: Value | 'none' = 'none';
         if (e.Initializer) {
@@ -6289,14 +6289,14 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
             return Throw.TypeError('a tuple element default must be compile-time evaluable, and $1 is not', Value(outsideElement));
           }
           Initial = Q(yield* evaluateTypeInitializer(e.Initializer, Type, 'a tuple element default'));
-          sawDefault = true;
         }
-        if (e.Rest) {
-          sawRest = true;
-        }
-        Elements.push({ Type, Rest: e.Rest, Initial });
+        if (e.Rest && Type.Kind === 'tuple') Elements.push(...Type.Elements);
+        else Elements.push({ Type, Rest: e.Rest, Initial });
       }
-      return { Kind: 'tuple', Elements };
+      const type = { Kind: 'tuple' as const, Elements };
+      const placement = TupleDefaultPlacementError(type);
+      if (placement) return Throw.TypeError('$1 is not a type', Value(placement));
+      return type;
     }
     case 'PatternType':
       // table-metadata-values: source and flags, never a RegExp object.

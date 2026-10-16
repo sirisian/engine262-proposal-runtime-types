@@ -443,6 +443,12 @@ export interface TupleElementRecord {
   readonly DeclaredDefault?: boolean;
   /** Source of the default until the pre-evaluation check can evaluate it. */
   readonly InitializerNode?: ParseNode;
+  /**
+   * Source generic environment; ordinary type substitution must not rebind
+   * these names. Closed obligations are recorded when the declaring context
+   * is specialized, independently of the consumer's element-type substitution.
+   */
+  readonly InitializerBindings?: ReadonlyMap<string, TypeRecord>;
 }
 
 /**

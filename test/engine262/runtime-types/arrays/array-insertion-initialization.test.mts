@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { nativeErrorClass } from '../error-observer.mts';
-import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf } from '#self';
+import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf, type Value as EngineValue, type ObjectValue as EngineObjectValue } from '#self';
 
 const corpus = JSON.parse(readFileSync(new URL('../conformance/array-insertion-initialization.json', import.meta.url), 'utf8')) as {
   cases: { name: string; limits?: { steps?: number; records?: number; depth?: number }; steps: { source: string; expected: Record<string, unknown>; messageIncludes?: string }[] }[];
@@ -63,7 +63,7 @@ test('a cross-realm intrinsic stages the receiving array tail', async () => {
   const selected = EnsureCompletion(foreign.evaluateScriptSkipDebugger('Array.prototype.unshift;'));
   expect(selected.Type).toBe('normal');
   const realm = new ManagedRealm();
-  X(CreateDataPropertyOrThrow(realm.GlobalObject, Value('foreignUnshift'), selected.Value as Value));
+  X(CreateDataPropertyOrThrow(realm.GlobalObject, Value('foreignUnshift'), selected.Value as EngineValue));
   const result = EnsureCompletion(realm.evaluateScriptSkipDebugger('const a:[].<uint8>=[1];const raw:any=a;foreignUnshift.call(raw,8,9);raw.join(",");'));
   expect(result.Type).toBe('normal');
   expect((result.Value as { stringValue: () => string }).stringValue()).toBe('8,9,1');
@@ -95,7 +95,7 @@ for (const type of ['uint8', '()=>number']) {
     expect(result.Type).toBe('normal');
     expect(result.Value).toBeInstanceOf(ObjectValue);
     // Host fixture: do not endorse program-visible deletion of typed storage.
-    (result.Value as ObjectValue).properties.delete(Value('0'));
+    (result.Value as EngineObjectValue).properties.delete(Value('0'));
     const observed = EnsureCompletion(realm.evaluateScriptSkipDebugger('let error="none";try{Reflect.defineProperty(raw,"0",{});}catch(e){error=e.name;}error+"/"+String(raw[0])+"/"+Object.hasOwn(raw,"0");'));
     expect(observed.Type).toBe('normal');
     expect((observed.Value as { stringValue: () => string }).stringValue()).toBe(type === 'uint8' ? 'none/0/true' : 'TypeError/undefined/false');

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { nativeErrorClass } from '../error-observer.mts';
-import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf } from '#self';
+import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf, type Value as EngineValue } from '#self';
 
 const corpus = JSON.parse(readFileSync(new URL('../conformance/tuple-mutation-plans.json', import.meta.url), 'utf8')) as {
   cases: { name: string; limits?: { steps?: number; records?: number; depth?: number }; steps: { source: string; expected: Record<string, unknown>; messageIncludes?: string }[] }[];
@@ -61,7 +61,7 @@ test('a cross-realm intrinsic checks the receiving tuple backing', async () => {
   const selected = EnsureCompletion(foreign.evaluateScriptSkipDebugger('Array.prototype.reverse;'));
   expect(selected.Type).toBe('normal');
   const realm = new ManagedRealm();
-  X(CreateDataPropertyOrThrow(realm.GlobalObject, Value('foreignReverse'), selected.Value as Value));
+  X(CreateDataPropertyOrThrow(realm.GlobalObject, Value('foreignReverse'), selected.Value as EngineValue));
   const result = EnsureCompletion(realm.evaluateScriptSkipDebugger('const t:[uint8,uint16]=[1,258];let e="none";try{foreignReverse.call(t);}catch(x){e=x.name;}e+"/"+t.join(",");'));
   expect(result.Type).toBe('normal');
   expect((result.Value as { stringValue: () => string }).stringValue()).toBe('TypeError/1,258');

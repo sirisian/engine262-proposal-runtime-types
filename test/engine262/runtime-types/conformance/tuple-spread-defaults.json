@@ -1,0 +1,1166 @@
+{
+  "cases": [
+    {
+      "name": "nested computed omission",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[...[number=3+4]]=raw;String(t.length)+\"/\"+t[0]+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested literal omission",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[...[number=7]]=raw;String(t.length)+\"/\"+t[0]+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested default construction",
+      "steps": [
+        {
+          "source": "let t:[...[number=3+4]];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed prefix plus spread defaults",
+      "steps": [
+        {
+          "source": "const raw:any=[1];const t:[number,...[string=\"s\",boolean=true]]=raw;t.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,s,true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple spread before own default",
+      "steps": [
+        {
+          "source": "const t:[...[number],string=\"s\"]=[1];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default before spread required",
+      "steps": [
+        {
+          "source": "const t:[number=7,...[string]]=[];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_REQUIRED",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default followed by spread defaults",
+      "steps": [
+        {
+          "source": "const t:[number=7,...[string=\"s\"]]=[];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7,s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested dynamic before default invalid",
+      "steps": [
+        {
+          "source": "const t:[...[...[].<number>],number=7]=[];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_REQUIRED",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite before default",
+      "steps": [
+        {
+          "source": "const t:[...[2].<number>,string=\"s\"]=[1,2];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2,s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default before finite required invalid",
+      "steps": [
+        {
+          "source": "const t:[number=7,...[2].<string>]=[];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_REQUIRED",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero finite before default",
+      "steps": [
+        {
+          "source": "const t:[...[0].<never>,number=7]=[];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero finite after default",
+      "steps": [
+        {
+          "source": "const t:[number=7,...[0].<never>]=[];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite default construction",
+      "steps": [
+        {
+          "source": "let t:[...[2].<number>,string=\"s\"];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0,0,s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite default trailing dynamic",
+      "steps": [
+        {
+          "source": "const raw:any=[1,2];const t:[...[2].<number>,string=\"s\",...[].<boolean>]=raw;t.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2,s/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested alias default",
+      "steps": [
+        {
+          "source": "type Tail=[number=3+4];const raw:any=[];const t:[...Tail]=raw;t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic value default",
+      "steps": [
+        {
+          "source": "type Tail<N:number>=[number=N+1];const raw:any=[];const t:[...Tail.<6>]=raw;t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic extent default",
+      "steps": [
+        {
+          "source": "type Tail<N:uint64>=[...[N].<number>,string=\"s\"];const raw:any=[1,2];const t:Tail.<2>=raw;t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2,s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic effective placement valid zero",
+      "steps": [
+        {
+          "source": "type Tail<N:uint64>=[number=7,...[N].<string>];const raw:any=[];const t:Tail.<0>=raw;t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic effective placement invalid nonzero",
+      "steps": [
+        {
+          "source": "type Tail<N:uint64>=[number=7,...[N].<string>];const raw:any=[];const t:Tail.<1>=raw;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_REQUIRED",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "lexical default shadow",
+      "steps": [
+        {
+          "source": "const n=7;type Tail=[number=n];function f(){const n=9;const raw:any=[];const t:[...Tail]=raw;return t[0];}String(f());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dependent lexical generic",
+      "steps": [
+        {
+          "source": "type Tail<N:number>=[number=N+1];function f<N:number>(){const raw:any=[];const t:[...Tail.<N>]=raw;return t[0];}String(f.<6>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union selected omission",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:null|[...[number=3+4]]=raw;const v:any=t;String(v.length);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pure membership",
+      "steps": [
+        {
+          "source": "const raw:any=[];String(raw is [...[number=7]])+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite pure membership",
+      "steps": [
+        {
+          "source": "const raw:any=[1,2];String(raw is [...[2].<number>,string=\"s\"])+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity default flatten",
+      "steps": [
+        {
+          "source": "String(type [...[number=3+4]]===type [number=7]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid unused default",
+      "steps": [
+        {
+          "source": "type Tail=[uint8=300];type T=[...Tail];\"ran\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_CONVERSION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested spread fully supplied identity",
+      "steps": [
+        {
+          "source": "const raw:any=[4];const t:[...[number=7]]=raw;String(t===raw)+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite default fully supplied identity",
+      "steps": [
+        {
+          "source": "const raw:any=[1,2,\"v\"];const t:[...[2].<number>,string=\"s\"]=raw;String(t===raw)+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1,2,v"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retained getter once",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return 5;}});const t:[number,...[number=7]]=raw;reads+\"/\"+t.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/5,7/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite retained getter once",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return 5;}});const t:[...[1].<number>,number=7]=raw;reads+\"/\"+t.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/5,7/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "short finite before getter",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return 5;}});attempt(()=>{const t:[...[2].<number>,number=7]=raw;})+\"/\"+reads;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite numeric conversion fills default",
+      "steps": [
+        {
+          "source": "const raw:any=[1,2];const t:[...[2].<uint8>,uint8=7]=raw;t.join(\",\")+\"/\"+String(t[0] is uint8)+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2,7/true/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite explicit conversion",
+      "steps": [
+        {
+          "source": "const raw:any=[257,258];const t=raw := [...[2].<uint8>,uint8=7];t.join(\",\")+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2,7/257,258"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested numeric conversion",
+      "steps": [
+        {
+          "source": "const raw:any=[1];const t:[...[uint8,uint8=7]]=raw;t.join(\",\")+\"/\"+String(t[0] is uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,7/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default before rest cannot skip",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[\"wrong\"];attempt(()=>{const t:[...[number=7],...[].<string>]=raw;});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "supplied undefined is not omission",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[undefined];attempt(()=>{const t:[...[number=7]]=raw;});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "hole is not omission",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[,];attempt(()=>{const t:[...[number=7]]=raw;});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested finite default stores",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2];const t:[...[...[2].<number>,number=7]]=raw;const v:any=t;attempt(()=>{v[2]=\"bad\";})+\"/\"+t.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,2,7/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional finite tail shrink and growth",
+      "steps": [
+        {
+          "source": "const raw:any=[1,2];const t:[...[2].<number>,number=7]=raw;const v:any=t;v.length=2;v.length=3;t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2,0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite default required minimum",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let t:[...[2].<number>,number=7];const v:any=t;attempt(()=>{v.length=1;})+\"/\"+t.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite default reference removal",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let t:[...[2].<number>,number=7];const v:any=t;let ref x=v[2];v.length=2;v.length=3;attempt(()=>{x=8;})+\"/\"+v[2];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite default slice produced positions",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let t:[...[2].<number>,number=7];const v:any=t;v.length=2;const c:any=t.slice(1);attempt(()=>{c.push(8);})+\"/\"+c.join(\",\")+\"/\"+v.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic callable supplied then default",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const raw:any=[id];const t:[...[(x:string)=>string,number=7]]=raw;String(t[0]===id.<string>)+\"/\"+t[1]+\"/\"+String(raw[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/7/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite generic callable supplied then default",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const raw:any=[id,id];const t:[...[2].<(x:string)=>string>,number=7]=raw;String(t[0]===id.<string>)+\"/\"+String(t[1]===id.<string>)+\"/\"+t[2]+\"/\"+String(raw[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/7/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested object default admission",
+      "steps": [
+        {
+          "source": "const raw:any={p:[]};const t:{p:[...[number=7]]}=raw;String(t===raw)+\"/\"+raw.p.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "array of defaulted tuple spreads",
+      "steps": [
+        {
+          "source": "const raw:any=[[],[]];const t:[].<[...[number=7]]>=raw;String(t===raw)+\"/\"+raw[0].join(\",\")+\"/\"+raw[1].join(\",\")+\"/\"+String(raw[0]!==raw[1]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/7/7/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "setter receives completed finite tuple",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let result=\"\";const raw:any={get p(){return [0,0,0];},set p(v){result=v.join(\",\")+\"/\"+attempt(()=>{v[2]=\"bad\";});}};const t:{p:[...[2].<number>,number=7]}=raw;t.p=[1,2];result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2,7/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite union selected construction",
+      "steps": [
+        {
+          "source": "const raw:any=[1,2];const t:null|[...[2].<number>,number=7]=raw;const v:any=t;v.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2,7/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overlapping same expanded defaults",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[...[number=7]]&[number=7]=raw;t.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overlapping conflicting expanded defaults",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[];attempt(()=>{const t:[...[number=7]]&[number=9]=raw;})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct generic default applications",
+      "steps": [
+        {
+          "source": "type Tail<N:number>=[number=N+1];const raw:any=[];const x:[...Tail.<6>]=raw;const y:[...Tail.<8>]=raw;x[0]+\"/\"+y[0]+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/9/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "lexical type alias identity",
+      "steps": [
+        {
+          "source": "type Tail=[number=7];function f(){type Tail=[number=9];const raw:any=[];const t:[...Tail]=raw;return t[0];}const raw:any=[];const t:[...Tail]=raw;t[0]+\"/\"+f();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested finite zero around defaults",
+      "steps": [
+        {
+          "source": "const t:[...[...[0].<never>,number=7,...[0].<never>]]= [];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "multiple default spreads",
+      "steps": [
+        {
+          "source": "const t:[...[number=7],...[string=\"s\",boolean=true]]= [];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7,s,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "expanded default then empty tuple",
+      "steps": [
+        {
+          "source": "const t:[...[number=7],...[]]= [];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested default plus trailing dynamic",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[...[number=7,...[].<string>]]=raw;t.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested default rest full prefix identity",
+      "steps": [
+        {
+          "source": "const raw:any=[7];const t:[...[number=7,...[].<string>]]=raw;String(t===raw);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unchanged required finite tuple",
+      "steps": [
+        {
+          "source": "let t:[...[2].<number>,boolean];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0,0,false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unchanged plain default tuple",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=7]=raw;t.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two finite runs before default",
+      "steps": [
+        {
+          "source": "const t:[...[1].<number>,...[2].<string>,boolean=true]=[1,\"a\",\"b\"];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,a,b,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite declared default does not alter identity rule",
+      "steps": [
+        {
+          "source": "String(type [...[1].<number>,number=7]===type [number,number=7]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested computed invalid initializer",
+      "steps": [
+        {
+          "source": "type Tail=[uint8=150+150];type T=[...Tail];\"ran\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_CONVERSION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "required suffix behind dynamic after default",
+      "steps": [
+        {
+          "source": "const t:[...[number=7],...[].<string>,boolean]=[];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_REQUIRED",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested default after dynamic",
+      "steps": [
+        {
+          "source": "type Tail=[number=7];const t:[...[].<string>,...Tail]=[];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_REQUIRED",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic default formation even when supplied",
+      "steps": [
+        {
+          "source": "type Tail<N:number>=[uint8=N+1];const t:[...Tail.<300>]=[1];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_CONVERSION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "static finite arity minimum",
+      "steps": [
+        {
+          "source": "const t:[...[2].<number>,number=7]=[1];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "static supplied type still positional",
+      "steps": [
+        {
+          "source": "const t:[...[number=7],...[].<string>]=[\"wrong\"];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "unrelated consumer value generic",
+      "steps": [
+        {
+          "source": "type Tail<N:number>=[uint8=N];function f<N:number>(){const raw:any=[];const t:[...Tail.<1>]=raw;return t[0];}String(f.<300>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outer captured value default",
+      "steps": [
+        {
+          "source": "function f<N:number>(){type Tail=[number=N+1];const raw:any=[];const t:[...Tail]=raw;return t[0];}String(f.<6>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same source different type generic",
+      "steps": [
+        {
+          "source": "type Tail<T:type,N:number>=[T=N];const raw:any=[];const a:[...Tail.<uint8,7>]=raw;const b:[...Tail.<number,9>]=raw;a[0]+\"/\"+b[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic invalid hidden by consumer",
+      "steps": [
+        {
+          "source": "type Tail<N:number>=[uint8=N];function f<N:number>(){const raw:any=[];const t:[...Tail.<300>]=raw;return t[0];}String(f.<1>());",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_CONVERSION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested consumer 1 spread False",
+      "steps": [
+        {
+          "source": "function outer<N:number>(){type Tail=[uint8=N];function inner<N:number>(){const raw:any=[];const t:Tail=raw;return t[0];}return inner.<1>();}String(outer.<1>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested consumer 300 spread False",
+      "steps": [
+        {
+          "source": "function outer<N:number>(){type Tail=[uint8=N];function inner<N:number>(){const raw:any=[];const t:Tail=raw;return t[0];}return inner.<300>();}String(outer.<1>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested consumer 1 spread True",
+      "steps": [
+        {
+          "source": "function outer<N:number>(){type Tail=[uint8=N];function inner<N:number>(){const raw:any=[];const t:[...Tail]=raw;return t[0];}return inner.<1>();}String(outer.<1>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested consumer 300 spread True",
+      "steps": [
+        {
+          "source": "function outer<N:number>(){type Tail=[uint8=N];function inner<N:number>(){const raw:any=[];const t:[...Tail]=raw;return t[0];}return inner.<300>();}String(outer.<1>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid outer default plain",
+      "steps": [
+        {
+          "source": "function outer<N:number>(){type Tail=[uint8=N];function inner<N:number>(){const raw:any=[];const t:Tail=raw;return t[0];}return inner.<1>();}String(outer.<300>());",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_CONVERSION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid outer default spread",
+      "steps": [
+        {
+          "source": "function outer<N:number>(){type Tail=[uint8=N];function inner<N:number>(){const raw:any=[];const t:[...Tail]=raw;return t[0];}return inner.<1>();}String(outer.<300>());",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DEFAULT_CONVERSION",
+              "phase": "pre-evaluation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "outer and inner independent defaults",
+      "steps": [
+        {
+          "source": "function outer<N:number>(){type Tail=[uint8=N];function inner<N:number>(){const raw:any=[];const a:[...Tail]=raw;const b:[number=N]=raw;return a[0]+\"/\"+b[0];}return inner.<300>();}outer.<1>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/300"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested generic alias captures outer",
+      "steps": [
+        {
+          "source": "function outer<N:number>(){type Tail<M:number>=[uint8=N,number=M];function inner<N:number>(){const raw:any=[];const t:[...Tail.<8>]=raw;return t.join(\",\");}return inner.<300>();}outer.<1>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,8"
+          }
+        }
+      ]
+    }
+  ]
+}

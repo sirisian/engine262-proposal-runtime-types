@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { nativeErrorClass } from '../error-observer.mts';
-import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf } from '#self';
+import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf, type Value as EngineValue } from '#self';
 
 const corpus = JSON.parse(readFileSync(new URL('../conformance/array-growth-initialization.json', import.meta.url), 'utf8')) as {
   cases: { name: string; limits?: { steps?: number; records?: number; depth?: number }; steps: { source: string; expected: Record<string, unknown>; messageIncludes?: string }[] }[];
@@ -63,7 +63,7 @@ test('a cross-realm reflected definition initializes target storage', async () =
   const selected = EnsureCompletion(foreign.evaluateScriptSkipDebugger('Reflect.defineProperty;'));
   expect(selected.Type).toBe('normal');
   const realm = new ManagedRealm();
-  X(CreateDataPropertyOrThrow(realm.GlobalObject, Value('foreignDefine'), selected.Value as Value));
+  X(CreateDataPropertyOrThrow(realm.GlobalObject, Value('foreignDefine'), selected.Value as EngineValue));
   const result = EnsureCompletion(realm.evaluateScriptSkipDebugger('const a:[].<uint8>=[7];const raw:any=a;foreignDefine(raw,"length",{value:3});raw.join(",");'));
   expect(result.Type).toBe('normal');
   expect((result.Value as { stringValue: () => string }).stringValue()).toBe('7,0,0');

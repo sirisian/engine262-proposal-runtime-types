@@ -20,7 +20,7 @@ import { firstUnreadableControl, readClassControls, readFieldControls } from '..
 import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
 import { isRangeObject, endpointOf, type RangeObject } from '../intrinsics/Range.mts';
 import type { EnvironmentRecord } from '../execution-context/Environment.mts';
-import { TupleStorageShapeOf, TupleStorageTypeAt, TupleLengthRange, TupleIndexType } from './tuple-storage.mts';
+import { TupleStorageShapeOf, TupleStorageTypeAt, TupleLengthRange, TupleIndexType, TuplePrefixElement, TuplePrefixLength, TupleDefaultPlacementError } from './tuple-storage.mts';
 import { MetadataKeys, MetadataEntries, MetadataKey } from './metadata-keys.mts';
 import { RawOperatorResultType } from './operator-result.mts';
 import { TypeDiagnosticOf, CreateTypeDiagnostic, ReportTypeDiagnostic } from './diagnostics.mts';
@@ -4279,6 +4279,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const typeParameterScopes: Map<string, Known | null>[] = [];
   const typeParameterDeclarations = new WeakMap<Map<string, Known | null>, readonly ParseNode[]>();
+  // Argument scopes identify the declarations they instantiate. A tuple
+  // initializer can belong to an outer alias even while a same-named inner
+  // parameter is being specialized.
+  const typeParameterArguments = new WeakMap<Map<string, Known | null>, ReadonlyMap<ParseNode, TypeRecord>>();
+  const retainTypeArgumentDeclarations = (scope: Map<string, Known | null>, declarations: readonly ParseNode[],
+    bindings: ReadonlyMap<string, TypeRecord>): void => {
+    const inputs = new Map<ParseNode, TypeRecord>();
+    for (const declaration of declarations) {
+      const name = (declaration as ParseNode.TypeParameter).BindingIdentifier?.name;
+      const bound = name && bindings.get(name);
+      if (bound) inputs.set(declaration, bound);
+    }
+    typeParameterArguments.set(scope, inputs);
+  };
   // Complete bounded symbolic domains without replacing the parameter by
   // its constraint. Only a known, unambiguous declaration scope identifies
   // the binder for this transport; substitution-only scopes stay local.
@@ -4802,6 +4816,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
     const visit = (node: ParseNode, available: ReadonlyMap<string, TypeRecord>): void => {
       const scoped = new Map(available);
+      typeParameterArguments.set(scoped, inputs);
       if (node !== declaration) for (const name of typeParameterNamesOf(node) ?? []) scoped.delete(name);
       // Expansion can erase alias bounds, and a callable signature can hide an
       // omitted default. Retain each application after its inference rungs and
@@ -9022,6 +9037,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const scope = new Map<string, Known | null>();
     for (const param of params) scope.set(param.BindingIdentifier.name, null);
     for (const captured of chosen?.Bindings.keys() ?? []) scope.set(captured, null);
+    const selected = chosen?.Declaration as { TypeParameters?: { Captures?: readonly ParseNode[] } } | undefined;
+    retainTypeArgumentDeclarations(scope, [...params, ...(selected?.TypeParameters?.Captures ?? [])],
+      chosen ? new Map([...bindings, ...chosen.Bindings]) : bindings);
     typeParameterScopes.push(scope);
     let body: Known = null;
     try {
@@ -10582,6 +10600,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       bindings.set(pname, resolvedDefault as TypeRecord);
       scope.set(pname, null);
     }
+    retainTypeArgumentDeclarations(scope, params, bindings);
     typeParameterScopes.push(scope);
     let resolvedBody: Known = null;
     try {
@@ -11693,10 +11712,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     checkCopyingDefault(member.Initializer, member.TypeAnnotation ? resolveType(member.TypeAnnotation.Type) : null);
   };
 
-  const checkFilledDefault = (type: TypeRecord, initializer?: ParseNode, value?: Value): void => {
+  const checkFilledDefault = (type: TypeRecord, initializer?: ParseNode, value?: Value, sourceBindings?: ReadonlyMap<string, TypeRecord>): void => {
     if ((initializer || value !== undefined) && !mentionsTypeParameter(type)) {
       const bindings = new Map<string, TypeRecord>();
-      for (const scope of specializedDefaultBindings) for (const [name, bound] of scope) {
+      for (const scope of sourceBindings ? [sourceBindings] : specializedDefaultBindings) for (const [name, bound] of scope) {
         if (bound && !mentionsTypeParameter(bound)) bindings.set(name, bound);
         else bindings.delete(name);
       }
@@ -11768,8 +11787,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (type.Name === 'Composite') checkCompositeArgument(type.Arguments);
       requireWellFormedVector(type);
     } else if (type.Kind === 'tuple') {
+      const placement = TupleDefaultPlacementError(type);
+      if (placement) reportType('rt-type-required', root, '$1 is not a type', Value(placement));
       for (const element of type.Elements) {
-        if (element.InitializerNode) checkFilledDefault(element.Type, element.InitializerNode, element.Initial === 'none' ? undefined : element.Initial);
+        if (element.InitializerNode) checkFilledDefault(element.Type, element.InitializerNode, element.Initial === 'none' ? undefined : element.Initial, element.InitializerBindings);
         checkTypeFormation(element.Type);
       }
     } else if (type.Kind === 'object') {
@@ -11936,7 +11957,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (t.Kind === 'tuple') {
       for (const element of t.Elements) {
         if (element.InitializerNode || element.Initial !== 'none') checkFilledDefault(element.Type, element.InitializerNode,
-          element.Initial === 'none' ? undefined : element.Initial);
+          element.Initial === 'none' ? undefined : element.Initial, element.InitializerBindings);
         else if (!element.Rest) checkDefaultInitialization(element.Type, seen);
       }
     }
@@ -12452,7 +12473,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (genericDeclaration.type === 'TypeAliasDeclaration') {
               if (resolvingAliases.has(genericDeclaration)) return null;
               resolvingAliases.add(genericDeclaration);
-              typeParameterScopes.push(new Map(bindings));
+              const scope = new Map(bindings);
+              retainTypeArgumentDeclarations(scope, genericParameters, bindings);
+              typeParameterScopes.push(scope);
               try {
                 const body = resolveType(genericDeclaration.Type);
                 checkSpecializedDeclaration(genericDeclaration, bindings);
@@ -12779,6 +12802,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               for (const captured of caseBindings?.keys() ?? []) {
                 scope.set(captured, null);
               }
+              retainTypeArgumentDeclarations(scope, aliasParams, bindings);
               typeParameterScopes.push(scope);
               let body: Known = null;
               const guardName = aliasDecl as ParseNode;
@@ -13384,31 +13408,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'TupleType': {
         const Elements = [];
-        let sawDefault = false;
-        let sawRest = false;
         for (const e of node.TupleElementList) {
-          // Defaults occupy the tail of the fixed prefix; a following rest
-          // may be empty. A required non-rest position after a default, or a
-          // default after a rest, remains a declaration error.
-          if (sawDefault && !e.Initializer && !e.Rest) {
-            reportType('rt-type-required', node, '$1 is not a type', Value('a tuple position without a default may not follow one with a default'));
-            return null;
-          }
-          if (sawRest && e.Initializer) {
-            reportType('rt-type-required', node, '$1 is not a type', Value('a tuple position with a default may not follow a rest'));
-            return null;
-          }
-          if (e.Initializer) {
-            sawDefault = true;
-            checkDefaultEvaluability(e.Initializer);
-            checkCopyingDefault(e.Initializer, resolveType(e.Type));
-          }
-          if (e.Rest) {
-            sawRest = true;
-          }
           const r = resolveType(e.Type);
-          if (!r) {
-            return null;
+          if (!r) return null;
+          if (e.Initializer) {
+            checkDefaultEvaluability(e.Initializer);
+            checkCopyingDefault(e.Initializer, r);
           }
           // Preserve a literal value immediately; other defaults retain their
           // source for the pre-evaluation phase. Arity needs only the presence
@@ -13416,11 +13421,39 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const initial = e.Initializer ? staticType(e.Initializer) : null;
           // #sec-array-and-tuple-types: every closed default is validated at
           // formation, whether it folded or needs the checking evaluator.
-          if (e.Initializer) checkFilledDefault(r, e.Initializer, initial?.Kind === 'literal' ? initial.Value : undefined);
-          Elements.push({ Type: e.Rest ? CanonicalizeType(r) : r, Rest: e.Rest, Initial: initial?.Kind === 'literal' ? initial.Value : 'none' as const,
-            DeclaredDefault: !!e.Initializer, InitializerNode: e.Initializer ?? undefined });
+          const sourceBindings = new Map<string, TypeRecord>();
+          if (e.Initializer) for (const name of new Set(typeParameterScopes.flatMap((scope) => [...scope.keys()]))) {
+            const owner = ResolveBindingDeclaration(e.Initializer, name);
+            if (owner?.kind !== 'type-parameter') continue;
+            const list = (owner.node as { TypeParameters?: { TypeParameterList?: readonly ParseNode[], Captures?: readonly ParseNode[] } }).TypeParameters;
+            const parameter = [...(list?.TypeParameterList ?? []), ...(list?.Captures ?? [])]
+              .find((p) => (p as ParseNode.TypeParameter).BindingIdentifier?.name === name);
+            if (!parameter) continue;
+            let captured: TypeRecord = { Kind: 'parameter', Name: name };
+            for (const scope of typeParameterScopes) {
+              if (typeParameterDeclarations.get(scope)?.includes(parameter)) {
+                const constraint = scope.get(name);
+                captured = { Kind: 'parameter', Name: name, ...(constraint ? { Constraint: constraint } : {}) };
+              }
+              const bound = typeParameterArguments.get(scope)?.get(parameter);
+              if (bound) captured = bound;
+            }
+            sourceBindings.set(name, captured);
+          }
+          if (e.Initializer) checkFilledDefault(r, e.Initializer, initial?.Kind === 'literal' ? initial.Value : undefined, sourceBindings);
+          const Type = e.Rest ? CanonicalizeType(r) : r;
+          if (e.Rest && Type.Kind === 'tuple') Elements.push(...Type.Elements);
+          else Elements.push({ Type, Rest: e.Rest, Initial: initial?.Kind === 'literal' ? initial.Value : 'none' as const,
+            DeclaredDefault: !!e.Initializer, InitializerNode: e.Initializer ?? undefined,
+            ...(e.Initializer ? { InitializerBindings: sourceBindings } : {}) });
         }
-        return { Kind: 'tuple', Elements };
+        const type = { Kind: 'tuple' as const, Elements };
+        const placement = TupleDefaultPlacementError(type);
+        if (placement) {
+          reportType('rt-type-required', node, '$1 is not a type', Value(placement));
+          return null;
+        }
+        return type;
       }
       case 'FunctionType': {
         // #sec-function-types: a GENERIC function type, `<T>(x: T) => T`, puts
@@ -20970,6 +21003,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const position = TupleStorageTypeAt(shape, index, elements.length)!;
         requireAssignable(element.type === 'Elision' ? undefinedType : staticTypeIn(element, position), position, node);
       });
+      for (let i = elements.length; i < TuplePrefixLength(shape); i += 1) {
+        const position = TuplePrefixElement(target, i)!;
+        checkFilledDefault(position.Type, position.InitializerNode, position.Initial === 'none' ? undefined : position.Initial, position.InitializerBindings);
+      }
       return;
     }
     // A REST in the TARGET makes the maximum unbounded - but not the minimum.
@@ -21032,7 +21069,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     });
     for (const position of fixed.slice(elements.length)) {
-      checkFilledDefault(position.Type, position.InitializerNode, position.Initial === 'none' ? undefined : position.Initial);
+      checkFilledDefault(position.Type, position.InitializerNode, position.Initial === 'none' ? undefined : position.Initial, position.InitializerBindings);
     }
   };
 

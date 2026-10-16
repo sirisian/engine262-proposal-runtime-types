@@ -18,7 +18,7 @@ for (const { name, steps } of corpus.cases) {
     const realm = new ManagedRealm();
     const pop = realm.pushTopContext();
     try {
-      const define = CreateBuiltinFunction(function* ([object, key, attributes]) {
+      const define = CreateBuiltinFunction(function* ([object, key = Value.undefined, attributes = Value.undefined]) {
         const property = X(yield* ToPropertyKey(key));
         const desc = X(yield* ToPropertyDescriptor(attributes));
         expect(object).toBeInstanceOf(ObjectValue);
