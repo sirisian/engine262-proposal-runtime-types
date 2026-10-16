@@ -3,7 +3,7 @@ import { MetadataStorageKey, MetadataKey, MetadataKeys, MetadataEntries } from '
 import { isRegExpObject } from '../intrinsics/RegExp.mts';
 import type { CapturedTypeContext } from '../type-system/runtime.mts';
 import { RawOperatorResultType } from '../type-system/operator-result.mts';
-import { publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, MayRequireCallableMaterialization, MayRequireTupleDefaults, type StructuralStorageAdmission, type TupleDefaultConstruction, type UnionMemberAdmission } from '../type-system/runtime.mts';
+import { publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, MayRequireCallableMaterialization, MayRequireTupleDefaults, ObserveSequenceLength, ObserveSequenceElement, type SequenceObservation, type StructuralStorageAdmission, type TupleDefaultConstruction, type UnionMemberAdmission } from '../type-system/runtime.mts';
 import { primitiveMembership } from '../type-system/runtime.mts';
 import { currentTypeParameterFrame, SpecializedFunctionSignatureOf } from '../type-system/runtime.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
@@ -592,8 +592,8 @@ function StructuralStorageEstablished(value: Value, type: TypeRecord): boolean {
 /** The specification's last step of #sec-requiretype, and the last step of the
  * checked conversion: a value already of the type passes, anything else is a
  * TypeError. Kept private so that RequireType has exactly one meaning. */
-function* requireMembership(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[]): ValueEvaluator {
-  const ok = Q(yield* IsOfType(value, t, storage));
+function* requireMembership(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], sequence?: SequenceObservation): ValueEvaluator {
+  const ok = Q(yield* IsOfType(value, t, storage, undefined, sequence));
   if (!ok) {
     // proposal-runtime-types #sec-vector-lanes: the broadcast. A value of the
     // lane type is not a MEMBER of the vector type - it converts to one - so
@@ -998,7 +998,7 @@ function TypedNumericMismatch(value: Value, record: TypeRecord): ThrowCompletion
   return undefined;
 }
 
-export function* RequireType(value: Value, t: TypeRecord): ValueEvaluator {
+export function* RequireType(value: Value, t: TypeRecord, sequence?: SequenceObservation): ValueEvaluator {
   // proposal-runtime-types: an UNSUBSTITUTED generic parameter admits any
   // value. At the point a field of type `T` is defined, the application has
   // bound `T` - `new B.<uint8>()` means uint8 - and substituting that binding
@@ -1064,7 +1064,7 @@ export function* RequireType(value: Value, t: TypeRecord): ValueEvaluator {
       }
     }
   }
-  return Q(yield* CheckedConvertValue(value, t));
+  return Q(yield* CheckedConvertValue(value, t, sequence));
 }
 
 /** #sec-the-conversion-rule */
@@ -1562,7 +1562,9 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
   }
   const storage: StructuralStorageAdmission[] = [];
   const selection: UnionMemberAdmission = {};
-  const already = Q(yield* IsOfType(value, t, storage, selection));
+  const sequenceObservation: SequenceObservation | undefined = (t.Kind === 'array' || t.Kind === 'tuple') && value instanceof ObjectValue
+    ? { object: value, elements: new Map() } : undefined;
+  const already = Q(yield* IsOfType(value, t, storage, selection, sequenceObservation));
   if (already) {
     if (selection.construction) value = Q(yield* CompleteTupleDefaultConstruction([selection.construction]));
     else if (selection.member) value = Q(yield* MaterializeGenericCallable(value, selection.member));
@@ -1961,11 +1963,11 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
       && value instanceof ObjectValue && Q(IsArray(value)) === Value.true
       && SoAStorageOf(value as unknown as object) === undefined) {
     if (t.Kind === 'array') {
-      return Q(yield* ConvertArrayElementwise(value, t, ConvertValue));
+      return Q(yield* ConvertArrayElementwise(value, t, ConvertValue, sequenceObservation));
     }
-    return Q(yield* ConvertTupleElementwise(value, t, ConvertValue));
+    return Q(yield* ConvertTupleElementwise(value, t, ConvertValue, sequenceObservation));
   }
-  return Q(yield* RequireType(value, t));
+  return Q(yield* RequireType(value, t, sequenceObservation));
 }
 
 /** Enforces a binding's TypeAnnotation, if any, at initialization. */
@@ -2174,7 +2176,7 @@ function* BoundaryNumericConvert(value: Value, t: TypeRecord & { Kind: 'primitiv
   return converted;
 }
 
-export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
+export function* CheckedConvertValue(value: Value, t: TypeRecord, sequenceObservation?: SequenceObservation): ValueEvaluator {
   value = Q(yield* MaterializeGenericCallable(value, t));
   // sec-user-defined-conversions form 2, tried FIRST because the paths below
   // fork by target kind: a primitive target reaches its own switch and refuses
@@ -2409,12 +2411,14 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   // Only HERE, in the converting operation. RequireType checks and never
   // converts, so the same guard there sent a value it should have accepted down
   // a path that rebuilds one - which is what 481 failing tests were saying.
+  sequenceObservation ??= (t.Kind === 'array' || t.Kind === 'tuple') && value instanceof ObjectValue
+    ? { object: value, elements: new Map() } : undefined;
   let shortOfADefault = false;
   if (t.Kind === 'tuple' && t.Elements.some((e) => e.Initial !== 'none')
       // Supported domains use retained construction evidence below.
       && !TupleStorageShapeOf(t)
       && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
-    const lengthNow = R(Q(yield* ToNumber(Q(yield* Get(value, Value('length'))))) as NumberValue);
+    const lengthNow = Q(yield* SequenceConversionLength(value, sequenceObservation));
     shortOfADefault = lengthNow < t.Elements.length;
   }
   // The same adoption as at the other boundary above, and for the same reason:
@@ -2434,7 +2438,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   }
   const storage: StructuralStorageAdmission[] = [];
   const selection: UnionMemberAdmission = {};
-  const already = shortOfADefault ? false : Q(yield* IsOfType(value, t, storage, selection));
+  const already = shortOfADefault ? false : Q(yield* IsOfType(value, t, storage, selection, sequenceObservation));
   if (already) {
     if (selection.construction) value = Q(yield* CompleteTupleDefaultConstruction([selection.construction]));
     else if (selection.member) value = Q(yield* MaterializeGenericCallable(value, selection.member));
@@ -2922,7 +2926,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   // the caller's storage. A tuple literal builds a NEW array, so there is no
   // aliased storage to protect and the array rule applies unchanged.
   if (t.Kind === 'tuple' && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
-    return Q(yield* ConvertTupleElementwise(value, t, CheckedConvertValue));
+    return Q(yield* ConvertTupleElementwise(value, t, CheckedConvertValue, sequenceObservation));
   }
   if (t.Kind === 'array') {
     // proposal-runtime-types soa.md: "`SoA.<T>` and `[].<T>` are DISTINCT TYPES
@@ -2960,7 +2964,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
         return Throw.TypeError('$1 is not assignable to $2; use a spread to copy it', value, Value(displayType(t)));
       }
       if (isArr === Value.true) {
-        return Q(yield* ConvertArrayElementwise(value, t, CheckedConvertValue));
+        return Q(yield* ConvertArrayElementwise(value, t, CheckedConvertValue, sequenceObservation));
       }
     }
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
@@ -2968,7 +2972,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   // The specification's final step: a target this rule has no conversion for
   // admits only a value already of the type, and otherwise is a TypeError.
   // (This must NOT call RequireType, which delegates here.)
-  return Q(yield* requireMembership(value, t));
+  return Q(yield* requireMembership(value, t, undefined, sequenceObservation));
 }
 
 export function* IsOfTypeNode(value: Value, node: ParseNode.Type): PlainEvaluator<boolean> {
@@ -6502,6 +6506,15 @@ function Float128FromTypedNumber(value: TypedNumberValue): Value {
 /** A conversion of one element to its element or position type - the implicit or the explicit one. */
 type ElementConversion = (v: Value, t: TypeRecord) => ValueEvaluator;
 
+/** Convert the retained length once, including an observable coercion. */
+function* SequenceConversionLength(value: ObjectValue, observation?: SequenceObservation): PlainEvaluator<number> {
+  if (observation?.object === value && observation.conversionLength !== undefined) return observation.conversionLength;
+  const length = Q(yield* ObserveSequenceLength(value, observation));
+  const count = R(Q(yield* ToNumber(length))) as number;
+  if (observation?.object === value) observation.conversionLength = count;
+  return count;
+}
+
 /**
  * An array converted to an array type, element by element, by `convertElement`:
  * the implicit conversion passes CheckedConvertValue, the explicit one passes
@@ -6510,15 +6523,14 @@ type ElementConversion = (v: Value, t: TypeRecord) => ValueEvaluator;
  * element - `[x] := [].<T>` holds what `[x := T]` holds. The fixed extent is a
  * matter of shape, checked in both modes.
  */
-function* ConvertArrayElementwise(value: ObjectValue, t: TypeRecord & { Kind: 'array' }, convertElement: ElementConversion): ValueEvaluator {
-  const lenValue = Q(yield* Get(value, Value('length')));
-  const len = R(Q(yield* ToNumber(lenValue))) as number;
+function* ConvertArrayElementwise(value: ObjectValue, t: TypeRecord & { Kind: 'array' }, convertElement: ElementConversion, observation?: SequenceObservation): ValueEvaluator {
+  const len = Q(yield* SequenceConversionLength(value, observation));
   if (t.Extent !== 'dynamic' && t.Extent !== len) {
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
   }
   const out = X(ArrayCreate(len));
   for (let i = 0; i < len; i += 1) {
-    const el = Q(yield* Get(value, Value(String(i))));
+    const el = Q(yield* ObserveSequenceElement(value, i, observation)).value;
     const converted = Q(yield* convertElement(el, t.Element));
     X(CreateDataPropertyOrThrow(out, Value(String(i)), converted));
   }
@@ -6549,9 +6561,8 @@ function* ConvertArrayElementwise(value: ObjectValue, t: TypeRecord & { Kind: 'a
  * matter of shape, checked in both modes; an unsupplied position takes its
  * default, converted as a supplied value would be.
  */
-function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 'tuple' }, convertElement: ElementConversion): ValueEvaluator {
-  const lenValue = Q(yield* Get(value, Value('length')));
-  const len = R(Q(yield* ToNumber(lenValue))) as number;
+function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 'tuple' }, convertElement: ElementConversion, observation?: SequenceObservation): ValueEvaluator {
+  const len = Q(yield* SequenceConversionLength(value, observation));
   const elements = t.Elements;
   const shape = TupleStorageShapeOf(t);
   const rest = elements.find((e) => e.Rest);
@@ -6586,7 +6597,7 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
     const declared = shape ? TupleStorageTypeAt(shape, i, filled) : i < elements.length && !elements[i]!.Rest
       ? elements[i]!.Type
       : (rest !== undefined ? restElementType(rest.Type) : undefined);
-    const el = Q(yield* Get(value, Value(String(i))));
+    const el = Q(yield* ObserveSequenceElement(value, i, observation)).value;
     const converted = declared === undefined ? el : Q(yield* convertElement(el, declared));
     X(CreateDataPropertyOrThrow(out, Value(String(i)), converted));
   }

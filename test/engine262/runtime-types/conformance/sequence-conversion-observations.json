@@ -1,0 +1,970 @@
+{
+  "cases": [
+    {
+      "name": "implicit one observed value [uint8]",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;if(reads>1)throw new Error(\"replayed\");return 1;}});const t:[uint8]=raw;reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "implicit retained length [uint8]",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=new Proxy([1],{get(target,key,receiver){if(key===\"length\")reads++;return Reflect.get(target,key,receiver);}});const t:[uint8]=raw;reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "implicit one observed value [].<uint8>",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;if(reads>1)throw new Error(\"replayed\");return 1;}});const t:[].<uint8>=raw;reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "implicit retained length [].<uint8>",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=new Proxy([1],{get(target,key,receiver){if(key===\"length\")reads++;return Reflect.get(target,key,receiver);}});const t:[].<uint8>=raw;reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "implicit one observed value [1].<uint8>",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;if(reads>1)throw new Error(\"replayed\");return 1;}});const t:[1].<uint8>=raw;reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "implicit retained length [1].<uint8>",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=new Proxy([1],{get(target,key,receiver){if(key===\"length\")reads++;return Reflect.get(target,key,receiver);}});const t:[1].<uint8>=raw;reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "implicit one observed value [...[1].<uint8>]",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;if(reads>1)throw new Error(\"replayed\");return 1;}});const t:[...[1].<uint8>]=raw;reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "implicit retained length [...[1].<uint8>]",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=new Proxy([1],{get(target,key,receiver){if(key===\"length\")reads++;return Reflect.get(target,key,receiver);}});const t:[...[1].<uint8>]=raw;reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "implicit one observed value [...[].<uint8>]",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;if(reads>1)throw new Error(\"replayed\");return 1;}});const t:[...[].<uint8>]=raw;reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "implicit retained length [...[].<uint8>]",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=new Proxy([1],{get(target,key,receiver){if(key===\"length\")reads++;return Reflect.get(target,key,receiver);}});const t:[...[].<uint8>]=raw;reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "implicit one observed value [...[].<uint8>,...[].<uint8>]",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;if(reads>1)throw new Error(\"replayed\");return 1;}});const t:[...[].<uint8>,...[].<uint8>]=raw;reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "implicit retained length [...[].<uint8>,...[].<uint8>]",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=new Proxy([1],{get(target,key,receiver){if(key===\"length\")reads++;return Reflect.get(target,key,receiver);}});const t:[...[].<uint8>,...[].<uint8>]=raw;reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "implicit one observed value [...[].<uint8>,...[].<boolean>]",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;if(reads>1)throw new Error(\"replayed\");return 1;}});const t:[...[].<uint8>,...[].<boolean>]=raw;reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "implicit retained length [...[].<uint8>,...[].<boolean>]",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=new Proxy([1],{get(target,key,receiver){if(key===\"length\")reads++;return Reflect.get(target,key,receiver);}});const t:[...[].<uint8>,...[].<boolean>]=raw;reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit one observed value [uint8]",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;if(reads>1)throw new Error(\"replayed\");return 1;}});const t=(raw:=[uint8]);reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit retained length [uint8]",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=new Proxy([1],{get(target,key,receiver){if(key===\"length\")reads++;return Reflect.get(target,key,receiver);}});const t=(raw:=[uint8]);reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit one observed value [].<uint8>",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;if(reads>1)throw new Error(\"replayed\");return 1;}});const t=(raw:=[].<uint8>);reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit retained length [].<uint8>",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=new Proxy([1],{get(target,key,receiver){if(key===\"length\")reads++;return Reflect.get(target,key,receiver);}});const t=(raw:=[].<uint8>);reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit one observed value [1].<uint8>",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;if(reads>1)throw new Error(\"replayed\");return 1;}});const t=(raw:=[1].<uint8>);reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit retained length [1].<uint8>",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=new Proxy([1],{get(target,key,receiver){if(key===\"length\")reads++;return Reflect.get(target,key,receiver);}});const t=(raw:=[1].<uint8>);reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit one observed value [...[1].<uint8>]",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;if(reads>1)throw new Error(\"replayed\");return 1;}});const t=(raw:=[...[1].<uint8>]);reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit retained length [...[1].<uint8>]",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=new Proxy([1],{get(target,key,receiver){if(key===\"length\")reads++;return Reflect.get(target,key,receiver);}});const t=(raw:=[...[1].<uint8>]);reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit one observed value [...[].<uint8>]",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;if(reads>1)throw new Error(\"replayed\");return 1;}});const t=(raw:=[...[].<uint8>]);reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit retained length [...[].<uint8>]",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=new Proxy([1],{get(target,key,receiver){if(key===\"length\")reads++;return Reflect.get(target,key,receiver);}});const t=(raw:=[...[].<uint8>]);reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit one observed value [...[].<uint8>,...[].<uint8>]",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;if(reads>1)throw new Error(\"replayed\");return 1;}});const t=(raw:=[...[].<uint8>,...[].<uint8>]);reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit retained length [...[].<uint8>,...[].<uint8>]",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=new Proxy([1],{get(target,key,receiver){if(key===\"length\")reads++;return Reflect.get(target,key,receiver);}});const t=(raw:=[...[].<uint8>,...[].<uint8>]);reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit one observed value [...[].<uint8>,...[].<boolean>]",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;if(reads>1)throw new Error(\"replayed\");return 1;}});const t=(raw:=[...[].<uint8>,...[].<boolean>]);reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit retained length [...[].<uint8>,...[].<boolean>]",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=new Proxy([1],{get(target,key,receiver){if(key===\"length\")reads++;return Reflect.get(target,key,receiver);}});const t=(raw:=[...[].<uint8>,...[].<boolean>]);reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "lazy reads stop on range failure [uint8,uint8]",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let trace=\"\";const raw:any=[];Object.defineProperty(raw,\"0\",{get(){trace+=\"a\";return 300;}});Object.defineProperty(raw,\"1\",{get(){trace+=\"b\";return 1;}});const e=attempt(()=>{const t:[uint8,uint8]=raw;});e+\"/\"+trace;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "first getter exception identity [uint8,uint8]",
+      "steps": [
+        {
+          "source": "const marker={};let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;throw marker;}});Object.defineProperty(raw,\"1\",{get(){reads++;return 1;}});let same=false;try{const t:[uint8,uint8]=raw;}catch(e){same=e===marker;}same+\"/\"+reads;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inherited getters observed once [uint8,uint8]",
+      "steps": [
+        {
+          "source": "let a=0,b=0;const p=Object.create(Array.prototype);Object.defineProperty(p,\"0\",{get(){a++;return 1;}});Object.defineProperty(p,\"1\",{get(){b++;return 2;}});const raw:any=new Array(2);Object.setPrototypeOf(raw,p);const t:[uint8,uint8]=raw;a+\"/\"+b+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1/1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "second read cannot replace first value [uint8,uint8]",
+      "steps": [
+        {
+          "source": "let a=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){return ++a;}});raw[1]=2;const t:[uint8,uint8]=raw;a+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "lazy reads stop on range failure [].<uint8>",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let trace=\"\";const raw:any=[];Object.defineProperty(raw,\"0\",{get(){trace+=\"a\";return 300;}});Object.defineProperty(raw,\"1\",{get(){trace+=\"b\";return 1;}});const e=attempt(()=>{const t:[].<uint8>=raw;});e+\"/\"+trace;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "first getter exception identity [].<uint8>",
+      "steps": [
+        {
+          "source": "const marker={};let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;throw marker;}});Object.defineProperty(raw,\"1\",{get(){reads++;return 1;}});let same=false;try{const t:[].<uint8>=raw;}catch(e){same=e===marker;}same+\"/\"+reads;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inherited getters observed once [].<uint8>",
+      "steps": [
+        {
+          "source": "let a=0,b=0;const p=Object.create(Array.prototype);Object.defineProperty(p,\"0\",{get(){a++;return 1;}});Object.defineProperty(p,\"1\",{get(){b++;return 2;}});const raw:any=new Array(2);Object.setPrototypeOf(raw,p);const t:[].<uint8>=raw;a+\"/\"+b+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1/1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "second read cannot replace first value [].<uint8>",
+      "steps": [
+        {
+          "source": "let a=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){return ++a;}});raw[1]=2;const t:[].<uint8>=raw;a+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "incompatible extent reads no index",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let trace=\"\";const raw:any=new Proxy([1],{get(t,k,r){trace+=k+\",\";return Reflect.get(t,k,r);}});const e=attempt(()=>{const a:[2].<uint8>=raw;});e+\"/\"+trace;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/length,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "incompatible tuple arity reads no index",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let trace=\"\";const raw:any=new Proxy([1],{get(t,k,r){trace+=k+\",\";return Reflect.get(t,k,r);}});const e=attempt(()=>{const a:[uint8,uint8]=raw;});e+\"/\"+trace;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/length,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "general rest impossible count reads no index",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let trace=\"\";const raw:any=new Proxy([1],{get(t,k,r){trace+=k+\",\";return Reflect.get(t,k,r);}});const e=attempt(()=>{const a:[...[].<uint8>,...[2].<boolean>,...[].<uint8>]=raw;});e+\"/\"+trace;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/length,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured length survives getter growth",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;raw.push(2);return 1;}});const t:[].<uint8>=raw;reads+\"/\"+t.length+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured length survives getter shrink",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2];Object.defineProperty(raw,\"0\",{get(){raw.length=1;return 1;}});const e=attempt(()=>{const t:[uint8,uint8]=raw;});e+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "undefined result retained instead of reread",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[0,1];Object.defineProperty(raw,\"0\",{get(){reads++;return reads===1?undefined:7;}});const t:[undefined,uint8]=raw;reads+\"/\"+String(t[0])+\"/\"+t[1];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/undefined/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "hole result retained after later getter fills it",
+      "steps": [
+        {
+          "source": "const raw:any=new Array(2);Object.defineProperty(raw,\"1\",{get(){raw[0]=\"late\";return 1;}});const t:[undefined,uint8]=raw;String(t[0])+\"/\"+t[1]+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined/1/late"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retained prefix values survive later effects",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[\"first\",0];Object.defineProperty(raw,\"1\",{get(){reads++;raw[0]=\"late\";return 1;}});const t:[string,uint8]=raw;reads+\"/\"+t[0]+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/first/late"
+          }
+        }
+      ]
+    },
+    {
+      "name": "retained objects are identities not deep copies",
+      "steps": [
+        {
+          "source": "const item:any={n:1};const raw:any=[item,0];Object.defineProperty(raw,\"1\",{get(){item.n=2;return 1;}});const t:[any,uint8]=raw;String(t[0]===item)+\"/\"+t[0].n;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later getter follows earlier converting constructor",
+      "steps": [
+        {
+          "source": "let trace=\"\";let n=1;class C{constructor(x:uint32){trace+=\"c\";n=2;this.v=Number(x);}}const raw:any=[];Object.defineProperty(raw,\"0\",{get(){trace+=\"a\";return 1;}});Object.defineProperty(raw,\"1\",{get(){trace+=\"b\";return n;}});const t:[C,uint8]=raw;trace+\"/\"+t[0].v+\"/\"+t[1];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "acb/1/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "general rest observation precedes conversion failure",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let trace=\"\";const raw:any=[];Object.defineProperty(raw,\"0\",{get(){trace+=\"a\";return 300;}});Object.defineProperty(raw,\"1\",{get(){trace+=\"b\";return 1;}});const e=attempt(()=>{const t:[...[].<uint8>,...[].<boolean>]=raw;});e+\"/\"+trace;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "separate receiving boundaries observe afresh",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){return ++reads;}});const a:[uint8]=raw;const b:[uint8]=raw;reads+\"/\"+a[0]+\"/\"+b[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/1/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reentrant receiving boundary owns observations",
+      "steps": [
+        {
+          "source": "let reads=0;let busy=false;let inner=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;if(!busy){busy=true;const t:[uint8]=raw;inner=Number(t[0]);busy=false;return 1;}return 2;}});const t:[uint8]=raw;reads+\"/\"+inner+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/2/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pure membership stays separate from conversion",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return 1;}});const fit=raw is [uint8];const t:[uint8]=raw;reads+\"/\"+String(fit)+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/false/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "completed nested boundary survives outer conversion failure",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const nested:any={n:1};const raw:any=[nested,300];const e=attempt(()=>{const t:[{n:number},uint8]=raw;});const child=attempt(()=>{nested.n=\"changed\";});raw[0]=true;e+\"/\"+child+\"/\"+nested.n+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/TypeError/1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed conversion publishes no source sequence backing",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{configurable:true,get(){reads++;return 300;}});const e=attempt(()=>{const t:[uint8]=raw;});Object.defineProperty(raw,\"0\",{value:true});raw.push(\"later\");e+\"/\"+reads+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/1/true,later"
+          }
+        }
+      ]
+    },
+    {
+      "name": "converted output owns backing and source stays separate",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];const t:[uint8]=raw;raw[0]=\"changed\";const loose:any=t;const e=attempt(()=>{loose[0]=Symbol();});e+\"/\"+t[0]+\"/\"+raw[0]+\"/\"+String(t===raw);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/changed/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "compatible input preserves identity",
+      "steps": [
+        {
+          "source": "const raw:any=[1];const t:[number]=raw;String(t===raw);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "compatible accessor retains adoption refusal",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return 1;}});const e=attempt(()=>{const t:[number]=raw;});e+\"/\"+reads;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit conversion retains wrapping behavior",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return 300;}});const t=(raw:=[uint8]);reads+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/44"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default construction reuses supplied reads",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return 1;}});const t:[uint8,uint8=7]=raw;reads+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1,7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "length coercion is not replayed",
+      "steps": [
+        {
+          "source": "let reads=0,coercions=0;const length:any={valueOf(){coercions++;return 1;}};const raw:any=new Proxy([1],{get(t,k,r){if(k===\"length\"){reads++;return length;}return Reflect.get(t,k,r);}});const t:[uint8]=raw;reads+\"/\"+coercions+\"/\"+t[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "coercion failure stops before indexed get",
+      "steps": [
+        {
+          "source": "const marker={};let trace=\"\";const raw:any=new Proxy([1],{get(t,k,r){trace+=k+\",\";if(k===\"length\")return {valueOf(){trace+=\"coerce,\";throw marker;}};return Reflect.get(t,k,r);}});let same=false;try{const t:[uint8]=raw;}catch(e){same=e===marker;}String(same)+\"/\"+trace;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/length,coerce,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "implicit array-like fallback retains rejected source [uint8]",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let reads=0,lengths=0;const raw:any={get length(){lengths++;return 1;},get 0(){reads++;return reads===1?1:uint8(2);}};const e=attempt(()=>{const t:[uint8]=raw;});e+\"/\"+lengths+\"/\"+reads;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "implicit array-like fallback retains rejected source [].<uint8>",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let reads=0,lengths=0;const raw:any={get length(){lengths++;return 1;},get 0(){reads++;return reads===1?1:uint8(2);}};const e=attempt(()=>{const t:[].<uint8>=raw;});e+\"/\"+lengths+\"/\"+reads;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit array-like fallback retains rejected source [uint8]",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let reads=0,lengths=0;const raw:any={get length(){lengths++;return 1;},get 0(){reads++;return reads===1?1:uint8(2);}};const e=attempt(()=>{const t=(raw:=[uint8]);});e+\"/\"+lengths+\"/\"+reads;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit array-like fallback retains rejected source [].<uint8>",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let reads=0,lengths=0;const raw:any={get length(){lengths++;return 1;},get 0(){reads++;return reads===1?1:uint8(2);}};const e=attempt(()=>{const t=(raw:=[].<uint8>);});e+\"/\"+lengths+\"/\"+reads;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "compatible array-like identity remains unchanged",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any={length:1,get 0(){reads++;return 1;}};const t:[number]=raw;reads+\"/\"+String(t===raw);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructed vector array retains own data observations",
+      "steps": [
+        {
+          "source": "let a:[].<float32x4>=[new.(1,2,3,4),new.(1,2,3,4)];String(a.length)+\"/\"+a[1][3];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructed vector tuple retains own data observations",
+      "steps": [
+        {
+          "source": "const raw:any=[float32x4(1,2,3,4)];const t:[float32x4]=raw;String(t===raw)+\"/\"+t[0][2];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "vector mixed tuple conversion retains prefix identity",
+      "steps": [
+        {
+          "source": "const raw:any=[float32x4(1,2,3,4),1];const t:[float32x4,uint8]=raw;String(t[0][0])+\"/\"+t[1];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "vector identity remains reflexive",
+      "steps": [
+        {
+          "source": "const v:any=float32x4(1,2,3,4);String(Object.is(v,v));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "different vector replacement still invalidates admission",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[float32x4(1,2,3,4),0];Object.defineProperty(raw,\"1\",{get(){raw[0]=float32x4(5,6,7,8);return 0;}});const e=attempt(()=>{const t:[float32x4,number]=raw;});e+\"/\"+raw[0][0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/5"
+          }
+        }
+      ]
+    }
+  ]
+}

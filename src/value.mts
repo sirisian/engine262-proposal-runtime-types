@@ -1661,6 +1661,9 @@ export function SameType(x: Value, y: Value) {
     // at the value level a TypedNumberValue is its own Type in the language
     // sense, distinct from the Number type.
     case x instanceof TypedNumberValue && y instanceof TypedNumberValue:
+    // Vectors are a distinct primitive representation too. In particular a
+    // retained vector must remain SameValue with itself during admission.
+    case x instanceof VectorValue && y instanceof VectorValue:
     case x instanceof BigIntValue && y instanceof BigIntValue:
     case x instanceof SymbolValue && y instanceof SymbolValue:
     case x instanceof JSStringValue && y instanceof JSStringValue:

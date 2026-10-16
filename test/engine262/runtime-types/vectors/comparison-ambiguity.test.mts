@@ -95,6 +95,10 @@ test.each(['==', '!='])('discarded SIMD equality requires an expected result: %s
   expect(ok(`function generic<T: type>(a: vector.<T, 4>, b: vector.<T, 4>) { a ${operator} b; }`)).toBe(true);
 });
 
-test('discarded strict scalar equality keeps its existing policy', () => {
-  expect(ok('function unused(a: string, b: boolean) { a === b; a !== b; }')).toBe(true);
+test.each(['===', '!=='])('discarded disjoint strict equality is an operator error: %s', (operator) => {
+  // #sec-narrowfrom applies the disjoint comparison obligation even when the
+  // result is discarded. Compatible and unknown operands remain permitted.
+  expectStaticTypeError(`function unused(a: string, b: boolean) { a ${operator} b; }`);
+  expect(ok(`function compatible(a: string, b: string) { a ${operator} b; }`)).toBe(true);
+  expect(ok(`function unknown(a: any, b: any) { a ${operator} b; }`)).toBe(true);
 });

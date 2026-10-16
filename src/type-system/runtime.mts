@@ -3915,14 +3915,41 @@ export type TupleDefaultConstruction = {
 };
 export type UnionMemberAdmission = { member?: TypeRecord, construction?: TupleDefaultConstruction };
 
-export function* IsOfType(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], selection?: UnionMemberAdmission): PlainEvaluator<boolean> {
-  if (!storage && !selection) return yield* IsOfTypeWithStorage(value, t);
+/** Reads belong to one receiving operation, independently of whether its
+ * membership attempt succeeds. They establish no backing or liveness fact. */
+export type SequenceObservation = {
+  object: ObjectValue,
+  length?: Value,
+  conversionLength?: number,
+  elements: Map<number, { own: boolean, value: Value }>,
+};
+
+export function* ObserveSequenceLength(object: ObjectValue, observation?: SequenceObservation): ValueEvaluator {
+  if (observation?.object === object && observation.length !== undefined) return observation.length;
+  const length = Q(yield* Get(object, Value('length')));
+  if (observation?.object === object) observation.length = length;
+  return length;
+}
+
+export function* ObserveSequenceElement(object: ObjectValue, index: number, observation?: SequenceObservation): PlainEvaluator<{ own: boolean, value: Value }> {
+  const retained = observation?.object === object ? observation.elements.get(index) : undefined;
+  if (retained) return retained;
+  const key = Value(String(index));
+  const own = object.properties.has(key);
+  const value = Q(yield* Get(object, key));
+  const entry = { own, value };
+  if (observation?.object === object) observation.elements.set(index, entry);
+  return entry;
+}
+
+export function* IsOfType(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], selection?: UnionMemberAdmission, sequence?: SequenceObservation): PlainEvaluator<boolean> {
+  if (!storage && !selection) return yield* IsOfTypeWithStorage(value, t, storage, selection, sequence);
   const checkpoint = storage?.length;
   const previousMember = selection?.member;
   const previousConstruction = selection?.construction;
   let admitted = false;
   try {
-    admitted = Q(yield* IsOfTypeWithStorage(value, t, storage, selection));
+    admitted = Q(yield* IsOfTypeWithStorage(value, t, storage, selection, sequence));
     if (admitted && storage && selection?.construction) {
       // A copying value boundary owns its evidence. Do not acquire storage on
       // its source while the receiving operation is still choosing a result.
@@ -3942,7 +3969,7 @@ export function* IsOfType(value: Value, t: TypeRecord, storage?: StructuralStora
   }
 }
 
-function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], selection?: UnionMemberAdmission): PlainEvaluator<boolean> {
+function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], selection?: UnionMemberAdmission, sequence?: SequenceObservation): PlainEvaluator<boolean> {
   // proposal-runtime-types #sec-references-and-borrowing: a Reference Value is
   // of a `ref T` when the storage it borrows currently holds a T. The check
   // reads through to the referent rather than testing the reference itself,
@@ -4217,7 +4244,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       if (t.Kind === 'array' && CompositeTypeRecordOf(value) !== undefined) {
         return false;
       }
-      const lenValue = Q(yield* Get(value, Value('length')));
+      const lenValue = Q(yield* ObserveSequenceLength(value, sequence));
       // proposal-runtime-types: a TYPED array reports a typed `length` - a
       // `uint32` rather than a plain Number - so testing for NumberValue alone
       // rejected every typed array against its own array type. `[].<uint32>`
@@ -4237,11 +4264,9 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       const positions: { own: boolean, value: Value }[] | undefined = storage && isArrayExoticObject(value) ? [] : undefined;
       const sequenceObject = value;
       function* observe(index: number): ValueEvaluator {
-        const key = Value(String(index));
-        const own = sequenceObject.properties.has(key);
-        const element = Q(yield* Get(sequenceObject, key));
-        positions?.push({ own, value: element });
-        return element;
+        const entry = Q(yield* ObserveSequenceElement(sequenceObject, index, sequence));
+        positions?.push(entry);
+        return entry.value;
       }
       const retainSequence = () => {
         if (positions) storage!.push({ kind: 'sequence', object: value, length: len, positions });
