@@ -1,0 +1,438 @@
+{
+  "cases": [
+    {
+      "name": "direct annotation",
+      "steps": [
+        {
+          "source": "class C{}const raw:any=Object.create(C.prototype);const c:C=raw;String(Reflect.setPrototypeOf(raw,null))+\"/\"+String(raw is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit conversion",
+      "steps": [
+        {
+          "source": "class C{}const raw:any=Object.create(C.prototype);const c:any=(raw:=C);String(c===raw)+\"/\"+String(Reflect.setPrototypeOf(raw,null))+\"/\"+String(raw is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary constructor annotated elision",
+      "steps": [
+        {
+          "source": "class C{}const c:C=new C();const raw:any=c;String(Reflect.setPrototypeOf(raw,null))+\"/\"+String(raw is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inherited link",
+      "steps": [
+        {
+          "source": "class C{}class D extends C{}const raw:any=Object.create(D.prototype);const c:C=raw;String(Reflect.setPrototypeOf(D.prototype,null))+\"/\"+String(raw is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pure membership",
+      "steps": [
+        {
+          "source": "class C{}const raw:any=Object.create(C.prototype);const before=raw is C;String(before)+\"/\"+String(Reflect.setPrototypeOf(raw,null))+\"/\"+String(raw is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union membership does not pin selected class",
+      "steps": [
+        {
+          "source": "class C{}class D{}const raw:any=Object.create(C.prototype);const c:C|D=raw;String(Reflect.setPrototypeOf(raw,D.prototype))+\"/\"+String(raw is D);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid replacement dependencies",
+      "steps": [
+        {
+          "source": "class C{}const old:any=Object.create(C.prototype);const raw:any=Object.create(old);const c:C=raw;const next:any=Object.create(C.prototype);const a=Reflect.setPrototypeOf(raw,next);const b=Reflect.setPrototypeOf(old,null);const d=Reflect.setPrototypeOf(next,null);String(a)+\"/\"+String(b)+\"/\"+String(d)+\"/\"+String(raw is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Object setPrototypeOf throws before mutation",
+      "steps": [
+        {
+          "source": "class C{}const raw:any=Object.create(C.prototype);const c:C=raw;let error=\"none\";try{Object.setPrototypeOf(raw,null);}catch(e){error=e.name;}error+\"/\"+String(raw is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forwarding proxy alias",
+      "steps": [
+        {
+          "source": "class C{}const raw:any=Object.create(C.prototype);const c:C=raw;const p:any=new Proxy(raw,{});String(Reflect.setPrototypeOf(p,null))+\"/\"+String(raw is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "target prototype outgoing link irrelevant",
+      "steps": [
+        {
+          "source": "class C{}const raw:any=Object.create(C.prototype);const c:C=raw;String(Reflect.setPrototypeOf(C.prototype,null))+\"/\"+String(raw is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "parameter before body",
+      "steps": [
+        {
+          "source": "class C{}let entered=0;function f(v:C){entered++;return Reflect.setPrototypeOf(v,null);}const raw:any=Object.create(C.prototype);String(f(raw))+\"/\"+entered+\"/\"+String(raw is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "return before caller mutation",
+      "steps": [
+        {
+          "source": "class C{}const raw:any=Object.create(C.prototype);function f():C{return raw;}const c:any=f();String(Reflect.setPrototypeOf(c,null))+\"/\"+String(c is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "converting constructor result",
+      "steps": [
+        {
+          "source": "class C{constructor(v:any){}}const raw:any=1;const c:any=(function f(v:any):C{return v;})(raw);String(Reflect.setPrototypeOf(c,null))+\"/\"+String(c is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "legacy proto setter refuses invalidation",
+      "steps": [
+        {
+          "source": "class C{}const raw:any=Object.create(C.prototype);const c:C=raw;let error=\"none\";try{raw.__proto__=null;}catch(e){error=e.name;}error+\"/\"+String(raw is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shared chain remains constrained by another instance",
+      "steps": [
+        {
+          "source": "class C{}const shared:any=Object.create(C.prototype);const a:any=Object.create(shared);const b:any=Object.create(shared);const ca:C=a;const cb:C=b;const x=Reflect.setPrototypeOf(a,C.prototype);const y=Reflect.setPrototypeOf(shared,null);const z=Reflect.setPrototypeOf(b,C.prototype);const w=Reflect.setPrototypeOf(shared,null);[x,y,z,w,a is C,b is C].join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true,false,true,true,true,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "all acquired class obligations survive a prototype update",
+      "steps": [
+        {
+          "source": "class B{}class D extends B{}const raw:any=Object.create(D.prototype);const b:B=raw;const d:D=raw;String(Reflect.setPrototypeOf(raw,B.prototype))+\"/\"+String(Reflect.setPrototypeOf(D.prototype,null))+\"/\"+String(raw is D)+\"/\"+String(raw is B);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/false/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed plan leaves previous links guarded",
+      "steps": [
+        {
+          "source": "class C{}const link:any=Object.create(C.prototype);const raw:any=Object.create(link);const c:C=raw;const bad:any={};String(Reflect.setPrototypeOf(raw,bad))+\"/\"+String(Reflect.setPrototypeOf(link,null))+\"/\"+String(Reflect.setPrototypeOf(bad,null))+\"/\"+String(raw is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/false/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unchanged prototype succeeds on a nonextensible value",
+      "steps": [
+        {
+          "source": "class C{}const raw:any=Object.create(C.prototype);const c:C=raw;Object.preventExtensions(raw);String(Reflect.setPrototypeOf(raw,C.prototype))+\"/\"+String(Reflect.setPrototypeOf(raw,null))+\"/\"+String(raw is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "introducing an observable prototype is refused without calling its trap",
+      "steps": [
+        {
+          "source": "class C{}const raw:any=Object.create(C.prototype);const c:C=raw;let calls=0;const p:any=new Proxy({}, {getPrototypeOf(){calls++;return C.prototype;}});String(Reflect.setPrototypeOf(raw,p))+\"/\"+calls+\"/\"+String(raw is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/0/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a proxy trap cannot forward an invalidating write",
+      "steps": [
+        {
+          "source": "class C{}const raw:any=Object.create(C.prototype);const c:C=raw;let calls=0;const p:any=new Proxy(raw,{setPrototypeOf(target,proto){calls++;return Reflect.setPrototypeOf(target,proto);}});String(Reflect.setPrototypeOf(p,null))+\"/\"+calls+\"/\"+String(raw is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a proxy trap reporting success without mutation leaves the target valid",
+      "steps": [
+        {
+          "source": "class C{}const raw:any=Object.create(C.prototype);const c:C=raw;const p:any=new Proxy(raw,{setPrototypeOf(){return true;}});String(Reflect.setPrototypeOf(p,null))+\"/\"+String(raw is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed constructor conversion retains effects but no invalid nominal result",
+      "steps": [
+        {
+          "source": "let calls=0;let leaked:any;class C{constructor(v:any){calls++;leaked={};return leaked;}}const raw:any=1;let error=\"none\";try{const c:C=raw;}catch(e){error=e.name;}error+\"/\"+calls+\"/\"+String(Reflect.setPrototypeOf(leaked,null));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor abrupt completion retains precedence",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(v:any){calls++;throw new RangeError(\"constructor\");}}const raw:any=1;let error=\"none\";try{const c:C=raw;}catch(e){error=e.name;}error+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor mutation of its own result cannot publish a nonmember",
+      "steps": [
+        {
+          "source": "let leaked:any;class C{constructor(v:any){leaked=this;Object.setPrototypeOf(this,null);}}const raw:any=1;let error=\"none\";try{const c:C=raw;}catch(e){error=e.name;}error+\"/\"+String(leaked is C)+\"/\"+String(Reflect.setPrototypeOf(leaked,C.prototype));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "an independent completed class boundary survives a later throw",
+      "steps": [
+        {
+          "source": "class C{}const raw:any=Object.create(C.prototype);function f(v:C){throw new RangeError(\"later\");}try{f(raw);}catch(e){}String(Reflect.setPrototypeOf(raw,null))+\"/\"+String(raw is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "repeated admission neither releases nor broadens the obligation",
+      "steps": [
+        {
+          "source": "class C{}const raw:any=Object.create(C.prototype);const a:C=raw;const b:C=raw;const c:any=(raw:=C);String(Reflect.setPrototypeOf(raw,null))+\"/\"+String(c===raw);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unrelated prototype changes remain ordinary",
+      "steps": [
+        {
+          "source": "class C{}const raw:any=Object.create(C.prototype);const c:C=raw;const other:any={};String(Reflect.setPrototypeOf(other,null))+\"/\"+String(raw is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a valid change does not invalidate an element reference",
+      "steps": [
+        {
+          "source": "class C{}const raw:any=Object.create(C.prototype);const c:C=raw;const items:any=[c];let ref p=items[0];const link:any=Object.create(C.prototype);const changed=Reflect.setPrototypeOf(raw,link);String(changed)+\"/\"+String(p===raw)+\"/\"+String(p is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "an invalid change leaves a reference and its value intact",
+      "steps": [
+        {
+          "source": "class C{}const raw:any=Object.create(C.prototype);const c:C=raw;const items:any=[c];let ref p=items[0];const changed=Reflect.setPrototypeOf(raw,null);String(changed)+\"/\"+String(p===raw)+\"/\"+String(p is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "primitive values returned from constructors use the constructed receiver",
+      "steps": [
+        {
+          "source": "class C{constructor(v:any){return 1;}}const raw:any=2;const c:C=raw;const x:any=c;String(Reflect.setPrototypeOf(x,null))+\"/\"+String(x is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class expression exact boundary retains constructor identity",
+      "steps": [
+        {
+          "source": "const C=class{};const raw:any=Object.create(C.prototype);const c:C=raw;String(Reflect.setPrototypeOf(raw,null))+\"/\"+String(raw is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    }
+  ]
+}

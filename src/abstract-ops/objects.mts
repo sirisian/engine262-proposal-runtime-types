@@ -35,7 +35,7 @@ import {
   type Intrinsics,
 } from './all.mts';
 import {
-  ScalarRestDefinitionAllowed, CheckArrayDefinition, CreateBuiltinFunction, surroundingAgent, RequireType, LookupTypeDefault, Throw } from '#self';
+  PlanNominalPrototypeChange, CommitNominalPrototypeChange, ScalarRestDefinitionAllowed, CheckArrayDefinition, CreateBuiltinFunction, surroundingAgent, RequireType, LookupTypeDefault, Throw } from '#self';
 
 export interface OrdinaryObject extends ObjectValue {
   Prototype: ObjectValue | NullValue;
@@ -91,7 +91,10 @@ export function OrdinarySetPrototypeOf(O: OrdinaryObject, V: ObjectValue | NullV
       p = (p as OrdinaryObject).Prototype;
     }
   }
+  const changes = PlanNominalPrototypeChange(O, V);
+  if (changes === false) return Value.false;
   O.Prototype = V;
+  CommitNominalPrototypeChange(changes);
   return Value.true;
 }
 

@@ -1324,6 +1324,12 @@ export function* ConvertValueToUnion(value: Value, t: TypeRecord & { Members: re
 }
 
 export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
+  const result = Q(yield* ConvertValueUnbacked(value, t));
+  Q(AcquireNominalPrototype(result, t));
+  return result;
+}
+
+function* ConvertValueUnbacked(value: Value, t: TypeRecord): ValueEvaluator {
   value = Q(yield* MaterializeGenericCallable(value, t));
   // #sec-composite-typeobject-call: the typed creation "is the CONSTRUCTION
   // BOUNDARY of the composite types, as calling any parameterized Type Object is
@@ -2042,8 +2048,9 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
     // An ORDINARY class instance has no layout and is untouched, keeping the
     // identity a return must preserve.
     if (value instanceof ObjectValue && IsValueTypeClass(elided)) {
-      return CopyValueClassInstance(value);
+      value = CopyValueClassInstance(value);
     }
+    Q(AcquireNominalPrototype(value, elided));
     return value;
   }
   // #sec-contextual-types: the binding boundary applies the CHECKED conversion
@@ -2216,6 +2223,12 @@ function* BoundaryNumericConvert(value: Value, t: TypeRecord & { Kind: 'primitiv
 }
 
 export function* CheckedConvertValue(value: Value, t: TypeRecord, sequenceObservation?: SequenceObservation): ValueEvaluator {
+  const result = Q(yield* CheckedConvertValueUnbacked(value, t, sequenceObservation));
+  Q(AcquireNominalPrototype(result, t));
+  return result;
+}
+
+function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObservation?: SequenceObservation): ValueEvaluator {
   value = Q(yield* MaterializeGenericCallable(value, t));
   // sec-user-defined-conversions form 2, tried FIRST because the paths below
   // fork by target kind: a primitive target reaches its own switch and refuses
@@ -6687,3 +6700,4 @@ import { FillGenericConstraintFrame } from '../type-system/runtime.mts';
 import { IsCheckedCode } from '../type-system/checked-code.mts';
 import { MaterializeGenericCallable } from './generic-callable-boundary.mts';
 import { NamedCallItemsOf, SelectedNamedArguments } from './named-call.mts';
+import { AcquireNominalPrototype } from '#self';
