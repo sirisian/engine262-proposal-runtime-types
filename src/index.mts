@@ -117,3 +117,5 @@ export { TypeEvaluationBudget };
 export * from './type-system/scalar-rests.mts';
 export * from './abstract-ops/scalar-rest-storage.mts';
 export { DeclaredReferenceLocationType } from './abstract-ops/argument-distribution.mts';
+export { isRationalObject } from './intrinsics/Rational.mts';
+export { isFloat128Object } from './intrinsics/Float128.mts';

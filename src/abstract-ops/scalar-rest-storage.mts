@@ -2,15 +2,31 @@ import { AssignScalarRests, ScalarRestMember, ScalarRestOwner, ScalarRestValues,
 import { CarriedTypeRecordOf, DefaultValueOf, RuntimeTypeOf } from '../type-system/runtime.mts';
 import { TupleBackingLength, TupleStorageTypeAt, TupleResizePreserves, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { IsSubtype } from '../type-system/relations.mts';
-import type { TypeRecord } from '../type-system/records.mts';
+import { displayType, type TypeRecord } from '../type-system/records.mts';
 import { ObjectValue, ReferenceValue, Value, type Descriptor } from '../value.mts';
 import { Q, EnsureCompletion, type ThrowCompletion } from '../completion.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
-import { RequireType, ScalarRestConversionApplicable } from './runtime-types.mts';
-import { SameValue, Throw } from '#self';
+import { RequireType, ConvertValue, ScalarRestConversionApplicable, LookupClassOperator } from './runtime-types.mts';
+import { SameValue, Throw, isDecimalObject, isRationalObject, isFloat128Object } from '#self';
 
 type Convert = (value: Value, type: TypeRecord) => ValueEvaluator;
 export type ScalarRestItem = { value?: Value, convert?: boolean };
+
+/** These real numeric values use ObjectValue only as an interpreter
+ * representation. Their intrinsic payload conversions are pure; ordinary
+ * objects, metadata and a potentially selected class operator are not. */
+function pureScalarConversion(value: Value, type: TypeRecord, convert: Convert): boolean {
+  const carried = CarriedTypeRecordOf(value);
+  if (value instanceof ReferenceValue || (carried !== undefined && carried.Kind !== 'primitive')) return false;
+  if (!(value instanceof ObjectValue)) return true;
+  if (!isDecimalObject(value) && !isRationalObject(value) && !isFloat128Object(value)) return false;
+  // These explicit cases return through the intrinsic payload path before
+  // CheckedConvertValue's class-operator fallback. An unrelated operator must
+  // not turn a pure, failed candidate into a selected effectful conversion.
+  if (convert === ConvertValue && type.Kind === 'primitive'
+      && ['string', 'boolean', 'number', 'bigint', 'int', 'uint', 'float16', 'float32', 'float64'].includes(type.Name)) return true;
+  return LookupClassOperator(value, `convert ${displayType(type)}`) === null;
+}
 
 /** Pure intrinsic scalar computations may be retained. User conversion code is
  * only classified here and runs once, after assignment has been selected. */
@@ -33,10 +49,7 @@ export function* ConvertScalarRestItems(patterns: readonly ScalarRestPattern[], 
         if (value !== undefined) retain(type, value);
       } else if (ScalarRestMember(item.value, type)) retain(type, item.value);
       else if (item.convert) {
-        const carried = CarriedTypeRecordOf(item.value);
-        const pure = !(item.value instanceof ObjectValue) && !(item.value instanceof ReferenceValue)
-          && (carried === undefined || carried.Kind === 'primitive');
-        if (pure) {
+        if (pureScalarConversion(item.value, type, convert)) {
           const result = EnsureCompletion(yield* convert(item.value, type));
           if (result.Type === 'normal' && ScalarRestMember(result.Value, type)) retain(type, result.Value);
           else if (result.Type === 'throw') failure ??= result;

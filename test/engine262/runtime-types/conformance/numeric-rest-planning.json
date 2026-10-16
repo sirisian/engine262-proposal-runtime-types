@@ -1,0 +1,536 @@
+{
+  "cases": [
+    {
+      "name": "float128 Infinity gives back the BigInt rest",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[float128(Infinity)];const x:any=(v:=T);String(x[0] is number)+\"/\"+String(Object.is(x[0],Infinity))+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 -Infinity gives back the BigInt rest",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[float128(-Infinity)];const x:any=(v:=T);String(x[0] is number)+\"/\"+String(Object.is(x[0],-Infinity))+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 NaN gives back the BigInt rest",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[float128(NaN)];const x:any=(v:=T);String(x[0] is number)+\"/\"+String(Object.is(x[0],NaN))+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 keeps a finite BigInt prefix",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[float128(7),float128(Infinity)];const x:any=(v:=T);String(x[0] is bigint)+\"/\"+String(x[1] is number)+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 reserves a required BigInt separator",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[1].<bigint>,...[].<number>];const v:any=[float128(7),float128(Infinity)];const x:any=(v:=T);String(x[0] is bigint)+\"/\"+String(x[1] is number)+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 cannot erase a required BigInt",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[1].<bigint>,...[].<number>];const v:any=[float128(Infinity)];const x:any=(v:=T);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 retains finite explicit integer wrapping",
+      "steps": [
+        {
+          "source": "type T=[...[].<uint8>,...[].<number>];const v:any=[float128(300)];const x:any=(v:=T);String(x[0] is uint8)+\"/\"+x.join(\",\")+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/44/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 has no implicit numeric-family crossing",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[float128(7)];const x:T=v;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 pure failure precedence follows written runs",
+      "steps": [
+        {
+          "source": "type T=[...[].<string>,...[].<bigint>];const v:any=[float128(Infinity)];const x:any=(v:=T);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 retained result is guarded on later stores",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[float128(7),float128(Infinity)];const x:any=(v:=T);x[0]=2;String(x[0] is number)+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 own coercion hooks are not numeric payload",
+      "steps": [
+        {
+          "source": "let calls=0;const n:any=float128(Infinity);n.valueOf=()=>{calls++;throw new Error(\"hook\");};n[Symbol.toPrimitive]=()=>{calls++;throw new Error(\"hook\");};type T=[...[].<bigint>,...[].<number>];const v:any=[n];const x:any=(v:=T);calls+\"/\"+String(x[0] is number)+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 Infinity gives back the BigInt rest",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[decimal128(Infinity)];const x:any=(v:=T);String(x[0] is number)+\"/\"+String(Object.is(x[0],Infinity))+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 -Infinity gives back the BigInt rest",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[decimal128(-Infinity)];const x:any=(v:=T);String(x[0] is number)+\"/\"+String(Object.is(x[0],-Infinity))+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 NaN gives back the BigInt rest",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[decimal128(NaN)];const x:any=(v:=T);String(x[0] is number)+\"/\"+String(Object.is(x[0],NaN))+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 keeps a finite BigInt prefix",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[decimal128(7),decimal128(Infinity)];const x:any=(v:=T);String(x[0] is bigint)+\"/\"+String(x[1] is number)+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 reserves a required BigInt separator",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[1].<bigint>,...[].<number>];const v:any=[decimal128(7),decimal128(Infinity)];const x:any=(v:=T);String(x[0] is bigint)+\"/\"+String(x[1] is number)+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 cannot erase a required BigInt",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[1].<bigint>,...[].<number>];const v:any=[decimal128(Infinity)];const x:any=(v:=T);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 retains finite explicit integer wrapping",
+      "steps": [
+        {
+          "source": "type T=[...[].<uint8>,...[].<number>];const v:any=[decimal128(300)];const x:any=(v:=T);String(x[0] is uint8)+\"/\"+x.join(\",\")+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/44/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 has no implicit numeric-family crossing",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[decimal128(7)];const x:T=v;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 pure failure precedence follows written runs",
+      "steps": [
+        {
+          "source": "type T=[...[].<string>,...[].<bigint>];const v:any=[decimal128(Infinity)];const x:any=(v:=T);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 retained result is guarded on later stores",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[decimal128(7),decimal128(Infinity)];const x:any=(v:=T);x[0]=2;String(x[0] is number)+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 own coercion hooks are not numeric payload",
+      "steps": [
+        {
+          "source": "let calls=0;const n:any=decimal128(Infinity);n.valueOf=()=>{calls++;throw new Error(\"hook\");};n[Symbol.toPrimitive]=()=>{calls++;throw new Error(\"hook\");};type T=[...[].<bigint>,...[].<number>];const v:any=[n];const x:any=(v:=T);calls+\"/\"+String(x[0] is number)+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 explicit intrinsic dispatch ignores a class operator",
+      "steps": [
+        {
+          "source": "let calls=0;class C{operator bigint(){calls++;return 7n;}}const n:any=float128(Infinity);Object.setPrototypeOf(n,C.prototype);type T=[...[].<bigint>,...[].<number>];const v:any=[n];const x:any=(v:=T);calls+\"/\"+String(x[0] is number)+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 explicit intrinsic dispatch ignores a class operator",
+      "steps": [
+        {
+          "source": "let calls=0;class C{operator bigint(){calls++;return 7n;}}const n:any=decimal128(Infinity);Object.setPrototypeOf(n,C.prototype);type T=[...[].<bigint>,...[].<number>];const v:any=[n];const x:any=(v:=T);calls+\"/\"+String(x[0] is number)+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 finite fractional conversion is greedy",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[rational64(1.5)];const x:any=(v:=T);String(x[0] is bigint)+\"/\"+x[0]+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 unused class operator stays unexecuted",
+      "steps": [
+        {
+          "source": "let calls=0;class C{operator string(){calls++;return \"chosen\";}}const n:any=rational64(7);Object.setPrototypeOf(n,C.prototype);type T=[...[].<string>,...[1].<boolean>];const v:any=[n];try{const x:T=v;}catch(e){}String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rational64 selected class operator executes once",
+      "steps": [
+        {
+          "source": "let calls=0;class C{operator string(){calls++;return \"chosen\";}}const n:any=rational64(7);Object.setPrototypeOf(n,C.prototype);type T=[...[].<string>,...[].<number>];const v:any=[n];const x:T=v;calls+\"/\"+x.join(\",\")+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/chosen/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 finite fractional conversion is greedy",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[float128(1.5)];const x:any=(v:=T);String(x[0] is bigint)+\"/\"+x[0]+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 unused class operator stays unexecuted",
+      "steps": [
+        {
+          "source": "let calls=0;class C{operator string(){calls++;return \"chosen\";}}const n:any=float128(7);Object.setPrototypeOf(n,C.prototype);type T=[...[].<string>,...[1].<boolean>];const v:any=[n];try{const x:T=v;}catch(e){}String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "float128 selected class operator executes once",
+      "steps": [
+        {
+          "source": "let calls=0;class C{operator string(){calls++;return \"chosen\";}}const n:any=float128(7);Object.setPrototypeOf(n,C.prototype);type T=[...[].<string>,...[].<number>];const v:any=[n];const x:T=v;calls+\"/\"+x.join(\",\")+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/chosen/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 finite fractional conversion is greedy",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[decimal128(1.5)];const x:any=(v:=T);String(x[0] is bigint)+\"/\"+x[0]+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 unused class operator stays unexecuted",
+      "steps": [
+        {
+          "source": "let calls=0;class C{operator string(){calls++;return \"chosen\";}}const n:any=decimal128(7);Object.setPrototypeOf(n,C.prototype);type T=[...[].<string>,...[1].<boolean>];const v:any=[n];try{const x:T=v;}catch(e){}String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal128 selected class operator executes once",
+      "steps": [
+        {
+          "source": "let calls=0;class C{operator string(){calls++;return \"chosen\";}}const n:any=decimal128(7);Object.setPrototypeOf(n,C.prototype);type T=[...[].<string>,...[].<number>];const v:any=[n];const x:T=v;calls+\"/\"+x.join(\",\")+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/chosen/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary object coercion is not a pure numeric payload",
+      "steps": [
+        {
+          "source": "let calls=0;const n:any={valueOf(){calls++;return Infinity;}};type T=[...[].<bigint>,...[].<number>];const v:any=[n];try{const x:any=(v:=T);}catch(e){}String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric slot names on ordinary objects confer no payload",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[{Float128Significand:0n,Float128Exponent:0,Float128Class:\"infinity\",Float128Sign:1}];const x:any=(v:=T);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a Proxy around a numeric value is not its internal payload",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[new Proxy(float128(Infinity),{})];const x:any=(v:=T);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary Number nonfinite giveback remains valid",
+      "steps": [
+        {
+          "source": "type T=[...[].<bigint>,...[].<number>];const v:any=[1,Infinity];const x:any=(v:=T);String(x[0] is number)+\"/\"+String(x[1] is number)+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "impossible length does not observe numeric input",
+      "steps": [
+        {
+          "source": "let calls=0;const v:any=[];Object.defineProperty(v,\"0\",{get(){calls++;return float128(Infinity);}});type T=[...[2].<bigint>,...[].<number>,...[].<boolean>];try{const x:any=(v:=T);}catch(e){}String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    }
+  ]
+}
