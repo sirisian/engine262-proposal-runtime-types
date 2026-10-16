@@ -121,8 +121,19 @@ export function TupleStorageShapeOf(type: TypeRecord): TupleStorageShape | undef
         expanded = true;
         if (!visit(element.Type)) return false;
       } else if (element.Type.Kind === 'array') {
-        if (element.Type.Extent === 'dynamic' && !rest) rest = element.Type.Element;
-        else if (typeof element.Type.Extent === 'number' && Number.isSafeInteger(element.Type.Extent) && element.Type.Extent >= 0) {
+        if (element.Type.Extent === 'dynamic') {
+          if (!rest) rest = element.Type.Element;
+          else {
+            // Equal unbounded runs, separated only by required positions of
+            // that same type, have a declaration-proved positional domain.
+            // Keep the intervening count as a compact required prefix. This
+            // does not freeze a value-dependent partition or merge Type Objects.
+            if (!SameType(rest, element.Type.Element) || suffix.some((run) => !SameType(run.Type, rest!))) return false;
+            prefix.push(...suffix);
+            suffix.length = 0;
+            expanded = true;
+          }
+        } else if (typeof element.Type.Extent === 'number' && Number.isSafeInteger(element.Type.Extent) && element.Type.Extent >= 0) {
           expanded = true;
           if (element.Type.Extent > 0 && hasDefaults) return false;
           required += element.Type.Extent;

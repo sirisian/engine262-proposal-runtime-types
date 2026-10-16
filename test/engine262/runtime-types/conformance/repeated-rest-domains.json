@@ -1,0 +1,2244 @@
+{
+  "cases": [
+    {
+      "name": "tuple-suffix-storage: non-final rest store uses its own type",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;raw[0]=\"b\";raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: suffix store uses its own type",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;raw[1]=false;raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a,false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: rest rejects suffix value",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{raw[0]=Symbol();})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: suffix rejects rest value",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{raw[1]=\"b\";})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: empty rest anchors suffix at zero",
+      "steps": [
+        {
+          "source": "const raw:any=[true];const t:[...[].<string>,...[].<string>,boolean]=raw;raw[0]=false;raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: required prefix rest and two suffix positions",
+      "steps": [
+        {
+          "source": "const raw:any=[true,\"a\",\"b\",1,2];const t:[boolean,...[].<string>,...[].<string>,number,number]=raw;raw[1]=\"c\";raw[3]=3;raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true,c,b,3,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: zero-width middle with prefix and suffix",
+      "steps": [
+        {
+          "source": "const raw:any=[true,1];const t:[boolean,...[].<string>,...[].<string>,number]=raw;raw[0]=false;raw[1]=2;raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: reflect set accepts rest store",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;Reflect.set(raw,\"0\",\"b\");raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: reflect set rejects suffix value",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{Reflect.set(raw,\"1\",\"b\");})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: define property accepts rest store",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;Object.defineProperty(raw,\"0\",{value:\"b\"});raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: define property rejects suffix value",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{Object.defineProperty(raw,\"1\",{value:\"b\"});})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: reflect definition accepts rest store",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;Reflect.defineProperty(raw,\"0\",{value:\"b\"});raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: reflect definition rejects suffix value",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{Reflect.defineProperty(raw,\"1\",{value:\"b\"});})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: push rejects changed surviving contract",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{raw.push(\"b\");})+\"/\"+raw.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: pop rejects changed surviving contract",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{raw.pop();})+\"/\"+raw.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: shift rejects changed surviving contract",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{raw.shift();})+\"/\"+raw.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: unshift rejects changed surviving contract",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{raw.unshift(\"b\");})+\"/\"+raw.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: splice shrink rejects changed surviving contract",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{raw.splice(0,1);})+\"/\"+raw.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: splice grow rejects changed surviving contract",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{raw.splice(0,0,\"b\");})+\"/\"+raw.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: length grow rejects changed surviving contract",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{raw.length=3;})+\"/\"+raw.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: length shrink rejects changed surviving contract",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{raw.length=1;})+\"/\"+raw.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: reflect length rejects changed surviving contract",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{Reflect.defineProperty(raw,\"length\",{value:1});})+\"/\"+raw.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: far store rejects changed surviving contract",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{raw[3]=\"b\";})+\"/\"+raw.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: descriptor growth rejects changed surviving contract",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{Reflect.defineProperty(raw,\"2\",{get(){return \"b\";}});})+\"/\"+raw.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: reverse rejects incompatible positional movement",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{raw.reverse();})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: copyWithin rejects incompatible positional movement",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{raw.copyWithin(0,1);})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: sort rejects incompatible positional movement",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{raw.sort();})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: fill rejects incompatible positional movement",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{raw.fill(\"b\");})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: same-type middle copyWithin",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",\"b\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;raw.copyWithin(0,1,2);raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b,b,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: same-type rest fill",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",\"b\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;raw.fill(\"c\",0,2);raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "c,c,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: suffix fill",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;raw.fill(false,1);raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a,false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: same-length splice",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;raw.splice(0,1,\"b\");raw.splice(1,1,false);raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b,false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: palindromic anchored contracts reverse",
+      "steps": [
+        {
+          "source": "const raw:any=[true,\"a\",\"b\",false];const t:[boolean,...[].<string>,...[].<string>,boolean]=raw;raw.reverse();raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false,b,a,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: equal rest and suffix can grow and shrink",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",\"b\"];const t:[...[].<string>,...[].<string>,string]=raw;raw.push(\"c\");raw.shift();raw.unshift(\"d\");raw.splice(1,1);raw.pop();raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "d"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: equal domains still preserve minimum",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\"];const t:[...[].<string>,...[].<string>,string]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>raw.pop())+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: with accepts suffix and leaves source unchanged",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;const copy:any=raw.with(-1,false);copy[0]=7;copy.join(\",\")+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7,false/a,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: with rejects wrong suffix value",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>raw.with(-1,\"x\"))+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: search admits rest and suffix domains",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;String(raw.includes(\"a\"))+\"/\"+String(raw.includes(true))+\"/\"+raw.indexOf(true)+\"/\"+raw.lastIndexOf(\"a\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/1/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: search includes unoccupied rest domain",
+      "steps": [
+        {
+          "source": "const raw:any=[true];const t:[...[].<string>,...[].<string>,boolean]=raw;String(raw.includes(\"a\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: search rejects unrelated domain",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>raw.includes(Symbol()));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: rest copies do not invent fixed shape",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;const a:any=raw.slice();const b:any=raw.toReversed();a[0]=7;b[0]=\"x\";a.join(\",\")+\"/\"+b.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7,true/x,a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: pure membership does not acquire storage",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const ok=raw is [...[].<string>,...[].<string>,boolean];raw[0]=7;String(ok)+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/7,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: parameter acquisition",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];function f(x:[...[].<string>,...[].<string>,boolean]){return x;}f(raw);raw[0]=\"b\";raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: return acquisition",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];function f():[...[].<string>,...[].<string>,boolean]{return raw;}f();raw[0]=\"b\";raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: assignment acquisition",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];let t:[...[].<string>,...[].<string>,boolean]=[true];t=raw;raw[0]=\"b\";raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: nested acquisition",
+      "steps": [
+        {
+          "source": "const raw:any={x:[\"a\",true]};const t:{x:[...[].<string>,...[].<string>,boolean]}=raw;raw.x[0]=\"b\";raw.x.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: union selected tuple acquisition",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:([...[].<string>,...[].<string>,boolean]|number)=raw;raw[0]=\"b\";raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: generic callable in suffix materializes",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const raw:any=[\"a\",id];const t:[...[].<string>,...[].<string>,(x:string)=>string]=raw;String(raw[1]===id.<string>)+\"/\"+raw[1](\"x\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/x"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: inherited repeated callable observations materialize once per location",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}let reads=0,writes=0;let saved:any=id;const raw:any=[\"a\",id];const accessorPrototype=Object.create(Array.prototype);Object.setPrototypeOf(raw,accessorPrototype);raw.length=Math.max(raw.length,2);delete raw[1];Object.defineProperty(accessorPrototype,\"1\",{get(){reads++;return saved;},set(v){writes++;saved=v;},configurable:true});const t:[...[].<string>,...[].<string>,(x:string)=>string]=raw;reads+\"/\"+writes+\"/\"+String(saved===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: failed suffix check publishes no backing",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",7];function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const e=attempt(()=>{const t:[...[].<string>,...[].<string>,boolean]=raw;});raw[0]=7;e+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7,7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: existing wider backing remains authoritative",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const broad:[...[].<(string|boolean)>]=raw;const narrow:[...[].<string>,...[].<string>,boolean]=raw;raw[0]=false;raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: conjoined suffix domains permit equal-type growth",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\"];const t:([...[].<string>,...[].<string>,string]&[string,...[].<string>,...[].<string>])=raw;raw.push(\"b\");raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a,b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: fixed extent bounds anchored domain",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:([...[].<string>,...[].<string>,boolean]&[2].<(string|boolean)>)=raw;raw[0]=\"b\";function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>raw.push(\"c\"))+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/b,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: numeric suffix conversion keeps distinct types",
+      "steps": [
+        {
+          "source": "const raw:any=[1,258];const t:[...[].<uint8>,...[].<uint8>,uint16]=raw;String(t[0] is uint8)+\"/\"+String(t[1] is uint16)+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/1,258"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: empty numeric rest conversion anchors suffix",
+      "steps": [
+        {
+          "source": "const raw:any=[258];const t:[...[].<uint8>,...[].<uint8>,uint16]=raw;String(t[0] is uint16)+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/258"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: suffix reference supplies declared contract",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function f(ref x:boolean){x=false;}f(ref raw[1]);raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a,false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: rest reference supplies declared contract",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function f(ref x:string){x=\"b\";}f(ref raw[0]);raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: failed resize preserves suffix reference",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;let ref b=raw[1];function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>raw.pop());b=false;raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a,false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: replacement keeps suffix reference",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;let ref b=raw[1];raw[1]=false;String(b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: removed equal-type suffix reference stays invalid",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",\"b\"];const t:[...[].<string>,...[].<string>,string]=raw;let ref b=raw[1];raw.pop();raw.push(\"c\");function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{b=\"x\";})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,c"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: argument effects precede rejected splice plan",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;let effects=\"\";function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>raw.splice({valueOf(){effects+=\"n\";return 0;}},1))+\"/\"+effects+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/n/a,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: species not called for rejected plan",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;let effects=0;raw.constructor={get [Symbol.species](){effects++;return Array;}};function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>raw.splice(0,1))+\"/\"+effects+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/a,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: literal with empty rest uses suffix context",
+      "steps": [
+        {
+          "source": "const t:[...[].<string>,...[].<string>,boolean]=[true];String(t[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: literal with prefix middle and suffix uses exact context",
+      "steps": [
+        {
+          "source": "const t:[boolean,...[].<string>,...[].<string>,uint16]=[true,\"a\",\"b\",258];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true,a,b,258"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: literal expanded fixed spread uses suffix context",
+      "steps": [
+        {
+          "source": "const a:[string,string]=[\"a\",\"b\"];const t:[...[].<string>,...[].<string>,boolean]=[...a,true];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a,b,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: literal generic suffix uses contextual signature",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const t:[...[].<string>,...[].<string>,(x:string)=>string]=[\"a\",id];String(t[1]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: value copy in suffix acquisition",
+      "steps": [
+        {
+          "source": "class P{value:uint8=1;}const p:P=new P();const raw:any=[\"a\",p];const t:[...[].<string>,...[].<string>,P]=raw;p.value=2;String(raw[1].value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: failed callable write publishes no backing",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}const raw:any=[\"a\",id];Object.defineProperty(raw,\"1\",{writable:false});function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const e=attempt(()=>{const t:[...[].<string>,...[].<string>,(x:string)=>string]=raw;});raw[0]=Symbol();e+\"/\"+String(raw[0] is symbol)+\"/\"+String(raw[1]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: conjoined fixed copy retains exact positions",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:([...[].<string>,...[].<string>,boolean]&[string,boolean])=raw;const copy:any=raw.toReversed();function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{copy[0]=\"x\";})+\"/\"+copy.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true,a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: conjunction search uses complete positional intersections",
+      "steps": [
+        {
+          "source": "const raw:any=[true];const t:([...[].<boolean>,...[].<boolean>,boolean]&[].<(boolean|symbol)>)=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>raw.includes(Symbol()));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: admitted suffix deletion is rejected",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",true];const t:[...[].<string>,...[].<string>,boolean]=raw;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}attempt(()=>{delete raw[1];})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/a,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: literal requires its suffix",
+      "steps": [
+        {
+          "source": "const t:[...[].<string>,...[].<string>,boolean]=[];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "diagnostic": {
+              "phase": "static"
+            },
+            "errorClass": "StaticTypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: literal rejects wrong suffix",
+      "steps": [
+        {
+          "source": "const t:[...[].<string>,...[].<string>,boolean]=[\"x\"];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "diagnostic": {
+              "phase": "static"
+            },
+            "errorClass": "StaticTypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: static array destructuring retains possible suffix type",
+      "steps": [
+        {
+          "source": "const t:[...[].<string>,...[].<string>,boolean]=[\"a\",true];const [x,y]=t;String(y===true);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: static property destructuring retains possible suffix type",
+      "steps": [
+        {
+          "source": "const t:[...[].<string>,...[].<string>,boolean]=[\"a\",true];const {1:y}=t;String(y===true);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-suffix-storage: static early index excludes unreachable later suffix",
+      "steps": [
+        {
+          "source": "const t:[...[].<string>,...[].<string>,boolean,number]=[true,1];const x:string|boolean=t[0];String(x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: empty input completes prefix and keeps source",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=7,...[].<string>,...[].<string>]=raw;String(t===raw)+\"/\"+t.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: multiple omitted defaults precede empty rest",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=7,boolean=true,...[].<string>,...[].<string>]=raw;t.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7,true/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: partial defaulted prefix keeps supplied value",
+      "steps": [
+        {
+          "source": "const raw:any=[3];const t:[number=7,boolean=true,...[].<string>,...[].<string>]=raw;t.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3,true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: fully supplied tuple admits in place",
+      "steps": [
+        {
+          "source": "const raw:any=[3,\"s\"];const t:[number=7,...[].<string>,...[].<string>]=raw;String(t===raw)+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/3,s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: prefix incompatible value cannot skip to rest",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[\"s\"];String(raw is [number=7,...[].<string>,...[].<string>])+\"/\"+attempt(()=>{const t:[number=7,...[].<string>,...[].<string>]=raw;})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/TypeError/s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: later default cannot be skipped to rest",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[3,\"s\"];String(raw is [number=7,boolean=true,...[].<string>,...[].<string>])+\"/\"+attempt(()=>{const t:[number=7,boolean=true,...[].<string>,...[].<string>]=raw;});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: required prefix remains required",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[];attempt(()=>{const t:[number,boolean=true,...[].<string>,...[].<string>]=raw;});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: membership observes omission without completing",
+      "steps": [
+        {
+          "source": "const raw:any=[];String(raw is [number=7,...[].<string>,...[].<string>])+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: reference viability leaves omission alone",
+      "steps": [
+        {
+          "source": "const raw:any=[];function inspect(ref x:[number=7,...[].<string>,...[].<string>]){}inspect(ref raw);String(raw.length);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: supplied hole does not take default",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=Array(1);String(raw is [number=7,...[].<string>,...[].<string>])+\"/\"+attempt(()=>{const t:[number=7,...[].<string>,...[].<string>]=raw;})+\"/\"+String(0 in raw);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/TypeError/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: supplied undefined does not take default",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[undefined];attempt(()=>{const t:[number=7,...[].<string>,...[].<string>]=raw;});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: nullable selected union completes",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:([number=7,...[].<string>,...[].<string>]|null)=raw;const out:any=t;out.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: nested object completes selected tuple",
+      "steps": [
+        {
+          "source": "const raw:any=[];const outer:any={item:raw};const t:{item:[number=7,...[].<string>,...[].<string>]}=outer;String(t===outer)+\"/\"+outer.item.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: homogeneous array completes nested tuple",
+      "steps": [
+        {
+          "source": "const raw:any=[];const outer:any=[raw];const t:[].<[number=7,...[].<string>,...[].<string>]>=outer;String(t===outer)+\"/\"+outer[0].join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: return boundary completes tuple",
+      "steps": [
+        {
+          "source": "const raw:any=[];function get():[number=7,...[].<string>,...[].<string>]{return raw;}const out:any=get();out.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: argument boundary completes tuple",
+      "steps": [
+        {
+          "source": "const raw:any=[];function get(x:[number=7,...[].<string>,...[].<string>]):number{return x[0];}String(get(raw))+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: literal contextual conversion completes prefix",
+      "steps": [
+        {
+          "source": "const t:[number=7,...[].<string>,...[].<string>]=[];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: explicit conversion completes prefix",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:any=raw := [number=7,...[].<string>,...[].<string>];t.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: default declaration constructs prefix",
+      "steps": [
+        {
+          "source": "let t:[number=7,...[].<string>,...[].<string>];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: computed default completes at boundary",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=3+4,...[].<string>,...[].<string>]=raw;t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: supplied callable prefix specializes on copied output",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const t:[F,number=7,...[].<string>,...[].<string>]=raw;String(t[0]===id.<string>)+\"/\"+t[1]+\"/\"+String(raw[0]===id)+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/7/true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: fully supplied callable rest specializes in place",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[1,id];const t:[number=7,...[].<F>,...[].<F>]=raw;String(t===raw)+\"/\"+String(raw[1]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: copied output enforces prefix and rest stores",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[];const t:[number=7,...[].<string>,...[].<string>]=raw;const out:any=t;out.push(\"s\");attempt(()=>{out[0]=\"bad\";})+\"/\"+attempt(()=>{out[1]=Symbol();})+\"/\"+out.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/TypeError/7,s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: in place output enforces prefix and rest stores",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,\"s\"];const t:[number=7,...[].<string>,...[].<string>]=raw;attempt(()=>{raw[0]=\"bad\";})+\"/\"+attempt(()=>{raw[1]=Symbol();})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/TypeError/1,s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: shrink and grow keep declared positional contracts",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=7,...[].<string>,...[].<string>]=raw;const out:any=t;out.length=0;out.length=2;out.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: indexed growth uses type defaults not initializer",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=7,...[].<string>,...[].<string>]=raw;const out:any=t;out.length=0;out[2]=\"z\";out.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0,,z"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: boundary after shrink reconstructs default",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=7,...[].<string>,...[].<string>]=raw;const out:any=t;out.length=0;const next:[number=7,...[].<string>,...[].<string>]=t;String(next===t)+\"/\"+next[0]+\"/\"+out.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: required prefix prevents shrinking past minimum",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];const t:[number,boolean=true,...[].<string>,...[].<string>]=raw;const out:any=t;out.length=1;attempt(()=>{out.length=0;})+\"/\"+out.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: absent rest participates in search admission",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[];const t:[number=7,...[].<string>,...[].<string>]=raw;const out:any=t;String(out.includes(\"s\"))+\"/\"+attempt(()=>{out.includes(Symbol());});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: rest with copy remains an ordinary Array control",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=7,...[].<string>,...[].<string>]=raw;const out:any=t.with(0,3);out.push(Symbol());String(out[0])+\"/\"+typeof out[1];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3/symbol"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: source reference remains live and independent",
+      "steps": [
+        {
+          "source": "const raw:any=[1];let ref r=raw[0];const t:[number,number=7,...[].<string>,...[].<string>]=raw;r=8;raw[0]+\"/\"+t[0]+\"/\"+t[1];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "8/1/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: removed prefix reference cannot revive",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];const t:[number=7,...[].<string>,...[].<string>]=raw;let ref r=raw[0];raw.pop();raw.push(3);attempt(()=>{r=2;})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: source getter read once and left intact",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return id;}});const t:[F,number=7,...[].<string>,...[].<string>]=raw;reads+\"/\"+String(t[0]===id.<string>)+\"/\"+t[1]+\"/\"+String(typeof Object.getOwnPropertyDescriptor(raw,\"0\").get);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true/7/function"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: frozen empty source can be copied",
+      "steps": [
+        {
+          "source": "const raw:any=Object.freeze([]);const t:[number=7,...[].<string>,...[].<string>]=raw;t.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: setter sees completed typed output",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let saved:any;let seen=\"\";const raw:any=[];const outer:any={get item(){return raw;},set item(v){saved=v;seen=v[0]+\"/\"+attempt(()=>{v.push(Symbol());});}};const t:{item:[number=7,...[].<string>,...[].<string>]}=outer;seen+\"/\"+saved.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: completed output survives setter failure",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let saved:any;const raw:any=[];const outer:any={get item(){return raw;},set item(v){saved=v;throw new Error(\"stop\");}};attempt(()=>{const t:{item:[number=7,...[].<string>,...[].<string>]}=outer;})+\"/\"+saved[0]+\"/\"+attempt(()=>{saved.push(Symbol());})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "Error/7/TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: overlapping rest contracts both constrain output",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[];const t:([number=7,...[].<string>,...[].<string>]&[any=7,...[].<(string|boolean)>])=raw;const out:any=t;out.push(\"s\");attempt(()=>{out.push(Symbol());})+\"/\"+out.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7,s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: overlapping defaults must agree",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[];attempt(()=>{const t:([number=7,...[].<string>,...[].<string>]&[number=9,...[].<boolean>,...[].<boolean>])=raw;})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: noncopying homogeneous evidence constrains new default",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[];attempt(()=>{const t:([any=\"s\",...[].<number>,...[].<number>]&[].<number>)=raw;})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: required custom source property is not copied",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[];raw.extra=1;attempt(()=>{const t:([number=7,...[].<string>,...[].<string>]&{extra:number})=raw;})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: required single rest suffix control",
+      "steps": [
+        {
+          "source": "const raw:any=[1,\"s\",true];const t:[number,...[].<string>,...[].<string>,boolean]=raw;String(t===raw)+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1,s,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: rest store retains ordinary String conversion",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=7,...[].<string>,...[].<string>]=raw;const out:any=t;out.push(2);typeof out[1]+\"/\"+out.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string/7,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: fully supplied prefix and empty rest retain identity",
+      "steps": [
+        {
+          "source": "const raw:any=[1];const t:[number=7,...[].<string>,...[].<string>]=raw;String(t===raw)+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: generic application completes a defaulted prefix",
+      "steps": [
+        {
+          "source": "const raw:any=[];function get<T:type>(x:any):[T=7,...[].<string>,...[].<string>]{return x;}const t:any=get.<number>(raw);t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: contextual literal cannot skip default to rest",
+      "steps": [
+        {
+          "source": "const t:[number=7,...[].<string>,...[].<string>]=[\"s\"];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple-rest-defaults: default after rest stays invalid",
+      "steps": [
+        {
+          "source": "type T=[...[].<string>,...[].<string>,number=7];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_REQUIRED",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite-tuple-rests: finite prefix dynamic middle finite suffix membership",
+      "steps": [
+        {
+          "source": "const good:any=[1,2,\"s\",true,false];const short:any=[1,true,false];const empty:any=[1,2,true,false];type T=[...[2].<number>,...[].<string>,...[].<string>,...[2].<boolean>];String(good is T)+\"/\"+String(short is T)+\"/\"+String(empty is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite-tuple-rests: empty dynamic middle still keeps finite suffix contracts",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2,true,false];const t:[...[2].<number>,...[].<string>,...[].<string>,...[2].<boolean>]=raw;attempt(()=>{raw[2]=\"bad\";})+\"/\"+attempt(()=>{raw.push(true);})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/TypeError/1,2,true,false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite-tuple-rests: equal dynamic and finite suffix contracts permit growth",
+      "steps": [
+        {
+          "source": "const raw:any=[1,2,\"a\",\"b\"];const t:[...[2].<number>,...[].<string>,...[].<string>,...[2].<string>]=raw;raw.push(\"c\");raw.pop();raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2,a,b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite-tuple-rests: finite prefix minimum prevents shrinking into it",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2];const t:[...[2].<number>,...[].<string>,...[].<string>]=raw;attempt(()=>{raw.pop();})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite-tuple-rests: empty finite prefix before dynamic rest remains growable",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[...[0].<number>,...[].<string>,...[].<string>]=raw;raw.push(3);typeof raw[0]+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite-tuple-rests: removed dynamic tail reference cannot revive",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2,\"a\"];const t:[...[2].<number>,...[].<string>,...[].<string>]=raw;let ref r=raw[2];raw.pop();raw.push(\"b\");attempt(()=>{r=\"c\";})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,2,b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite-tuple-rests: finite and suffix conjunction preserves both domains",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,\"s\"];const t:([...[2].<(number|string)>]&[number,...[].<string>,...[].<string>])=raw;attempt(()=>{raw[0]=\"bad\";})+\"/\"+attempt(()=>{raw.push(\"x\");})+\"/\"+String(raw.includes(\"s\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/TypeError/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite-tuple-rests: finite source to dynamic suffix compares anchored position",
+      "steps": [
+        {
+          "source": "String(Reflect.isAssignable(type [...[2].<number>,boolean],type [...[].<number>,...[].<number>,boolean]))+\"/\"+String(Reflect.isAssignable(type [...[2].<number>,string],type [...[].<number>,...[].<number>,boolean]));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite-tuple-rests: trailing dynamic default control",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=7,...[].<string>,...[].<string>]=raw;t[0]+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite-tuple-rests: finite dynamic subtype checks newly occupied rest",
+      "steps": [
+        {
+          "source": "String(Reflect.isAssignable(type [...[2].<number>,...[].<string>,...[].<string>,...[3].<boolean>],type [number,...[].<(number|boolean)>,boolean]));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite-tuple-rests: finite dynamic subtype retains all source lengths",
+      "steps": [
+        {
+          "source": "String(Reflect.isAssignable(type [...[2].<number>,...[].<string>,...[].<string>,...[3].<boolean>],type [number,...[].<(number|string|boolean)>,boolean]));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite-tuple-rests: finite dynamic subtype checks shifted suffix boundary",
+      "steps": [
+        {
+          "source": "String(Reflect.isAssignable(type [...[2].<number>,...[].<number>,...[].<number>,...[2].<boolean>],type [...[].<number>,...[].<number>,...[3].<boolean>]));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite-tuple-rests: unsupported multiple dynamic source does not prove finite extent",
+      "steps": [
+        {
+          "source": "String(Reflect.isAssignable(type [...[].<number>,...[].<number>,...[].<number>,...[].<number>],type [...[2].<number>]));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite-tuple-rests: conjoined finite boundaries keep search domains",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,\"tag\"];const a:[...[].<number>,...[].<number>,...[2].<(number|\"tag\")>]=raw;const b:[...[2].<(number|\"tag\")>,...[].<\"tag\">]=raw;String(raw.includes(\"tag\"))+\"/\"+attempt(()=>{raw.includes(\"bad\");});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite middle membership 0",
+      "steps": [
+        {
+          "source": "const raw:any=[];String(raw is [...[].<number>,...[2].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite middle membership 1",
+      "steps": [
+        {
+          "source": "const raw:any=[0];String(raw is [...[].<number>,...[2].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite middle membership 2",
+      "steps": [
+        {
+          "source": "const raw:any=[0, 1];String(raw is [...[].<number>,...[2].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite middle membership 3",
+      "steps": [
+        {
+          "source": "const raw:any=[0, 1, 2];String(raw is [...[].<number>,...[2].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite middle membership 5",
+      "steps": [
+        {
+          "source": "const raw:any=[0, 1, 2, 3, 4];String(raw is [...[].<number>,...[2].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite middle minimum length",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2,3];const t:[...[].<number>,...[2].<number>,...[].<number>]=raw;attempt(()=>{raw.length=1;})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite middle minimum pop",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2,3];const t:[...[].<number>,...[2].<number>,...[].<number>]=raw;attempt(()=>{raw.pop();raw.pop();})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite middle minimum shift",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2,3];const t:[...[].<number>,...[2].<number>,...[].<number>]=raw;attempt(()=>{raw.shift();raw.shift();})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite middle minimum splice",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2,3];const t:[...[].<number>,...[2].<number>,...[].<number>]=raw;attempt(()=>{raw.splice(0,2);})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite middle same-type defaults and growth",
+      "steps": [
+        {
+          "source": "let t:[...[].<number>,...[2].<number>,...[].<number>];const raw:any=t;raw.push(4);raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0,0,4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "three rests accumulate separated finite counts",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2,3,4];const t:[...[].<number>,number,...[].<number>,...[2].<number>,...[].<number>]=raw;attempt(()=>{raw.length=2;})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested finite middle aliases",
+      "steps": [
+        {
+          "source": "type A=[...[].<number>,...[2].<number>];type B=[...[].<number>,boolean];const raw:any=[1,2,true];const t:[...A,...B]=raw;raw[2]=false;raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2,false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic finite middle",
+      "steps": [
+        {
+          "source": "type T<N:uint32>=[...[].<number>,...[N].<number>,...[].<number>];const raw:any=[1,2];const t:T.<2>=raw;raw.push(3);raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite middle compact billion count",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any={length:0,get 0(){reads++;return 1;}};String(raw is [...[].<number>,...[1000000000].<number>,...[].<number>])+\"/\"+reads;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "equal rests with non-equal fixed barrier stay ordered",
+      "steps": [
+        {
+          "source": "const a:any=[1,\"s\",2];const b:any=[\"s\",\"t\"];String(a is [...[].<number>,string,...[].<number>])+\"/\"+String(b is [...[].<number>,string,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "subtype rests are not equal rest contracts",
+      "steps": [
+        {
+          "source": "const a:any=[true,1];String(a is [...[].<number>,number,...[].<(number|boolean)>])+\"/\"+String(a is [...[].<(number|boolean)>,number,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "separated finite non-equal barrier preserves extent",
+      "steps": [
+        {
+          "source": "const a:any=[1,\"s\",\"t\",2];const b:any=[1,\"s\",2];String(a is [...[].<number>,...[2].<string>,...[].<number>])+\"/\"+String(b is [...[].<number>,...[2].<string>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested admitted String store converts Boolean",
+      "steps": [
+        {
+          "source": "const raw:any={a:[1,2,\"s\"]};const t:{a:[...[].<number>,...[].<number>,string]}=raw;raw.a[2]=true;typeof raw.a[2];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested rejected Symbol store preserves value",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any={a:[1,2,\"s\"]};const t:{a:[...[].<number>,...[].<number>,string]}=raw;attempt(()=>{raw.a[2]=Symbol();})+\"/\"+raw.a.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,2,s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "implicit conversion anchors fourth suffix",
+      "steps": [
+        {
+          "source": "const raw:any=[1,2,3,true];const t:[...[].<uint8>,...[].<uint8>,boolean]=raw;String(t is [...[].<uint8>,...[].<uint8>,boolean])+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1,2,3,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit conversion anchors fourth suffix",
+      "steps": [
+        {
+          "source": "const raw:any=[257,258,259,true];const t=(raw:=[...[].<uint8>,...[].<uint8>,boolean]);String(t is [...[].<uint8>,...[].<uint8>,boolean])+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1,2,3,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same-type barriers keep original type identity",
+      "steps": [
+        {
+          "source": "type A=[...[].<number>,number,...[].<number>];type B=[number,...[].<number>];String(A===B);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero finite barrier does not add a different contract",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[];const t:[...[].<number>,...[0].<string>,...[].<number>]=raw;raw.push(1);attempt(()=>{raw.push(Symbol());})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    }
+  ]
+}
