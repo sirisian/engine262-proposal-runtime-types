@@ -1,0 +1,830 @@
+{
+  "cases": [
+    {
+      "name": "missing own elements [].<any>",
+      "steps": [
+        {
+          "source": "const raw:any=[,,];const a:[].<any>=raw;String(a===raw)+\"/\"+raw.length+\"/\"+Object.keys(raw).join(\",\")+\"/\"+String(raw[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/2/0,1/undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "missing own elements [].<undefined>",
+      "steps": [
+        {
+          "source": "const raw:any=[,,];const a:[].<undefined>=raw;String(a===raw)+\"/\"+raw.length+\"/\"+Object.keys(raw).join(\",\")+\"/\"+String(raw[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/2/0,1/undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "missing own elements [].<number|undefined>",
+      "steps": [
+        {
+          "source": "const raw:any=[,,];const a:[].<number|undefined>=raw;String(a===raw)+\"/\"+raw.length+\"/\"+Object.keys(raw).join(\",\")+\"/\"+String(raw[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/2/0,1/undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "missing own elements [2].<any>",
+      "steps": [
+        {
+          "source": "const raw:any=[,,];const a:[2].<any>=raw;String(a===raw)+\"/\"+raw.length+\"/\"+Object.keys(raw).join(\",\")+\"/\"+String(raw[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/2/0,1/undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "missing own elements [undefined,undefined]",
+      "steps": [
+        {
+          "source": "const raw:any=[,,];const a:[undefined,undefined]=raw;String(a===raw)+\"/\"+raw.length+\"/\"+Object.keys(raw).join(\",\")+\"/\"+String(raw[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/2/0,1/undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "missing own elements [...[].<undefined>,undefined]",
+      "steps": [
+        {
+          "source": "const raw:any=[,,];const a:[...[].<undefined>,undefined]=raw;String(a===raw)+\"/\"+raw.length+\"/\"+Object.keys(raw).join(\",\")+\"/\"+String(raw[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/2/0,1/undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "missing own elements [undefined,...[].<undefined>]",
+      "steps": [
+        {
+          "source": "const raw:any=[,,];const a:[undefined,...[].<undefined>]=raw;String(a===raw)+\"/\"+raw.length+\"/\"+Object.keys(raw).join(\",\")+\"/\"+String(raw[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/2/0,1/undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal holes become present undefined",
+      "steps": [
+        {
+          "source": "const a:[].<undefined>=[,,];const raw:any=a;String(raw.length)+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/0,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "argument holes are initialized",
+      "steps": [
+        {
+          "source": "function f(a:[].<undefined>){const raw:any=a;return Object.keys(raw).join(\",\");}f([,,]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "return holes are initialized",
+      "steps": [
+        {
+          "source": "function f():[].<undefined>{return [,,];}const raw:any=f();Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "defaulted tuple supplied hole is not a default",
+      "steps": [
+        {
+          "source": "const raw:any=[,];const a:[any=7]=raw;String(a===raw)+\"/\"+Object.hasOwn(raw,\"0\")+\"/\"+String(raw[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/undefined"
+          }
+        }
+      ]
+    },
+    {
+      "name": "defaulted tuple omitted trailing position still uses default",
+      "steps": [
+        {
+          "source": "const raw:any=[];const a:[any=7]=raw;String(a===raw)+\"/\"+String(a[0])+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "membership remains observational",
+      "steps": [
+        {
+          "source": "const raw:any=[,,];String(raw is [].<undefined>)+\"/\"+Object.keys(raw).length+\"/\"+String(Reflect.deleteProperty(raw,\"0\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/0/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed membership remains observational",
+      "steps": [
+        {
+          "source": "const raw:any=[,];String(raw is [].<number>)+\"/\"+Object.hasOwn(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "membership narrowing still initializes at a boundary",
+      "steps": [
+        {
+          "source": "const raw:any=[,];let result=\"\";if(raw is [].<undefined>){const a:[].<undefined>=raw;result=String(a===raw)+\"/\"+Object.hasOwn(raw,\"0\");}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected union initializes the owned sequence",
+      "steps": [
+        {
+          "source": "const raw:any=[,];const a:[].<undefined>|null=raw;String(a===raw)+\"/\"+Object.hasOwn(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any selected target does not acquire sequence backing",
+      "steps": [
+        {
+          "source": "const raw:any=[,];const a:[].<undefined>|any=raw;String(a===raw)+\"/\"+Object.hasOwn(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "successful later union arm retains only its evidence",
+      "steps": [
+        {
+          "source": "const raw:any=[,1];const a:[].<string>|[any,number]=raw;String(a===raw)+\"/\"+Object.keys(raw).join(\",\")+\"/\"+raw[1];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/0,1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested and repeated paths initialize once",
+      "steps": [
+        {
+          "source": "const raw:any=[,];const a:{left:[].<undefined>,right:[undefined]}={left:raw,right:raw};String(a.left===raw)+\"/\"+String(a.right===raw)+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "combined homogeneous and tuple domains initialize own slots",
+      "steps": [
+        {
+          "source": "const raw:any=[,];const a:([].<any>&[undefined])=raw;String(a===raw)+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed admission does not initialize or protect holes",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[,1];attempt(()=>{const a:[].<string>=raw;})+\"/\"+Object.hasOwn(raw,\"0\")+\"/\"+Reflect.deleteProperty(raw,\"1\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a missing function has no implicit default",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[,];attempt(()=>{const a:[].<F>=raw;})+\"/\"+raw.length+\"/\"+Object.hasOwn(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nonextensible sparse source refuses acquisition",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[,,];Object.preventExtensions(raw);attempt(()=>{const a:[].<any>=raw;})+\"/\"+Object.keys(raw).length+\"/\"+Reflect.deleteProperty(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "sealed sparse source refuses acquisition",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[,];Object.seal(raw);attempt(()=>{const a:[].<undefined>=raw;})+\"/\"+Object.keys(raw).length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "frozen dense undefined source needs no new properties",
+      "steps": [
+        {
+          "source": "const raw:any=[undefined];Object.freeze(raw);const a:[].<undefined>=raw;String(a===raw)+\"/\"+Object.hasOwn(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "readonly length permits initialization within existing extent",
+      "steps": [
+        {
+          "source": "const raw:any=[,,];Object.defineProperty(raw,\"length\",{writable:false});const a:[].<undefined>=raw;String(a===raw)+\"/\"+Object.keys(raw).join(\",\")+\"/\"+Object.getOwnPropertyDescriptor(raw,\"length\").writable;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/0,1/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "new own descriptors are initialized ordinary data",
+      "steps": [
+        {
+          "source": "const raw:any=[,];const a:[].<any>=raw;const d=Object.getOwnPropertyDescriptor(raw,\"0\");String(d.value)+\"/\"+d.writable+\"/\"+d.enumerable+\"/\"+d.configurable;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined/true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "existing descriptors and ordinary keys are retained",
+      "steps": [
+        {
+          "source": "const raw:any=[undefined,,];Object.defineProperty(raw,\"0\",{enumerable:false,writable:false});raw.extra=7;const a:[].<undefined>=raw;Object.keys(raw).join(\",\")+\"/\"+Object.getOwnPropertyDescriptor(raw,\"0\").writable+\"/\"+raw.extra;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,extra/false/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "new holes are protected after admission",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[,];const a:[].<any>=raw;attempt(()=>{delete raw[0];})+\"/\"+Object.hasOwn(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "initialized holes participate in removal",
+      "steps": [
+        {
+          "source": "const raw:any=[,,];const a:[].<undefined>=raw;raw.shift();String(raw.length)+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit cast of compatible sparse input preserves identity",
+      "steps": [
+        {
+          "source": "const raw:any=[,];const a:any=raw := [].<undefined>;String(a===raw)+\"/\"+Object.hasOwn(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "converting copy creates dense output and leaves source alone",
+      "steps": [
+        {
+          "source": "const raw:any=[,1];const a:any=raw := [].<uint8|undefined>;String(a===raw)+\"/\"+Object.keys(a).join(\",\")+\"/\"+Object.hasOwn(raw,\"0\")+\"/\"+String(a[1]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/0,1/false/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inherited data becomes owned and preserves source identity",
+      "steps": [
+        {
+          "source": "const proto=Object.create(Array.prototype);proto[0]=7;const raw:any=[,];Object.setPrototypeOf(raw,proto);const a:[].<number>=raw;proto[0]=9;String(a===raw)+\"/\"+Object.hasOwn(raw,\"0\")+\"/\"+raw[0]+\"/\"+String(Object.getPrototypeOf(raw)===proto);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/7/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inherited getter is read once and not replayed",
+      "steps": [
+        {
+          "source": "let reads=0;const proto=Object.create(Array.prototype);Object.defineProperty(proto,\"0\",{get(){reads++;return undefined;}});const raw:any=[,];Object.setPrototypeOf(raw,proto);const a:[].<undefined>=raw;String(reads)+\"/\"+Object.hasOwn(raw,\"0\")+\"/\"+String(raw[0])+\"/\"+reads;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true/undefined/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unchanged inherited value invokes no setter",
+      "steps": [
+        {
+          "source": "let writes=0;const proto=Object.create(Array.prototype);Object.defineProperty(proto,\"0\",{get(){return 7;},set(v){writes++;}});const raw:any=[,];Object.setPrototypeOf(raw,proto);const a:[].<number>=raw;String(writes)+\"/\"+Object.hasOwn(raw,\"0\")+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/true/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inherited callable conversion retains ordinary setter effects",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let held:any=id;let reads=0;let writes=0;let receiver:any;const proto=Object.create(Array.prototype);Object.defineProperty(proto,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;receiver=this;}});const raw:any=[,];Object.setPrototypeOf(raw,proto);const a:[].<F>=raw;String(reads)+\"/\"+writes+\"/\"+String(receiver===raw)+\"/\"+String(held===id.<string>)+\"/\"+Object.hasOwn(raw,\"0\")+\"/\"+String(raw[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1/true/true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inherited writable data materialization creates own storage",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const proto=Object.create(Array.prototype);proto[0]=id;const raw:any=[,];Object.setPrototypeOf(raw,proto);const a:[].<F>=raw;String(proto[0]===id)+\"/\"+Object.hasOwn(raw,\"0\")+\"/\"+String(raw[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "changed inherited getter-only value retains write refusal",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;const proto=Object.create(Array.prototype);Object.defineProperty(proto,\"0\",{get(){reads++;return id;}});const raw:any=[,];Object.setPrototypeOf(raw,proto);attempt(()=>{const a:[].<F>=raw;})+\"/\"+reads+\"/\"+Object.hasOwn(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unchanged inherited readonly value can initialize own data",
+      "steps": [
+        {
+          "source": "const proto=Object.create(Array.prototype);Object.defineProperty(proto,\"0\",{value:7,writable:false});const raw:any=[,];Object.setPrototypeOf(raw,proto);const a:[].<number>=raw;String(Object.hasOwn(raw,\"0\"))+\"/\"+Object.getOwnPropertyDescriptor(raw,\"0\").writable;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "preflight nonextensibility follows reads but precedes materialization",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;let writes=0;const proto=Object.create(Array.prototype);Object.defineProperty(proto,\"0\",{get(){reads++;return id;},set(v){writes++;}});const raw:any=[,];Object.setPrototypeOf(raw,proto);Object.preventExtensions(raw);attempt(()=>{const a:[].<F>=raw;})+\"/\"+reads+\"/\"+writes+\"/\"+Object.hasOwn(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/0/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "getter-created own location is preserved on refusal",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[,];const proto=Object.create(Array.prototype);Object.defineProperty(proto,\"0\",{get(){Object.defineProperty(raw,\"0\",{value:9,configurable:true});return 7;}});Object.setPrototypeOf(raw,proto);attempt(()=>{const a:[].<number>=raw;})+\"/\"+raw[0]+\"/\"+Reflect.deleteProperty(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/9/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later getter deleting an observed own location prevents publication",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[undefined,undefined];Object.defineProperty(raw,\"1\",{get(){delete raw[0];return undefined;},configurable:true});attempt(()=>{const a:[].<undefined>=raw;})+\"/\"+Object.hasOwn(raw,\"0\")+\"/\"+Reflect.deleteProperty(raw,\"1\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later getter changing observed data prevents publication",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[undefined,undefined];Object.defineProperty(raw,\"1\",{get(){raw[0]=9;return undefined;},configurable:true});attempt(()=>{const a:[].<undefined>=raw;})+\"/\"+raw[0]+\"/\"+Reflect.deleteProperty(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/9/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "deletion before the position is observed can supply undefined",
+      "steps": [
+        {
+          "source": "const raw:any=[undefined,undefined];Object.defineProperty(raw,\"0\",{get(){delete raw[1];return undefined;},configurable:true});const a:[].<undefined>=raw;String(Object.hasOwn(raw,\"1\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later getter creates an earlier missing own location",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[,undefined];Object.defineProperty(raw,\"1\",{get(){raw[0]=9;return undefined;},configurable:true});attempt(()=>{const a:[].<undefined>=raw;})+\"/\"+raw[0]+\"/\"+Reflect.deleteProperty(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/9/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "getter append cancels publication without discarding append",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[,undefined];Object.defineProperty(raw,\"1\",{get(){raw[2]=9;return undefined;},configurable:true});attempt(()=>{const a:[].<undefined>=raw;})+\"/\"+raw.length+\"/\"+Object.hasOwn(raw,\"0\")+\"/\"+raw[2];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/3/false/9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested parent failure publishes no child holes or parent contracts",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[,];const obj:any={left:raw,get right(){raw.length=2;return 7;}};attempt(()=>{const a:{left:[].<undefined>,right:number}=obj;})+\"/\"+raw.length+\"/\"+Object.keys(raw).length+\"/\"+Reflect.deleteProperty(obj,\"left\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/2/0/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "one failing child prevents all planned hole publication",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const left:any=[,];const right:any=[,];Object.preventExtensions(right);const raw:any={left,right};attempt(()=>{const a:{left:[].<undefined>,right:[].<undefined>}=raw;})+\"/\"+Object.keys(left).length+\"/\"+Object.keys(right).length+\"/\"+Reflect.deleteProperty(raw,\"left\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/0/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "late nonextensibility preserves setter effects and unfilled positions",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let writes=0;const proto=Object.create(Array.prototype);Object.defineProperty(proto,\"0\",{get(){return id;},set(v){writes++;Object.preventExtensions(raw);}});const raw:any=[,];Object.setPrototypeOf(raw,proto);attempt(()=>{const a:[].<F>=raw;})+\"/\"+writes+\"/\"+Object.hasOwn(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "setter append prevents publication without discarding effects",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let writes=0;const proto=Object.create(Array.prototype);Object.defineProperty(proto,\"0\",{get(){return id;},set(v){writes++;raw[1]=9;}});const raw:any=[,];Object.setPrototypeOf(raw,proto);attempt(()=>{const a:[].<F>=raw;})+\"/\"+writes+\"/\"+raw.length+\"/\"+Object.hasOwn(raw,\"0\")+\"/\"+raw[1];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/2/false/9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "setter-created incompatible own definition is not overwritten",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;function other(x:string):string{return x;}const proto=Object.create(Array.prototype);Object.defineProperty(proto,\"0\",{get(){return id;},set(v){Object.defineProperty(raw,\"0\",{value:other,configurable:true});}});const raw:any=[,];Object.setPrototypeOf(raw,proto);attempt(()=>{const a:[].<F>=raw;})+\"/\"+String(raw[0]===other)+\"/\"+Reflect.deleteProperty(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "setter-created matching own definition keeps its attributes",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const proto=Object.create(Array.prototype);Object.defineProperty(proto,\"0\",{get(){return id;},set(v){Object.defineProperty(raw,\"0\",{value:v,writable:false,configurable:true});}});const raw:any=[,];Object.setPrototypeOf(raw,proto);const a:[].<F>=raw;String(raw[0]===id.<string>)+\"/\"+Object.getOwnPropertyDescriptor(raw,\"0\").writable;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "new accessor cannot substitute for missing initialized data",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const proto=Object.create(Array.prototype);Object.defineProperty(proto,\"0\",{get(){return id;},set(v){Object.defineProperty(raw,\"0\",{get(){return v;},configurable:true});}});const raw:any=[,];Object.setPrototypeOf(raw,proto);attempt(()=>{const a:[].<F>=raw;})+\"/\"+String(typeof Object.getOwnPropertyDescriptor(raw,\"0\").get)+\"/\"+Reflect.deleteProperty(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/function/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "independent nested admission is retained",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let held:any=id;let once=true;const proto=Object.create(Array.prototype);Object.defineProperty(proto,\"0\",{get(){return held;},set(v){held=v;if(once){once=false;const inner:[].<any>=raw;}}});const raw:any=[,];Object.setPrototypeOf(raw,proto);const a:[].<F>=raw;raw[0]=7;String(raw[0])+\"/\"+Object.hasOwn(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "existing generic accessor keeps its current effect order",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;let writes=0;let held:any=id;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return held;},set(v){writes++;held=v;},configurable:true});const a:[].<F>=raw;String(reads)+\"/\"+writes+\"/\"+String(held===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary untyped holes stay holes",
+      "steps": [
+        {
+          "source": "const raw:any=[,,];String(raw.length)+\"/\"+Object.keys(raw).length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh own hole values do not invalidate a preexisting property borrow",
+      "steps": [
+        {
+          "source": "const raw:any=[,];let ref b=raw[0];const a:[].<any>=raw;raw[0]=7;String(b)+\"/\"+Object.hasOwn(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed admission scope is restored",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const proto=Object.create(Array.prototype);Object.defineProperty(proto,\"0\",{get(){return id;},set(v){raw.length=2;throw new Error(\"stop\");}});const raw:any=[,];Object.setPrototypeOf(raw,proto);attempt(()=>{const a:[].<F>=raw;});Object.defineProperty(raw,\"0\",{value:7,configurable:true});raw[2]=9;String(raw.length)+\"/\"+raw[0]+\"/\"+raw[2];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3/7/9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stale callable observation refuses before overwriting independent data",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;function other(x:string):string{return x;}const raw:any=[id,id];Object.defineProperty(raw,\"1\",{get(){raw[0]=other;return id;},configurable:true});attempt(()=>{const a:[].<F>=raw;})+\"/\"+String(raw[0]===other)+\"/\"+Reflect.deleteProperty(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true/true"
+          }
+        }
+      ]
+    }
+  ]
+}

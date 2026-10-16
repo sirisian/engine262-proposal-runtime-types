@@ -3844,6 +3844,9 @@ export type StructuralStorageAdmission = {
   kind: 'array', object: ObjectValue, element: TypeRecord, extent: number | 'dynamic',
 } | {
   kind: 'tuple', object: ObjectValue, shape: TupleStorageShape,
+} | {
+  kind: 'sequence', object: ObjectValue, length: number,
+  positions: readonly { own: boolean, value: Value }[],
 };
 
 /** A backing contract can prove membership without proving materialization. */
@@ -4171,6 +4174,22 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         return false;
       }
       const len = R(unwrapToNumber(lenValue as NumberValue | TypedNumberValue));
+      // Admission retains own-presence separately from Get's value. A hole or
+      // inherited element can supply a value without supplying owned storage.
+      // Pure membership omits this evidence and never initializes positions.
+      const positions: { own: boolean, value: Value }[] | undefined = storage && isArrayExoticObject(value) ? [] : undefined;
+      const sequenceObject = value;
+      function* observe(index: number): ValueEvaluator {
+        const key = Value(String(index));
+        const own = sequenceObject.properties.has(key);
+        const element = Q(yield* Get(sequenceObject, key));
+        positions?.push({ own, value: element });
+        return element;
+      }
+      const retainSequence = () => {
+        if (positions) storage!.push({ kind: 'sequence', object: value, length: len, positions });
+      };
+
       if (t.Kind === 'array') {
         // An extent RECORD: a parameter's is its binding in
         // the running frames, where bound; an opaque one - a construction's
@@ -4213,7 +4232,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           return false;
         }
         for (let i = 0; i < len; i += 1) {
-          const el = Q(yield* Get(value, Value(String(i))));
+          const el = Q(yield* observe(i));
           const admitted: UnionMemberAdmission | undefined = storage ? {} : undefined;
           if (!Q(yield* IsOfType(el, t.Element, storage, admitted))) {
             return false;
@@ -4224,6 +4243,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         // Retain the container even when empty. Extent resolution and element
         // observations belong to this admission, not a later Get walk.
         storage?.push({ kind: 'array', object: value, element: t.Element, extent: extent as number | 'dynamic' });
+        retainSequence();
         return true;
       }
       // Per #sec-array-membership.
@@ -4250,7 +4270,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           return false;
         }
         for (let i = 0; i < len; i += 1) {
-          const el = Q(yield* Get(value, Value(String(i))));
+          const el = Q(yield* observe(i));
           const admitted: UnionMemberAdmission | undefined = storage && tupleShape ? {} : undefined;
           const type = t.Elements[i].Type;
           if (!Q(yield* IsOfType(el, type, storage, admitted))) {
@@ -4260,6 +4280,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
             value: el, admittedType: admitted?.member ?? type });
         }
         if (tupleShape) storage?.push({ kind: 'tuple', object: value, shape: tupleShape });
+        retainSequence();
         return true;
       }
       // The predicate SequenceAssignment takes is synchronous and IsOfType is
@@ -4268,7 +4289,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       // type, which is what one item reaching it must be.
       const items: Value[] = [];
       for (let i = 0; i < len; i += 1) {
-        items.push(Q(yield* Get(value, Value(String(i)))));
+        items.push(Q(yield* observe(i)));
       }
       const admitted: boolean[][] = [];
       const evidence: StructuralStorageAdmission[][][] = [];
@@ -4300,6 +4321,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         }
         if (tupleShape) storage.push({ kind: 'tuple', object: value, shape: tupleShape });
       }
+      retainSequence();
       return true;
     }
     case 'nominal': {

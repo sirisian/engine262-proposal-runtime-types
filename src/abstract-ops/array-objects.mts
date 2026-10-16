@@ -68,6 +68,10 @@ const InternalMethods = {
     const removal = removalScope && removalScope.context === surroundingAgent.executionContextStack.at(-1) && removalScope.key === P
       ? removalScope.plan : undefined;
     if (removal) Q(CheckArrayRemoval(removal));
+    const admission = admissionWrites.get(array);
+    const admissionCheck = admission && admission.context === surroundingAgent.executionContextStack.at(-1) && admission.key === P
+      ? admission.check : undefined;
+    if (admissionCheck) Q(admissionCheck());
     // `Set` checks a store against the tuple's
     // position type or the array's element type; a REDEFINITION reached
     // neither, so `Object.defineProperty(a, 0, { value: "no" })` put a String
@@ -110,6 +114,7 @@ const InternalMethods = {
     // Revalidate even if the callback has now created the destination itself.
     if (insertion) Q(CheckArrayInsertion(insertion));
     if (removal) Q(CheckArrayRemoval(removal));
+    if (admissionCheck) Q(admissionCheck());
     if (P instanceof JSStringValue && P.stringValue() === 'length') {
       return Q(yield* ArraySetLength(array, Desc));
     } else if (isArrayIndex(P)) {
@@ -529,6 +534,25 @@ export function* FinishArrayRemoval(object: ObjectValue, length: number,
   plan: ArrayRemovalPlan | undefined): ValueEvaluator<BooleanValue> {
   if (plan) Q(CheckArrayRemoval(plan));
   return yield* Set(object, Value('length'), F(length), Value.true);
+}
+
+const admissionWrites = new WeakMap<ObjectValue, {
+  key: JSStringValue, context: unknown, check: () => ThrowCompletion | undefined,
+}>();
+
+/** Guard only the admission's own definition after any Set conversion effects.
+ * Independent callback writes retain their ordinary execution context. */
+export function* SetArrayAdmission(object: ObjectValue, key: JSStringValue, value: Value,
+  check: () => ThrowCompletion | undefined): ValueEvaluator<BooleanValue> {
+  Q(check());
+  const previous = admissionWrites.get(object);
+  admissionWrites.set(object, { key, check, context: surroundingAgent.executionContextStack.at(-1) });
+  try {
+    return yield* Set(object, key, value, Value.false);
+  } finally {
+    if (previous) admissionWrites.set(object, previous);
+    else admissionWrites.delete(object);
+  }
 }
 
 /** https://tc39.es/ecma262/#sec-isconcatspreadable */

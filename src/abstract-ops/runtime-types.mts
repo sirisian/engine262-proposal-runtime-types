@@ -1,4 +1,4 @@
-import { TupleStorageShapeOf, TupleLengthRange, TupleStorageTypeAt, TupleFixedPositions, type TupleStorageShape } from '../type-system/tuple-storage.mts';
+import { TupleStorageShapeOf, TupleLengthRange, TupleStorageTypeAt, TupleFixedPositions, TupleBackingLength, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { MetadataStorageKey, MetadataKey, MetadataKeys, MetadataEntries } from '../type-system/metadata-keys.mts';
 import { isRegExpObject } from '../intrinsics/RegExp.mts';
 import type { CapturedTypeContext } from '../type-system/runtime.mts';
@@ -19,7 +19,7 @@ import { SoAStorageOf } from '../intrinsics/SoA.mts';
 import { ConsumeEvaluationSteps, IsBudgetExhausted, EnterTypeComputation, ExitTypeComputation, BeginTypeEvaluation, EndTypeEvaluation } from '../type-system/budget.mts';
 import { Construct, IsCallable, IsConstructor, PrivateFieldAdd, PrivateMethodOrAccessorAdd, ToLength, SameValue } from './all.mts';
 import { CanonicalizeType, GetTypeObject, ConvertToDecimal } from '../type-system/intern.mts';
-import { TypedBooleanValue, TypedBoolean, TypedSymbolValue, TypedSymbol, TypedBigIntValue, TypedBigInt, NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, type NativeSteps, type Arguments, type FunctionCallContext, Descriptor } from '../value.mts';
+import { TypedBooleanValue, TypedBoolean, TypedSymbolValue, TypedSymbol, TypedBigIntValue, TypedBigInt, NumberValue, SymbolValue, TypedNumberValue, isTypedNumber, JSStringValue, TypedStringValue, TypedString, Value, ObjectValue, BigIntValue, BooleanValue, UndefinedValue, type NativeSteps, type Arguments, type FunctionCallContext, Descriptor } from '../value.mts';
 import { VectorValue } from '../value.mts';
 import { ReferenceValue } from '../value.mts';
 import { isBitLaneType, vectorShape } from '../type-system/vector-ops.mts';
@@ -43,6 +43,7 @@ import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime
 import { describeParameters, minimumArity, resolveOverloadChecked, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature, operatorTableKey } from '../type-system/overloads.mts';
 import {
   wellKnownSymbols,
+  SetArrayAdmission, OrdinaryGetOwnProperty, ValidateAndApplyPropertyDescriptor, IsDataDescriptor, Assert, type OrdinaryObject,
   Call, R, Throw, WithoutMetadata, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate, GetValue, Evaluate,
   IsComposite, CompositeFromShape } from '#self';
 import { CreateRangeObject, isRangeObject } from '../intrinsics/Range.mts';
@@ -170,7 +171,8 @@ function carryStringType(value: Value, t: TypeRecord): Value {
 function* CompleteStructuralAdmission(storage: readonly StructuralStorageAdmission[]): PlainEvaluator<void> {
   type SequenceStorage = ObjectValue & { TypedElement?: TypeRecord, TypedExtent?: number, TypedTuple?: TupleStorageShape };
   type SequenceGroup = { elements: TypeRecord[], type?: TypeRecord, extent?: number,
-    shapes: TupleStorageShape[], shape?: TupleStorageShape, acquire: boolean };
+    shapes: TupleStorageShape[], shape?: TupleStorageShape, acquire: boolean,
+    observations: Extract<StructuralStorageAdmission, { kind: 'sequence' }>[] };
   type Group = { types: TypeRecord[], targets: TypeRecord[], property: boolean, copy: boolean,
     type?: TypeRecord, target?: TypeRecord, previous?: Value };
   const sequences = new Map<ObjectValue, SequenceGroup>();
@@ -178,11 +180,11 @@ function* CompleteStructuralAdmission(storage: readonly StructuralStorageAdmissi
   const together = (types: TypeRecord[]): TypeRecord => types.length === 1 ? types[0]!
     : CanonicalizeType({ Kind: 'intersection', Members: types });
   for (const entry of storage) {
-    if (entry.kind !== 'array' && entry.kind !== 'tuple') continue;
+    if (entry.kind !== 'array' && entry.kind !== 'tuple' && entry.kind !== 'sequence') continue;
     let sequence = sequences.get(entry.object);
     if (!sequence) {
       const target = entry.object as SequenceStorage;
-      sequence = { elements: [], shapes: [], acquire: Q(IsArray(target)) === Value.true
+      sequence = { elements: [], shapes: [], observations: [], acquire: Q(IsArray(target)) === Value.true
         && target.TypedElement === undefined && target.TypedTuple === undefined };
       sequences.set(entry.object, sequence);
     }
@@ -194,10 +196,11 @@ function* CompleteStructuralAdmission(storage: readonly StructuralStorageAdmissi
         }
         sequence.extent = entry.extent;
       }
-    } else sequence.shapes.push(entry.shape);
+    } else if (entry.kind === 'tuple') sequence.shapes.push(entry.shape);
+    else sequence.observations.push(entry);
   }
   for (const entry of storage) {
-    if (entry.kind === 'array' || entry.kind === 'tuple') continue;
+    if (entry.kind === 'array' || entry.kind === 'tuple' || entry.kind === 'sequence') continue;
     let properties = groups.get(entry.object);
     if (!properties) groups.set(entry.object, properties = new Map());
     let group = properties.get(entry.key);
@@ -233,22 +236,101 @@ function* CompleteStructuralAdmission(storage: readonly StructuralStorageAdmissi
       Positions: Array.from({ length: fixed }, (_, i) => TupleStorageTypeAt(shape, i, fixed)!), Rest: undefined,
     };
   }
+  type Initialization = { length: number, positions: Map<string, { own: boolean, value: Value }> };
+  const initialization = new Map<ObjectValue, Initialization>();
+  const checkLength = (object: ObjectValue, plan: Initialization): ThrowCompletion | undefined => {
+    if (TupleBackingLength(object) !== plan.length) return Throw.TypeError('array length changed during storage admission');
+    return undefined;
+  };
+  for (const [object, sequence] of sequences) {
+    if (!sequence.acquire || !sequence.observations.length) continue;
+    const plan: Initialization = { length: sequence.observations[0]!.length, positions: new Map() };
+    Q(checkLength(object, plan));
+    for (const observation of sequence.observations) {
+      if (observation.length !== plan.length) return Throw.TypeError('array length changed between admission observations');
+      for (let i = 0; i < observation.positions.length; i += 1) {
+        const position = observation.positions[i]!;
+        const key = String(i);
+        if (object.properties.has(Value(key)) !== position.own) {
+          return Throw.TypeError('array own presence changed during storage admission');
+        }
+        if (!position.own && (object as OrdinaryObject).Extensible === Value.false) {
+          return Throw.TypeError('a nonextensible array cannot initialize missing own elements');
+        }
+        plan.positions.set(key, { own: position.own, value: position.own ? position.value : CopyValueClassInstance(position.value) });
+      }
+    }
+    for (const [key, position] of plan.positions) {
+      const desc = OrdinaryGetOwnProperty(object as OrdinaryObject, Value(key));
+      if (!(desc instanceof UndefinedValue) && IsDataDescriptor(desc) && !SameValue(desc.Value!, position.value)) {
+        return Throw.TypeError('an independent definition conflicts with element admission');
+      }
+    }
+    initialization.set(object, plan);
+  }
   // Preserve observation order; repeated equal observations of a location share
   // its materialization/write even when other locations intervene.
   for (const entry of storage) {
-    if (entry.kind === 'array' || entry.kind === 'tuple') continue;
+    if (entry.kind === 'array' || entry.kind === 'tuple' || entry.kind === 'sequence') continue;
     const { object, key, value } = entry;
     const group = groups.get(object)!.get(key)!;
     if (group.previous === value) continue;
     group.previous = value;
+    const plan = initialization.get(object);
+    if (plan) Q(checkLength(object, plan));
     let converted = Q(yield* MaterializeGenericCallable(value, group.target!));
     if (group.copy) converted = CopyValueClassInstance(converted);
+    if (plan) Q(checkLength(object, plan));
+    const position = typeof key === 'string' ? plan?.positions.get(key) : undefined;
+    if (position) position.value = converted;
     if (converted !== value) {
       const property = propertyKeyValue(key);
-      if (Q(yield* SetProperty(object, property, converted, Value.false)) === Value.false) {
+      const own = object.properties.has(property);
+      const before = plan ? OrdinaryGetOwnProperty(object as OrdinaryObject, property) : Value.undefined;
+      const check = (): ThrowCompletion | undefined => {
+        const conflict = checkLength(object, plan!);
+        if (conflict) return conflict;
+        if (object.properties.has(property) !== own) return Throw.TypeError('array own presence changed during admission write');
+        if (!(before instanceof UndefinedValue) && IsDataDescriptor(before)) {
+          const current = OrdinaryGetOwnProperty(object as OrdinaryObject, property);
+          if (current instanceof UndefinedValue || !IsDataDescriptor(current) || !SameValue(current.Value!, before.Value!)) {
+            return Throw.TypeError('array data changed during admission write');
+          }
+        }
+        return undefined;
+      };
+      const written = Q(yield* (plan && property instanceof JSStringValue
+        ? SetArrayAdmission(object, property, converted, check)
+        : SetProperty(object, property, converted, Value.false)));
+      if (written === Value.false) {
         return Throw.TypeError('$1 cannot be converted to $2 in place, because it is not writable', property, Value(displayType(group.type!)));
       }
+      if (plan) Q(checkLength(object, plan));
     }
+  }
+  const missing: { object: OrdinaryObject, key: JSStringValue, value: Value }[] = [];
+  for (const [object, plan] of initialization) {
+    Q(checkLength(object, plan));
+    const target = object as SequenceStorage;
+    const independentlyEstablished = target.TypedElement !== undefined || target.TypedTuple !== undefined;
+    for (const [key, position] of plan.positions) {
+      const property = Value(key);
+      const desc = OrdinaryGetOwnProperty(object as OrdinaryObject, property);
+      if (desc instanceof UndefinedValue) {
+        if (position.own || independentlyEstablished) return Throw.TypeError('an admitted own element was removed before publication');
+        if ((object as OrdinaryObject).Extensible === Value.false) return Throw.TypeError('a nonextensible array cannot initialize missing own elements');
+        missing.push({ object: object as OrdinaryObject, key: property, value: position.value });
+      } else if (!independentlyEstablished && ((!position.own && !IsDataDescriptor(desc))
+          || (IsDataDescriptor(desc) && !SameValue(desc.Value!, position.value)))) {
+        return Throw.TypeError('an independent definition conflicts with element initialization');
+      }
+    }
+  }
+  // No user code between revalidation, missing-element initialization, and
+  // contract publication. Defaults, getters, and inherited setters are not replayed.
+  for (const { object, key, value } of missing) {
+    Assert(ValidateAndApplyPropertyDescriptor(object, key, object.Extensible,
+      Descriptor({ Value: value, Writable: Value.true, Enumerable: Value.true, Configurable: Value.true }), Value.undefined) === Value.true);
   }
   // A failure publishes none of this admission's new contracts. Earlier
   // ordinary effects and independently completed nested boundaries survive.
