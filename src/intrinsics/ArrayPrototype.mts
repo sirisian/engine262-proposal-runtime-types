@@ -1,3 +1,4 @@
+import { BeginArrayInsertion, SetArrayInsertion, FinishArrayInsertion } from '../abstract-ops/array-objects.mts';
 import { TupleStorageTypeAt, TupleFixedPositions, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { ValidateArrayMutation } from '../abstract-ops/array-mutation.mts';
 import {
@@ -789,6 +790,7 @@ function* ArrayProto_splice(args: Arguments, { thisValue }: FunctionCallContext)
   Q(ValidateArrayMutation(O, { length: len + insertCount - actualDeleteCount,
     moves: insertCount === actualDeleteCount ? [] : [{ from: actualStart + actualDeleteCount,
       to: actualStart + insertCount, count: len - actualStart - actualDeleteCount }] }));
+  const insertion = BeginArrayInsertion(O, len + insertCount - actualDeleteCount);
   const A = Q(yield* ArraySpeciesCreate(O, actualDeleteCount));
   let k = 0;
   while (k < actualDeleteCount) {
@@ -810,7 +812,7 @@ function* ArrayProto_splice(args: Arguments, { thisValue }: FunctionCallContext)
       const fromPresent = Q(yield* HasProperty(O, from));
       if (fromPresent === Value.true) {
         const fromValue = Q(yield* Get(O, from));
-        Q(yield* Set(O, to, fromValue, Value.true));
+        Q(yield* SetArrayInsertion(O, to, fromValue, insertion));
       } else {
         Q(yield* DeletePropertyOrThrow(O, to));
       }
@@ -829,7 +831,7 @@ function* ArrayProto_splice(args: Arguments, { thisValue }: FunctionCallContext)
       const fromPresent = Q(yield* HasProperty(O, from));
       if (fromPresent === Value.true) {
         const fromValue = Q(yield* Get(O, from));
-        Q(yield* Set(O, to, fromValue, Value.true));
+        Q(yield* SetArrayInsertion(O, to, fromValue, insertion));
       } else {
         Q(yield* DeletePropertyOrThrow(O, to));
       }
@@ -839,10 +841,10 @@ function* ArrayProto_splice(args: Arguments, { thisValue }: FunctionCallContext)
   k = actualStart;
   while (items.length > 0) {
     const E = items.shift()!;
-    Q(yield* Set(O, X(ToString(F(k))), E, Value.true));
+    Q(yield* SetArrayInsertion(O, X(ToString(F(k))), E, insertion));
     k += 1;
   }
-  Q(yield* Set(O, Value('length'), F(len - actualDeleteCount + itemCount), Value.true));
+  Q(yield* FinishArrayInsertion(O, len - actualDeleteCount + itemCount, insertion));
   return A;
 }
 
@@ -989,6 +991,7 @@ function* ArrayProto_unshift(args: Arguments, { thisValue }: FunctionCallContext
   const O = Q(ToObject(thisValue));
   const len = Q(yield* LengthOfArrayLike(O));
   const argCount = args.length;
+  const insertion = BeginArrayInsertion(O, len + argCount);
   if (argCount > 0) {
     if (len + argCount > (2 ** 53) - 1) {
       return Throw.TypeError('Cannot make length of array-like object surpass the bounds of an integer index');
@@ -1001,7 +1004,7 @@ function* ArrayProto_unshift(args: Arguments, { thisValue }: FunctionCallContext
       const fromPresent = Q(yield* HasProperty(O, from));
       if (fromPresent === Value.true) {
         const fromValue = Q(yield* Get(O, from));
-        Q(yield* Set(O, to, fromValue, Value.true));
+        Q(yield* SetArrayInsertion(O, to, fromValue, insertion));
       } else {
         Q(yield* DeletePropertyOrThrow(O, to));
       }
@@ -1012,11 +1015,11 @@ function* ArrayProto_unshift(args: Arguments, { thisValue }: FunctionCallContext
     while (items.length !== 0) {
       const E = items.shift()!;
       const jStr = X(ToString(F(j)));
-      Q(yield* Set(O, jStr, E, Value.true));
+      Q(yield* SetArrayInsertion(O, jStr, E, insertion));
       j += 1;
     }
   }
-  Q(yield* Set(O, Value('length'), F(len + argCount), Value.true));
+  Q(yield* FinishArrayInsertion(O, len + argCount, insertion));
   return F(len + argCount);
 }
 

@@ -1,5 +1,6 @@
 import { TupleBackingLength, TupleStorageTypeAt, TupleResizePreserves, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
+import type { ThrowCompletion } from '../completion.mts';
 import {
   surroundingAgent, Descriptor, ObjectValue, JSStringValue, Value, wellKnownSymbols, type ObjectInternalMethods,
   NumberValue, UndefinedValue,
@@ -18,6 +19,8 @@ import {
   Get,
   GetFunctionRealm,
   IsDataDescriptor,
+  IsAccessorDescriptor,
+  Set,
   IsArray,
   IsConstructor,
   OrdinaryDefineOwnProperty,
@@ -55,6 +58,10 @@ const InternalMethods = {
     const array = this;
 
     Assert(IsPropertyKey(P));
+    const scoped = insertionWrites.get(array);
+    const insertion = scoped && scoped.context === surroundingAgent.executionContextStack.at(-1) && scoped.key === P
+      ? scoped.plan : undefined;
+    if (insertion) Q(CheckArrayInsertion(insertion));
     // `Set` checks a store against the tuple's
     // position type or the array's element type; a REDEFINITION reached
     // neither, so `Object.defineProperty(a, 0, { value: "no" })` put a String
@@ -75,6 +82,10 @@ const InternalMethods = {
         TypedTuple?: TupleStorageShape,
         TypedElement?: PositionType,
       };
+      const extent = (array as { TypedExtent?: number }).TypedExtent;
+      if (extent !== undefined && Number((P as JSStringValue).stringValue()) >= extent) {
+        return Throw.TypeError('a fixed-extent array cannot be grown');
+      }
       const tuple = typed.TypedTuple;
       if (tuple !== undefined) {
         const position = Number((P as JSStringValue).stringValue());
@@ -89,6 +100,9 @@ const InternalMethods = {
         Desc = Descriptor({ ...Desc, Value: Q(yield* RequireType(Desc.Value, typed.TypedElement)) });
       }
     }
+    // Conversion can reenter before this definition reaches its ordinary write.
+    // Revalidate even if the callback has now created the destination itself.
+    if (insertion) Q(CheckArrayInsertion(insertion));
     if (P instanceof JSStringValue && P.stringValue() === 'length') {
       return Q(yield* ArraySetLength(array, Desc));
     } else if (isArrayIndex(P)) {
@@ -101,6 +115,36 @@ const InternalMethods = {
       const index = X(ToUint32(P));
       if (R(index) >= R(length) && lengthDesc.Writable === Value.false) {
         return Value.false;
+      }
+      if (surroundingAgent.feature('runtime-types') && HasTypedArrayBacking(array)
+          && R(index) < R(length) && OrdinaryGetOwnProperty(array, P) === Value.undefined) {
+        if (IsAccessorDescriptor(Desc)) return Throw.TypeError('a new typed array position requires a data value');
+        if (Desc.Value === undefined) {
+          if (array.Extensible === Value.false) return Value.false;
+          const backing = array as ArrayBacking;
+          const { TypedTuple: tuple, TypedElement: element, TypedExtent: extent } = backing;
+          const target = tuple ? TupleStorageTypeAt(tuple, R(index), R(length)) : element;
+          Assert(target !== undefined);
+          const value = Q(yield* DefaultValueOf(target));
+          if (value === undefined) return Throw.TypeError('a new array position has no default value');
+          const copy = CopyValueClassInstance(value);
+          if (TupleBackingLength(array) !== R(length) || backing.TypedTuple !== tuple
+              || backing.TypedElement !== element || backing.TypedExtent !== extent
+              || OrdinaryGetOwnProperty(array, P) !== Value.undefined) {
+            return Throw.TypeError('array backing changed during element initialization');
+          }
+          Desc = Descriptor({ ...Desc, Value: copy });
+        }
+      }
+      if (surroundingAgent.feature('runtime-types') && HasTypedArrayBacking(array) && R(index) >= R(length)) {
+        if (IsAccessorDescriptor(Desc)) return Throw.TypeError('a new typed array position requires a data value');
+        if (insertion) {
+          if (array.Extensible === Value.false) return Value.false;
+          insertion.values.set(R(index), Desc);
+          return Value.true;
+        }
+        return yield* GrowInitializedArray(array, R(length), R(index) + 1,
+          Descriptor({ Value: F(R(index) + 1) }), new Map([[R(index), Desc]]));
       }
       let succeeded = X(OrdinaryDefineOwnProperty(array, P, Desc));
       if (succeeded === Value.false) {
@@ -270,7 +314,8 @@ export function* ArraySetLength(array: OrdinaryObject, Desc: Descriptor): ValueE
 }
 
 /** Prepare defaults before publishing an explicit typed length increase. */
-function* GrowInitializedArray(array: OrdinaryObject, oldLen: number, newLen: number, desc: Descriptor): ValueEvaluator<BooleanValue> {
+function* GrowInitializedArray(array: OrdinaryObject, oldLen: number, newLen: number, desc: Descriptor,
+  supplied: ReadonlyMap<number, Descriptor> = new Map()): ValueEvaluator<BooleanValue> {
   const backing = array as OrdinaryObject & {
     TypedElement?: Parameters<typeof DefaultValueOf>[0],
     TypedTuple?: TupleStorageShape,
@@ -287,13 +332,20 @@ function* GrowInitializedArray(array: OrdinaryObject, oldLen: number, newLen: nu
       || IsCompatiblePropertyDescriptor(array.Extensible, desc, current) === Value.false) {
     return Value.false;
   }
-  const values: Value[] = [];
+  const values: Descriptor[] = [];
   for (let index = oldLen; index < newLen; index += 1) {
-    const target = tuple === undefined ? element : TupleStorageTypeAt(tuple, index, newLen);
-    Assert(target !== undefined);
-    const value = Q(yield* DefaultValueOf(target));
-    if (value === undefined) return Throw.TypeError('a new array position has no default value');
-    values.push(CopyValueClassInstance(value));
+    const suppliedDescriptor = supplied.get(index);
+    let value = suppliedDescriptor?.Value;
+    if (value === undefined) {
+      const target = tuple === undefined ? element : TupleStorageTypeAt(tuple, index, newLen);
+      Assert(target !== undefined);
+      value = Q(yield* DefaultValueOf(target));
+      if (value === undefined) return Throw.TypeError('a new array position has no default value');
+      value = CopyValueClassInstance(value);
+    }
+    values.push(Descriptor(suppliedDescriptor === undefined
+      ? { Value: value, Writable: Value.true, Enumerable: Value.true, Configurable: Value.true }
+      : { ...suppliedDescriptor, Value: value }));
     // Defaults can call metadata code. A plan is not permission to overwrite
     // an independent resize or newly acquired backing contract.
     if (TupleBackingLength(array) !== oldLen || backing.TypedElement !== element
@@ -309,9 +361,7 @@ function* GrowInitializedArray(array: OrdinaryObject, oldLen: number, newLen: nu
   // No user code runs between this revalidation and publication. Define own
   // data slots directly, without inherited setters or a second conversion.
   for (let offset = 0; offset < values.length; offset += 1) {
-    const success = ValidateAndApplyPropertyDescriptor(array, Value(String(oldLen + offset)), array.Extensible, Descriptor({
-      Value: values[offset]!, Writable: Value.true, Enumerable: Value.true, Configurable: Value.true,
-    }), Value.undefined);
+    const success = ValidateAndApplyPropertyDescriptor(array, Value(String(oldLen + offset)), array.Extensible, values[offset]!, Value.undefined);
     Assert(success === Value.true);
   }
   const success = ValidateAndApplyPropertyDescriptor(array, lengthKey, array.Extensible, desc, current);
@@ -322,6 +372,74 @@ function* GrowInitializedArray(array: OrdinaryObject, oldLen: number, newLen: nu
     backing.TypedGeneration = (backing.TypedGeneration ?? 0) + 1;
   }
   return Value.true;
+}
+
+type ArrayBacking = OrdinaryObject & {
+  TypedElement?: Parameters<typeof DefaultValueOf>[0], TypedTuple?: TupleStorageShape, TypedExtent?: number,
+};
+
+function HasTypedArrayBacking(array: ObjectValue): boolean {
+  const backing = array as ArrayBacking;
+  return backing.TypedElement !== undefined || backing.TypedTuple !== undefined;
+}
+
+export type ArrayInsertionPlan = {
+  object: ArrayBacking, oldLength: number, length: number,
+  element: ArrayBacking['TypedElement'], tuple: ArrayBacking['TypedTuple'], extent: number | undefined,
+  values: Map<number, Descriptor>,
+};
+
+const insertionWrites = new WeakMap<ObjectValue, {
+  plan: ArrayInsertionPlan, key: JSStringValue, context: unknown,
+}>();
+
+/** Only growing owned typed Array mutations need a private tail. */
+export function BeginArrayInsertion(object: ObjectValue, length: number): ArrayInsertionPlan | undefined {
+  if (!surroundingAgent.feature('runtime-types') || !isArrayExoticObject(object) || !HasTypedArrayBacking(object)) return undefined;
+  const oldLength = TupleBackingLength(object);
+  if (length <= oldLength) return undefined;
+  const backing = object as ArrayBacking;
+  return { object: backing, oldLength, length, element: backing.TypedElement,
+    tuple: backing.TypedTuple, extent: backing.TypedExtent, values: new Map() };
+}
+
+function CheckArrayInsertion(plan: ArrayInsertionPlan): ThrowCompletion | undefined {
+  const { object } = plan;
+  if (TupleBackingLength(object) !== plan.oldLength || object.TypedElement !== plan.element
+      || object.TypedTuple !== plan.tuple || object.TypedExtent !== plan.extent) {
+    return Throw.TypeError('array backing changed during insertion');
+  }
+  return undefined;
+}
+
+/** Keep Set's lookup, conversion and setter effects. Only this intrinsic write,
+ * in this execution context, can stage its eventual own data definition. A
+ * callback's independent writes run in their own context and publish normally. */
+export function* SetArrayInsertion(object: ObjectValue, key: JSStringValue, value: Value,
+  plan: ArrayInsertionPlan | undefined): ValueEvaluator<BooleanValue> {
+  if (!plan) return yield* Set(object, key, value, Value.true);
+  Q(CheckArrayInsertion(plan));
+  const previous = insertionWrites.get(object);
+  insertionWrites.set(object, { plan, key, context: surroundingAgent.executionContextStack.at(-1) });
+  try {
+    const result = Q(yield* Set(object, key, value, Value.true));
+    Q(CheckArrayInsertion(plan));
+    return result;
+  } finally {
+    if (previous) insertionWrites.set(object, previous);
+    else insertionWrites.delete(object);
+  }
+}
+
+export function* FinishArrayInsertion(object: ObjectValue, length: number,
+  plan: ArrayInsertionPlan | undefined): ValueEvaluator<BooleanValue> {
+  if (!plan) return yield* Set(object, Value('length'), F(length), Value.true);
+  Q(CheckArrayInsertion(plan));
+  if (length > 2 ** 32 - 1) return Throw.RangeError('Array length too big.');
+  const succeeded = Q(yield* GrowInitializedArray(plan.object, plan.oldLength, length,
+    Descriptor({ Value: F(length) }), plan.values));
+  if (succeeded === Value.false) return Throw.TypeError('array insertion cannot publish its initialized tail');
+  return succeeded;
 }
 
 /** https://tc39.es/ecma262/#sec-isconcatspreadable */

@@ -1315,13 +1315,7 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
       const elementType = (Receiver as { TypedElement?: unknown }).TypedElement;
       if (elementType !== undefined && isArrayIndex(P)) {
         V = Q(yield* RequireType(V, elementType as never));
-        // proposal-runtime-types #sec-reference-liveness: a store past the
-        // current capacity grows the backing allocation, and growth relocates
-        // it. The generation is bumped so that a borrow taken before the growth
-        // is invalidated at its next use, which is what a packed backing store
-        // requires and what a program must not be able to depend on the absence
-        // of.
-        const typed = Receiver as { TypedCapacity?: number, TypedGeneration?: number, TypedExtent?: number };
+        const typed = Receiver as { TypedExtent?: number };
         const index = Number((P as JSStringValue).stringValue());
         // proposal-runtime-types #sec-array-and-tuple-types: a FIXED extent is
         // part of the type and does not move. A store past the end would grow
@@ -1332,11 +1326,8 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
         if (typed.TypedExtent !== undefined && index >= typed.TypedExtent) {
           return Throw.TypeError('a fixed-extent array cannot be grown');
         }
-        const capacity = typed.TypedCapacity ?? 0;
-        if (index >= capacity) {
-          typed.TypedCapacity = Math.max(index + 1, capacity * 2, 4);
-          typed.TypedGeneration = (typed.TypedGeneration ?? 0) + 1;
-        }
+        // Owned Array definitions update capacity only when initialized growth
+        // actually publishes. Failed stores and inherited setters do not move it.
       }
       // #sec-span-type: an element write through a WINDOW over an owned array.
       // The store is checked against the ARRAY's element type by the array's
