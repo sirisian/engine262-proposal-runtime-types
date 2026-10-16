@@ -3,10 +3,13 @@ import type { ThrowCompletion } from '../completion.mts';
 import type { TypeRecord } from './records.mts';
 import { Throw } from '#self';
 
-type Obligation = { owner: WeakRef<ObjectValue>, target: WeakRef<ObjectValue>, links: WeakRef<ObjectValue>[] };
+type Inspect = (owner: ObjectValue, changed: ObjectValue, replacement: ObjectValue | NullValue) => ObjectValue[] | false;
+type Obligation = { owner: WeakRef<ObjectValue>, links: WeakRef<ObjectValue>[] }
+  & ({ target: WeakRef<ObjectValue> } | { inspect: Inspect });
 type Change = { obligation: Obligation, links: ObjectValue[] };
 const acquired = new WeakMap<ObjectValue, Map<ObjectValue, Obligation>>();
 const dependents = new WeakMap<ObjectValue, Set<Obligation>>();
+const observed = new WeakMap<ObjectValue, Obligation>();
 
 function detach(obligation: Obligation): void {
   for (const link of obligation.links) {
@@ -33,7 +36,7 @@ function attach(obligation: Obligation, links: readonly ObjectValue[]): void {
 /** A path contains exactly the objects whose outgoing prototype links are
  * consulted before reaching target. The target's own prototype is irrelevant.
  * undefined means observable/exotic evidence, null an ordinary nonmember. */
-function pathTo(owner: ObjectValue, target: ObjectValue, changed?: ObjectValue,
+export function OrdinaryNominalPath(owner: ObjectValue, target: ObjectValue, changed?: ObjectValue,
   replacement?: ObjectValue | NullValue): ObjectValue[] | null | undefined {
   const path: ObjectValue[] = [];
   const seen = new Set<ObjectValue>();
@@ -52,7 +55,7 @@ function pathTo(owner: ObjectValue, target: ObjectValue, changed?: ObjectValue,
 
 /** Only resolved, non-generic source classes with a permanent own prototype
  * identity enter this specialization. This is not a new nominal brand. */
-export function AcquireNominalPrototype(value: Value, type: TypeRecord): ThrowCompletion | undefined {
+export function OrdinaryNominalPrototype(type: TypeRecord): ObjectValue | undefined {
   if (type.Kind !== 'nominal' || type.Arguments.length) return undefined;
   const declaration = (type.Declaration as { type?: string } | undefined)?.type;
   if (declaration !== 'ClassDeclaration' && declaration !== 'ClassExpression') return undefined;
@@ -60,9 +63,14 @@ export function AcquireNominalPrototype(value: Value, type: TypeRecord): ThrowCo
   if (!(constructor instanceof ObjectValue) || constructor.GetOwnProperty !== ObjectValue.prototype.GetOwnProperty) return undefined;
   const prototype = constructor.properties.get(Value('prototype'));
   if (!(prototype?.Value instanceof ObjectValue) || prototype.Writable !== Value.false || prototype.Configurable !== Value.false) return undefined;
+  return prototype.Value;
+}
+
+export function AcquireNominalPrototype(value: Value, type: TypeRecord): ThrowCompletion | undefined {
+  const target = OrdinaryNominalPrototype(type);
+  if (!target) return undefined;
   if (!(value instanceof ObjectValue)) return Throw.TypeError('a class boundary returned a non-Object value');
-  const target = prototype.Value;
-  const links = pathTo(value, target);
+  const links = OrdinaryNominalPath(value, target);
   if (links === undefined) return undefined;
   if (links === null) return Throw.TypeError('a class boundary returned a value outside its nominal prototype contract');
   let contracts = acquired.get(value);
@@ -87,9 +95,12 @@ export function PlanNominalPrototypeChange(object: ObjectValue, replacement: Obj
       detach(obligation);
       continue;
     }
-    const target = obligation.target.deref();
-    if (!target) return false;
-    const links = pathTo(owner, target, object, replacement);
+    let links: ObjectValue[] | null | undefined | false;
+    if ('target' in obligation) {
+      const target = obligation.target.deref();
+      if (!target) return false;
+      links = OrdinaryNominalPath(owner, target, object, replacement);
+    } else links = obligation.inspect(owner, object, replacement);
     if (!links) return false;
     changes.push({ obligation, links });
   }
@@ -100,4 +111,16 @@ export function PlanNominalPrototypeChange(object: ObjectValue, replacement: Obj
  * between planning and commit. Old links cease to constrain later mutations. */
 export function CommitNominalPrototypeChange(changes: readonly Change[]): void {
   for (const { obligation, links } of changes) attach(obligation, links);
+}
+
+/** The inspector is an engine operation, never a user callback. It must not
+ * capture the owner or its type/prototype graph: finalizer records outlive it. */
+export function ObserveNominalPrototypeDependencies(owner: ObjectValue, links: readonly ObjectValue[], inspect: Inspect): void {
+  let obligation = observed.get(owner);
+  if (!obligation) {
+    obligation = { owner: new WeakRef(owner), links: [], inspect };
+    observed.set(owner, obligation);
+    finalized.register(owner, obligation);
+  }
+  attach(obligation, links);
 }

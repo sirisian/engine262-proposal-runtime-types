@@ -83,7 +83,7 @@ import { SelfThisTypeRecord } from './check.mts';
 import { SameType } from './relations.mts';
 import { IsSubtype } from './relations.mts';
 import {
-  DeclaredReferenceLocationType, ScalarRestsOf, ScalarRestShape, type ScalarRestPattern, type ScalarRestStorage,
+  DeclaredReferenceLocationType, OrdinaryRestsOf, ScalarRestsOf, ScalarRestShape, type ScalarRestPattern, type ScalarRestStorage,
   Call, Get, GetValue, HasProperty, IsCallable, OrdinaryFunctionCreate, R, ResolveBinding, SameValue, surroundingAgent, Throw, ToBoolean,
 } from '#self';
 
@@ -4362,6 +4362,8 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       // and a rest element's Type is the ARRAY it stands for, so comparing an
       // element against it directly meant no rest ever matched anything.
       const tupleShape = TupleStorageShapeOf(t);
+      const ordinaryPattern = storage && isArrayExoticObject(value) ? OrdinaryRestsOf(t) : undefined;
+      const nominalPattern = ordinaryPattern?.some((run) => run.Type.Kind === 'nominal') ? ordinaryPattern : undefined;
       const sequenceRange = TupleSequenceLengthRange(t);
       if (sequenceRange && (len < sequenceRange.min || len > sequenceRange.max)) return false;
       if (tupleShape?.Runs) {
@@ -4378,7 +4380,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           storage?.push({ kind: 'element', object: value, key: String(i), type,
             value: el, admittedType: admitted?.member ?? type, construction: admitted?.construction, descendants: storage.slice(childStart) });
         }
-        storage?.push({ kind: 'tuple', object: value, shape: tupleShape });
+        storage?.push({ kind: 'tuple', object: value, shape: tupleShape, scalarRest: nominalPattern });
         retainSequence();
         const length = TuplePrefixLength(tupleShape);
         if (storage && selection && tupleShape.MinimumLength !== undefined && len < length && Q(IsArray(value)) === Value.true) {
@@ -4413,7 +4415,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           if (tupleShape) storage?.push({ kind: 'element', object: value, key: String(i), type,
             value: el, admittedType: admitted?.member ?? type, construction: admitted?.construction, descendants: storage.slice(childStart) });
         }
-        if (tupleShape) storage?.push({ kind: 'tuple', object: value, shape: tupleShape });
+        if (tupleShape) storage?.push({ kind: 'tuple', object: value, shape: tupleShape, scalarRest: nominalPattern });
         retainSequence();
         if (storage && selection && tupleShape && len < fixed.length && Q(IsArray(value)) === Value.true) {
           // The construction plan contains the positions to fill. The retained
@@ -4468,9 +4470,9 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
             for (const record of evidence[at++][k]) storage.push(record);
           }
         }
-        if (tupleShape) storage.push({ kind: 'tuple', object: value, shape: tupleShape });
+        if (tupleShape) storage.push({ kind: 'tuple', object: value, shape: tupleShape, scalarRest: nominalPattern });
         else if (isArrayExoticObject(value)) {
-          const scalar = ScalarRestsOf(t);
+          const scalar = ordinaryPattern;
           if (scalar) storage.push({ kind: 'tuple', object: value,
             shape: ScalarRestShape(scalar), scalarRest: scalar });
         }

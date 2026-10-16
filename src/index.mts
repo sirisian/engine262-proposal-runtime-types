@@ -120,3 +120,6 @@ export { DeclaredReferenceLocationType } from './abstract-ops/argument-distribut
 export { isRationalObject } from './intrinsics/Rational.mts';
 export { isFloat128Object } from './intrinsics/Float128.mts';
 export * from './type-system/nominal-prototype.mts';
+export * from './type-system/nominal-rests.mts';
+export { IsValueTypeClass } from './type-system/layout.mts';
+export { TupleBackingLength } from './type-system/tuple-storage.mts';

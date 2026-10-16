@@ -3,8 +3,9 @@ import type { TypeRecord } from './records.mts';
 import { SameType } from './relations.mts';
 import { TupleBackingLength } from './tuple-storage.mts';
 import { CanonicalizeType } from './intern.mts';
+import { OrdinaryNominalPrototype, OrdinaryNominalPath, IsValueTypeClass } from '#self';
 
-export type ScalarRestType = TypeRecord & { Kind: 'primitive' };
+export type ScalarRestType = TypeRecord & { Kind: 'primitive' | 'nominal' };
 export type ScalarRestRunRecord = { Type: ScalarRestType, Min: number, Max: number };
 export type ScalarRestPattern = readonly ScalarRestRunRecord[];
 export type ScalarRestStorage = ObjectValue & { ScalarRestGuards?: readonly ScalarRestPattern[] };
@@ -32,10 +33,21 @@ export function ScalarRestLengthAllowed(object: ObjectValue, length: number): bo
  * Defaults, metadata, object elements and unresolved counts stay outside this
  * specialization. Do not expand a declared extent into individual records. */
 export function ScalarRestsOf(type: TypeRecord): ScalarRestPattern | undefined {
+  return OrdinaryRestsOf(type, false);
+}
+
+/** Already-admitted identity class values can also carry a correlated ordinary
+ * prototype guard. This does not enable speculative nominal conversion. */
+export function OrdinaryRestsOf(type: TypeRecord, nominal = true): ScalarRestPattern | undefined {
   if (type.Kind !== 'tuple') return undefined;
   const result: ScalarRestRunRecord[] = [];
   const active = new Set<TypeRecord>();
   const append = (item: TypeRecord, Min: number, Max: number): boolean => {
+    if (item.Kind === 'nominal' && nominal && OrdinaryNominalPrototype(item) && !IsValueTypeClass(item)
+        && !(item.Declaration as { TypeParameters?: { TypeParameterList?: readonly unknown[] } }).TypeParameters?.TypeParameterList?.length) {
+      if (Max > 0) result.push({ Type: item, Min, Max });
+      return true;
+    }
     if (item.Kind !== 'primitive') return false;
     if (item.Name === 'int' || item.Name === 'uint') {
       if (item.Arguments.length !== 1 || typeof item.Arguments[0] !== 'number') return false;
@@ -99,6 +111,10 @@ export function ScalarRestRun(pattern: ScalarRestPattern, index: number, length:
 }
 
 export function ScalarRestMember(value: Value, type: ScalarRestType): boolean {
+  if (type.Kind === 'nominal') {
+    const target = OrdinaryNominalPrototype(type);
+    return value instanceof ObjectValue && target !== undefined && Array.isArray(OrdinaryNominalPath(value, target));
+  }
   if (value instanceof TypedNumberValue) {
     const numeric = value as TypedNumberValue;
     const record = numeric.TypeRecord as TypeRecord;
@@ -145,12 +161,13 @@ function advance(pattern: ScalarRestPattern, states: States, admits: (type: Scal
   return closure(pattern, next);
 }
 
-export function ScalarRestsAccept(pattern: ScalarRestPattern, values: readonly Value[]): boolean {
+export function ScalarRestsAccept(pattern: ScalarRestPattern, values: readonly Value[],
+  member: (value: Value, type: ScalarRestType) => boolean = ScalarRestMember): boolean {
   const range = ScalarRestLengthRange(pattern);
   if (values.length < range.min || values.length > range.max) return false;
   let states = closure(pattern, [[0, 0]]);
   for (const value of values) {
-    states = advance(pattern, states, (type) => ScalarRestMember(value, type));
+    states = advance(pattern, states, (type) => member(value, type));
     if (!states.length) return false;
   }
   return states.some(([run]) => run === pattern.length);
@@ -196,7 +213,8 @@ export function ScalarRestDefinitionAllowed(object: ObjectValue, key: unknown, d
  * guard. Retain all reachable states: a finite separator can require giving
  * back an earlier match of the same type. No conversions run in this search. */
 export function AssignScalarRests(patterns: readonly ScalarRestPattern[], length: number,
-  admits: (index: number, type: ScalarRestType) => boolean): ScalarRestType[] | undefined {
+  admits: (index: number, type: ScalarRestType) => boolean,
+  compatible: (index: number, chosen: ScalarRestType, required: ScalarRestType) => boolean = (_index, chosen, required) => SameType(chosen, required)): ScalarRestType[] | undefined {
   if (patterns.some((pattern) => {
     const range = ScalarRestLengthRange(pattern);
     return length < range.min || length > range.max;
@@ -214,7 +232,7 @@ export function AssignScalarRests(patterns: readonly ScalarRestPattern[], length
     const next = [states];
     let count = 0;
     while (count < limit && admits(at + count, item.Type)) {
-      const advanced = next[count]!.map((set, i) => advance(others[i]!, set, (type) => SameType(item.Type, type)));
+      const advanced = next[count]!.map((set, i) => advance(others[i]!, set, (type) => compatible(at + count, item.Type, type)));
       if (advanced.some((set) => !set.length)) break;
       next.push(advanced);
       count += 1;

@@ -16,6 +16,7 @@ export type ScalarRestItem = { value?: Value, convert?: boolean };
  * representation. Their intrinsic payload conversions are pure; ordinary
  * objects, metadata and a potentially selected class operator are not. */
 function pureScalarConversion(value: Value, type: TypeRecord, convert: Convert): boolean {
+  if (type.Kind !== 'primitive') return false;
   const carried = CarriedTypeRecordOf(value);
   if (value instanceof ReferenceValue || (carried !== undefined && carried.Kind !== 'primitive')) return false;
   if (!(value instanceof ObjectValue)) return true;
@@ -33,7 +34,8 @@ function pureScalarConversion(value: Value, type: TypeRecord, convert: Convert):
 export function* ConvertScalarRestItems(patterns: readonly ScalarRestPattern[], items: readonly ScalarRestItem[],
   convert: Convert, accepts: (index: number, type: TypeRecord, value?: Value) => boolean = () => true): PlainEvaluator<Value[]> {
   const unchanged = AssignScalarRests(patterns, items.length, (i, type) => items[i]!.value !== undefined
-    && ScalarRestMember(items[i]!.value!, type) && accepts(i, type, items[i]!.value));
+    && ScalarRestMember(items[i]!.value!, type) && accepts(i, type, items[i]!.value),
+  (i, _chosen, required) => ScalarRestMember(items[i]!.value!, required));
   if (unchanged) return items.map((item) => item.value!);
   const types = [...new Set(patterns[0]!.map((run) => run.Type))];
   const candidates: Map<TypeRecord, { value?: Value }>[] = [];
@@ -45,6 +47,9 @@ export function* ConvertScalarRestItems(patterns: readonly ScalarRestPattern[], 
     };
     for (const type of types) {
       if (item.value === undefined) {
+        // Nominal defaults require selected effectful planning, outside this
+        // already-admitted identity-class specialization.
+        if (type.Kind === 'nominal') continue;
         const value = Q(yield* DefaultValueOf(type));
         if (value !== undefined) retain(type, value);
       } else if (ScalarRestMember(item.value, type)) retain(type, item.value);
@@ -58,7 +63,10 @@ export function* ConvertScalarRestItems(patterns: readonly ScalarRestPattern[], 
     }
     candidates.push(row);
   }
-  const selected = AssignScalarRests(patterns, items.length, (i, type) => candidates[i]!.has(type));
+  const selected = AssignScalarRests(patterns, items.length, (i, type) => candidates[i]!.has(type), (i, chosen, required) => {
+    const value = candidates[i]!.get(chosen)?.value;
+    return value === undefined ? IsSubtype(chosen, required, []) : ScalarRestMember(value, required);
+  });
   if (!selected) return failure ?? Throw.TypeError('no ordered scalar rest assignment admits the sequence');
   const values: Value[] = [];
   for (let i = 0; i < selected.length; i += 1) {

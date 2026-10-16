@@ -35,7 +35,7 @@ import {
   type Intrinsics,
 } from './all.mts';
 import {
-  PlanNominalPrototypeChange, CommitNominalPrototypeChange, ScalarRestDefinitionAllowed, CheckArrayDefinition, CreateBuiltinFunction, surroundingAgent, RequireType, LookupTypeDefault, Throw } from '#self';
+  RefreshNominalRestDependencies, PlanNominalPrototypeChange, CommitNominalPrototypeChange, ScalarRestDefinitionAllowed, CheckArrayDefinition, CreateBuiltinFunction, surroundingAgent, RequireType, LookupTypeDefault, Throw } from '#self';
 
 export interface OrdinaryObject extends ObjectValue {
   Prototype: ObjectValue | NullValue;
@@ -229,6 +229,12 @@ export function IsCompatiblePropertyDescriptor(Extensible: BooleanValue, Desc: D
 
 // 9.1.6.3 ValidateAndApplyPropertyDescriptor
 export function ValidateAndApplyPropertyDescriptor(O: ObjectValue | UndefinedValue, P: PropertyKeyValue | UndefinedValue, extensible: BooleanValue, Desc: Descriptor, current: UndefinedValue | Descriptor) {
+  const result = ValidateAndApplyPropertyDescriptorUnobserved(O, P, extensible, Desc, current);
+  if (result === Value.true && O instanceof ObjectValue) RefreshNominalRestDependencies(O, P as PropertyKeyValue);
+  return result;
+}
+
+function ValidateAndApplyPropertyDescriptorUnobserved(O: ObjectValue | UndefinedValue, P: PropertyKeyValue | UndefinedValue, extensible: BooleanValue, Desc: Descriptor, current: UndefinedValue | Descriptor) {
   Assert(O === Value.undefined || IsPropertyKey(P));
 
   if (current instanceof UndefinedValue) {
@@ -456,6 +462,7 @@ export function* OrdinaryDelete(O: ObjectValue, P: PropertyKeyValue): ValueEvalu
       RemoveArrayElementIdentity(O, P.stringValue());
     }
     O.properties.delete(P);
+    RefreshNominalRestDependencies(O, P as PropertyKeyValue);
     return Value.true;
   }
   return Value.false;

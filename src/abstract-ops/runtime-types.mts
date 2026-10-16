@@ -566,6 +566,7 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
         if (!patterns.some((old) => old.length === pattern.length && old.every((run, i) => run.Min === pattern[i]!.Min && run.Max === pattern[i]!.Max && SameType(run.Type, pattern[i]!.Type)))) patterns.push(pattern);
       }
       if (patterns.length !== guarded.ScalarRestGuards?.length) guarded.ScalarRestGuards = patterns;
+      RefreshNominalRestDependencies(target);
     }
   }
 }
@@ -1183,6 +1184,7 @@ function isBooleanConversionSource(value: Value): boolean {
 /** Applicability only: this must not invoke a class conversion while searching. */
 export function ScalarRestConversionApplicable(value: Value, t: ScalarRestType,
   convert: (v: Value, type: TypeRecord) => ValueEvaluator): boolean {
+  if (t.Kind !== 'primitive') return false;
   const explicit = convert === ConvertValue;
   if (!explicit && IsCallable(LookupClassOperator(value, `convert ${displayType(t)}`) ?? Value.undefined)) return true;
   if (t.Name === 'boolean') return explicit || isBooleanConversionSource(value);
@@ -6700,4 +6702,4 @@ import { FillGenericConstraintFrame } from '../type-system/runtime.mts';
 import { IsCheckedCode } from '../type-system/checked-code.mts';
 import { MaterializeGenericCallable } from './generic-callable-boundary.mts';
 import { NamedCallItemsOf, SelectedNamedArguments } from './named-call.mts';
-import { AcquireNominalPrototype } from '#self';
+import { AcquireNominalPrototype, RefreshNominalRestDependencies } from '#self';

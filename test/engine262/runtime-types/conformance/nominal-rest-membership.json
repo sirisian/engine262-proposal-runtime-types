@@ -1,0 +1,634 @@
+{
+  "cases": [
+    {
+      "name": "direct child",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const child:any=new C();const raw:any=[child,\"s\"];const t:T=raw;String(Reflect.setPrototypeOf(child,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inherited child",
+      "steps": [
+        {
+          "source": "class C{}class D extends C{}type T=[...[].<C>,...[].<string>];const child:any=new D();const raw:any=[child,\"s\"];const t:T=raw;String(Reflect.setPrototypeOf(D.prototype,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "repartition class roles",
+      "steps": [
+        {
+          "source": "class C{}class D{}type T=[...[].<C>,...[].<D>];const child:any=new C();const raw:any=[child];const t:T=raw;String(Reflect.setPrototypeOf(child,D.prototype))+\"/\"+String(raw is T)+\"/\"+String(Reflect.setPrototypeOf(child,C.prototype));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordered class roles",
+      "steps": [
+        {
+          "source": "class C{}class D{}type T=[...[].<C>,...[].<D>];const a:any=new C();const b:any=new C();const raw:any=[a,b];const t:T=raw;String(Reflect.setPrototypeOf(a,D.prototype))+\"/\"+String(Reflect.setPrototypeOf(b,D.prototype))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replaced child release",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const b:any=new C();const raw:any=[a,\"s\"];const t:T=raw;raw[0]=b;String(Reflect.setPrototypeOf(a,null))+\"/\"+String(Reflect.setPrototypeOf(b,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "removed child release",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const raw:any=[a];const t:T=raw;raw.pop();String(Reflect.setPrototypeOf(a,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inserted child guard",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const raw:any=[];const t:T=raw;raw.push(a);String(Reflect.setPrototypeOf(a,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shared multiple guards",
+      "steps": [
+        {
+          "source": "class C{}class D{}type T=[...[].<C>,...[].<D>];type U=[...[].<C>,...[].<string>];const a:any=new C();const one:any=[a];const two:any=[a];const t:T=one;const u:U=two;const first=Reflect.setPrototypeOf(a,D.prototype);two.pop();String(first)+\"/\"+String(Reflect.setPrototypeOf(a,D.prototype))+\"/\"+String(one is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid intermediate reattachment",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const old:any=Object.create(C.prototype);const fresh:any=Object.create(C.prototype);const a:any=Object.create(old);const raw:any=[a];const t:T=raw;String(Reflect.setPrototypeOf(a,fresh))+\"/\"+String(Reflect.setPrototypeOf(old,null))+\"/\"+String(Reflect.setPrototypeOf(fresh,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "membership only remains pure",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const raw:any=[a];const before=raw is T;String(before)+\"/\"+String(Reflect.setPrototypeOf(a,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "newly inserted child retires on removal",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const raw:any=[];const t:T=raw;raw.push(a);raw.pop();String(Reflect.setPrototypeOf(a,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "newly replaced child retires on replacement",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const b:any=new C();const raw:any=[a];const t:T=raw;raw[0]=b;raw[0]=\"s\";String(Reflect.setPrototypeOf(a,null))+\"/\"+String(Reflect.setPrototypeOf(b,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same array acquires conjunctive patterns",
+      "steps": [
+        {
+          "source": "class C{}class D extends C{}type T=[...[].<C>,...[].<string>];type U=[...[].<D>,...[].<string>];const a:any=new D();const raw:any=[a];const t:T=raw;const u:U=raw;const b:any=new D();raw[0]=b;String(Reflect.setPrototypeOf(b,C.prototype))+\"/\"+String(Reflect.setPrototypeOf(b,null))+\"/\"+String(raw is T)+\"/\"+String(raw is U);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/false/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed prototype change retains its old dependency",
+      "steps": [
+        {
+          "source": "class C{}class D{}type T=[...[].<C>,...[].<D>,...[].<string>];const a:any=new C();const b:any=new C();const raw:any=[a,b];const t:T=raw;const bad:any=Object.create(D.prototype);const first=Reflect.setPrototypeOf(a,bad);const unrelated=Reflect.setPrototypeOf(bad,null);String(first)+\"/\"+String(unrelated)+\"/\"+String(Reflect.setPrototypeOf(a,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shared inherited link constraints survive one owner removal",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const p:any=Object.create(C.prototype);const a:any=Object.create(p);const b:any=Object.create(p);const one:any=[a];const two:any=[b];const t:T=one;const u:T=two;one.pop();const first=Reflect.setPrototypeOf(p,null);two.pop();String(first)+\"/\"+String(Reflect.setPrototypeOf(p,null));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "exact child boundary remains after owner removal",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const c:C=a;const raw:any=[a];const t:T=raw;raw.pop();String(Reflect.setPrototypeOf(a,null))+\"/\"+String(a is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary Object setPrototypeOf throws without invalidation",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const raw:any=[a];const t:T=raw;attempt(()=>Object.setPrototypeOf(a,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "legacy proto setter is guarded",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const raw:any=[a];const t:T=raw;attempt(()=>{a.__proto__=null;})+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forwarding child Proxy reaches guard",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const raw:any=[a];const t:T=raw;const alias:any=new Proxy(a,{});String(Reflect.setPrototypeOf(alias,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "new exotic prefix is refused without observations",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const raw:any=[a];const t:T=raw;let calls=0;const p:any=new Proxy(C.prototype,{getPrototypeOf(){calls++;return null;}});String(Reflect.setPrototypeOf(a,p))+\"/\"+calls+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/0/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "array Proxy alias replaces children without narrow pinning",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const b:any=new C();const raw:any=[a];const t:T=raw;const alias:any=new Proxy(raw,{});alias[0]=b;raw.pop();String(Reflect.setPrototypeOf(a,null))+\"/\"+String(Reflect.setPrototypeOf(b,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflective replacement refreshes dependencies",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const b:any=new C();const raw:any=[a];const t:T=raw;Reflect.defineProperty(raw,\"0\",{value:b});String(Reflect.setPrototypeOf(a,null))+\"/\"+String(Reflect.setPrototypeOf(b,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "length truncation releases removed children",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const raw:any=[a];const t:T=raw;raw.length=0;String(Reflect.setPrototypeOf(a,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "required finite nominal count cannot be removed",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}class C{}type T=[...[1].<C>,...[].<string>];const a:any=new C();const raw:any=[a,\"s\"];const t:T=raw;attempt(()=>{raw.length=0;})+\"/\"+String(Reflect.setPrototypeOf(a,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nominal values can move into a later run",
+      "steps": [
+        {
+          "source": "class C{}class D{}type T=[...[].<C>,...[].<D>,...[].<string>];const a:any=new C();const raw:any=[a];const t:T=raw;raw[0]=\"s\";String(Reflect.setPrototypeOf(a,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "multiple occurrences retain child dependency until all are removed",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const raw:any=[a,a];const t:T=raw;raw.pop();const first=Reflect.setPrototypeOf(a,null);raw.pop();String(first)+\"/\"+String(Reflect.setPrototypeOf(a,null));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class target outgoing link is irrelevant",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const raw:any=[a];const t:T=raw;String(Reflect.setPrototypeOf(C.prototype,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unrelated nominal object remains mutable",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const b:any=new C();const raw:any=[a];const t:T=raw;String(Reflect.setPrototypeOf(b,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested structural admission installs the rest dependency",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const raw:any=[a];const holder:any={items:raw};const typed:{items:T}=holder;String(Reflect.setPrototypeOf(a,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union admission installs only the chosen whole sequence guard",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const raw:any=[a];const typed:T|number=raw;String(Reflect.setPrototypeOf(a,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "narrow reference cannot claim the current nominal role",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const raw:any=[a];const typed:T=raw;let entered=0;function f(ref x:C){entered++;}attempt(()=>f(ref raw[0]))+\"/\"+entered;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid repartition leaves an element reference live",
+      "steps": [
+        {
+          "source": "class C{}class D{}type T=[...[].<C>,...[].<D>];const a:any=new C();const raw:any=[a];const t:T=raw;let ref x=raw[0];const changed=Reflect.setPrototypeOf(a,D.prototype);String(changed)+\"/\"+String(x===a)+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "removal retains ordinary stale reference behavior",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const raw:any=[a];const t:T=raw;let ref x=raw[0];raw.pop();raw.push(\"s\");attempt(()=>{x=\"later\";})+\"/\"+String(Reflect.setPrototypeOf(a,null))+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true/s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed admission preserves prior effects without a new guard",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const raw:any=[a];raw.length=2;let calls=0;const proto:any=Object.create(Array.prototype);Object.defineProperty(proto,\"1\",{get(){calls++;Object.setPrototypeOf(a,null);return \"s\";}});Object.setPrototypeOf(raw,proto);const failed=attempt(()=>{const t:T=raw;});Object.setPrototypeOf(raw,Array.prototype);raw[0]=true;failed+\"/\"+calls+\"/\"+String(raw[0])+\"/\"+String(Object.getPrototypeOf(a)===null);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed replacement leaves original child guarded",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}class C{}class D{}type T=[...[].<C>,...[].<D>];const a:any=new C();const b:any=new C();const bad:any=new D();const raw:any=[a,b];const t:T=raw;const failed=attempt(()=>{raw[0]=bad;});failed+\"/\"+String(raw[0]===a)+\"/\"+String(Reflect.setPrototypeOf(a,null))+\"/\"+String(Reflect.setPrototypeOf(bad,null));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overlapping class roles can give back to a surviving subclass",
+      "steps": [
+        {
+          "source": "class C{}class D extends C{}type T=[...[].<C>,...[].<D>];const a:any=new D();const raw:any=[a];const t:T=raw;String(Reflect.setPrototypeOf(D.prototype,null))+\"/\"+String(raw is T)+\"/\"+String(Reflect.setPrototypeOf(a,C.prototype))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a newly available role is used when the previous role changes",
+      "steps": [
+        {
+          "source": "class C{}class D{}type T=[...[].<C>,...[].<D>];const a:any=new D();const raw:any=[a];const t:T=raw;const first=Reflect.setPrototypeOf(D.prototype,C.prototype);const second=Reflect.setPrototypeOf(a,C.prototype);String(first)+\"/\"+String(second)+\"/\"+String(Reflect.setPrototypeOf(a,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero nominal count does not guard unrelated values",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[0].<C>,...[].<string>];const a:any=new C();const raw:any=[\"s\"];const t:T=raw;String(Reflect.setPrototypeOf(a,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed nominal tuple receives the same child protection",
+      "steps": [
+        {
+          "source": "class C{}const a:any=new C();const raw:any=[a,\"s\"];const t:[C,string]=raw;String(Reflect.setPrototypeOf(a,null))+\"/\"+String(raw is [C,string]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed frozen replacement does not attach the proposed child",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const b:any=new C();const raw:any=[a];const t:T=raw;Object.defineProperty(raw,\"0\",{writable:false,configurable:false});String(Reflect.defineProperty(raw,\"0\",{value:b}))+\"/\"+String(Reflect.setPrototypeOf(a,null))+\"/\"+String(Reflect.setPrototypeOf(b,null));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed truncation releases only the removed suffix",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const b:any=new C();const raw:any=[a,b];const t:T=raw;Object.defineProperty(raw,\"0\",{configurable:false});const failed=attempt(()=>{raw.length=0;});failed+\"/\"+raw.length+\"/\"+String(Reflect.setPrototypeOf(a,null))+\"/\"+String(Reflect.setPrototypeOf(b,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/false/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite nominal separator survives dynamic giveback",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[1].<C>,...[].<string>];const a:any=new C();const b:any=new C();const raw:any=[a,b,\"s\"];const t:T=raw;raw[1]=\"x\";String(Reflect.setPrototypeOf(a,null))+\"/\"+String(Reflect.setPrototypeOf(b,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "independently completed nested guard survives a later throw",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const raw:any=[a];const failed=attempt(()=>{const t:T=raw;throw new RangeError(\"later\");});failed+\"/\"+String(Reflect.setPrototypeOf(a,null));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nominal reference writes preserve broad projection",
+      "steps": [
+        {
+          "source": "class C{}type T=[...[].<C>,...[].<string>];const a:any=new C();const b:any=new C();const raw:any=[a];const t:T=raw;function replace(ref x:C|string){x=b;}replace(ref raw[0]);raw[0]=\"s\";String(Reflect.setPrototypeOf(a,null))+\"/\"+String(Reflect.setPrototypeOf(b,null))+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "conversion effects cannot reuse stale nominal role evidence",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}class C{}class D{}type T=[...[].<C>,...[].<string>,...[].<D>];const a:any=new C();const b:any=new D();const raw:any=[a,b];const t:T=raw;let calls=0;class E{operator string(){calls++;Object.setPrototypeOf(a,D.prototype);return \"s\";}}const e:any=new E();const failed=attempt(()=>{raw[1]=e;});failed+\"/\"+calls+\"/\"+String(raw is T)+\"/\"+String(a is D)+\"/\"+String(raw[1]===b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/true/true/true"
+          }
+        }
+      ]
+    }
+  ]
+}
