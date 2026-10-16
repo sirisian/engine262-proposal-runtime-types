@@ -1,5 +1,5 @@
 import { BeginArrayInsertion, SetArrayInsertion, FinishArrayInsertion, BeginArrayRemoval, SetArrayRemoval, DeleteArrayRemoval, FinishArrayRemoval } from '../abstract-ops/array-objects.mts';
-import { TupleStorageTypeAt, TupleFixedPositions, type TupleStorageShape } from '../type-system/tuple-storage.mts';
+import { TupleStorageTypeAt, TupleCopyPositions, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { ValidateArrayMutation } from '../abstract-ops/array-mutation.mts';
 import {
   BooleanValue,
@@ -697,7 +697,7 @@ function* ArrayProto_slice([start = Value.undefined, end = Value.undefined]: Arg
   // A slice is a WINDOW on the positions, and the indices are known here even
   // where they were not known statically, so the window is exact.
   const sliceShape = tupleShapeOf(O);
-  const slicePositions = sliceShape && TupleFixedPositions(sliceShape);
+  const slicePositions = sliceShape && TupleCopyPositions(sliceShape, len);
   if (slicePositions !== undefined) {
     propagateTupleShape(A, slicePositions.slice(windowStart, final));
   }
@@ -753,10 +753,10 @@ function* ArrayProto_toSorted([comparator = Value.undefined]: Arguments, { thisV
   // tuple sorted by an arbitrary comparator has no position types this
   // operation can state, and stamping the source's would be a lie.
   const sortedShape = tupleShapeOf(O);
-  const sortedPositions = sortedShape && TupleFixedPositions(sortedShape);
-  if (sortedPositions !== undefined && sortedPositions.length > 0
+  const sortedPositions = sortedShape && TupleCopyPositions(sortedShape, len);
+  if (sortedPositions !== undefined
       && sortedPositions.every((position) => SameTypeRecord(position, sortedPositions[0]!))) {
-    propagateTupleShape(A, sortedPositions);
+    propagateTupleShape(A, sortedPositions, sortedShape);
   }
   return A;
 }
@@ -974,9 +974,9 @@ function* ArrayProto_with([index = Value.undefined, value = Value.undefined]: Ar
   // `with` replaces one position with a value already checked against that
   // position's type, so the shape is the source's.
   const withShape = tupleShapeOf(O);
-  const withPositions = withShape && TupleFixedPositions(withShape);
+  const withPositions = withShape && TupleCopyPositions(withShape, len);
   if (withPositions !== undefined) {
-    propagateTupleShape(A, withPositions);
+    propagateTupleShape(A, withPositions, withShape);
   }
   return A;
 }
@@ -1101,18 +1101,19 @@ function tupleShapeOf(source: Value): TupleShape | undefined {
  * `propagateElementType` covers an array, whose copy has the same element type
  * whatever the operation did. A tuple's does not: `toReversed` permutes the
  * positions, `slice` takes a window of them, `with` leaves them alone. So the
- * caller passes the positions its own operation produced, and this stamps them.
+ * caller passes the positions its own operation produced. An unchanged domain
+ * can also retain its complete length interval, including an empty occupancy.
  *
  * A tuple with a REST is left alone here. Its positions are not a fixed list -
  * the rest collects however many the value happens to hold - so permuting or
  * slicing one does not have an answer in the same sense, and stamping a guess
  * would be worse than stamping nothing.
  */
-function propagateTupleShape(copy: Value, positions: readonly TypeRecord[]): void {
+function propagateTupleShape(copy: Value, positions: readonly TypeRecord[], domain?: TupleShape): void {
   if (!surroundingAgent.feature('runtime-types') || !(copy instanceof ObjectValue)) {
     return;
   }
-  (copy as unknown as { TypedTuple?: TupleShape }).TypedTuple = { Positions: positions, Rest: undefined };
+  (copy as unknown as { TypedTuple?: TupleShape }).TypedTuple = domain ?? { Positions: positions, Rest: undefined };
 }
 
 /** https://tc39.es/ecma262/#sec-array.prototype.toreversed */
@@ -1132,7 +1133,7 @@ function* ArrayProto_toReversed(_args: Arguments, { thisValue }: FunctionCallCon
   // The reverse of `[uint8, string]` is `[string, uint8]`: the positions are
   // the source's, read backwards.
   const reversedShape = tupleShapeOf(O);
-  const reversedPositions = reversedShape && TupleFixedPositions(reversedShape);
+  const reversedPositions = reversedShape && TupleCopyPositions(reversedShape, len);
   if (reversedPositions !== undefined) {
     propagateTupleShape(A, [...reversedPositions].reverse());
   }

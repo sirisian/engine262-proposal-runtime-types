@@ -3,15 +3,20 @@ import { CanonicalizeType } from './intern.mts';
 import { SameType } from './relations.mts';
 import { ObjectValue, NumberValue, Value, R } from '#self';
 
-/** A complete required prefix/rest/suffix domain, or its conjunction with
+/** A complete positional or required prefix/rest/suffix domain, or its conjunction with
  * other acquired domains. No observed partition or element values are stored. */
 export type TupleStorageShape = {
   Positions: readonly TypeRecord[], Rest: TypeRecord | undefined,
   Suffix?: readonly TypeRecord[], Conjuncts?: readonly TupleStorageShape[],
+  MinimumLength?: number,
 };
 
 export function TupleStorageShapeOf(type: TypeRecord): TupleStorageShape | undefined {
-  if (type.Kind !== 'tuple' || type.Elements.some((e) => e.Initial !== 'none' || e.DeclaredDefault)) return undefined;
+  if (type.Kind !== 'tuple') return undefined;
+  const hasDefaults = type.Elements.some((e) => e.Initial !== 'none' || e.DeclaredDefault);
+  // Without a rest, defaults change admitted lengths, never the type at an
+  // existing index. Default/rest combinations still need general assignment.
+  if (hasDefaults && type.Elements.some((e) => e.Rest)) return undefined;
   const positions: TypeRecord[] = [];
   const suffix: TypeRecord[] = [];
   let rest: TypeRecord | undefined;
@@ -20,7 +25,8 @@ export function TupleStorageShapeOf(type: TypeRecord): TupleStorageShape | undef
     else if (!rest && element.Type.Kind === 'array' && element.Type.Extent === 'dynamic') rest = element.Type.Element;
     else return undefined;
   }
-  return { Positions: positions, Rest: rest, ...(suffix.length ? { Suffix: suffix } : {}) };
+  return { Positions: positions, Rest: rest, ...(suffix.length ? { Suffix: suffix } : {}),
+    ...(hasDefaults ? { MinimumLength: type.Elements.filter((e) => e.Initial === 'none' && !e.DeclaredDefault).length } : {}) };
 }
 
 export function TupleLengthRange(shape: TupleStorageShape): { min: number, max: number } {
@@ -29,8 +35,8 @@ export function TupleLengthRange(shape: TupleStorageShape): { min: number, max: 
     return { min: ranges.reduce((n, r) => Math.max(n, r.min), 0),
       max: ranges.reduce((n, r) => Math.min(n, r.max), Infinity) };
   }
-  const min = shape.Positions.length + (shape.Suffix?.length ?? 0);
-  return { min, max: shape.Rest === undefined ? min : Infinity };
+  const width = shape.Positions.length + (shape.Suffix?.length ?? 0);
+  return { min: shape.MinimumLength ?? width, max: shape.Rest === undefined ? width : Infinity };
 }
 
 export function TupleStorageTypeAt(shape: TupleStorageShape, index: number, length: number): TypeRecord | undefined {
@@ -82,6 +88,14 @@ export function TupleFixedPositions(shape: TupleStorageShape): readonly TypeReco
   return Array.from({ length: range.max }, (_, index) => TupleStorageTypeAt(shape, index, range.max)!);
 }
 
+/** A bounded positional copy contains exactly the positions copied at this
+ * length. Omitted source defaults do not create extra copied elements. */
+export function TupleCopyPositions(shape: TupleStorageShape, length: number): readonly TypeRecord[] | undefined {
+  const range = TupleLengthRange(shape);
+  if (!Number.isFinite(range.max) || length < range.min || length > range.max) return undefined;
+  return Array.from({ length }, (_, index) => TupleStorageTypeAt(shape, index, length)!);
+}
+
 /** Search includes every declared domain, even an empty rest. For conjunctions,
  * all prefix/suffix overlaps occur before their total width plus one; larger
  * lengths add only repetitions of the same middle intersection. */
@@ -94,7 +108,8 @@ export function TupleSearchTypes(shape: TupleStorageShape): TypeRecord[] {
   const width = parts.reduce((n, part) => Math.max(n, part.Positions.length), 0)
     + parts.reduce((n, part) => Math.max(n, part.Suffix?.length ?? 0), 0) + 1;
   const result: TypeRecord[] = [];
-  for (let length = TupleLengthRange(shape).min; length <= width; length += 1) {
+  const range = TupleLengthRange(shape);
+  for (let length = range.min; length <= Math.min(width, range.max); length += 1) {
     for (let index = 0; index < length; index += TupleStorageRun(shape, index, length)) {
       result.push(TupleStorageTypeAt(shape, index, length)!);
     }
@@ -105,6 +120,9 @@ export function TupleSearchTypes(shape: TupleStorageShape): TypeRecord[] {
 /** A static index without a known length ranges over each possible suffix
  * alignment, never over a partition guessed from current element values. */
 export function TupleIndexType(type: TypeRecord, index: number): TypeRecord | undefined {
+  // Storage support does not expand the separate static-index judgment for
+  // defaulted tuple types.
+  if (type.Kind === 'tuple' && type.Elements.some((e) => e.Initial !== 'none' || e.DeclaredDefault)) return undefined;
   const shape = TupleStorageShapeOf(type);
   if (!shape || index < 0) return undefined;
   if (index < shape.Positions.length) return shape.Positions[index];

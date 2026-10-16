@@ -226,12 +226,12 @@ function* CompleteStructuralAdmission(storage: readonly StructuralStorageAdmissi
     const shape: TupleStorageShape = parts.length === 1 ? parts[0]!
       : { Positions: [], Rest: undefined, Conjuncts: parts };
     const range = TupleLengthRange(shape);
-    const fixed = sequence.extent ?? (Number.isFinite(range.max) ? range.max : undefined);
+    const fixed = sequence.extent ?? (range.min === range.max ? range.max : undefined);
     if (range.min > range.max || (fixed !== undefined && (fixed < range.min || fixed > range.max))) {
       return Throw.TypeError('the admitted sequence contracts have incompatible length domains');
     }
-    // A finite bound makes every index fixed. Otherwise retain all anchored
-    // domains; flattening would lose suffix alignment at another length.
+    // Only an exact length can flatten the domain. A defaulted tuple's finite
+    // maximum still admits shorter lengths; suffixes remain end-aligned.
     sequence.shape = fixed === undefined ? shape : {
       Positions: Array.from({ length: fixed }, (_, i) => TupleStorageTypeAt(shape, i, fixed)!), Rest: undefined,
     };
@@ -2249,7 +2249,7 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     Q(yield* CompleteStructuralAdmission(storage));
     // Stable tuple domains are acquired with the retained admission, including
     // nested and union-selected tuples. Preserve existing backing for every
-    // view. Complex/defaulted tuple storage retains its separate legacy path.
+    // view. General rest storage retains its separate legacy path.
     if (t.Kind === 'tuple' && !TupleStorageShapeOf(t) && value instanceof ObjectValue
         && (value as { TypedElement?: unknown }).TypedElement === undefined
         && (value as { TypedTuple?: unknown }).TypedTuple === undefined && Q(IsArray(value)) === Value.true) {
