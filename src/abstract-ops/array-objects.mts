@@ -1,4 +1,4 @@
-import { TupleBackingLength, TupleStorageTypeAt, TupleResizePreserves, type TupleStorageShape } from '../type-system/tuple-storage.mts';
+import { TupleBackingLength, TupleStorageTypeAt, TupleResizePreserves, TupleLengthRange, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
 import type { ThrowCompletion } from '../completion.mts';
 import {
@@ -9,6 +9,7 @@ import {
   TypedStringValue,
   isTypedNumber,
   Q, X, type ValueCompletion, type ValueEvaluator, type PlainEvaluator,
+  AbruptCompletion,
   type Mutable, type YieldEvaluator,
   IsLessThan,
   Assert,
@@ -21,6 +22,7 @@ import {
   IsDataDescriptor,
   IsAccessorDescriptor,
   Set,
+  DeletePropertyOrThrow,
   IsArray,
   IsConstructor,
   OrdinaryDefineOwnProperty,
@@ -62,6 +64,10 @@ const InternalMethods = {
     const insertion = scoped && scoped.context === surroundingAgent.executionContextStack.at(-1) && scoped.key === P
       ? scoped.plan : undefined;
     if (insertion) Q(CheckArrayInsertion(insertion));
+    const removalScope = removalWrites.get(array);
+    const removal = removalScope && removalScope.context === surroundingAgent.executionContextStack.at(-1) && removalScope.key === P
+      ? removalScope.plan : undefined;
+    if (removal) Q(CheckArrayRemoval(removal));
     // `Set` checks a store against the tuple's
     // position type or the array's element type; a REDEFINITION reached
     // neither, so `Object.defineProperty(a, 0, { value: "no" })` put a String
@@ -103,6 +109,7 @@ const InternalMethods = {
     // Conversion can reenter before this definition reaches its ordinary write.
     // Revalidate even if the callback has now created the destination itself.
     if (insertion) Q(CheckArrayInsertion(insertion));
+    if (removal) Q(CheckArrayRemoval(removal));
     if (P instanceof JSStringValue && P.stringValue() === 'length') {
       return Q(yield* ArraySetLength(array, Desc));
     } else if (isArrayIndex(P)) {
@@ -159,6 +166,18 @@ const InternalMethods = {
     }
     return yield* OrdinaryDefineOwnProperty(array, P, Desc);
   },
+
+  * Delete(P): ValueEvaluator<BooleanValue> {
+    if (surroundingAgent.feature('runtime-types') && isArrayIndex(P)) {
+      const backing = this as ArrayBacking;
+      const index = Number((P as JSStringValue).stringValue());
+      const bound = backing.TypedExtent ?? (backing.TypedTuple ? TupleLengthRange(backing.TypedTuple).max : Infinity);
+      if (HasTypedArrayBacking(this) && index < bound) {
+        return Throw.TypeError('$1 is a typed element and cannot be deleted', P);
+      }
+    }
+    return yield* ObjectValue.prototype.Delete.call(this, P);
+  },
 } satisfies Partial<ObjectInternalMethods<OrdinaryObject>>;
 
 export { InternalMethods as ArrayExoticObjectInternalMethods };
@@ -182,6 +201,7 @@ export function ArrayCreate(length: number, proto?: ObjectValue): ValueCompletio
   const array = X(MakeBasicObject(['Prototype', 'Extensible'])) as Mutable<OrdinaryObject>;
   array.Prototype = proto;
   array.DefineOwnProperty = InternalMethods.DefineOwnProperty;
+  array.Delete = InternalMethods.Delete;
 
   X(OrdinaryDefineOwnProperty(array, Value('length'), Descriptor({
     Value: F(length),
@@ -296,14 +316,16 @@ export function* ArraySetLength(array: OrdinaryObject, Desc: Descriptor): ValueE
   });
   keys.sort((a, b) => Number(b.stringValue()) - Number(a.stringValue()));
   for (const P of keys) {
-    const deleteSucceeded = X(array.Delete(P));
-    if (deleteSucceeded === Value.false) {
+    // These positions leave the published extent. Bypass only the Array's
+    // direct-delete refusal; retain ordinary descriptor and identity handling.
+    const deleteSucceeded = yield* ObjectValue.prototype.Delete.call(array, P);
+    if (deleteSucceeded === Value.false || deleteSucceeded instanceof AbruptCompletion) {
       newLenDesc = Descriptor({ ...newLenDesc, Value: F(R(X(ToUint32(P))) + 1) });
       if (newWritable === false) {
         newLenDesc = Descriptor({ ...newLenDesc, Writable: Value.false });
       }
       X(OrdinaryDefineOwnProperty(array, Value('length'), newLenDesc));
-      return Value.false;
+      return deleteSucceeded;
     }
   }
   if (newWritable === false) {
@@ -440,6 +462,73 @@ export function* FinishArrayInsertion(object: ObjectValue, length: number,
     Descriptor({ Value: F(length) }), plan.values));
   if (succeeded === Value.false) return Throw.TypeError('array insertion cannot publish its initialized tail');
   return succeeded;
+}
+
+export type ArrayRemovalPlan = Omit<ArrayInsertionPlan, 'values'>;
+const removalWrites = new WeakMap<ObjectValue, {
+  plan: ArrayRemovalPlan, key: JSStringValue, context: unknown,
+}>();
+
+/** Removing intrinsic tails remain present until the final length operation.
+ * Existing-position writes and independent callbacks still happen normally. */
+export function BeginArrayRemoval(object: ObjectValue, length: number): ArrayRemovalPlan | undefined {
+  if (!surroundingAgent.feature('runtime-types') || !isArrayExoticObject(object) || !HasTypedArrayBacking(object)) return undefined;
+  const oldLength = TupleBackingLength(object);
+  if (length >= oldLength) return undefined;
+  const backing = object as ArrayBacking;
+  return { object: backing, oldLength, length, element: backing.TypedElement,
+    tuple: backing.TypedTuple, extent: backing.TypedExtent };
+}
+
+function CheckArrayRemoval(plan: ArrayRemovalPlan): ThrowCompletion | undefined {
+  const { object } = plan;
+  if (TupleBackingLength(object) !== plan.oldLength || object.TypedElement !== plan.element
+      || object.TypedTuple !== plan.tuple || object.TypedExtent !== plan.extent) {
+    return Throw.TypeError('array backing changed during removal');
+  }
+  return undefined;
+}
+
+export function* SetArrayRemoval(object: ObjectValue, key: JSStringValue, value: Value,
+  plan: ArrayRemovalPlan | undefined): ValueEvaluator<BooleanValue> {
+  if (!plan) return yield* Set(object, key, value, Value.true);
+  Q(CheckArrayRemoval(plan));
+  const previous = removalWrites.get(object);
+  removalWrites.set(object, { plan, key, context: surroundingAgent.executionContextStack.at(-1) });
+  try {
+    const result = Q(yield* Set(object, key, value, Value.true));
+    Q(CheckArrayRemoval(plan));
+    return result;
+  } finally {
+    if (previous) removalWrites.set(object, previous);
+    else removalWrites.delete(object);
+  }
+}
+
+export function* DeleteArrayRemoval(object: ObjectValue, key: JSStringValue,
+  plan: ArrayRemovalPlan | undefined): ValueEvaluator<BooleanValue> {
+  if (!plan) return yield* DeletePropertyOrThrow(object, key);
+  Q(CheckArrayRemoval(plan));
+  const index = Number(key.stringValue());
+  if (index < plan.length || index >= plan.oldLength) return yield* DeletePropertyOrThrow(object, key);
+  // An independently acquired required object property still protects this
+  // location even though the Array operation would remove its indexed role.
+  if ((object as { TypedProperties?: Map<unknown, unknown> }).TypedProperties?.has(key.stringValue())) {
+    return Throw.TypeError('$1 is a typed property and cannot be deleted', key);
+  }
+  const desc = OrdinaryGetOwnProperty(plan.object, key);
+  if (!(desc instanceof UndefinedValue) && desc.Configurable === Value.false) {
+    return Throw.TypeError('array removal cannot delete a nonconfigurable element');
+  }
+  // Preflight at the ordinary deletion step, but neither remove the location
+  // nor invalidate references until length truncation actually succeeds.
+  return Value.true;
+}
+
+export function* FinishArrayRemoval(object: ObjectValue, length: number,
+  plan: ArrayRemovalPlan | undefined): ValueEvaluator<BooleanValue> {
+  if (plan) Q(CheckArrayRemoval(plan));
+  return yield* Set(object, Value('length'), F(length), Value.true);
 }
 
 /** https://tc39.es/ecma262/#sec-isconcatspreadable */

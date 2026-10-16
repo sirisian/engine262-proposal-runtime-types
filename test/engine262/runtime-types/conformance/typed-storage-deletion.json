@@ -1,0 +1,872 @@
+{
+  "cases": [
+    {
+      "name": "sloppy direct deletion delete raw[0]",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];let ref b=a[0];const raw:any=a;attempt(()=>{delete raw[0];})+\"/\"+raw.length+\"/\"+Object.hasOwn(raw,\"0\")+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/true/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "strict direct deletion delete raw[0]",
+      "steps": [
+        {
+          "source": "\"use strict\";function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];let ref b=a[0];const raw:any=a;attempt(()=>{delete raw[0];})+\"/\"+raw.length+\"/\"+Object.hasOwn(raw,\"0\")+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/true/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "sloppy direct deletion delete raw?.[0]",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];let ref b=a[0];const raw:any=a;attempt(()=>{delete raw?.[0];})+\"/\"+raw.length+\"/\"+Object.hasOwn(raw,\"0\")+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/true/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "strict direct deletion delete raw?.[0]",
+      "steps": [
+        {
+          "source": "\"use strict\";function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];let ref b=a[0];const raw:any=a;attempt(()=>{delete raw?.[0];})+\"/\"+raw.length+\"/\"+Object.hasOwn(raw,\"0\")+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/true/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "sloppy direct deletion Reflect.deleteProperty(raw,\"0\")",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];let ref b=a[0];const raw:any=a;attempt(()=>{Reflect.deleteProperty(raw,\"0\");})+\"/\"+raw.length+\"/\"+Object.hasOwn(raw,\"0\")+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/true/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "strict direct deletion Reflect.deleteProperty(raw,\"0\")",
+      "steps": [
+        {
+          "source": "\"use strict\";function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];let ref b=a[0];const raw:any=a;attempt(()=>{Reflect.deleteProperty(raw,\"0\");})+\"/\"+raw.length+\"/\"+Object.hasOwn(raw,\"0\")+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/true/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declared deletion domain [].<any>99",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<any>=[];const raw:any=a;attempt(()=>{Reflect.deleteProperty(raw,\"99\");})+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declared deletion domain [2].<uint8>1",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[2].<uint8>=[1,2];const raw:any=a;attempt(()=>{Reflect.deleteProperty(raw,\"1\");})+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declared deletion domain [2].<uint8>2",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[2].<uint8>=[1,2];const raw:any=a;attempt(()=>{Reflect.deleteProperty(raw,\"2\");})+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/0,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declared deletion domain [uint8,string]1",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[uint8,string]=[1,\"x\"];const raw:any=a;attempt(()=>{Reflect.deleteProperty(raw,\"1\");})+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declared deletion domain [uint8,string]2",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[uint8,string]=[1,\"x\"];const raw:any=a;attempt(()=>{Reflect.deleteProperty(raw,\"2\");})+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/0,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declared deletion domain [uint8,...[].<uint8>]99",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[uint8,...[].<uint8>]=[1];const raw:any=a;attempt(()=>{Reflect.deleteProperty(raw,\"99\");})+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declared deletion domain [...[].<string>,string]99",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[...[].<string>,string]=[\"x\"];const raw:any=a;attempt(()=>{Reflect.deleteProperty(raw,\"99\");})+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inherited data does not waive protected domain",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[];const raw:any=a;const proto=Object.create(Object.getPrototypeOf(raw));proto[99]=7;Object.setPrototypeOf(raw,proto);attempt(()=>{Reflect.deleteProperty(raw,\"99\");})+\"/\"+proto[99]+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "noncanonical and ordinary keys remain deletable",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[7];const raw:any=a;const s=Symbol();for(const key of [\"01\",\"-0\",\"1.0\",\"4294967295\",\"label\",s]){raw[key]=9;if(!Reflect.deleteProperty(raw,key))throw new Error(\"failed\");}raw.join(\",\")+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "property key coercion occurs before runtime refusal",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];const raw:any=a;let calls=0;const key={toString(){calls++;raw[0]=8;return \"0\";}};attempt(()=>{Reflect.deleteProperty(raw,key);})+\"/\"+calls+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/8"
+          }
+        }
+      ]
+    },
+    {
+      "name": "abrupt key coercion takes precedence",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];const raw:any=a;attempt(()=>{Reflect.deleteProperty(raw,{toString(){throw new RangeError(\"key\");}});})+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "protected nonconfigurable deletion still throws",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];const raw:any=a;Object.defineProperty(raw,\"0\",{configurable:false});attempt(()=>{Reflect.deleteProperty(raw,\"0\");})+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "untyped deletion retains holes",
+      "steps": [
+        {
+          "source": "const raw:any=[7];String(Reflect.deleteProperty(raw,\"0\"))+\"/\"+raw.length+\"/\"+Object.hasOwn(raw,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "untyped nonconfigurable reflection returns false",
+      "steps": [
+        {
+          "source": "const raw:any=[7];Object.defineProperty(raw,\"0\",{configurable:false});String(Reflect.deleteProperty(raw,\"0\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed named-property deletion still throws",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const o:{x:number}={x:7};const raw:any=o;attempt(()=>{Reflect.deleteProperty(raw,\"x\");})+\"/\"+raw.x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "untyped proxy forwarding retains deletion behavior",
+      "steps": [
+        {
+          "source": "const a=[7];const raw:any=new Proxy(a,{});String(Reflect.deleteProperty(raw,\"0\"))+\"/\"+a.length+\"/\"+Object.hasOwn(a,\"0\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed backing retains its existing proxy refusal",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[7];const raw:any=a;let calls=0;attempt(()=>{new Proxy(raw,{deleteProperty(t,k){calls++;return true;}});})+\"/\"+calls+\"/\"+a[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary typed removal raw.pop()",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[1,2,3];const raw:any=a;String(raw.pop())+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3/1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary typed removal raw.shift()",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[1,2,3];const raw:any=a;String(raw.shift())+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary typed removal raw.splice(0,2,9).join(\",\")",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[1,2,3];const raw:any=a;String(raw.splice(0,2,9).join(\",\"))+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2/9,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "truncation preserves survivor and invalidates removed location",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3];a.reserve(8);let ref first=a[0];let ref last=a[2];const raw:any=a;raw.length=1;String(first)+\"/\"+attempt(()=>{String(last);})+\"/\"+a.capacity+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/TypeError/8/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "removal reference identity raw.pop()",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3];a.reserve(8);let ref first=a[0];let ref last=a[2];const raw:any=a;raw.pop();String(first)+\"/\"+attempt(()=>{String(last);})+\"/\"+a.capacity+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/TypeError/8/1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "removal reference identity raw.shift()",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3];a.reserve(8);let ref first=a[0];let ref last=a[2];const raw:any=a;raw.shift();String(first)+\"/\"+attempt(()=>{String(last);})+\"/\"+a.capacity+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/TypeError/8/2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "removal reference identity raw.splice(0,2,9)",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3];a.reserve(8);let ref first=a[0];let ref last=a[2];const raw:any=a;raw.splice(0,2,9);String(first)+\"/\"+attempt(()=>{String(last);})+\"/\"+a.capacity+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "9/TypeError/8/9,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "readonly length cannot leave a deleted tail raw.pop()",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3,4];let ref tail=a[3];const raw:any=a;Object.defineProperty(raw,\"length\",{writable:false});attempt(()=>{raw.pop();})+\"/\"+raw.join(\",\")+\"/\"+raw.length+\"/\"+Object.hasOwn(raw,\"3\")+\"/\"+tail;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,2,3,4/4/true/4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "readonly length cannot leave a deleted tail raw.shift()",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3,4];let ref tail=a[3];const raw:any=a;Object.defineProperty(raw,\"length\",{writable:false});attempt(()=>{raw.shift();})+\"/\"+raw.join(\",\")+\"/\"+raw.length+\"/\"+Object.hasOwn(raw,\"3\")+\"/\"+tail;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/2,3,4,4/4/true/4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "readonly length cannot leave a deleted tail raw.splice(0,3,9)",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3,4];let ref tail=a[3];const raw:any=a;Object.defineProperty(raw,\"length\",{writable:false});attempt(()=>{raw.splice(0,3,9);})+\"/\"+raw.join(\",\")+\"/\"+raw.length+\"/\"+Object.hasOwn(raw,\"3\")+\"/\"+tail;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/9,4,3,4/4/true/4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nonconfigurable tail preflight retains all planned removals",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3,4];let ref tail=a[3];const raw:any=a;Object.defineProperty(raw,\"2\",{configurable:false});attempt(()=>{raw.splice(0,3);})+\"/\"+raw.join(\",\")+\"/\"+raw.length+\"/\"+tail;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/4,2,3,4/4/4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tail descriptor refusal precedes replacement conversion",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3];const raw:any=a;Object.defineProperty(raw,\"2\",{configurable:false});attempt(()=>{raw.splice(0,2,999);})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,3,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement conversion failure retains tail and prior writes",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3,4];let ref tail=a[3];const raw:any=a;attempt(()=>{raw.splice(0,3,999);})+\"/\"+raw.join(\",\")+\"/\"+tail;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/1,4,3,4/4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit partial truncation retains descriptor semantics",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3,4];let ref kept=a[2];let ref gone=a[3];const raw:any=a;Object.defineProperty(raw,\"2\",{configurable:false});String(Reflect.defineProperty(raw,\"length\",{value:1,writable:false}))+\"/\"+raw.length+\"/\"+Object.keys(raw).join(\",\")+\"/\"+kept+\"/\"+attempt(()=>{String(gone);})+\"/\"+Object.getOwnPropertyDescriptor(raw,\"length\").writable;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/3/0,1,2/3/TypeError/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacement callback sees old tail and live reference",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3,4];let ref tail=a[3];const raw:any=a;let seen=\"\";Object.defineProperty(raw,\"0\",{get(){return 1;},set(v){seen=raw.length+\":\"+Object.keys(raw).join(\",\")+\":\"+tail;}});raw.splice(0,3,9);seen+\"/\"+raw.length+\"/\"+attempt(()=>{String(tail);});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "4:0,1,2,3:4/2/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "callback cannot inherit removal permission",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3];const raw:any=a;let seen=\"\";Object.defineProperty(raw,\"0\",{get(){return 1;},set(v){seen=attempt(()=>{Reflect.deleteProperty(raw,\"2\");});}});raw.shift();seen+\"/\"+raw.length+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/2/0,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "late descriptor change uses ordinary partial final truncation",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3,4];let ref tail=a[3];const raw:any=a;Object.defineProperty(raw,\"0\",{get(){return 1;},set(v){Object.defineProperty(raw,\"2\",{configurable:false});}});attempt(()=>{raw.splice(0,3,9);})+\"/\"+raw.length+\"/\"+Object.keys(raw).join(\",\")+\"/\"+attempt(()=>{String(tail);});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/3/0,1,2/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pop getter append cancels stale removal",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2];const raw:any=a;Object.defineProperty(raw,\"1\",{get(){raw[2]=9;return 2;}});attempt(()=>{raw.pop();})+\"/\"+raw.length+\"/\"+raw[2]+\"/\"+Object.keys(raw).join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/3/9/0,1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shift getter shrink cancels stale movement",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3];const raw:any=a;Object.defineProperty(raw,\"0\",{get(){raw.length=2;return 1;},set(v){throw new Error(\"stale\");}});attempt(()=>{raw.shift();})+\"/\"+raw.length+\"/\"+raw[1];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/2/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "splice species shrink survives stale removal",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3,4];const raw:any=a;raw.constructor={[Symbol.species]:function(){raw.length=3;return [];}};attempt(()=>{raw.splice(0,3,9);})+\"/\"+raw.length+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/3/1,2,3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "independent nested pop survives outer cancellation",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2];const raw:any=a;let once=true;Object.defineProperty(raw,\"1\",{get(){if(once){once=false;raw.pop();}return 2;}});attempt(()=>{raw.pop();})+\"/\"+raw.length+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier getter throw precedes conflict report",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2];const raw:any=a;Object.defineProperty(raw,\"1\",{get(){raw[2]=9;throw new RangeError(\"getter\");}});attempt(()=>{raw.pop();})+\"/\"+raw.length+\"/\"+raw[2];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/3/9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "capacity-only callback change does not cancel removal",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[1,2];const raw:any=a;Object.defineProperty(raw,\"1\",{get(){a.reserve(8);return 2;}});String(raw.pop())+\"/\"+raw.length+\"/\"+a.capacity;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/1/8"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value-only callback change remains observable",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[1,2];const raw:any=a;Object.defineProperty(raw,\"1\",{get(){raw[0]=9;return 2;}});String(raw.pop())+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "removal scope is cleared after setter failure",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3];const raw:any=a;Object.defineProperty(raw,\"0\",{get(){return 1;},set(v){throw new Error(\"stop\");}});attempt(()=>{raw.shift();});raw[3]=7;String(raw.length)+\"/\"+raw[3]+\"/\"+attempt(()=>{delete raw[3];});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "4/7/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "untyped failed pop preserves ordinary partial state",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2];Object.defineProperty(raw,\"length\",{writable:false});attempt(()=>{raw.pop();})+\"/\"+raw.length+\"/\"+Object.hasOwn(raw,\"1\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/2/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "untyped sparse shift retains ordinary hole behavior",
+      "steps": [
+        {
+          "source": "const raw:any=[1,,3];raw.shift();String(raw.length)+\"/\"+Object.hasOwn(raw,\"0\")+\"/\"+raw[1];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/false/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed extent removal still fails before getter",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[2].<uint8>=[1,2];const raw:any=a;let hits=0;Object.defineProperty(raw,\"1\",{get(){hits++;return 2;}});attempt(()=>{raw.pop();})+\"/\"+hits+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "trailing rest removal respects minimum",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[uint8,...[].<uint8>]=[1,2];const raw:any=a;raw.pop();attempt(()=>{raw.pop();})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "matching suffix rest can shrink",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\",\"b\",\"c\"];const a:[...[].<string>,string]=raw;raw.shift();raw.splice(0,1);raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "c"
+          }
+        }
+      ]
+    },
+    {
+      "name": "different suffix refuses removal before effects",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,true];const a:[...[].<number>,boolean]=raw;attempt(()=>{raw.pop();})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty removal methods stay no-ops",
+      "steps": [
+        {
+          "source": "const a:[].<symbol>=[];const raw:any=a;String(raw.pop())+\"/\"+String(raw.shift())+\"/\"+raw.splice(0,1).length+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined/undefined/0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "equal replacement and growing insertion still work",
+      "steps": [
+        {
+          "source": "const a:[].<uint8>=[1,2];const raw:any=a;raw.splice(0,1,9);raw.unshift(7);raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7,9,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "conversion resize prevents stale own definition",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type Dim={m:number};meta Dim{default={m:0};subtype(a,b){return a.m===b.m;}}primitive float64{operator float64.<{m:1}>():float64.<{m:1}>{globalThis.onConvert();return this;}}globalThis.onConvert=()=>{};const a:[].<float64.<{m:1}>>=[0,0,0];const raw:any=a;const seed:any=raw[0];let once=true;globalThis.onConvert=()=>{if(once){once=false;raw[3]=seed;}};attempt(()=>{raw.splice(0,2,8);})+\"/\"+raw.length+\"/\"+Number(raw[0])+\"/\"+Number(raw[3]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/4/0/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "array truncation retains a separately acquired required property",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3];const raw:any=a;const o:{\"1\":uint8}=raw;let ref gone=a[2];attempt(()=>{raw.length=0;})+\"/\"+raw.length+\"/\"+Object.keys(raw).join(\",\")+\"/\"+o[1]+\"/\"+attempt(()=>{String(gone);});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/2/0,1/2/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflected required-property barrier retains requested readonly length",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3];const raw:any=a;const o:{\"1\":uint8}=raw;attempt(()=>{Reflect.defineProperty(raw,\"length\",{value:0,writable:false});})+\"/\"+raw.length+\"/\"+Object.keys(raw).join(\",\")+\"/\"+Object.getOwnPropertyDescriptor(raw,\"length\").writable;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/2/0,1/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intrinsic required-property preflight retains deferred tails",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2,3,4];const raw:any=a;const o:{\"2\":uint8}=raw;let ref tail=a[3];attempt(()=>{raw.splice(0,3);})+\"/\"+raw.join(\",\")+\"/\"+tail;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/4,2,3,4/4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary array with required numeric property truncates to its barrier",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2,3];const o:{\"1\":number}=raw;attempt(()=>{raw.length=0;})+\"/\"+raw.length+\"/\"+Object.keys(raw).join(\",\")+\"/\"+o[1];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/2/0,1/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "regrowth cannot revive a removed element reference",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const a:[].<uint8>=[1,2];a.reserve(8);let ref last=a[1];const raw:any=a;raw.pop();raw.push(9);attempt(()=>{String(last);})+\"/\"+raw.join(\",\")+\"/\"+a.capacity;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,9/8"
+          }
+        }
+      ]
+    }
+  ]
+}

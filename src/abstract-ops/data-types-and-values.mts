@@ -7,7 +7,9 @@ import { CanonicalNumericIndexString, R } from './all.mts';
 
 // 6.1.7 #integer-index
 export function isIntegerIndex(V: Value) {
-  if (!(V instanceof JSStringValue)) {
+  // R converts -0 to mathematical zero; exclude the spelling before that
+  // conversion so an ordinary "-0" property never becomes an indexed slot.
+  if (!(V instanceof JSStringValue) || V.stringValue() === '-0') {
     return false;
   }
   const numeric = X(CanonicalNumericIndexString(V));
@@ -22,7 +24,7 @@ export function isIntegerIndex(V: Value) {
 
 // 6.1.7 #array-index
 export function isArrayIndex(V: Value) {
-  if (!(V instanceof JSStringValue)) {
+  if (!(V instanceof JSStringValue) || V.stringValue() === '-0') {
     return false;
   }
   const numeric = X(CanonicalNumericIndexString(V));

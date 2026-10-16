@@ -1,4 +1,4 @@
-import { BeginArrayInsertion, SetArrayInsertion, FinishArrayInsertion } from '../abstract-ops/array-objects.mts';
+import { BeginArrayInsertion, SetArrayInsertion, FinishArrayInsertion, BeginArrayRemoval, SetArrayRemoval, DeleteArrayRemoval, FinishArrayRemoval } from '../abstract-ops/array-objects.mts';
 import { TupleStorageTypeAt, TupleFixedPositions, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { ValidateArrayMutation } from '../abstract-ops/array-mutation.mts';
 import {
@@ -321,9 +321,10 @@ function* ArrayProto_pop(_args: Arguments, { thisValue }: FunctionCallContext): 
   } else {
     const newLen = len - 1;
     const index = Q(yield* ToString(F(newLen)));
+    const removal = BeginArrayRemoval(O, newLen);
     const element = Q(yield* Get(O, index));
-    Q(yield* DeletePropertyOrThrow(O, index));
-    Q(yield* Set(O, Value('length'), F(newLen), Value.true));
+    Q(yield* DeleteArrayRemoval(O, index, removal));
+    Q(yield* FinishArrayRemoval(O, newLen, removal));
     return element;
   }
 }
@@ -632,6 +633,7 @@ function* ArrayProto_shift(_args: Arguments, { thisValue }: FunctionCallContext)
     Q(yield* Set(O, Value('length'), F(+0), Value.true));
     return Value.undefined;
   }
+  const removal = BeginArrayRemoval(O, len - 1);
   const first = Q(yield* Get(O, Value('0')));
   let k = 1;
   while (k < len) {
@@ -640,14 +642,14 @@ function* ArrayProto_shift(_args: Arguments, { thisValue }: FunctionCallContext)
     const fromPresent = Q(yield* HasProperty(O, from));
     if (fromPresent === Value.true) {
       const fromVal = Q(yield* Get(O, from));
-      Q(yield* Set(O, to, fromVal, Value.true));
+      Q(yield* SetArrayRemoval(O, to, fromVal, removal));
     } else {
       Q(yield* DeletePropertyOrThrow(O, to));
     }
     k += 1;
   }
-  Q(yield* DeletePropertyOrThrow(O, X(ToString(F(len - 1)))));
-  Q(yield* Set(O, Value('length'), F(len - 1), Value.true));
+  Q(yield* DeleteArrayRemoval(O, X(ToString(F(len - 1))), removal));
+  Q(yield* FinishArrayRemoval(O, len - 1, removal));
   return first;
 }
 
@@ -791,6 +793,7 @@ function* ArrayProto_splice(args: Arguments, { thisValue }: FunctionCallContext)
     moves: insertCount === actualDeleteCount ? [] : [{ from: actualStart + actualDeleteCount,
       to: actualStart + insertCount, count: len - actualStart - actualDeleteCount }] }));
   const insertion = BeginArrayInsertion(O, len + insertCount - actualDeleteCount);
+  const removal = BeginArrayRemoval(O, len + insertCount - actualDeleteCount);
   const A = Q(yield* ArraySpeciesCreate(O, actualDeleteCount));
   let k = 0;
   while (k < actualDeleteCount) {
@@ -812,7 +815,7 @@ function* ArrayProto_splice(args: Arguments, { thisValue }: FunctionCallContext)
       const fromPresent = Q(yield* HasProperty(O, from));
       if (fromPresent === Value.true) {
         const fromValue = Q(yield* Get(O, from));
-        Q(yield* SetArrayInsertion(O, to, fromValue, insertion));
+        Q(yield* SetArrayRemoval(O, to, fromValue, removal));
       } else {
         Q(yield* DeletePropertyOrThrow(O, to));
       }
@@ -820,7 +823,7 @@ function* ArrayProto_splice(args: Arguments, { thisValue }: FunctionCallContext)
     }
     k = len;
     while (k > len - actualDeleteCount + itemCount) {
-      Q(yield* DeletePropertyOrThrow(O, X(ToString(F(k - 1)))));
+      Q(yield* DeleteArrayRemoval(O, X(ToString(F(k - 1))), removal));
       k -= 1;
     }
   } else if (itemCount > actualDeleteCount) {
@@ -841,10 +844,12 @@ function* ArrayProto_splice(args: Arguments, { thisValue }: FunctionCallContext)
   k = actualStart;
   while (items.length > 0) {
     const E = items.shift()!;
-    Q(yield* SetArrayInsertion(O, X(ToString(F(k))), E, insertion));
+    if (removal) Q(yield* SetArrayRemoval(O, X(ToString(F(k))), E, removal));
+    else Q(yield* SetArrayInsertion(O, X(ToString(F(k))), E, insertion));
     k += 1;
   }
-  Q(yield* FinishArrayInsertion(O, len - actualDeleteCount + itemCount, insertion));
+  if (removal) Q(yield* FinishArrayRemoval(O, len - actualDeleteCount + itemCount, removal));
+  else Q(yield* FinishArrayInsertion(O, len - actualDeleteCount + itemCount, insertion));
   return A;
 }
 
