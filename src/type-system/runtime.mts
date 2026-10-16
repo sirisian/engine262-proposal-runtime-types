@@ -3839,7 +3839,10 @@ export function* CompleteCallableConstraints(type: TypeRecord, runtimeEnvironmen
 export type StructuralStorageAdmission = {
   kind: 'property' | 'element',
   object: ObjectValue, key: string | SymbolValue, type: TypeRecord,
-  value: Value, admittedType: TypeRecord,
+  value: Value, admittedType: TypeRecord, construction?: TupleDefaultConstruction,
+  defaultCheck?: boolean, optional?: boolean, descendants?: readonly StructuralStorageAdmission[],
+} | {
+  kind: 'object', object: ObjectValue, type: TypeRecord & { Kind: 'object' },
 } | {
   kind: 'array', object: ObjectValue, element: TypeRecord, extent: number | 'dynamic',
 } | {
@@ -3872,22 +3875,53 @@ export function MayRequireCallableMaterialization(source: TypeRecord, target: Ty
   return contains(source, true) && contains(target, false);
 }
 
+/** A type-only backing proof cannot establish that an optional tuple tail is
+ * currently supplied. Keep these receiving boundaries available at runtime. */
+export function MayRequireTupleDefaults(t: TypeRecord, seen = new Set<TypeRecord>()): boolean {
+  if (seen.has(t)) return false;
+  seen.add(t);
+  switch (t.Kind) {
+    case 'tuple': return t.Elements.some((e) => e.Initial !== 'none' || e.DeclaredDefault || MayRequireTupleDefaults(e.Type, seen));
+    case 'array': return MayRequireTupleDefaults(t.Element, seen);
+    case 'object': return t.Properties.some((p) => MayRequireTupleDefaults(p.type, seen))
+      || t.IndexSignatures.some((p) => MayRequireTupleDefaults(p.Value, seen));
+    case 'union': case 'intersection': return t.Members.some((m) => MayRequireTupleDefaults(m, seen));
+    case 'shared': return MayRequireTupleDefaults(t.Target, seen);
+    case 'nominal': return t.Structure !== undefined && MayRequireTupleDefaults(SubstituteTypeArguments(t.Structure, t.Declaration, t.Arguments), seen);
+    default: return false;
+  }
+}
+
 /** Receiving operations retain a choice for this value, never its children. */
-export type UnionMemberAdmission = { member?: TypeRecord };
+export type TupleDefaultConstruction = {
+  plans: readonly { object: ObjectValue, type: TypeRecord & { Kind: 'tuple' }, values: readonly Value[] }[],
+  storage: readonly StructuralStorageAdmission[],
+};
+export type UnionMemberAdmission = { member?: TypeRecord, construction?: TupleDefaultConstruction };
 
 export function* IsOfType(value: Value, t: TypeRecord, storage?: StructuralStorageAdmission[], selection?: UnionMemberAdmission): PlainEvaluator<boolean> {
   if (!storage && !selection) return yield* IsOfTypeWithStorage(value, t);
   const checkpoint = storage?.length;
   const previousMember = selection?.member;
+  const previousConstruction = selection?.construction;
   let admitted = false;
   try {
     admitted = Q(yield* IsOfTypeWithStorage(value, t, storage, selection));
+    if (admitted && storage && selection?.construction) {
+      // A copying value boundary owns its evidence. Do not acquire storage on
+      // its source while the receiving operation is still choosing a result.
+      selection.construction = { plans: selection.construction.plans,
+        storage: [...selection.construction.storage, ...storage.splice(checkpoint!)] };
+    }
     return admitted;
   } finally {
     // Failed alternatives and abrupt checks publish no speculative contracts.
     if (!admitted) {
       if (storage) storage.length = checkpoint!;
-      if (selection) selection.member = previousMember;
+      if (selection) {
+        selection.member = previousMember;
+        selection.construction = previousConstruction;
+      }
     }
   }
 }
@@ -4042,18 +4076,25 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       for (const m of t.Members) {
         const nested: UnionMemberAdmission | undefined = selection ? {} : undefined;
         if (Q(yield* IsOfType(value, m, storage, nested))) {
-          if (selection) selection.member = nested?.member ?? m;
+          if (selection) {
+            selection.member = nested?.member ?? m;
+            selection.construction = nested?.construction;
+          }
           return true;
         }
       }
       return false;
     }
     case 'intersection': {
+      const constructions: TupleDefaultConstruction[] = [];
       for (const m of t.Members) {
-        if (!Q(yield* IsOfType(value, m, storage))) {
-          return false;
-        }
+        const nested: UnionMemberAdmission | undefined = selection ? {} : undefined;
+        if (!Q(yield* IsOfType(value, m, storage, nested))) return false;
+        if (nested?.construction) constructions.push(nested.construction);
       }
+      if (selection && constructions.length) selection.construction = {
+        plans: constructions.flatMap((part) => part.plans), storage: constructions.flatMap((part) => part.storage),
+      };
       return true;
     }
     case 'parameterized': {
@@ -4234,11 +4275,12 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         for (let i = 0; i < len; i += 1) {
           const el = Q(yield* observe(i));
           const admitted: UnionMemberAdmission | undefined = storage ? {} : undefined;
+          const childStart = storage?.length;
           if (!Q(yield* IsOfType(el, t.Element, storage, admitted))) {
             return false;
           }
           storage?.push({ kind: 'element', object: value, key: String(i), type: t.Element,
-            value: el, admittedType: admitted?.member ?? t.Element });
+            value: el, admittedType: admitted?.member ?? t.Element, construction: admitted?.construction, descendants: storage.slice(childStart) });
         }
         // Retain the container even when empty. Extent resolution and element
         // observations belong to this admission, not a later Get walk.
@@ -4269,18 +4311,24 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         if (len < requiredLength || len > t.Elements.length) {
           return false;
         }
+        const values: Value[] = [];
         for (let i = 0; i < len; i += 1) {
           const el = Q(yield* observe(i));
+          values.push(el);
           const admitted: UnionMemberAdmission | undefined = storage && tupleShape ? {} : undefined;
           const type = t.Elements[i].Type;
+          const childStart = storage?.length;
           if (!Q(yield* IsOfType(el, type, storage, admitted))) {
             return false;
           }
           if (tupleShape) storage?.push({ kind: 'element', object: value, key: String(i), type,
-            value: el, admittedType: admitted?.member ?? type });
+            value: el, admittedType: admitted?.member ?? type, construction: admitted?.construction, descendants: storage.slice(childStart) });
         }
         if (tupleShape) storage?.push({ kind: 'tuple', object: value, shape: tupleShape });
         retainSequence();
+        if (storage && selection && tupleShape && len < t.Elements.length && Q(IsArray(value)) === Value.true) {
+          selection.construction = { plans: [{ object: value, type: t, values }], storage: [] };
+        }
         return true;
       }
       // The predicate SequenceAssignment takes is synchronous and IsOfType is
@@ -4303,7 +4351,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           const ok = Q(yield* IsOfType(items[i], type, candidate, selection));
           row.push(ok);
           if (ok && tupleShape) candidate?.push({ kind: 'element', object: value, key: String(i), type,
-            value: items[i], admittedType: selection?.member ?? type });
+            value: items[i], admittedType: selection?.member ?? type, construction: selection?.construction, descendants: candidate.slice() });
           records.push(candidate ?? []);
         }
         admitted.push(row);
@@ -4630,7 +4678,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       // is the one it was given, which is what the slot says.
       const carriedRuntime = (value as { RuntimeType?: TypeRecord }).RuntimeType;
       if (carriedRuntime && IsSubtype(carriedRuntime, t, [])
-          && (!storage || !MayRequireCallableMaterialization(carriedRuntime, t))) {
+          && (!storage || (!MayRequireCallableMaterialization(carriedRuntime, t) && !MayRequireTupleDefaults(t)))) {
         return true;
       }
       for (const p of t.Properties) {
@@ -4643,11 +4691,12 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           continue;
         }
         const pv = Q(yield* Get(value, key));
+        const childStart = storage?.length;
         const admitted = storage ? {} as UnionMemberAdmission : undefined;
         if (!Q(yield* IsOfType(pv, p.type, storage, admitted))) {
           return false;
         }
-        storage?.push({ kind: 'property', object: value, key: p.key, type: p.type, value: pv, admittedType: admitted?.member ?? p.type });
+        storage?.push({ kind: 'property', object: value, key: p.key, type: p.type, value: pv, admittedType: admitted?.member ?? p.type, construction: admitted?.construction, optional: p.optional, descendants: storage.slice(childStart) });
       }
       // Index signatures constrain every own enumerable key not already named.
       if (t.IndexSignatures.length > 0) {
@@ -4664,15 +4713,17 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           for (const ix of t.IndexSignatures) {
             if (Q(yield* IsOfType(k, ix.Key))) {
               const kv = Q(yield* Get(value, k));
+              const childStart = storage?.length;
               const admitted = storage ? {} as UnionMemberAdmission : undefined;
               if (!Q(yield* IsOfType(kv, ix.Value, storage, admitted))) {
                 return false;
               }
-              storage?.push({ kind: 'property', object: value, key: k.stringValue(), type: ix.Value, value: kv, admittedType: admitted?.member ?? ix.Value });
+              storage?.push({ kind: 'property', object: value, key: k.stringValue(), type: ix.Value, value: kv, admittedType: admitted?.member ?? ix.Value, construction: admitted?.construction, optional: true, descendants: storage.slice(childStart) });
             }
           }
         }
       }
+      storage?.push({ kind: 'object', object: value, type: t });
       return true;
     }
     case 'function': {

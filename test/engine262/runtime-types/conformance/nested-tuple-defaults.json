@@ -1,0 +1,690 @@
+{
+  "cases": [
+    {
+      "name": "nested object fills default without changing source",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const outer:any={item:raw};const t:{item:[F,number=7]}=outer;String(t===outer)+\"/\"+t.item.length+\"/\"+t.item[1]+\"/\"+String(t.item[0]===id.<string>)+\"/\"+raw.length+\"/\"+String(raw[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/2/7/true/1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected union fills default with separate output",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const t:([F,number=7]|null)=raw;const out:any=t;out.length+\"/\"+out[1]+\"/\"+String(out[0]===id.<string>)+\"/\"+String(out===raw)+\"/\"+String(raw[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/7/true/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit cast fills a selected default",
+      "steps": [
+        {
+          "source": "const raw:any=[1];const t:any=raw := [number,number=7];String(t===raw)+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/1,7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct omitted-default control",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const t:[F,number=7]=raw;String(t===raw)+\"/\"+String(t[0]===id.<string>)+\"/\"+t[1]+\"/\"+String(raw[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true/7/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fully supplied control remains in place",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id,1];const outer:any={item:raw};const t:{item:[F,number=7]}=outer;String(t.item===raw)+\"/\"+String(raw[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "array element fills nested default",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const outer:any=[raw];const t:[].<[F,number=7]>=outer;String(t===outer)+\"/\"+outer[0].length+\"/\"+outer[0][1]+\"/\"+String(outer[0][0]===id.<string>)+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/2/7/true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple element fills nested default",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const outer:any=[raw];const t:[[F,number=7]]=outer;String(t===outer)+\"/\"+outer[0].length+\"/\"+outer[0][1]+\"/\"+String(outer[0][0]===id.<string>)+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/2/7/true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest element fills nested default",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const outer:any=[raw];const t:[...[].<[F,number=7]>]=outer;String(t===outer)+\"/\"+outer[0].length+\"/\"+outer[0][1]+\"/\"+String(outer[0][0]===id.<string>)+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/2/7/true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "suffix element fills nested default",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const outer:any=[raw];const t:[...[].<boolean>,[F,number=7]]=outer;String(t===outer)+\"/\"+outer[0].length+\"/\"+outer[0][1]+\"/\"+String(outer[0][0]===id.<string>)+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/2/7/true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "index signature fills nested default",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const outer:any={item:raw};const t:{[key:string]:[F,number=7]}=outer;outer.item.length+\"/\"+outer.item[1]+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/7/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "getter observations are retained without replay",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;let elementReads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){elementReads++;return id;}});const outer:any={get item(){reads++;return raw;},set item(v){this.saved=v;}};const t:{item:[F,number=7]}=outer;reads+\"/\"+elementReads+\"/\"+outer.saved.length+\"/\"+String(outer.saved[0]===id.<string>)+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/1/2/true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "frozen source can be copied",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=Object.freeze([id]);const outer:any={item:raw};const t:{item:[F,number=7]}=outer;outer.item.length+\"/\"+String(outer.item[0]===id.<string>)+\"/\"+String(raw[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nonwritable parent rejects replacement leaving source intact",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[id];const outer:any=Object.freeze({item:raw});attempt(()=>{const t:{item:[F,number=7]}=outer;})+\"/\"+raw.length+\"/\"+String(raw[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "setter receives completed typed tuple",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[id];let seen=\"\";let saved:any;const outer:any={get item(){return raw;},set item(v){saved=v;seen=String(v[0]===id.<string>)+\"/\"+v[1]+\"/\"+attempt(()=>{v[0]=1;});}};const t:{item:[F,number=7]}=outer;seen+\"/\"+saved.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/7/TypeError/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured output stays typed after enclosing setter throws",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[id];let saved:any;const outer:any={get item(){return raw;},set item(v){saved=v;throw new RangeError(\"stop\");}};const error=attempt(()=>{const t:{item:[F,number=7]}=outer;});error+\"/\"+saved[1]+\"/\"+attempt(()=>{saved[0]=1;})+\"/\"+String(raw[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/7/TypeError/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier parent replacement survives later refusal",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const first:any=[id];const second:any=[id];const outer:any={a:first,b:second};Object.defineProperty(outer,\"b\",{writable:false});const error=attempt(()=>{const t:{a:[F,number=7],b:[F,number=9]}=outer;});error+\"/\"+outer.a[1]+\"/\"+String(outer.b===second)+\"/\"+String(first[0]===id)+\"/\"+String(second[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7/true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed union candidate leaks no construction",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any={a:[id],tag:1};const t:({a:[F,number=7],tag:string}|{a:any,tag:number})=raw;String(raw.a.length)+\"/\"+String(raw.a[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected union write failure does not retry broad arm",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[id];const outer:any=Object.freeze({a:1,b:1,item:raw});const error=attempt(()=>{const t:({a:number,item:[F,number=7]}|{b:number,item:any})=outer;});error+\"/\"+String(outer.item===raw);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pure membership does not fill or specialize",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const outer:any={item:raw};String(outer is {item:[F,number=7]})+\"/\"+raw.length+\"/\"+String(raw[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reference viability does not fill or specialize",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const outer:any={item:raw};function inspect(ref x:{item:[F,number=7]}){}inspect(ref outer);String(raw.length)+\"/\"+String(raw[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "supplied undefined does not request default",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id,undefined];const outer:any={item:raw};const t:{item:[F,any=7]}=outer;String(outer.item===raw)+\"/\"+String(raw[1]===undefined);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "supplied hole remains supplied",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id,,];const outer:any={item:raw};const t:{item:[F,any=7]}=outer;String(outer.item===raw)+\"/\"+String(raw[1]===undefined)+\"/\"+Object.hasOwn(raw,\"1\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty nested tuple fills every default",
+      "steps": [
+        {
+          "source": "const raw:any=[];const outer:any={item:raw};const t:{item:[number=7,string=\"s\"]}=outer;outer.item.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7,s/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two copied levels fill defaults",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const inner:any=[id];const raw:any=[inner];const outer:any={item:raw};const t:{item:[[F,number=7],number=9]}=outer;outer.item[0][1]+\"/\"+outer.item[1]+\"/\"+String(outer.item[0][0]===id.<string>)+\"/\"+raw.length+\"/\"+inner.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/9/true/1/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same source in distinct locations creates distinct copies",
+      "steps": [
+        {
+          "source": "const raw:any=[1];const outer:any={a:raw,b:raw};const t:{a:[number,number=7],b:[number,number=9]}=outer;String(outer.a===outer.b)+\"/\"+outer.a[1]+\"/\"+outer.b[1]+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/7/9/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same location overlapping equal defaults writes once",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];let writes=0;let held:any=raw;const obj:any={get item(){return held;},set item(v){writes++;held=v;}};const outer:any={a:obj,b:obj};const t:{a:{item:[F,number=7]},b:{item:[F,number=7]}}=outer;writes+\"/\"+held[1]+\"/\"+String(held[0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/7/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same location conflicting defaults refuses before writes",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[id];let writes=0;let held:any=raw;const obj:any={get item(){return held;},set item(v){writes++;held=v;}};const outer:any={a:obj,b:obj};const error=attempt(()=>{const t:{a:{item:[F,number=7]},b:{item:[F,number=9]}}=outer;});error+\"/\"+writes+\"/\"+String(raw[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersection equal defaults preserves both domains",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];const t:([number,number=7]&[any,any=7])=raw;const out:any=t;out.join(\",\")+\"/\"+attempt(()=>{out[0]=Symbol();})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,7/TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "intersection differing defaults refuses",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];attempt(()=>{const t:([number,number=7]&[any,any=9])=raw;})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "construction refuses conflicting final lengths",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];attempt(()=>{const t:([number,number=7]&[number])=raw;})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "homogeneous conjunction checks newly supplied default",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];attempt(()=>{const t:([number,any=\"s\"]&[].<number>)=raw;})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "homogeneous conjunction admits compatible default",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];const t:([number,number=7]&[].<number>)=raw;const out:any=t;out.join(\",\")+\"/\"+attempt(()=>out.push(3));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,7/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic source backing is preserved by separate copy",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const a:[<T:type>(x:T)=>T]=[id];const raw:any=a;const outer:any={item:raw};const t:{item:[F,number=7]}=outer;String(outer.item[0]===id.<string>)+\"/\"+String(raw[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source element reference stays live",
+      "steps": [
+        {
+          "source": "const raw:any=[1];let ref element=raw[0];const outer:any={item:raw};const t:{item:[number,number=7]}=outer;element=8;raw[0]+\"/\"+outer.item[0]+\"/\"+outer.item[1];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "8/1/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiving property reference observes replacement",
+      "steps": [
+        {
+          "source": "const raw:any=[1];const outer:any={item:raw};let ref element=outer.item;const t:{item:[number,number=7]}=outer;const view:any=element;view.length+\"/\"+view[1];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "copy keeps no-rest permitted length window",
+      "steps": [
+        {
+          "source": "const outer:any={item:[1]};const t:{item:[number,number=7]}=outer;outer.item.pop();outer.item.push(8);outer.item.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,8"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value elements copied into result",
+      "steps": [
+        {
+          "source": "class P{value:uint8=1;}const p:P=new P();const raw:any=[p];const outer:any={item:raw};const t:{item:[P,number=7]}=outer;p.value=2;outer.item[0].value+\"/\"+raw[0].value+\"/\"+outer.item[1];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/2/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value defaults copied on independent constructions",
+      "steps": [
+        {
+          "source": "class P{value:uint8=1;}type T=[number,P=new P()];const outer:any={a:[1],b:[2]};const t:{a:T,b:T}=outer;outer.a[1].value=8;String(outer.b[1].value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overlapping noncopying tuple domain constrains copy",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];const obj:any={item:raw};const outer:any={a:obj,b:obj};attempt(()=>{const t:{a:{item:[number,number=7]},b:{item:[number]}}=outer;})+\"/\"+String(obj.item===raw)+\"/\"+attempt(()=>raw.push(\"s\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overlapping homogeneous domain constrains default",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];const obj:any={item:raw};const outer:any={a:obj,b:obj};attempt(()=>{const t:{a:{item:[number,any=\"s\"]},b:{item:[].<number>}}=outer;})+\"/\"+String(obj.item===raw)+\"/\"+attempt(()=>raw.push(\"s\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "copy refuses required source custom property",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];raw.extra=1;attempt(()=>{const t:([number,number=7]&{extra:number})=raw;})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "copy omits optional source custom property",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[1];raw.extra={v:id};const t:([number,number=7]&{extra?:{v:F}})=raw;const out:any=t;String(out.extra===undefined)+\"/\"+String(raw.extra.v===id)+\"/\"+out[1];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "copy checks changed length property",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];attempt(()=>{const t:([number,number=7]&{length:1})=raw;})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed outer boundary still completes shortened nested tuple",
+      "steps": [
+        {
+          "source": "const raw:any={item:[1,2]};const first:{item:[number,number=7]}=raw;raw.item.pop();function again(x:{item:[number,number=7]}){return x;}const next=again(first);const out:any=next;out.item.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "new default satisfies extra index signature",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];attempt(()=>{const t:([number,any=\"s\"]&{[key:string]:number})=raw;})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "new default satisfies formerly absent optional member",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];attempt(()=>{const t:([number,any=\"s\"]&{1?:number})=raw;})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "index signature does not require copied source extras",
+      "steps": [
+        {
+          "source": "const raw:any=[1];raw.extra=2;const t:([number,number=7]&{[key:string]:number})=raw;const out:any=t;out.join(\",\")+\"/\"+String(out.extra===undefined);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,7/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overlapping element paths keep noncopying domain",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];const obj:any=[raw];const outer:any={a:obj,b:obj};attempt(()=>{const t:{a:[[number,number=7]],b:[[number]]}=outer;})+\"/\"+String(obj[0]===raw)+\"/\"+attempt(()=>raw.push(\"s\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "new property observation cannot skip combined default check",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];attempt(()=>{const t:([number,any=\"s\"]&[].<number>&{[key:string]:any})=raw;})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    }
+  ]
+}

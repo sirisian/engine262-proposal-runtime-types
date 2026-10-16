@@ -676,7 +676,7 @@
       "name": "combined search sees declared absent defaulted position",
       "steps": [
         {
-          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];const outer:any={a:raw,b:raw};const t:{a:[number,string=\"d\"],b:[number,any=7]}=outer;String(raw.includes(\"x\"))+\"/\"+attempt(()=>raw.includes(Symbol()));",
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,\"d\"];const outer:any={a:raw,b:raw};const t:{a:[number,string=\"d\"],b:[number,any=7]}=outer;raw.pop();String(raw.includes(\"x\"))+\"/\"+attempt(()=>raw.includes(Symbol()));",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,

@@ -3,7 +3,7 @@ import { MetadataStorageKey, MetadataKey, MetadataKeys, MetadataEntries } from '
 import { isRegExpObject } from '../intrinsics/RegExp.mts';
 import type { CapturedTypeContext } from '../type-system/runtime.mts';
 import { RawOperatorResultType } from '../type-system/operator-result.mts';
-import { publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, MayRequireCallableMaterialization, type StructuralStorageAdmission } from '../type-system/runtime.mts';
+import { publishedReturnTypeOfFunction, instantiateGenericCapture, SubstituteTypeArguments, MayRequireCallableMaterialization, MayRequireTupleDefaults, type StructuralStorageAdmission, type TupleDefaultConstruction, type UnionMemberAdmission } from '../type-system/runtime.mts';
 import { primitiveMembership } from '../type-system/runtime.mts';
 import { currentTypeParameterFrame, SpecializedFunctionSignatureOf } from '../type-system/runtime.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
@@ -166,14 +166,182 @@ function carryStringType(value: Value, t: TypeRecord): Value {
   return value;
 }
 
+/** Defaults are chosen by the already selected value boundary. Conflicting
+ * constructions cannot be resolved by whichever structural path ran last. */
+function ValidateTupleDefaultConstruction(parts: readonly TupleDefaultConstruction[]): ThrowCompletion | undefined {
+  const plans = parts.flatMap((part) => part.plans);
+  const first = plans[0]!;
+  const length = first.type.Elements.length;
+  for (const plan of plans) {
+    if (plan.object !== first.object || plan.values.length !== first.values.length || plan.type.Elements.length !== length) {
+      return Throw.TypeError('the retained tuple constructions have incompatible lengths');
+    }
+    for (let i = plan.values.length; i < length; i += 1) {
+      const initial = plan.type.Elements[i]!.Initial;
+      const expected = first.type.Elements[i]!.Initial;
+      if (initial === 'none' || expected === 'none' || !SameValue(initial, expected)) {
+        return Throw.TypeError('the retained tuple constructions have conflicting defaults');
+      }
+    }
+  }
+  for (const entry of parts.flatMap((part) => part.storage)) {
+    if (entry.object !== first.object) continue;
+    if (entry.kind === 'array' && entry.extent !== 'dynamic' && entry.extent !== length) {
+      return Throw.TypeError('tuple default construction violates an acquired extent');
+    }
+    if (entry.kind === 'tuple') {
+      const range = TupleLengthRange(entry.shape);
+      if (length < range.min || length > range.max) return Throw.TypeError('tuple default construction violates an acquired length domain');
+    }
+  }
+  return undefined;
+}
+
+/** Construct from retained observations, then finish this nested boundary
+ * before its result can escape through an enclosing ordinary Set. */
+function* CompleteTupleDefaultConstruction(parts: readonly TupleDefaultConstruction[]): ValueEvaluator {
+  Q(ValidateTupleDefaultConstruction(parts));
+  const plans = parts.flatMap((part) => part.plans);
+  const first = plans[0]!;
+  const source = first.object;
+  const length = first.type.Elements.length;
+  const supplied = first.values.length;
+  const entries = parts.flatMap((part) => part.storage);
+  const values = [...plans[plans.length - 1]!.values];
+  for (let i = supplied; i < length; i += 1) values.push(first.type.Elements[i]!.Initial as Value);
+  const out = X(ArrayCreate(length));
+  for (let i = 0; i < length; i += 1) {
+    X(CreateDataPropertyOrThrow(out, Value(String(i)), values[i]!));
+  }
+  const storage: StructuralStorageAdmission[] = [];
+  const omitted = new Set<StructuralStorageAdmission>();
+  const replacements = new Map<StructuralStorageAdmission, StructuralStorageAdmission[]>();
+  // An additional object contract is checked on the new Array's own/prototype
+  // properties, not by reading the source again. Reuse unchanged observations.
+  for (const entry of entries) {
+    if (entry.object !== source || entry.kind !== 'property') continue;
+    const key = propertyKeyValue(entry.key);
+    if (Q(yield* HasProperty(out, key)) === Value.false) {
+      if (!entry.optional) return Throw.TypeError('tuple construction cannot retain a required property');
+      omitted.add(entry);
+      for (const child of entry.descendants ?? []) omitted.add(child);
+      continue;
+    }
+    const value = Q(yield* Get(out, key));
+    if (SameValue(value, entry.value)) continue;
+    for (const child of entry.descendants ?? []) omitted.add(child);
+    const children: StructuralStorageAdmission[] = [];
+    const selection: UnionMemberAdmission = {};
+    if (!Q(yield* IsOfType(value, entry.type, children, selection))) {
+      return Throw.TypeError('tuple construction does not satisfy a retained property contract');
+    }
+    replacements.set(entry, [...children, { ...entry, object: out, value,
+      admittedType: selection.member ?? entry.type, construction: selection.construction }]);
+  }
+  for (const entry of entries) {
+    if (entry.object !== source || entry.kind !== 'object') continue;
+    const contracts: { key: string | SymbolValue, type: TypeRecord, optional: boolean }[] = [];
+    for (const property of entry.type.Properties) {
+      if (!entries.some((other) => other.object === source && other.kind === 'property'
+          && other.key === property.key && other.type === property.type)) {
+        if (Q(yield* HasProperty(out, propertyKeyValue(property.key))) === Value.true) {
+          contracts.push({ key: property.key, type: property.type, optional: property.optional });
+        }
+      }
+    }
+    for (let i = supplied; i < length; i += 1) {
+      const key = String(i);
+      if (entry.type.Properties.some((property) => property.key === key)) continue;
+      for (const index of entry.type.IndexSignatures) {
+        if (Q(yield* IsOfType(Value(key), index.Key))) contracts.push({ key, type: index.Value, optional: true });
+      }
+    }
+    for (const contract of contracts) {
+      const value = Q(yield* Get(out, propertyKeyValue(contract.key)));
+      const selection: UnionMemberAdmission = {};
+      const start = storage.length;
+      if (!Q(yield* IsOfType(value, contract.type, storage, selection))) {
+        return Throw.TypeError('a constructed tuple property does not satisfy its acquired contract');
+      }
+      storage.push({ kind: 'property', object: out, ...contract, value,
+        admittedType: selection.member ?? contract.type, construction: selection.construction, descendants: storage.slice(start) });
+    }
+  }
+  for (const entry of entries) {
+    if (omitted.has(entry)) continue;
+    const replacement = replacements.get(entry);
+    if (replacement) {
+      storage.push(...replacement);
+      continue;
+    }
+    if (entry.object !== source) {
+      storage.push(entry);
+      continue;
+    }
+    if (entry.kind === 'sequence') continue;
+    storage.push({ ...entry, object: out });
+  }
+  for (let i = supplied; i < length; i += 1) {
+    const types: TypeRecord[] = [];
+    for (const entry of storage) {
+      if (entry.object !== out) continue;
+      if (entry.kind === 'array') types.push(entry.element);
+      else if (entry.kind === 'tuple') types.push(TupleStorageTypeAt(entry.shape, i, length)!);
+    }
+    const type = types.length === 1 ? types[0]! : CanonicalizeType({ Kind: 'intersection', Members: types });
+    storage.push({ kind: 'element', object: out, key: String(i), type, admittedType: type, value: values[i]!,
+      defaultCheck: !plans.every((plan) => SameType(plan.type.Elements[i]!.Type, type)) });
+  }
+  storage.push({ kind: 'sequence', object: out, length, positions: values.map((value) => ({ own: true, value })) });
+  Q(yield* CompleteStructuralAdmission(storage));
+  return out;
+}
+
 /** Complete retained structural admission without replaying a Get. Existing
  * backing contracts remain authoritative; ordinary Set owns write effects. */
-function* CompleteStructuralAdmission(storage: readonly StructuralStorageAdmission[]): PlainEvaluator<void> {
+function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmission[]): PlainEvaluator<void> {
+  // A construction selected on one path also owns non-copying evidence for
+  // the same receiving location and observed value. Otherwise that path would
+  // stamp the old source while publishing a replacement that violates it.
+  type Entry = Extract<StructuralStorageAdmission, { kind: 'property' | 'element' }>;
+  const locations = new Map<ObjectValue, Map<string | SymbolValue, Map<Value, Entry[]>>>();
+  for (const entry of retained) {
+    if (entry.kind !== 'property' && entry.kind !== 'element') continue;
+    let properties = locations.get(entry.object);
+    if (!properties) locations.set(entry.object, properties = new Map());
+    let observations = properties.get(entry.key);
+    if (!observations) properties.set(entry.key, observations = new Map());
+    const entries = observations.get(entry.value) ?? [];
+    entries.push(entry);
+    observations.set(entry.value, entries);
+  }
+  const captured = new Set<StructuralStorageAdmission>();
+  const constructions = new Map<Entry, TupleDefaultConstruction>();
+  const merged = new Set<Entry>();
+  for (const properties of locations.values()) {
+    for (const observations of properties.values()) {
+      for (const entries of observations.values()) {
+        if (!entries.some((entry) => entry.construction)) continue;
+        const parts: TupleDefaultConstruction[] = [];
+        for (const entry of entries) {
+          if (entry.construction) parts.push(entry.construction);
+          else parts.push({ plans: [], storage: entry.descendants ?? [] });
+          for (const child of entry.descendants ?? []) captured.add(child);
+          merged.add(entry);
+        }
+        constructions.set(entries[0]!, { plans: parts.flatMap((part) => part.plans), storage: parts.flatMap((part) => part.storage) });
+      }
+    }
+  }
+  const storage = retained.filter((entry) => !captured.has(entry)).map((entry) => {
+    if (entry.kind !== 'property' && entry.kind !== 'element') return entry;
+    return merged.has(entry) ? { ...entry, construction: constructions.get(entry) } : entry;
+  });
   type SequenceStorage = ObjectValue & { TypedElement?: TypeRecord, TypedExtent?: number, TypedTuple?: TupleStorageShape };
   type SequenceGroup = { elements: TypeRecord[], type?: TypeRecord, extent?: number,
     shapes: TupleStorageShape[], shape?: TupleStorageShape, acquire: boolean,
     observations: Extract<StructuralStorageAdmission, { kind: 'sequence' }>[] };
-  type Group = { types: TypeRecord[], targets: TypeRecord[], property: boolean, copy: boolean,
+  type Group = { types: TypeRecord[], targets: TypeRecord[], constructions: Map<Value, TupleDefaultConstruction[]>, property: boolean, copy: boolean, checkDefault: boolean,
     type?: TypeRecord, target?: TypeRecord, previous?: Value };
   const sequences = new Map<ObjectValue, SequenceGroup>();
   const groups = new Map<ObjectValue, Map<string | SymbolValue, Group>>();
@@ -200,14 +368,20 @@ function* CompleteStructuralAdmission(storage: readonly StructuralStorageAdmissi
     else sequence.observations.push(entry);
   }
   for (const entry of storage) {
-    if (entry.kind === 'array' || entry.kind === 'tuple' || entry.kind === 'sequence') continue;
+    if (entry.kind !== 'property' && entry.kind !== 'element') continue;
     let properties = groups.get(entry.object);
     if (!properties) groups.set(entry.object, properties = new Map());
     let group = properties.get(entry.key);
-    if (!group) properties.set(entry.key, group = { types: [], targets: [], property: false, copy: false });
+    if (!group) properties.set(entry.key, group = { types: [], targets: [], constructions: new Map(), property: false, copy: false, checkDefault: false });
     group.types.push(entry.type);
     group.targets.push(entry.admittedType);
+    if (entry.construction) {
+      const parts = group.constructions.get(entry.value) ?? [];
+      parts.push(entry.construction);
+      group.constructions.set(entry.value, parts);
+    }
     group.property ||= entry.kind === 'property';
+    group.checkDefault ||= entry.defaultCheck === true;
     // Acquiring owned element storage is a copy position. Passing already
     // typed sequence storage through another view is not a fresh store of all its values.
     group.copy ||= entry.kind === 'element' && sequences.get(entry.object)?.acquire === true;
@@ -216,6 +390,9 @@ function* CompleteStructuralAdmission(storage: readonly StructuralStorageAdmissi
     for (const group of properties.values()) {
       group.type = together(group.types);
       group.target = together(group.targets);
+      for (const parts of group.constructions.values()) {
+        Q(ValidateTupleDefaultConstruction(parts));
+      }
     }
   }
   for (const sequence of sequences.values()) {
@@ -274,14 +451,22 @@ function* CompleteStructuralAdmission(storage: readonly StructuralStorageAdmissi
   // Preserve observation order; repeated equal observations of a location share
   // its materialization/write even when other locations intervene.
   for (const entry of storage) {
-    if (entry.kind === 'array' || entry.kind === 'tuple' || entry.kind === 'sequence') continue;
+    if (entry.kind !== 'property' && entry.kind !== 'element') continue;
     const { object, key, value } = entry;
     const group = groups.get(object)!.get(key)!;
     if (group.previous === value) continue;
     group.previous = value;
     const plan = initialization.get(object);
     if (plan) Q(checkLength(object, plan));
-    let converted = Q(yield* MaterializeGenericCallable(value, group.target!));
+    if (group.checkDefault) {
+      if (!Q(yield* IsOfType(value, group.type!))) {
+        return Throw.TypeError('a tuple default does not satisfy all acquired position contracts');
+      }
+    }
+    const constructions = group.constructions.get(value);
+    let converted: Value;
+    if (constructions) converted = Q(yield* CompleteTupleDefaultConstruction(constructions));
+    else converted = Q(yield* MaterializeGenericCallable(value, group.target!));
     if (group.copy) converted = CopyValueClassInstance(converted);
     if (plan) Q(checkLength(object, plan));
     const position = typeof key === 'string' ? plan?.positions.get(key) : undefined;
@@ -359,6 +544,7 @@ function* CompleteStructuralAdmission(storage: readonly StructuralStorageAdmissi
 /** Elision can retain its no-evaluation behavior when storage already carries
  * every required contract. This inspects internal descriptors, never getters. */
 function StructuralStorageEstablished(value: Value, type: TypeRecord): boolean {
+  if (MayRequireTupleDefaults(type)) return false;
   if (!(value instanceof ObjectValue)) return true;
   if (type.Kind === 'reference' || type.Kind === 'any') return true;
   if (type.Kind === 'shared') return StructuralStorageEstablished(value, type.Target);
@@ -1058,12 +1244,14 @@ function representsExactly(v: number | bigint, m: TypeRecord & { Kind: 'primitiv
 export function* ConvertValueToUnion(value: Value, t: TypeRecord & { Members: readonly TypeRecord[] }, convert: (v: Value, m: TypeRecord) => ValueEvaluator): ValueEvaluator {
   const members = t.Members;
   for (const m of members) {
-    const selection: { member?: TypeRecord } = {};
+    const selection: UnionMemberAdmission = {};
     const storage: StructuralStorageAdmission[] = [];
     if (Q(yield* IsOfType(value, m, storage, selection))) {
       // Selection is complete. A declaration-check failure propagates rather
       // than selecting another body from a later member.
-      const converted = Q(yield* MaterializeGenericCallable(value, selection.member ?? m));
+      let converted: Value;
+      if (selection.construction) converted = Q(yield* CompleteTupleDefaultConstruction([selection.construction]));
+      else converted = Q(yield* MaterializeGenericCallable(value, selection.member ?? m));
       Q(yield* CompleteStructuralAdmission(storage));
       return converted;
     }
@@ -1373,10 +1561,11 @@ export function* ConvertValue(value: Value, t: TypeRecord): ValueEvaluator {
     }
   }
   const storage: StructuralStorageAdmission[] = [];
-  const selection: { member?: TypeRecord } = {};
+  const selection: UnionMemberAdmission = {};
   const already = Q(yield* IsOfType(value, t, storage, selection));
   if (already) {
-    if (selection.member) value = Q(yield* MaterializeGenericCallable(value, selection.member));
+    if (selection.construction) value = Q(yield* CompleteTupleDefaultConstruction([selection.construction]));
+    else if (selection.member) value = Q(yield* MaterializeGenericCallable(value, selection.member));
     Q(yield* CompleteStructuralAdmission(storage));
     // A typed COLLECTION needs the same stamp for the same reason, and needs it
     // more: an array acquires its element type from the conversion that builds
@@ -2242,10 +2431,11 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
     }
   }
   const storage: StructuralStorageAdmission[] = [];
-  const selection: { member?: TypeRecord } = {};
+  const selection: UnionMemberAdmission = {};
   const already = shortOfADefault ? false : Q(yield* IsOfType(value, t, storage, selection));
   if (already) {
-    if (selection.member) value = Q(yield* MaterializeGenericCallable(value, selection.member));
+    if (selection.construction) value = Q(yield* CompleteTupleDefaultConstruction([selection.construction]));
+    else if (selection.member) value = Q(yield* MaterializeGenericCallable(value, selection.member));
     Q(yield* CompleteStructuralAdmission(storage));
     // Stable tuple domains are acquired with the retained admission, including
     // nested and union-selected tuples. Preserve existing backing for every
