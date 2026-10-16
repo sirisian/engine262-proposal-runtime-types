@@ -1,0 +1,854 @@
+{
+  "cases": [
+    {
+      "name": "finite extent membership window",
+      "steps": [
+        {
+          "source": "const short:any=[1];const exact:any=[1,2];const long:any=[1,2,3];String(short is [...[2].<number>])+\"/\"+String(exact is [...[2].<number>])+\"/\"+String(long is [...[2].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite run followed by fixed position admits in place",
+      "steps": [
+        {
+          "source": "const raw:any=[1,2,true];const t:[...[2].<number>,boolean]=raw;String(t===raw)+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1,2,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite run and suffix stores retain their positions",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2,true];const t:[...[2].<number>,boolean]=raw;attempt(()=>{raw[1]=\"bad\";})+\"/\"+attempt(()=>{raw[2]=\"bad\";})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/TypeError/1,2,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite typed literal adapts exact positions",
+      "steps": [
+        {
+          "source": "const t:[...[2].<uint8>,boolean]=[1,2,true];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "membership checks suffix at its real index",
+      "steps": [
+        {
+          "source": "const a:any=[1,2,3];String(a is [...[2].<number>,boolean]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "short admission fails before supplied getter",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return 1;}});attempt(()=>{const t:[...[2].<number>]=raw;})+\"/\"+reads;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "long admission refuses surplus",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2,3];attempt(()=>{const t:[...[2].<number>]=raw;})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite tuple default fills every required position",
+      "steps": [
+        {
+          "source": "let t:[...[2].<number>,boolean];t.length+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3/0,0,false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite default publishes complete backing",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let t:[...[2].<number>];const raw:any=t;attempt(()=>{raw.push(3);})+\"/\"+attempt(()=>{raw[1]=\"bad\";})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/TypeError/0,0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty finite run contributes no positions",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[...[0].<number>]=raw;String(t===raw)+\"/\"+String([1] is [...[0].<number>])+\"/\"+t.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty never run has a default",
+      "steps": [
+        {
+          "source": "let t:[...[0].<never>];String(t.length);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "several finite runs preserve each ordered region",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2,\"a\",\"b\"];const t:[...[2].<number>,...[2].<string>]=raw;raw[2]=3;attempt(()=>{raw[1]=\"bad\";})+\"/\"+typeof raw[2]+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/string/1,2,3,b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested finite tuple spread preserves exact positions",
+      "steps": [
+        {
+          "source": "const raw:any=[1,2,true];const t:[...[...[2].<number>,boolean]]=raw;String(t===raw)+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1,2,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested tuple required control",
+      "steps": [
+        {
+          "source": "const raw:any=[1,\"s\"];const t:[...[number,string]]=raw;String(t===raw)+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1,s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested aliases and finite rests compose",
+      "steps": [
+        {
+          "source": "type A=[...[2].<number>];type B=[...A,boolean];const raw:any=[1,2,true];const t:[...B]=raw;t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested finite default creates required values",
+      "steps": [
+        {
+          "source": "let t:[...[number,...[2].<boolean>]];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0,false,false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite prefix dynamic middle finite suffix membership",
+      "steps": [
+        {
+          "source": "const good:any=[1,2,\"s\",true,false];const short:any=[1,true,false];const empty:any=[1,2,true,false];type T=[...[2].<number>,...[].<string>,...[2].<boolean>];String(good is T)+\"/\"+String(short is T)+\"/\"+String(empty is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty dynamic middle still keeps finite suffix contracts",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2,true,false];const t:[...[2].<number>,...[].<string>,...[2].<boolean>]=raw;attempt(()=>{raw[2]=\"bad\";})+\"/\"+attempt(()=>{raw.push(true);})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/TypeError/1,2,true,false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "equal dynamic and finite suffix contracts permit growth",
+      "steps": [
+        {
+          "source": "const raw:any=[1,2,\"a\",\"b\"];const t:[...[2].<number>,...[].<string>,...[2].<string>]=raw;raw.push(\"c\");raw.pop();raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2,a,b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite prefix minimum prevents shrinking into it",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2];const t:[...[2].<number>,...[].<string>]=raw;attempt(()=>{raw.pop();})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty finite prefix before dynamic rest remains growable",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[...[0].<number>,...[].<string>]=raw;raw.push(3);typeof raw[0]+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite numeric elementwise conversion uses exact suffix",
+      "steps": [
+        {
+          "source": "const raw:any=[1,2,true];const t:[...[2].<uint8>,boolean]=raw;String(t===raw)+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/1,2,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit conversion respects finite extent",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];attempt(()=>{const t:any=raw := [...[2].<number>];});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit conversion keeps all positional target types",
+      "steps": [
+        {
+          "source": "const raw:any=[1,2,0];const t:any=raw := [...[2].<uint8>,boolean];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2,false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function argument finite extent refusal",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];function accept(x:[...[2].<number>]){}attempt(()=>accept(raw));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function return finite extent refusal",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];function get():[...[2].<number>]{return raw;}attempt(()=>get());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic finite extent resolves before admission",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}function get<N:uint64>(x:any):[...[N].<number>]{return x;}const raw:any=[1];attempt(()=>get.<2>(raw));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic finite extent accepts correct length",
+      "steps": [
+        {
+          "source": "function get<N:uint64>(x:any):[...[N].<number>]{return x;}const raw:any=[1,2];const t:any=get.<2>(raw);String(t===raw)+\"/\"+t.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite rest callable admission specializes both positions",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id,id];const t:[...[2].<F>]=raw;String(t===raw)+\"/\"+String(raw[0]===id.<string>)+\"/\"+String(raw[1]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected union retains finite rest callable evidence",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id,id];const t:([...[2].<F>]|null)=raw;String(raw[0]===id.<string>)+\"/\"+String(raw[1]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested structural finite callable admission",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any={items:[id,id]};const t:{items:[...[2].<F>]}=raw;String(raw.items[0]===id.<string>)+\"/\"+String(raw.items[1]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested omitted tuple completes within finite rest",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[[id],[id]];const t:[...[2].<[(x:string)=>string,number=7]>]=raw;raw[0][1]+\"/\"+raw[1][1]+\"/\"+String(raw[0][0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/7/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pure finite membership does not specialize",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id,id];String(raw is [...[2].<F>])+\"/\"+String(raw[0]===id);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed length refuses removal while preserving reference",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2];const t:[...[2].<number>]=raw;let ref r=raw[1];attempt(()=>{raw.pop();})+\"/\"+r+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/2/1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "removed dynamic tail reference cannot revive",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2,\"a\"];const t:[...[2].<number>,...[].<string>]=raw;let ref r=raw[2];raw.pop();raw.push(\"b\");attempt(()=>{r=\"c\";})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,2,b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite zero run adds no search alternative",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2];const t:[...[0].<any>,...[2].<number>]=raw;attempt(()=>{raw.includes(Symbol());});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite copy reverse carries reversed contracts",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2,true];const t:[...[2].<number>,boolean]=raw;const out:any=t.toReversed();attempt(()=>{out[0]=1;})+\"/\"+attempt(()=>{out[1]=\"bad\";})+\"/\"+out.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/TypeError/true,2,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite slice keeps exactly copied positions",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2,true];const t:[...[2].<number>,boolean]=raw;const out:any=t.slice(1);attempt(()=>{out.push(true);})+\"/\"+out.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/2,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite with retains exact complete domain",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2,true];const t:[...[2].<number>,boolean]=raw;const out:any=t.with(1,3);attempt(()=>{out.push(true);})+\"/\"+out.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,3,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite mutation refuses incompatible movement",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,2,true];const t:[...[2].<number>,boolean]=raw;attempt(()=>{raw.reverse();})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,2,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite homogeneous movement remains valid",
+      "steps": [
+        {
+          "source": "const raw:any=[1,2,3];const t:[...[3].<number>]=raw;raw.reverse();raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3,2,1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite and suffix conjunction preserves both domains",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,\"s\"];const t:([...[2].<(number|string)>]&[number,...[].<string>])=raw;attempt(()=>{raw[0]=\"bad\";})+\"/\"+attempt(()=>{raw.push(\"x\");})+\"/\"+String(raw.includes(\"s\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/TypeError/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite extent participates in both subtype directions",
+      "steps": [
+        {
+          "source": "String(Reflect.isAssignable(type [...[2].<number>],type [number,number]))+\"/\"+String(Reflect.isAssignable(type [number,number],type [...[2].<number>]));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite subtype refuses shorter longer and shifted types",
+      "steps": [
+        {
+          "source": "String(Reflect.isAssignable(type [number],type [...[2].<number>]))+\"/\"+String(Reflect.isAssignable(type [number,number,number],type [...[2].<number>]))+\"/\"+String(Reflect.isAssignable(type [...[2].<number>,boolean],type [number,boolean,number]));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/false/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite source to dynamic suffix compares anchored position",
+      "steps": [
+        {
+          "source": "String(Reflect.isAssignable(type [...[2].<number>,boolean],type [...[].<number>,boolean]))+\"/\"+String(Reflect.isAssignable(type [...[2].<number>,string],type [...[].<number>,boolean]));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "large finite subtyping uses segment boundaries",
+      "steps": [
+        {
+          "source": "String(Reflect.isAssignable(type [...[500000000].<number>,...[500000000].<number>],type [...[1000000000].<number>]))+\"/\"+String(Reflect.isAssignable(type [...[1000000000].<number>],type [...[999999999].<number>]));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite array rest retains published type identity control",
+      "steps": [
+        {
+          "source": "String(type [...[2].<number>]===type [number,number])+\"/\"+String(type [...[number,string]]===type [number,string]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "trailing dynamic default control",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=7,...[].<string>]=raw;t[0]+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite literal too short fails before body",
+      "steps": [
+        {
+          "source": "const t:[...[2].<number>]=[1];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite literal too long fails before body",
+      "steps": [
+        {
+          "source": "const t:[...[2].<number>]=[1,2,3];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite literal suffix uses Boolean context",
+      "steps": [
+        {
+          "source": "const t:[...[2].<number>,boolean]=[1,2,\"s\"];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite indexed read has exact suffix type",
+      "steps": [
+        {
+          "source": "const t:[...[2].<number>,boolean]=[1,2,true];const n:number=t[2];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite literal index is bounded",
+      "steps": [
+        {
+          "source": "const t:[...[2].<number>]=[1,2];t[2];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_INDEX_SIGNATURE",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite constant length store rejects before body",
+      "steps": [
+        {
+          "source": "const t:[...[2].<number>]=[1,2];t.length=1;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_FIXED_EXTENT_STORE",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite dynamic subtype checks newly occupied rest",
+      "steps": [
+        {
+          "source": "String(Reflect.isAssignable(type [...[2].<number>,...[].<string>,...[3].<boolean>],type [number,...[].<(number|boolean)>,boolean]));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite dynamic subtype retains all source lengths",
+      "steps": [
+        {
+          "source": "String(Reflect.isAssignable(type [...[2].<number>,...[].<string>,...[3].<boolean>],type [number,...[].<(number|string|boolean)>,boolean]));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite dynamic subtype checks shifted suffix boundary",
+      "steps": [
+        {
+          "source": "String(Reflect.isAssignable(type [...[2].<number>,...[].<number>,...[2].<boolean>],type [...[].<number>,...[3].<boolean>]));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unsupported multiple dynamic source does not prove finite extent",
+      "steps": [
+        {
+          "source": "String(Reflect.isAssignable(type [...[].<number>,...[].<number>],type [...[2].<number>]));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "conjoined finite boundaries keep search domains",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,\"tag\"];const a:[...[].<number>,...[2].<(number|\"tag\")>]=raw;const b:[...[2].<(number|\"tag\")>,...[].<\"tag\">]=raw;String(raw.includes(\"tag\"))+\"/\"+attempt(()=>{raw.includes(\"bad\");});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/TypeError"
+          }
+        }
+      ]
+    }
+  ]
+}

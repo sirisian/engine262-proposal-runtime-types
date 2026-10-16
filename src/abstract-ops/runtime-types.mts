@@ -6563,7 +6563,8 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
   // default, and the supplied length may fall anywhere from there to the
   // position count.
   const requiredCount = elements.filter((e) => !e.Rest && e.Initial === 'none').length;
-  if (len < requiredCount || (rest === undefined && len > fixedCount)) {
+  const range = shape?.Runs ? TupleLengthRange(shape) : undefined;
+  if (range ? len < range.min || len > range.max : len < requiredCount || (rest === undefined && len > fixedCount)) {
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
   }
   // An unsupplied position takes its default, converted to that position's

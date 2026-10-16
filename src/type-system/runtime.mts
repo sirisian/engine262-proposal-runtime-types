@@ -66,7 +66,7 @@ import {
 import { CanonicalizeType, GetTypeObject, isTypeObject, isClassTypeObject } from './intern.mts';
 import { invalidTupleRest } from './tuple-rests.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization, ClassTypeEnvironmentOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
-import { TupleStorageShapeOf, type TupleStorageShape } from './tuple-storage.mts';
+import { TupleStorageShapeOf, TupleLengthRange, TupleStorageTypeAt, type TupleStorageShape } from './tuple-storage.mts';
 import { MetadataStorageKey, MetadataKey, MetadataEntries } from './metadata-keys.mts';
 import { GenericWhereVerified } from './generic-where.mts';
 import { GenericAliasContextOf } from './generic-alias-context.mts';
@@ -3260,6 +3260,18 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       return out;
     }
     case 'tuple': {
+      const shape = TupleStorageShapeOf(t);
+      if (shape?.Runs) {
+        const length = TupleLengthRange(shape).min;
+        const out = Q(ArrayCreate(length));
+        for (let i = 0; i < length; i += 1) {
+          const value = Q(yield* DefaultValueOf(TupleStorageTypeAt(shape, i, length)!));
+          if (value === undefined) return undefined;
+          X(CreateDataPropertyOrThrow(out, Value(String(i)), value));
+        }
+        (out as { TypedTuple?: TupleStorageShape }).TypedTuple = shape;
+        return out;
+      }
       // #sec-defaultvalueof: "For each element _e_ of _t_.[[Elements]], do: if
       // _e_.[[Rest]] is *false* and _e_.[[Initial]] is ~none~ and
       // DefaultValueOf(_e_.[[Type]]) is ~none~, return ~none~. Return a new
@@ -4300,6 +4312,22 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       // and a rest element's Type is the ARRAY it stands for, so comparing an
       // element against it directly meant no rest ever matched anything.
       const tupleShape = TupleStorageShapeOf(t);
+      if (tupleShape?.Runs) {
+        const range = TupleLengthRange(tupleShape);
+        if (len < range.min || len > range.max) return false;
+        for (let i = 0; i < len; i += 1) {
+          const el = Q(yield* observe(i));
+          const type = TupleStorageTypeAt(tupleShape, i, len)!;
+          const admitted: UnionMemberAdmission | undefined = storage ? {} : undefined;
+          const childStart = storage?.length;
+          if (!Q(yield* IsOfType(el, type, storage, admitted))) return false;
+          storage?.push({ kind: 'element', object: value, key: String(i), type,
+            value: el, admittedType: admitted?.member ?? type, construction: admitted?.construction, descendants: storage.slice(childStart) });
+        }
+        storage?.push({ kind: 'tuple', object: value, shape: tupleShape });
+        retainSequence();
+        return true;
+      }
       const restCount = t.Elements.filter((e) => e.Rest).length;
       const defaultedPrefix = tupleShape?.MinimumLength !== undefined && tupleShape.Rest !== undefined;
       if (restCount === 0 || defaultedPrefix) {

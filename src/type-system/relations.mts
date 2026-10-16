@@ -2,6 +2,7 @@ import { SameValue, R } from '../abstract-ops/all.mts';
 import { NormalizeMetadataRecord } from '../abstract-ops/runtime-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { Value, NumberValue, isTypedNumber } from '../value.mts';
+import { TupleStorageShapeOf, TupleLengthRange, TupleStorageLengths, TupleStorageTypeAt, TupleStorageRun } from './tuple-storage.mts';
 import { MetadataKeys } from './metadata-keys.mts';
 import type { ParameterRecord, SignatureRecord, TypeRecord, TupleElementRecord } from './records.mts';
 import { IsFamilyRecord } from './records.mts';
@@ -1378,6 +1379,25 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
     }
     case 'tuple': {
       const tt = t as Extract<TypeRecord, { Kind: 'tuple' }>;
+      const sourceShape = TupleStorageShapeOf(s);
+      const targetShape = TupleStorageShapeOf(tt);
+      if (sourceShape && targetShape) {
+        const from = TupleLengthRange(sourceShape);
+        const to = TupleLengthRange(targetShape);
+        if (from.min < to.min || from.max > to.max) return false;
+        for (const length of TupleStorageLengths([sourceShape, targetShape], from.min, from.max)) {
+          for (let i = 0; i < length;) {
+            const source = TupleStorageTypeAt(sourceShape, i, length);
+            const target = TupleStorageTypeAt(targetShape, i, length);
+            if (!source || !target || !IsSubtype(source, target, next)) return false;
+            i += Math.min(length - i, TupleStorageRun(sourceShape, i, length), TupleStorageRun(targetShape, i, length));
+          }
+        }
+        return true;
+      }
+
+      // An unresolved/general shape supplies no proof against a finite run.
+      if (sourceShape?.Runs || targetShape?.Runs) return false;
       if (tupleMinLength(s.Elements) < tupleMinLength(tt.Elements)) {
         return false;
       }

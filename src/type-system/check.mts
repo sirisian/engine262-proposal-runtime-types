@@ -6222,7 +6222,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const element = receiver.Elements[Number(index)]!;
         return element.DeclaredDefault ? null : element.Type;
       }
-      return TupleIndexType(receiver, Number(index)) ?? (rest >= 0 && rest === receiver.Elements.length - 1
+      return TupleIndexType(receiver, Number(index)) ?? (!TupleStorageShapeOf(receiver)?.Runs && rest >= 0 && rest === receiver.Elements.length - 1
         ? restElementType(receiver.Elements[rest]!.Type) : null);
     }
     return null;
@@ -19857,17 +19857,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // decided, and reading one of them gives that position's type.
           if (receiver && receiver.Kind === 'tuple') {
             const positions = receiver.Elements ?? [];
+            const domain = TupleStorageShapeOf(receiver);
             const restAt = positions.findIndex((e) => e.Rest);
             const fixed = restAt === -1 ? positions.length : restAt;
             const literalIndex = numericIndexLiteral(m.Expression);
             const index = literalIndex ?? singletonTupleIndex(m.Expression);
             if (!isDeleteOperand && index !== null) {
               if ((typeof index === 'number' && !Number.isInteger(index)) || index < 0
-                  || (restAt === -1 && index >= fixed)) {
+                  || (domain?.Runs ? Number(index) >= TupleLengthRange(domain).max : restAt === -1 && index >= fixed)) {
                 const completion = CreateTypeDiagnostic('rt-index-signature', node, diagnosticPhase, '$1 is not an index of $2', Value(String(index)), Value(displayType(receiver))) as ThrowCompletion;
                 errors.push(completion.Value as ObjectValue);
                 return null;
               }
+              if (domain?.Runs && (domain.Rest === undefined || literalIndex !== null)) return TupleIndexType(receiver, Number(index)) ?? null;
               if (index < fixed) {
                 const position = positions[Number(index)]!;
                 // Newly recognized keys only claim required, unambiguous slots.
@@ -19876,7 +19878,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               }
               // Preserve the existing proof boundary for nonliteral rest keys.
               return literalIndex !== null ? TupleIndexType(receiver, Number(index))
-                ?? (restAt === positions.length - 1 ? restElementType(positions[restAt]!.Type) : null) : null;
+                ?? (!domain?.Runs && restAt === positions.length - 1 ? restElementType(positions[restAt]!.Type) : null) : null;
             }
           }
           // The third arm. A computed access
@@ -20957,8 +20959,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // One homogeneous rest has a unique partition at a known literal length,
     // including a required suffix. Keep contextual typing on that exact index.
     const shape = TupleStorageShapeOf(target);
-    if (shape?.Suffix?.length) {
-      if (elements.length < TupleLengthRange(shape).min) {
+    if (shape?.Suffix?.length || shape?.Runs) {
+      const range = TupleLengthRange(shape);
+      if (elements.length < range.min || elements.length > range.max) {
         report({ Kind: 'tuple', Elements: elements.map(() => ({ Type: anyTypeRecord, Rest: false, Initial: 'none' })) }, target);
         for (const element of elements) walk(element);
         return;
@@ -23174,7 +23177,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
   const exactLength = (t: TypeRecord): number | null => {
     if (t.Kind === 'array') return typeof t.Extent === 'number' ? t.Extent : null;
-    if (t.Kind === 'tuple') return t.Elements.every((e) => !e.Rest && e.Initial === 'none') ? t.Elements.length : null;
+    if (t.Kind === 'tuple') {
+      const shape = TupleStorageShapeOf(t);
+      if (shape?.Runs) {
+        const range = TupleLengthRange(shape);
+        return range.min === range.max ? range.min : null;
+      }
+      return t.Elements.every((e) => !e.Rest && e.Initial === 'none') ? t.Elements.length : null;
+    }
     return null;
   };
   /**
@@ -29707,6 +29717,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (receiver?.Kind === 'array' && typeof receiver.Extent === 'number' && length !== BigInt(receiver.Extent)) {
       reportType('rt-fixed-extent-store', root, 'a fixed-extent array cannot be grown');
     } else if (receiver?.Kind === 'tuple') {
+      const shape = TupleStorageShapeOf(receiver);
+      if (shape?.Runs) {
+        const range = TupleLengthRange(shape);
+        if (length < BigInt(range.min) || (Number.isFinite(range.max) && length > BigInt(range.max))) reportType('rt-fixed-extent-store', root, 'a tuple cannot be given a length outside its declared domain');
+        return;
+      }
       const rest = receiver.Elements.findIndex((element) => element.Rest);
       const fixed = rest < 0 ? receiver.Elements.length : rest;
       if (rest < 0 ? length !== BigInt(fixed) : length < BigInt(fixed)) reportType('rt-fixed-extent-store', root, 'a tuple of $1 positions cannot be given a length of $2', Value(String(fixed)), Value(String(length)));
@@ -29725,7 +29741,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const checkLengthMutation = (target: ParseNode, operator: string, value?: ParseNode): void => {
     if (!['++', '--', '+=', '-='].includes(operator)) return;
     const receiver = lengthReceiver(target);
-    const extent = receiver?.Kind === 'array' ? receiver.Extent
+    const domain = receiver?.Kind === 'tuple' ? TupleStorageShapeOf(receiver) : undefined;
+    const extent = domain?.Runs ? exactLength(receiver!) : receiver?.Kind === 'array' ? receiver.Extent
       : receiver?.Kind === 'tuple' && receiver.Elements.every((element) => !element.Rest && !element.DeclaredDefault)
         ? receiver.Elements.length : undefined;
     if (typeof extent !== 'number' || !Number.isSafeInteger(extent)) return;
@@ -30121,7 +30138,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (t?.Kind === 'tuple') {
       const rest = t.Elements.findIndex((el) => el.Rest);
       if (rest >= 0 && index >= rest) {
-        return { type: TupleIndexType(t, index) ?? (rest === t.Elements.length - 1 ? restElementType(t.Elements[rest]!.Type) : null) };
+        return { type: TupleIndexType(t, index) ?? (!TupleStorageShapeOf(t)?.Runs && rest === t.Elements.length - 1 ? restElementType(t.Elements[rest]!.Type) : null) };
       }
       return { type: t.Elements[index]?.Type ?? undefinedType };
     }
