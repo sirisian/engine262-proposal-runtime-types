@@ -1,0 +1,702 @@
+{
+  "cases": [
+    {
+      "name": "empty input completes prefix and keeps source",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=7,...[].<string>]=raw;String(t===raw)+\"/\"+t.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "multiple omitted defaults precede empty rest",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=7,boolean=true,...[].<string>]=raw;t.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7,true/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "partial defaulted prefix keeps supplied value",
+      "steps": [
+        {
+          "source": "const raw:any=[3];const t:[number=7,boolean=true,...[].<string>]=raw;t.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3,true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fully supplied tuple admits in place",
+      "steps": [
+        {
+          "source": "const raw:any=[3,\"s\"];const t:[number=7,...[].<string>]=raw;String(t===raw)+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/3,s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prefix incompatible value cannot skip to rest",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[\"s\"];String(raw is [number=7,...[].<string>])+\"/\"+attempt(()=>{const t:[number=7,...[].<string>]=raw;})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/TypeError/s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later default cannot be skipped to rest",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[3,\"s\"];String(raw is [number=7,boolean=true,...[].<string>])+\"/\"+attempt(()=>{const t:[number=7,boolean=true,...[].<string>]=raw;});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "required prefix remains required",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[];attempt(()=>{const t:[number,boolean=true,...[].<string>]=raw;});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "membership observes omission without completing",
+      "steps": [
+        {
+          "source": "const raw:any=[];String(raw is [number=7,...[].<string>])+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reference viability leaves omission alone",
+      "steps": [
+        {
+          "source": "const raw:any=[];function inspect(ref x:[number=7,...[].<string>]){}inspect(ref raw);String(raw.length);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "supplied hole does not take default",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=Array(1);String(raw is [number=7,...[].<string>])+\"/\"+attempt(()=>{const t:[number=7,...[].<string>]=raw;})+\"/\"+String(0 in raw);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/TypeError/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "supplied undefined does not take default",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[undefined];attempt(()=>{const t:[number=7,...[].<string>]=raw;});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nullable selected union completes",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:([number=7,...[].<string>]|null)=raw;const out:any=t;out.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested object completes selected tuple",
+      "steps": [
+        {
+          "source": "const raw:any=[];const outer:any={item:raw};const t:{item:[number=7,...[].<string>]}=outer;String(t===outer)+\"/\"+outer.item.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "homogeneous array completes nested tuple",
+      "steps": [
+        {
+          "source": "const raw:any=[];const outer:any=[raw];const t:[].<[number=7,...[].<string>]>=outer;String(t===outer)+\"/\"+outer[0].join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "return boundary completes tuple",
+      "steps": [
+        {
+          "source": "const raw:any=[];function get():[number=7,...[].<string>]{return raw;}const out:any=get();out.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "argument boundary completes tuple",
+      "steps": [
+        {
+          "source": "const raw:any=[];function get(x:[number=7,...[].<string>]):number{return x[0];}String(get(raw))+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal contextual conversion completes prefix",
+      "steps": [
+        {
+          "source": "const t:[number=7,...[].<string>]=[];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit conversion completes prefix",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:any=raw := [number=7,...[].<string>];t.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default declaration constructs prefix",
+      "steps": [
+        {
+          "source": "let t:[number=7,...[].<string>];t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed default completes at boundary",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=3+4,...[].<string>]=raw;t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "supplied callable prefix specializes on copied output",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[id];const t:[F,number=7,...[].<string>]=raw;String(t[0]===id.<string>)+\"/\"+t[1]+\"/\"+String(raw[0]===id)+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/7/true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fully supplied callable rest specializes in place",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[1,id];const t:[number=7,...[].<F>]=raw;String(t===raw)+\"/\"+String(raw[1]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested omitted tuple inside rest completes",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;const raw:any=[1,[id]];const t:[number=7,...[].<[F,number=9]>]=raw;String(t===raw)+\"/\"+raw[1][1]+\"/\"+String(raw[1][0]===id.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/9/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "copied output enforces prefix and rest stores",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[];const t:[number=7,...[].<string>]=raw;const out:any=t;out.push(\"s\");attempt(()=>{out[0]=\"bad\";})+\"/\"+attempt(()=>{out[1]=Symbol();})+\"/\"+out.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/TypeError/7,s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "in place output enforces prefix and rest stores",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1,\"s\"];const t:[number=7,...[].<string>]=raw;attempt(()=>{raw[0]=\"bad\";})+\"/\"+attempt(()=>{raw[1]=Symbol();})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/TypeError/1,s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shrink and grow keep declared positional contracts",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=7,...[].<string>]=raw;const out:any=t;out.length=0;out.length=2;out.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0,"
+          }
+        }
+      ]
+    },
+    {
+      "name": "indexed growth uses type defaults not initializer",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=7,...[].<string>]=raw;const out:any=t;out.length=0;out[2]=\"z\";out.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0,,z"
+          }
+        }
+      ]
+    },
+    {
+      "name": "boundary after shrink reconstructs default",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=7,...[].<string>]=raw;const out:any=t;out.length=0;const next:[number=7,...[].<string>]=t;String(next===t)+\"/\"+next[0]+\"/\"+out.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "required prefix prevents shrinking past minimum",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];const t:[number,boolean=true,...[].<string>]=raw;const out:any=t;out.length=1;attempt(()=>{out.length=0;})+\"/\"+out.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "absent rest participates in search admission",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[];const t:[number=7,...[].<string>]=raw;const out:any=t;String(out.includes(\"s\"))+\"/\"+attempt(()=>{out.includes(Symbol());});",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest with copy remains an ordinary Array control",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=7,...[].<string>]=raw;const out:any=t.with(0,3);out.push(Symbol());String(out[0])+\"/\"+typeof out[1];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3/symbol"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source reference remains live and independent",
+      "steps": [
+        {
+          "source": "const raw:any=[1];let ref r=raw[0];const t:[number,number=7,...[].<string>]=raw;r=8;raw[0]+\"/\"+t[0]+\"/\"+t[1];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "8/1/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "removed prefix reference cannot revive",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[1];const t:[number=7,...[].<string>]=raw;let ref r=raw[0];raw.pop();raw.push(3);attempt(()=>{r=2;})+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source getter read once and left intact",
+      "steps": [
+        {
+          "source": "function id<T:type>(x:T):T{return x;}type F=(x:string)=>string;let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return id;}});const t:[F,number=7,...[].<string>]=raw;reads+\"/\"+String(t[0]===id.<string>)+\"/\"+t[1]+\"/\"+String(typeof Object.getOwnPropertyDescriptor(raw,\"0\").get);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true/7/function"
+          }
+        }
+      ]
+    },
+    {
+      "name": "frozen empty source can be copied",
+      "steps": [
+        {
+          "source": "const raw:any=Object.freeze([]);const t:[number=7,...[].<string>]=raw;t.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "setter sees completed typed output",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let saved:any;let seen=\"\";const raw:any=[];const outer:any={get item(){return raw;},set item(v){saved=v;seen=v[0]+\"/\"+attempt(()=>{v.push(Symbol());});}};const t:{item:[number=7,...[].<string>]}=outer;seen+\"/\"+saved.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "completed output survives setter failure",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}let saved:any;const raw:any=[];const outer:any={get item(){return raw;},set item(v){saved=v;throw new Error(\"stop\");}};attempt(()=>{const t:{item:[number=7,...[].<string>]}=outer;})+\"/\"+saved[0]+\"/\"+attempt(()=>{saved.push(Symbol());})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "Error/7/TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overlapping rest contracts both constrain output",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[];const t:([number=7,...[].<string>]&[any=7,...[].<(string|boolean)>])=raw;const out:any=t;out.push(\"s\");attempt(()=>{out.push(Symbol());})+\"/\"+out.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/7,s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "overlapping defaults must agree",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[];attempt(()=>{const t:([number=7,...[].<string>]&[number=9,...[].<boolean>])=raw;})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "noncopying homogeneous evidence constrains new default",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[];attempt(()=>{const t:([any=\"s\",...[].<number>]&[].<number>)=raw;})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "required custom source property is not copied",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}const raw:any=[];raw.extra=1;attempt(()=>{const t:([number=7,...[].<string>]&{extra:number})=raw;})+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "required single rest suffix control",
+      "steps": [
+        {
+          "source": "const raw:any=[1,\"s\",true];const t:[number,...[].<string>,boolean]=raw;String(t===raw)+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1,s,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "no rest default control",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=7]=raw;t.join(\",\")+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest store retains ordinary String conversion",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=7,...[].<string>]=raw;const out:any=t;out.push(2);typeof out[1]+\"/\"+out.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string/7,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fully supplied prefix and empty rest retain identity",
+      "steps": [
+        {
+          "source": "const raw:any=[1];const t:[number=7,...[].<string>]=raw;String(t===raw)+\"/\"+t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic application completes a defaulted prefix",
+      "steps": [
+        {
+          "source": "const raw:any=[];function get<T:type>(x:any):[T=7,...[].<string>]{return x;}const t:any=get.<number>(raw);t.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contextual literal cannot skip default to rest",
+      "steps": [
+        {
+          "source": "const t:[number=7,...[].<string>]=[\"s\"];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "required fixed position after default stays invalid",
+      "steps": [
+        {
+          "source": "type T=[number=7,number];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_REQUIRED",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default after rest stays invalid",
+      "steps": [
+        {
+          "source": "type T=[...[].<string>,number=7];",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_TYPE_REQUIRED",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -14,9 +14,9 @@ export type TupleStorageShape = {
 export function TupleStorageShapeOf(type: TypeRecord): TupleStorageShape | undefined {
   if (type.Kind !== 'tuple') return undefined;
   const hasDefaults = type.Elements.some((e) => e.Initial !== 'none' || e.DeclaredDefault);
-  // Without a rest, defaults change admitted lengths, never the type at an
-  // existing index. Default/rest combinations still need general assignment.
-  if (hasDefaults && type.Elements.some((e) => e.Rest)) return undefined;
+  // Defaults in a fixed prefix change admitted lengths, never the type at an
+  // existing index. A following dynamic array rest starts after that prefix;
+  // an incompatible supplied value cannot skip a defaulted position.
   const positions: TypeRecord[] = [];
   const suffix: TypeRecord[] = [];
   let rest: TypeRecord | undefined;
@@ -25,8 +25,9 @@ export function TupleStorageShapeOf(type: TypeRecord): TupleStorageShape | undef
     else if (!rest && element.Type.Kind === 'array' && element.Type.Extent === 'dynamic') rest = element.Type.Element;
     else return undefined;
   }
+  if (hasDefaults && suffix.length) return undefined;
   return { Positions: positions, Rest: rest, ...(suffix.length ? { Suffix: suffix } : {}),
-    ...(hasDefaults ? { MinimumLength: type.Elements.filter((e) => e.Initial === 'none' && !e.DeclaredDefault).length } : {}) };
+    ...(hasDefaults ? { MinimumLength: type.Elements.filter((e) => !e.Rest && e.Initial === 'none' && !e.DeclaredDefault).length } : {}) };
 }
 
 export function TupleLengthRange(shape: TupleStorageShape): { min: number, max: number } {

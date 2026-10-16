@@ -4290,8 +4290,9 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       }
       // Per #sec-array-membership.
       //
-      // A tuple with NO rest is positional and exact, which is the common case
-      // and reads each element once. Any rest at all goes through
+      // A tuple with no rest, or a fixed defaulted prefix and one trailing
+      // dynamic array rest, is positional and reads each element once. Other
+      // rest shapes go through
       // SequenceAssignment: which element receives which run is its answer, and
       // hand-rolling the mapping is what left two defects here. The length
       // check ignored elements AFTER a rest, so `[1]` satisfied
@@ -4300,15 +4301,17 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       // element against it directly meant no rest ever matched anything.
       const tupleShape = TupleStorageShapeOf(t);
       const restCount = t.Elements.filter((e) => e.Rest).length;
-      if (restCount === 0) {
+      const defaultedPrefix = tupleShape?.MinimumLength !== undefined && tupleShape.Rest !== undefined;
+      if (restCount === 0 || defaultedPrefix) {
         // #sec-array-membership: an element's slot "is optional exactly when its
         // [[Initial]] is not ~none~", so a value may stop short of the trailing
         // positions that carry a default. The exact-length test could never see
         // one, because [[Initial]] was always ~none~ - which is what made the
         // design's "a shorter array satisfies a longer tuple return"
         // unreachable.
-        const requiredLength = t.Elements.filter((e) => e.Initial === 'none').length;
-        if (len < requiredLength || len > t.Elements.length) {
+        const fixed = defaultedPrefix ? t.Elements.filter((e) => !e.Rest) : t.Elements;
+        const requiredLength = fixed.filter((e) => e.Initial === 'none').length;
+        if (len < requiredLength || (restCount === 0 && len > fixed.length)) {
           return false;
         }
         const values: Value[] = [];
@@ -4316,7 +4319,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           const el = Q(yield* observe(i));
           values.push(el);
           const admitted: UnionMemberAdmission | undefined = storage && tupleShape ? {} : undefined;
-          const type = t.Elements[i].Type;
+          const type = i < fixed.length ? fixed[i].Type : tupleShape!.Rest!;
           const childStart = storage?.length;
           if (!Q(yield* IsOfType(el, type, storage, admitted))) {
             return false;
@@ -4326,8 +4329,10 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         }
         if (tupleShape) storage?.push({ kind: 'tuple', object: value, shape: tupleShape });
         retainSequence();
-        if (storage && selection && tupleShape && len < t.Elements.length && Q(IsArray(value)) === Value.true) {
-          selection.construction = { plans: [{ object: value, type: t, values }], storage: [] };
+        if (storage && selection && tupleShape && len < fixed.length && Q(IsArray(value)) === Value.true) {
+          // The construction plan contains the positions to fill. The retained
+          // tuple evidence above carries the complete domain, including rest.
+          selection.construction = { plans: [{ object: value, type: { ...t, Elements: fixed }, values }], storage: [] };
         }
         return true;
       }
@@ -6229,12 +6234,8 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
       let sawDefault = false;
       let sawRest = false;
       for (const e of node.TupleElementList) {
-        // #sec-array-and-tuple-types: a tuple is positional, so the only way to
-        // leave a position unsupplied is to stop short of it. A default anywhere
-        // but the tail could never be taken, and one after a rest could never be
-        // reached. Both are stated as type errors and neither was enforced,
-        // because the record could not represent a default and so nothing
-        // downstream could see their order.
+        // Defaults may finish the fixed prefix before a rest. They cannot
+        // precede a required non-rest position or follow a rest.
         if (sawDefault && !e.Initializer && !e.Rest) {
           return Throw.TypeError('$1 is not a type', Value('a tuple position without a default may not follow one with a default'));
         }

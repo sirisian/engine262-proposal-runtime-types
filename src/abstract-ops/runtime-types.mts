@@ -2411,6 +2411,9 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord): ValueEvaluato
   // a path that rebuilds one - which is what 481 failing tests were saying.
   let shortOfADefault = false;
   if (t.Kind === 'tuple' && t.Elements.some((e) => e.Initial !== 'none')
+      // A supported trailing rest uses retained construction evidence below;
+      // the rest declaration itself is not an unsupplied fixed position.
+      && TupleStorageShapeOf(t)?.Rest === undefined
       && value instanceof ObjectValue && Q(IsArray(value)) === Value.true) {
     const lengthNow = R(Q(yield* ToNumber(Q(yield* Get(value, Value('length'))))) as NumberValue);
     shortOfADefault = lengthNow < t.Elements.length;
@@ -6565,7 +6568,7 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
   }
   // An unsupplied position takes its default, converted to that position's
   // type as a supplied value would be.
-  const filled = Math.max(len, rest === undefined ? fixedCount : len);
+  const filled = Math.max(len, rest === undefined || shape?.MinimumLength !== undefined ? fixedCount : len);
   const out = X(ArrayCreate(filled));
   for (let i = 0; i < filled; i += 1) {
     if (i >= len) {
