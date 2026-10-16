@@ -113,3 +113,7 @@ export type { CallableGroupHost, CallableDeclaration, SpecializationCase } from 
 
 import * as TypeEvaluationBudget from './type-system/budget.mts';
 export { TypeEvaluationBudget };
+
+export * from './type-system/scalar-rests.mts';
+export * from './abstract-ops/scalar-rest-storage.mts';
+export { DeclaredReferenceLocationType } from './abstract-ops/argument-distribution.mts';

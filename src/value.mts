@@ -13,6 +13,7 @@ import { PropertyKeyMap } from './utils/container.mts';
 import type { PrivateElementRecord } from './runtime-semantics/MethodDefinitionEvaluation.mts';
 import type { PlainEvaluator } from './evaluator.mts';
 import {
+  ScalarRestOwner,
   OrdinaryDefineOwnProperty,
   OrdinaryDelete,
   OrdinaryGet,
@@ -33,6 +34,7 @@ import {
   type DefaultConstructorBuiltinFunction, EnvironmentRecord,
   Throw,
   RequireType,
+  PrepareScalarRestStore,
   isArrayIndex,
   surroundingAgent,
 } from '#self';
@@ -1301,7 +1303,9 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
       // #sec-issubtype: a `[uint8]` seen as a `[uint8 | string]` is the same
       // object, and a String written through the wider view would otherwise land
       // in a slot declared `uint8`.
-      const tuple = (Receiver as { TypedTuple?: TupleStorageShape }).TypedTuple;
+      const scalarOwner = ScalarRestOwner(Receiver as ObjectValue);
+      if (scalarOwner.ScalarRestGuards?.length && isArrayIndex(P)) V = Q(yield* PrepareScalarRestStore(Receiver as ObjectValue, P as JSStringValue, V));
+      const tuple = ((scalarOwner.ScalarRestGuards?.length ? scalarOwner : Receiver) as { TypedTuple?: TupleStorageShape }).TypedTuple;
       if (tuple !== undefined && isArrayIndex(P)) {
         const index = Number((P as JSStringValue).stringValue());
         const length = TupleBackingLength(Receiver as ObjectValue);

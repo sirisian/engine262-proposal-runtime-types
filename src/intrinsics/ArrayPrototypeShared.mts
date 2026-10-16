@@ -16,6 +16,7 @@ import { assignProps } from './bootstrap.mts';
 import { ValidateTypedArray } from './TypedArray.mts';
 import { RequireType, surroundingAgent } from '#self';
 import {
+  SetArrayMove,
   Assert,
   Call,
   DeletePropertyOrThrow,
@@ -24,7 +25,6 @@ import {
   Invoke,
   IsCallable,
   SameValueZero,
-  Set,
   IsStrictlyEqual,
   ToBoolean,
   ToIntegerOrInfinity,
@@ -563,14 +563,14 @@ export function bootstrapArrayPrototypeShared(realmRec: Realm, proto: ObjectValu
         upperValue = Q(yield* Get(O, upperP));
       }
       if (lowerExists === Value.true && upperExists === Value.true) {
-        Q(yield* Set(O, lowerP, upperValue as Value, Value.true));
-        Q(yield* Set(O, upperP, lowerValue as Value, Value.true));
+        Q(yield* SetArrayMove(O, lowerP, upperValue as Value));
+        Q(yield* SetArrayMove(O, upperP, lowerValue as Value));
       } else if (lowerExists === Value.false && upperExists === Value.true) {
-        Q(yield* Set(O, lowerP, upperValue as Value, Value.true));
+        Q(yield* SetArrayMove(O, lowerP, upperValue as Value));
         Q(yield* DeletePropertyOrThrow(O, upperP));
       } else if (lowerExists === Value.true && upperExists === Value.false) {
         Q(yield* DeletePropertyOrThrow(O, lowerP));
-        Q(yield* Set(O, upperP, lowerValue as Value, Value.true));
+        Q(yield* SetArrayMove(O, upperP, lowerValue as Value));
       } else {
         // no further action is required
       }

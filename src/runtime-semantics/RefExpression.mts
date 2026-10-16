@@ -12,6 +12,7 @@ import { SoAStorageOf, SoAElementReference } from '../intrinsics/SoA.mts';
 import { ArrayElementIdentity } from '../type-system/array-borrow.mts';
 import { Get, surroundingAgent } from '#self';
 import {
+  ScalarRestOwner,
   IsPropertyKey,
   IsPropertyReference,
   IsSuperReference,
@@ -120,7 +121,9 @@ export function* SoAElementLocationFor(location: ReferenceRecord): PlainEvaluato
     // proposal-runtime-types #sec-reference-liveness: a borrow of an element of
     // a growable `[].<T>` records the generation of its backing allocation, so
     // that a growth which relocates the allocation invalidates it.
-    const typed = location.Base as unknown as { TypedElement?: unknown, TypedGeneration?: number,
+    const owner = ScalarRestOwner(location.Base);
+    const source = owner.ScalarRestGuards?.length ? owner : location.Base;
+    const typed = source as unknown as { TypedElement?: unknown, TypedGeneration?: number,
       TypedTuple?: TupleStorageShape };
     // Tuple positions also have removal identity. Shrinking a trailing rest
     // must not leave a borrow live or revive it when the index is filled again.
@@ -138,9 +141,9 @@ export function* SoAElementLocationFor(location: ReferenceRecord): PlainEvaluato
           IndexSetOperator: undefined,
           SoAElement: undefined,
           ArrayBorrow: {
-            Source: location.Base, TakenAt: typed.TypedGeneration ?? 0,
+            Source: source, TakenAt: typed.TypedGeneration ?? 0,
             Key: location.ReferencedName.stringValue(),
-            ElementIdentity: ArrayElementIdentity(location.Base, location.ReferencedName.stringValue()),
+            ElementIdentity: ArrayElementIdentity(source, location.ReferencedName.stringValue()),
           },
         });
       }

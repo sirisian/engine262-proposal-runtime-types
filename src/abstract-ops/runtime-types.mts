@@ -42,6 +42,7 @@ import { TakeBodyContext } from '../type-system/runtime.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { describeParameters, minimumArity, resolveOverloadChecked, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature, operatorTableKey } from '../type-system/overloads.mts';
 import {
+  ScalarRestsOf, ScalarRestsAccept, ScalarRestProjection, ScalarRestValues, type ScalarRestStorage, type ScalarRestPattern, ConvertScalarRestItems,
   wellKnownSymbols,
   SetArrayAdmission, OrdinaryGetOwnProperty, ValidateAndApplyPropertyDescriptor, IsDataDescriptor, Assert, type OrdinaryObject,
   Call, R, Throw, WithoutMetadata, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate, GetValue, Evaluate,
@@ -340,6 +341,7 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
   type SequenceStorage = ObjectValue & { TypedElement?: TypeRecord, TypedExtent?: number, TypedTuple?: TupleStorageShape };
   type SequenceGroup = { elements: TypeRecord[], type?: TypeRecord, extent?: number,
     shapes: TupleStorageShape[], shape?: TupleStorageShape, acquire: boolean,
+    scalarRests: ScalarRestPattern[],
     observations: Extract<StructuralStorageAdmission, { kind: 'sequence' }>[] };
   type Group = { types: TypeRecord[], targets: TypeRecord[], constructions: Map<Value, TupleDefaultConstruction[]>, property: boolean, copy: boolean, checkDefault: boolean,
     type?: TypeRecord, target?: TypeRecord, previous?: Value };
@@ -352,7 +354,7 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
     let sequence = sequences.get(entry.object);
     if (!sequence) {
       const target = entry.object as SequenceStorage;
-      sequence = { elements: [], shapes: [], observations: [], acquire: Q(IsArray(target)) === Value.true
+      sequence = { elements: [], shapes: [], scalarRests: [], observations: [], acquire: Q(IsArray(target)) === Value.true
         && target.TypedElement === undefined && target.TypedTuple === undefined };
       sequences.set(entry.object, sequence);
     }
@@ -364,8 +366,10 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
         }
         sequence.extent = entry.extent;
       }
-    } else if (entry.kind === 'tuple') sequence.shapes.push(entry.shape);
-    else sequence.observations.push(entry);
+    } else if (entry.kind === 'tuple') {
+      sequence.shapes.push(entry.shape);
+      if (entry.scalarRest) sequence.scalarRests.push(entry.scalarRest);
+    } else sequence.observations.push(entry);
   }
   for (const entry of storage) {
     if (entry.kind !== 'property' && entry.kind !== 'element') continue;
@@ -515,6 +519,23 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
   }
   // No user code between revalidation, missing-element initialization, and
   // contract publication. Defaults, getters, and inherited setters are not replayed.
+  for (const [object, sequence] of sequences) {
+    if (!sequence.scalarRests.length) continue;
+    for (const observation of sequence.observations) {
+      if (TupleBackingLength(object) !== observation.length) return Throw.TypeError('scalar rest length changed during admission');
+      const values = ScalarRestValues(object, observation.length);
+      // Fresh sparse admission supplies its retained missing own values below.
+      const admitted = initialization.get(object);
+      const current = admitted ? Array.from({ length: observation.length }, (_, i) => {
+        const position = admitted.positions.get(String(i))!;
+        return object.properties.get(Value(String(i)))?.Value ?? position.value;
+      }) : values;
+      if (!current || observation.positions.some((entry, i) => !SameValue(entry.value, current[i]!))
+          || !sequence.scalarRests.every((pattern) => ScalarRestsAccept(pattern, current))) {
+        return Throw.TypeError('scalar rest data changed during admission');
+      }
+    }
+  }
   for (const { object, key, value } of missing) {
     Assert(ValidateAndApplyPropertyDescriptor(object, key, object.Extensible,
       Descriptor({ Value: value, Writable: Value.true, Enumerable: Value.true, Configurable: Value.true }), Value.undefined) === Value.true);
@@ -537,6 +558,14 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
       if (sequence.shape) target.TypedTuple = sequence.shape;
       if (sequence.type) StampTypedArray(target, sequence.type);
       if (sequence.extent !== undefined) target.TypedExtent = sequence.extent;
+    }
+    if (sequence.scalarRests.length) {
+      const guarded = target as ScalarRestStorage;
+      const patterns = [...guarded.ScalarRestGuards ?? []];
+      for (const pattern of sequence.scalarRests) {
+        if (!patterns.some((old) => old.length === pattern.length && old.every((type, i) => SameType(type, pattern[i]!)))) patterns.push(pattern);
+      }
+      if (patterns.length !== guarded.ScalarRestGuards?.length) guarded.ScalarRestGuards = patterns;
     }
   }
 }
@@ -1149,6 +1178,16 @@ function isNumberConversionSource(value: Value): boolean {
  */
 function isBooleanConversionSource(value: Value): boolean {
   return value instanceof BooleanValue;
+}
+
+/** Applicability only: this must not invoke a class conversion while searching. */
+export function ScalarRestConversionApplicable(value: Value, t: ScalarRestPattern[number],
+  convert: (v: Value, type: TypeRecord) => ValueEvaluator): boolean {
+  const explicit = convert === ConvertValue;
+  if (!explicit && IsCallable(LookupClassOperator(value, `convert ${displayType(t)}`) ?? Value.undefined)) return true;
+  if (t.Name === 'boolean') return explicit || isBooleanConversionSource(value);
+  if (t.Name === 'string') return isStringConversionSource(value);
+  return isBoundaryNumericTarget(t.Name) && isBoundaryNumericSource(value) && !isComplexObject(value);
 }
 
 /**
@@ -6565,6 +6604,22 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
   const len = Q(yield* SequenceConversionLength(value, observation));
   const elements = t.Elements;
   const shape = TupleStorageShapeOf(t);
+  const scalar = !shape && ScalarRestsOf(t);
+  if (scalar) {
+    const items = [];
+    for (let i = 0; i < len; i += 1) {
+      items.push({ value: Q(yield* ObserveSequenceElement(value, i, observation)).value, convert: true });
+    }
+    const conversion = convertElement === CheckedConvertValue ? RequireType : convertElement;
+    const values = Q(yield* ConvertScalarRestItems([scalar], items, conversion));
+    const out = X(ArrayCreate(len));
+    for (let i = 0; i < len; i += 1) {
+      X(CreateDataPropertyOrThrow(out, Value(String(i)), values[i]!));
+    }
+    (out as { TypedTuple?: TupleStorageShape }).TypedTuple = { Positions: [], Rest: ScalarRestProjection(scalar) };
+    (out as ScalarRestStorage).ScalarRestGuards = [scalar];
+    return out;
+  }
   const rest = elements.find((e) => e.Rest);
   const fixedCount = shape ? TuplePrefixLength(shape) : elements.filter((e) => !e.Rest).length;
   // #sec-array-and-tuple-types: a trailing position with a default may be

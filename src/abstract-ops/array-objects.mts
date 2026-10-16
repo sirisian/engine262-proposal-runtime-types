@@ -3,7 +3,7 @@ import { DefaultValueOf } from '../type-system/runtime.mts';
 import type { ThrowCompletion } from '../completion.mts';
 import {
   surroundingAgent, Descriptor, ObjectValue, JSStringValue, Value, wellKnownSymbols, type ObjectInternalMethods,
-  NumberValue, UndefinedValue,
+  NumberValue, UndefinedValue, type PropertyKeyValue,
   BooleanValue,
   BigIntValue,
   TypedStringValue,
@@ -52,7 +52,8 @@ import {
   GeneratorYield,
   Throw,
 } from '#self';
-import { isTypedArrayObject, RequireType, INDEX_TYPE } from '#self';
+import {
+  ScalarRestOwner, ScalarRestGuardsAccept, ScalarRestValues, PrepareScalarRestValues, isTypedArrayObject, RequireType, INDEX_TYPE } from '#self';
 
 const InternalMethods = {
   /** https://tc39.es/ecma262/#sec-array-exotic-objects-defineownproperty-p-desc */
@@ -97,6 +98,7 @@ const InternalMethods = {
         return Throw.TypeError('a fixed-extent array cannot be grown');
       }
       const tuple = typed.TypedTuple;
+      if (Desc.Value !== undefined) Desc = Descriptor({ ...Desc, Value: Q(yield* PrepareScalarRestStore(array, P as JSStringValue, Desc.Value)) });
       if (tuple !== undefined) {
         const position = Number((P as JSStringValue).stringValue());
         const length = TupleBackingLength(array);
@@ -363,9 +365,10 @@ function* GrowInitializedArray(array: OrdinaryObject, oldLen: number, newLen: nu
     return Value.false;
   }
   const values: Descriptor[] = [];
+  const scalarValues = Q(yield* PrepareScalarRestValues(array, newLen, supplied, false));
   for (let index = oldLen; index < newLen; index += 1) {
     const suppliedDescriptor = supplied.get(index);
-    let value = suppliedDescriptor?.Value;
+    let value = scalarValues?.[index] ?? suppliedDescriptor?.Value;
     if (value === undefined) {
       const target = tuple === undefined ? element : TupleStorageTypeAt(tuple, index, newLen);
       Assert(target !== undefined);
@@ -387,6 +390,12 @@ function* GrowInitializedArray(array: OrdinaryObject, oldLen: number, newLen: nu
   if (array.Extensible === Value.false
       || IsCompatiblePropertyDescriptor(array.Extensible, desc, current) === Value.false) {
     return Value.false;
+  }
+  if (scalarValues) {
+    const scalarPrefix = ScalarRestValues(array, oldLen);
+    if (!scalarPrefix || !ScalarRestGuardsAccept(array, [...scalarPrefix, ...values.map((entry) => entry.Value!)])) {
+      return Throw.TypeError('array growth violates its ordered scalar rest guards');
+    }
   }
   // No user code runs between this revalidation and publication. Define own
   // data slots directly, without inherited setters or a second conversion.
@@ -423,6 +432,38 @@ const insertionWrites = new WeakMap<ObjectValue, {
   plan: ArrayInsertionPlan, key: JSStringValue, context: unknown,
 }>();
 
+const movementWrites = new WeakMap<ObjectValue, { key: JSStringValue, context: unknown }>();
+
+/** Intrinsic movement preserves the moved value; it cannot repair an ordering
+ * violation by coercing a Number into a String. Ordinary inserted values convert. */
+export function* SetArrayMove(object: ObjectValue, key: JSStringValue, value: Value): ValueEvaluator<BooleanValue> {
+  if (!ScalarRestOwner(object).ScalarRestGuards?.length) return yield* Set(object, key, value, Value.true);
+  const previous = movementWrites.get(object);
+  movementWrites.set(object, { key, context: surroundingAgent.executionContextStack.at(-1) });
+  try {
+    return yield* Set(object, key, value, Value.true);
+  } finally {
+    if (previous) movementWrites.set(object, previous);
+    else movementWrites.delete(object);
+  }
+}
+
+export function* PrepareScalarRestStore(object: ObjectValue, key: JSStringValue, value: Value): ValueEvaluator {
+  const owner = ScalarRestOwner(object);
+  if (!owner.ScalarRestGuards?.length) return value;
+  const index = Number(key.stringValue());
+  const scope = insertionWrites.get(object);
+  const active = scope && scope.key === key && scope.context === surroundingAgent.executionContextStack.at(-1);
+  const supplied = new Map(active ? scope.plan.values : []);
+  supplied.set(index, Descriptor({ Value: value }));
+  let length = Math.max(TupleBackingLength(owner), index + 1);
+  for (const i of supplied.keys()) length = Math.max(length, i + 1);
+  const movement = movementWrites.get(object);
+  const moving = movement && movement.key === key && movement.context === surroundingAgent.executionContextStack.at(-1);
+  const values = Q(yield* PrepareScalarRestValues(object, length, supplied, !moving));
+  return values![index]!;
+}
+
 /** Only growing owned typed Array mutations need a private tail. */
 export function BeginArrayInsertion(object: ObjectValue, length: number): ArrayInsertionPlan | undefined {
   if (!surroundingAgent.feature('runtime-types') || !isArrayExoticObject(object) || !HasTypedArrayBacking(object)) return undefined;
@@ -446,13 +487,18 @@ function CheckArrayInsertion(plan: ArrayInsertionPlan): ThrowCompletion | undefi
  * in this execution context, can stage its eventual own data definition. A
  * callback's independent writes run in their own context and publish normally. */
 export function* SetArrayInsertion(object: ObjectValue, key: JSStringValue, value: Value,
-  plan: ArrayInsertionPlan | undefined): ValueEvaluator<BooleanValue> {
-  if (!plan) return yield* Set(object, key, value, Value.true);
+  plan: ArrayInsertionPlan | undefined, moving = false): ValueEvaluator<BooleanValue> {
+  if (!plan) {
+    if (moving) return yield* SetArrayMove(object, key, value);
+    return yield* Set(object, key, value, Value.true);
+  }
   Q(CheckArrayInsertion(plan));
   const previous = insertionWrites.get(object);
   insertionWrites.set(object, { plan, key, context: surroundingAgent.executionContextStack.at(-1) });
   try {
-    const result = Q(yield* Set(object, key, value, Value.true));
+    let result;
+    if (moving) result = Q(yield* SetArrayMove(object, key, value));
+    else result = Q(yield* Set(object, key, value, Value.true));
     Q(CheckArrayInsertion(plan));
     return result;
   } finally {
@@ -498,13 +544,18 @@ function CheckArrayRemoval(plan: ArrayRemovalPlan): ThrowCompletion | undefined 
 }
 
 export function* SetArrayRemoval(object: ObjectValue, key: JSStringValue, value: Value,
-  plan: ArrayRemovalPlan | undefined): ValueEvaluator<BooleanValue> {
-  if (!plan) return yield* Set(object, key, value, Value.true);
+  plan: ArrayRemovalPlan | undefined, moving = false): ValueEvaluator<BooleanValue> {
+  if (!plan) {
+    if (moving) return yield* SetArrayMove(object, key, value);
+    return yield* Set(object, key, value, Value.true);
+  }
   Q(CheckArrayRemoval(plan));
   const previous = removalWrites.get(object);
   removalWrites.set(object, { plan, key, context: surroundingAgent.executionContextStack.at(-1) });
   try {
-    const result = Q(yield* Set(object, key, value, Value.true));
+    let result;
+    if (moving) result = Q(yield* SetArrayMove(object, key, value));
+    else result = Q(yield* Set(object, key, value, Value.true));
     Q(CheckArrayRemoval(plan));
     return result;
   } finally {
@@ -547,15 +598,29 @@ const admissionWrites = new WeakMap<ObjectValue, {
  * Independent callback writes retain their ordinary execution context. */
 export function* SetArrayAdmission(object: ObjectValue, key: JSStringValue, value: Value,
   check: () => ThrowCompletion | undefined): ValueEvaluator<BooleanValue> {
+  return yield* WithArrayDefinitionCheck(object, key, check, () => Set(object, key, value, Value.false));
+}
+
+/** A borrowed store must still name a live location at its final definition.
+ * The callback also preserves Set's original receiver and Proxy dispatch. */
+export function* WithArrayDefinitionCheck(object: ObjectValue, key: JSStringValue,
+  check: () => ThrowCompletion | undefined, write: () => ValueEvaluator<BooleanValue>): ValueEvaluator<BooleanValue> {
   Q(check());
   const previous = admissionWrites.get(object);
   admissionWrites.set(object, { key, check, context: surroundingAgent.executionContextStack.at(-1) });
   try {
-    return yield* Set(object, key, value, Value.false);
+    return yield* write();
   } finally {
     if (previous) admissionWrites.set(object, previous);
     else admissionWrites.delete(object);
   }
+}
+
+/** Recheck after independent property conversion, immediately before publication. */
+export function CheckArrayDefinition(object: ObjectValue, key: PropertyKeyValue): ThrowCompletion | undefined {
+  const scope = admissionWrites.get(object);
+  if (scope && scope.key === key && scope.context === surroundingAgent.executionContextStack.at(-1)) return scope.check();
+  return undefined;
 }
 
 /** https://tc39.es/ecma262/#sec-isconcatspreadable */

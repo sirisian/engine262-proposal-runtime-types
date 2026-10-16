@@ -34,7 +34,8 @@ import {
   type FunctionObject,
   type Intrinsics,
 } from './all.mts';
-import { CreateBuiltinFunction, surroundingAgent, RequireType, LookupTypeDefault, Throw } from '#self';
+import {
+  ScalarRestDefinitionAllowed, CheckArrayDefinition, CreateBuiltinFunction, surroundingAgent, RequireType, LookupTypeDefault, Throw } from '#self';
 
 export interface OrdinaryObject extends ObjectValue {
   Prototype: ObjectValue | NullValue;
@@ -163,6 +164,8 @@ export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, 
     }
     const current = Q(yield* O.GetOwnProperty(P));
     const extensible = Q(yield* IsExtensible(O));
+    Q(CheckArrayDefinition(O, P));
+    if (!ScalarRestDefinitionAllowed(O, P, applied)) return Throw.TypeError('a property definition violates an ordered scalar rest guard');
     const result = ValidateAndApplyPropertyDescriptor(O, P, extensible, applied, current);
     if (result === Value.true) {
       const map = ((O as { TypedProperties?: Map<unknown, object> }).TypedProperties ??= new Map());
@@ -202,12 +205,17 @@ export function* OrdinaryDefineOwnProperty(O: ObjectValue, P: PropertyKeyValue, 
         const converted = Q(yield* RequireType(Desc.Value, declared.TypeRecord));
         const current = Q(yield* O.GetOwnProperty(P));
         const extensible = Q(yield* IsExtensible(O));
-        return ValidateAndApplyPropertyDescriptor(O, P, extensible, Descriptor({ ...Desc, Value: converted }), current);
+        const applied = Descriptor({ ...Desc, Value: converted });
+        Q(CheckArrayDefinition(O, P));
+        if (!ScalarRestDefinitionAllowed(O, P, applied)) return Throw.TypeError('a property definition violates an ordered scalar rest guard');
+        return ValidateAndApplyPropertyDescriptor(O, P, extensible, applied, current);
       }
     }
   }
   const current = Q(yield* O.GetOwnProperty(P));
   const extensible = Q(yield* IsExtensible(O));
+  Q(CheckArrayDefinition(O, P));
+  if (!ScalarRestDefinitionAllowed(O, P, Desc)) return Throw.TypeError('a property definition violates an ordered scalar rest guard');
   return ValidateAndApplyPropertyDescriptor(O, P, extensible, Desc, current);
 }
 

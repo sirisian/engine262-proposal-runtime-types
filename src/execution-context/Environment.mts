@@ -19,7 +19,7 @@ import { JSStringMap } from '../utils/container.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { SoAScatter, SoAElementBackingOf } from '../intrinsics/SoA.mts';
-import { RequireArrayBorrowLive } from '../abstract-ops/reference-operations.mts';
+import { RequireArrayBorrowLive, PutValue } from '../abstract-ops/reference-operations.mts';
 import { RequireType, functionTypeParameters } from '../abstract-ops/runtime-types.mts';
 import { lookupTypeParameter } from '../type-system/runtime.mts';
 import {
@@ -141,6 +141,9 @@ function* WriteThroughRefLocation(location: ReferenceRecord, V: Value): PlainEva
   const staleWrite = RequireArrayBorrowLive(location);
   if (staleWrite !== undefined) {
     return staleWrite;
+  }
+  if (location.ArrayBorrow && ScalarRestOwner(location.ArrayBorrow.Source).ScalarRestGuards?.length) {
+    return yield* PutValue(location, V);
   }
   // A whole-element store through the borrow writes every column at the index.
   if (location.SoAElement !== undefined) {
@@ -1123,7 +1126,8 @@ export type EnvironmentRecordWithThisBinding = FunctionEnvironmentRecord | Globa
 /** https://tc39.es/ecma262/#sec-getidentifierreference */
 // eslint-disable-next-line import-x/order
 import { TypeNameEnvironmentFor, RunningSourceTextAdmitsTypeNames } from './TypeNames.mts';
-import { surroundingAgent as agentForTypeNames } from '#self';
+import {
+  ScalarRestOwner, surroundingAgent as agentForTypeNames } from '#self';
 
 export function* GetIdentifierReference(env: EnvironmentRecord | null, name: JSStringValue, strict: BooleanValue, exceptedFromTypeNames?: boolean): PlainEvaluator<ReferenceRecord> {
   // 1. If lex is the value null, then

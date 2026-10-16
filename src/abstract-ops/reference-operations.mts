@@ -36,6 +36,7 @@ import {
   getActiveScriptId,
 } from './all.mts';
 import {
+  WithArrayDefinitionCheck, ScalarRestOwner,
   DynamicParsedCodeRecord, surroundingAgent, EnvironmentRecord, GetGlobalObject, Throw, Call,
 } from '#self';
 
@@ -375,7 +376,14 @@ export function* PutValue(V: ReferenceRecord | Value, W: Value): PlainEvaluator 
       V.ReferencedName = Q(yield* ToPropertyKey(V.ReferencedName as Value));
     }
     // c. Let succeeded be ? baseObj.[[Set]](V.[[ReferencedName]], W, GetThisValue(V)).
-    const succeeded = Q(yield* baseObj.Set(V.ReferencedName, W, GetThisValue(V)));
+    let succeeded;
+    if (V.ArrayBorrow && ScalarRestOwner(V.ArrayBorrow.Source).ScalarRestGuards?.length && V.ReferencedName instanceof JSStringValue) {
+      succeeded = Q(yield* WithArrayDefinitionCheck(V.ArrayBorrow.Source, V.ReferencedName,
+        () => RequireArrayBorrowLive(V), () => baseObj.Set(V.ReferencedName as PropertyKeyValue, W, GetThisValue(V))));
+      Q(RequireArrayBorrowLive(V));
+    } else {
+      succeeded = Q(yield* baseObj.Set(V.ReferencedName, W, GetThisValue(V)));
+    }
     // d. If succeeded is false and V.[[Strict]] is true, throw a TypeError exception.
     if (succeeded === Value.false && V.Strict === Value.true) {
       return Throw.TypeError('Cannot set property $1 on $2', V.ReferencedName, baseObj);

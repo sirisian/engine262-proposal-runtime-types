@@ -10,9 +10,10 @@ import type { ParameterRecord, TypeRecord } from '../type-system/records.mts';
 import { PlanReferenceArguments, type ReferenceForwarding } from '../type-system/reference-rest.mts';
 import { GetValue } from './reference-operations.mts';
 import { CheckedConvertValue } from './runtime-types.mts';
+import { ScalarRestOwner } from '#self';
 
 /** A location's declared contract, following aliases without reading storage. */
-export function DeclaredReferenceLocationType(location: ReferenceRecord): TypeRecord | undefined {
+export function DeclaredReferenceLocationType(location: ReferenceRecord, scalarRestOnly = false): TypeRecord | undefined {
   const seen = new Set<ReferenceRecord>();
   while (!seen.has(location)) {
     seen.add(location);
@@ -22,11 +23,13 @@ export function DeclaredReferenceLocationType(location: ReferenceRecord): TypeRe
         location = binding.refLocation;
         continue;
       }
-      return binding?.declaredType as TypeRecord | undefined;
+      return scalarRestOnly ? undefined : binding?.declaredType as TypeRecord | undefined;
     }
     if (location.Base instanceof ObjectValue && (location.ReferencedName instanceof JSStringValue || location.ReferencedName instanceof SymbolValue)) {
       const key = location.ReferencedName instanceof JSStringValue ? location.ReferencedName.stringValue() : location.ReferencedName;
-      const base = location.Base as ObjectValue & {
+      const owner = ScalarRestOwner(location.Base);
+      if (scalarRestOnly && !owner.ScalarRestGuards?.length) return undefined;
+      const base = (owner.ScalarRestGuards?.length ? owner : location.Base) as ObjectValue & {
         TypedProperties?: Map<string | SymbolValue, { TypeRecord: TypeRecord }>, TypedElement?: TypeRecord,
         TypedTuple?: TupleStorageShape,
       };

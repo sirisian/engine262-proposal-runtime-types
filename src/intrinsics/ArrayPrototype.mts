@@ -1,4 +1,4 @@
-import { BeginArrayInsertion, SetArrayInsertion, FinishArrayInsertion, BeginArrayRemoval, SetArrayRemoval, DeleteArrayRemoval, FinishArrayRemoval } from '../abstract-ops/array-objects.mts';
+import { SetArrayMove, BeginArrayInsertion, SetArrayInsertion, FinishArrayInsertion, BeginArrayRemoval, SetArrayRemoval, DeleteArrayRemoval, FinishArrayRemoval } from '../abstract-ops/array-objects.mts';
 import { TupleStorageTypeAt, TupleCopyPositions, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { ValidateArrayMutation } from '../abstract-ops/array-mutation.mts';
 import {
@@ -142,7 +142,7 @@ function* ArrayProto_copyWithin([target = Value.undefined, start = Value.undefin
     const fromPresent = Q(yield* HasProperty(O, fromKey));
     if (fromPresent === Value.true) {
       const fromVal = Q(yield* Get(O, fromKey));
-      Q(yield* Set(O, toKey, fromVal, Value.true));
+      Q(yield* SetArrayMove(O, toKey, fromVal));
     } else {
       Q(yield* DeletePropertyOrThrow(O, toKey));
     }
@@ -642,7 +642,7 @@ function* ArrayProto_shift(_args: Arguments, { thisValue }: FunctionCallContext)
     const fromPresent = Q(yield* HasProperty(O, from));
     if (fromPresent === Value.true) {
       const fromVal = Q(yield* Get(O, from));
-      Q(yield* SetArrayRemoval(O, to, fromVal, removal));
+      Q(yield* SetArrayRemoval(O, to, fromVal, removal, true));
     } else {
       Q(yield* DeletePropertyOrThrow(O, to));
     }
@@ -720,7 +720,7 @@ function* ArrayProto_sort([comparator = Value.undefined]: Arguments, { thisValue
   const itemCount = sortedList.length;
   let j = 0;
   while (j < itemCount) {
-    Q(yield* Set(obj, X(ToString(F(j))), sortedList[j], Value.true));
+    Q(yield* SetArrayMove(obj, X(ToString(F(j))), sortedList[j]));
     j += 1;
   }
   while (j < len) {
@@ -815,7 +815,7 @@ function* ArrayProto_splice(args: Arguments, { thisValue }: FunctionCallContext)
       const fromPresent = Q(yield* HasProperty(O, from));
       if (fromPresent === Value.true) {
         const fromValue = Q(yield* Get(O, from));
-        Q(yield* SetArrayRemoval(O, to, fromValue, removal));
+        Q(yield* SetArrayRemoval(O, to, fromValue, removal, true));
       } else {
         Q(yield* DeletePropertyOrThrow(O, to));
       }
@@ -834,7 +834,7 @@ function* ArrayProto_splice(args: Arguments, { thisValue }: FunctionCallContext)
       const fromPresent = Q(yield* HasProperty(O, from));
       if (fromPresent === Value.true) {
         const fromValue = Q(yield* Get(O, from));
-        Q(yield* SetArrayInsertion(O, to, fromValue, insertion));
+        Q(yield* SetArrayInsertion(O, to, fromValue, insertion, true));
       } else {
         Q(yield* DeletePropertyOrThrow(O, to));
       }
@@ -1009,7 +1009,7 @@ function* ArrayProto_unshift(args: Arguments, { thisValue }: FunctionCallContext
       const fromPresent = Q(yield* HasProperty(O, from));
       if (fromPresent === Value.true) {
         const fromValue = Q(yield* Get(O, from));
-        Q(yield* SetArrayInsertion(O, to, fromValue, insertion));
+        Q(yield* SetArrayInsertion(O, to, fromValue, insertion, true));
       } else {
         Q(yield* DeletePropertyOrThrow(O, to));
       }

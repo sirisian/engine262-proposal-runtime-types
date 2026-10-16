@@ -83,6 +83,7 @@ import { SelfThisTypeRecord } from './check.mts';
 import { SameType } from './relations.mts';
 import { IsSubtype } from './relations.mts';
 import {
+  DeclaredReferenceLocationType, ScalarRestsOf, ScalarRestProjection, type ScalarRestPattern, type ScalarRestStorage,
   Call, Get, GetValue, HasProperty, IsCallable, OrdinaryFunctionCreate, R, ResolveBinding, SameValue, surroundingAgent, Throw, ToBoolean,
 } from '#self';
 
@@ -3261,6 +3262,13 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
     }
     case 'tuple': {
       const shape = TupleStorageShapeOf(t);
+      const scalar = !shape && ScalarRestsOf(t);
+      if (scalar) {
+        const out = X(ArrayCreate(0));
+        (out as { TypedTuple?: TupleStorageShape }).TypedTuple = { Positions: [], Rest: ScalarRestProjection(scalar) };
+        (out as ScalarRestStorage).ScalarRestGuards = [scalar];
+        return out;
+      }
       if (shape?.Runs) {
         const length = TuplePrefixLength(shape) + TupleSuffixLength(shape);
         const out = Q(ArrayCreate(length));
@@ -3862,7 +3870,7 @@ export type StructuralStorageAdmission = {
 } | {
   kind: 'array', object: ObjectValue, element: TypeRecord, extent: number | 'dynamic',
 } | {
-  kind: 'tuple', object: ObjectValue, shape: TupleStorageShape,
+  kind: 'tuple', object: ObjectValue, shape: TupleStorageShape, scalarRest?: ScalarRestPattern,
 } | {
   kind: 'sequence', object: ObjectValue, length: number,
   positions: readonly { own: boolean, value: Value }[],
@@ -3984,6 +3992,10 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
   if (t.Kind === 'reference') {
     if (value instanceof ReferenceValue) {
       const referent = Q(yield* GetValue(value.Location));
+      // Scalar-rest backing supplies a stable invariant place contract across
+      // reference-typed parameters and returns as well as `ref` parameters.
+      const locationType = DeclaredReferenceLocationType(value.Location, true);
+      if (locationType && locationType.Kind !== 'any' && t.Target.Kind !== 'any' && !SameType(locationType, t.Target)) return false;
       return Q(yield* IsOfType(referent, t.Target));
     }
     // A value that reached here already decayed, and the absence of observable
@@ -4448,6 +4460,11 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
           }
         }
         if (tupleShape) storage.push({ kind: 'tuple', object: value, shape: tupleShape });
+        else if (isArrayExoticObject(value)) {
+          const scalar = ScalarRestsOf(t);
+          if (scalar) storage.push({ kind: 'tuple', object: value,
+            shape: { Positions: [], Rest: ScalarRestProjection(scalar) }, scalarRest: scalar });
+        }
       }
       retainSequence();
       return true;

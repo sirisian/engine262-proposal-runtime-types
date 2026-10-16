@@ -21,7 +21,7 @@ import { CreateListIteratorRecord } from '../abstract-ops/iterator-operations.mt
 import { TypeNodeToTypeRecord, RuntimeTypeOf } from '../type-system/runtime.mts';
 import { SameType } from '../type-system/relations.mts';
 import { displayType } from '../type-system/records.mts';
-import { AssignRuntimeArguments } from '../abstract-ops/argument-distribution.mts';
+import { AssignRuntimeArguments, DeclaredReferenceLocationType } from '../abstract-ops/argument-distribution.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { recordDeclaredType } from './LexicalDeclaration.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';
@@ -41,7 +41,7 @@ import {
 
   IteratorStepValue,
   UndefinedValue, EnvironmentRecord, type FunctionDeclaration,
-  Throw,
+  Throw, ScalarRestOwner,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-function-definitions-runtime-semantics-iteratorbindinginitialization */
@@ -249,6 +249,14 @@ function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.Single
         };
         locationType = base.TypedProperties?.get(key)?.TypeRecord
           ?? (String(Number(key)) === key ? base.TypedElement?.TypeRecord : undefined);
+        const owner = ScalarRestOwner(base);
+        if (owner.ScalarRestGuards?.length) {
+          locationType = DeclaredReferenceLocationType(location);
+          if (locationType && locationType.Kind !== 'any' && expected.Kind !== 'any'
+              && !SameType(locationType, expected)) {
+            return Throw.TypeError('the location bound by ref to $1 must have the same storage type', bindingId);
+          }
+        }
       }
       locationType ??= RuntimeTypeOf(referent);
       if ((expected.Kind === 'parameterized' || locationType.Kind === 'parameterized')
