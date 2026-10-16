@@ -53,7 +53,7 @@ import {
   Throw,
 } from '#self';
 import {
-  ScalarRestOwner, ScalarRestGuardsAccept, ScalarRestValues, PrepareScalarRestValues, isTypedArrayObject, RequireType, INDEX_TYPE } from '#self';
+  ScalarRestOwner, ScalarRestLengthAllowed, ScalarRestGuardsAccept, ScalarRestValues, PrepareScalarRestValues, isTypedArrayObject, RequireType, INDEX_TYPE } from '#self';
 
 const InternalMethods = {
   /** https://tc39.es/ecma262/#sec-array-exotic-objects-defineownproperty-p-desc */
@@ -291,6 +291,7 @@ export function* ArraySetLength(array: OrdinaryObject, Desc: Descriptor): ValueE
   if (tuple !== undefined && !TupleResizePreserves(tuple, TupleBackingLength(array), newLen)) {
     return Throw.TypeError('a tuple length change cannot change a surviving position contract');
   }
+  if (!ScalarRestLengthAllowed(array, newLen)) return Throw.TypeError('the length would violate a required scalar run count');
   newLenDesc = Descriptor({ ...Desc, Value: F(newLen) });
   const oldLenDesc = OrdinaryGetOwnProperty(array, Value('length'));
   Assert(!(oldLenDesc instanceof UndefinedValue));
@@ -306,6 +307,25 @@ export function* ArraySetLength(array: OrdinaryObject, Desc: Descriptor): ValueE
   }
   if (oldLenDesc.Writable === Value.false) {
     return Value.false;
+  }
+  // A finite-run language need not be prefix-closed. Ordinary deletion can
+  // stop at a nonconfigurable or independently typed property. Inspect that
+  // actual stopping point before any deletion; no getters or user code run.
+  if (ScalarRestOwner(array).ScalarRestGuards?.length) {
+    const values = ScalarRestValues(array, oldLen);
+    let stopped = newLen;
+    const properties = (array as { TypedProperties?: Map<unknown, unknown> }).TypedProperties;
+    array.properties.forEach((descriptor, key) => {
+      if (isArrayIndex(key)) {
+        const index = Number((key as JSStringValue).stringValue());
+        if (index >= newLen && (descriptor.Configurable === Value.false || properties?.has(String(index)))) stopped = Math.max(stopped, index + 1);
+      }
+    });
+    if (!values || !ScalarRestGuardsAccept(array, values.slice(0, newLen))
+        || !ScalarRestGuardsAccept(array, values.slice(0, stopped))
+        || (tuple && !TupleResizePreserves(tuple, oldLen, stopped))) {
+      return Throw.TypeError('truncation would leave an invalid scalar rest sequence');
+    }
   }
   let newWritable;
   if (newLenDesc.Writable === undefined || newLenDesc.Writable === Value.true) {

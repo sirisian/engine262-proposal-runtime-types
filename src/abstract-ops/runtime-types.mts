@@ -42,7 +42,7 @@ import { TakeBodyContext } from '../type-system/runtime.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { describeParameters, minimumArity, resolveOverloadChecked, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature, operatorTableKey } from '../type-system/overloads.mts';
 import {
-  ScalarRestsOf, ScalarRestsAccept, ScalarRestProjection, ScalarRestValues, type ScalarRestStorage, type ScalarRestPattern, ConvertScalarRestItems,
+  ScalarRestsOf, ScalarRestsAccept, ScalarRestShape, ScalarRestValues, type ScalarRestStorage, type ScalarRestPattern, type ScalarRestType, ConvertScalarRestItems,
   wellKnownSymbols,
   SetArrayAdmission, OrdinaryGetOwnProperty, ValidateAndApplyPropertyDescriptor, IsDataDescriptor, Assert, type OrdinaryObject,
   Call, R, Throw, WithoutMetadata, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate, GetValue, Evaluate,
@@ -563,7 +563,7 @@ function* CompleteStructuralAdmission(retained: readonly StructuralStorageAdmiss
       const guarded = target as ScalarRestStorage;
       const patterns = [...guarded.ScalarRestGuards ?? []];
       for (const pattern of sequence.scalarRests) {
-        if (!patterns.some((old) => old.length === pattern.length && old.every((type, i) => SameType(type, pattern[i]!)))) patterns.push(pattern);
+        if (!patterns.some((old) => old.length === pattern.length && old.every((run, i) => run.Min === pattern[i]!.Min && run.Max === pattern[i]!.Max && SameType(run.Type, pattern[i]!.Type)))) patterns.push(pattern);
       }
       if (patterns.length !== guarded.ScalarRestGuards?.length) guarded.ScalarRestGuards = patterns;
     }
@@ -1181,7 +1181,7 @@ function isBooleanConversionSource(value: Value): boolean {
 }
 
 /** Applicability only: this must not invoke a class conversion while searching. */
-export function ScalarRestConversionApplicable(value: Value, t: ScalarRestPattern[number],
+export function ScalarRestConversionApplicable(value: Value, t: ScalarRestType,
   convert: (v: Value, type: TypeRecord) => ValueEvaluator): boolean {
   const explicit = convert === ConvertValue;
   if (!explicit && IsCallable(LookupClassOperator(value, `convert ${displayType(t)}`) ?? Value.undefined)) return true;
@@ -6606,6 +6606,8 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
   const shape = TupleStorageShapeOf(t);
   const scalar = !shape && ScalarRestsOf(t);
   if (scalar) {
+    const range = TupleLengthRange(ScalarRestShape(scalar));
+    if (len < range.min || len > range.max) return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
     const items = [];
     for (let i = 0; i < len; i += 1) {
       items.push({ value: Q(yield* ObserveSequenceElement(value, i, observation)).value, convert: true });
@@ -6616,7 +6618,7 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
     for (let i = 0; i < len; i += 1) {
       X(CreateDataPropertyOrThrow(out, Value(String(i)), values[i]!));
     }
-    (out as { TypedTuple?: TupleStorageShape }).TypedTuple = { Positions: [], Rest: ScalarRestProjection(scalar) };
+    (out as { TypedTuple?: TupleStorageShape }).TypedTuple = ScalarRestShape(scalar);
     (out as ScalarRestStorage).ScalarRestGuards = [scalar];
     return out;
   }

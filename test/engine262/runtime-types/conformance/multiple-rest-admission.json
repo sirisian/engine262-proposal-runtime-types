@@ -85,15 +85,15 @@
       ]
     },
     {
-      "name": "finite shorter direct conversion",
+      "name": "finite required run converts Boolean to String",
       "steps": [
         {
-          "source": "const raw:any=[1,\"s\",true];const t:[...[].<number>,...[2].<string>,...[].<boolean>]=raw;\"accepted\";",
+          "source": "type T=[...[].<number>,...[2].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const t:T=raw;const result:any=t;typeof result[0]+\"/\"+typeof result[1]+\"/\"+typeof result[2]+\"/\"+String(result is T)+\"/\"+String(result===raw)+\"/\"+typeof raw[2];",
           "expected": {
-            "completion": "throw",
+            "completion": "normal",
             "bodyEntered": true,
             "scriptBodies": 1,
-            "errorClass": "TypeError"
+            "value": "number/string/string/true/false/boolean"
           }
         }
       ]

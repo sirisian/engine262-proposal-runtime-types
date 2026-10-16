@@ -2,7 +2,7 @@ import { TupleBackingLength, TupleStorageTypeAt, TupleStorageRun, TupleResizePre
 import { type ThrowCompletion } from '../completion.mts';
 import { SameType } from '../type-system/relations.mts';
 import { type ObjectValue } from '../value.mts';
-import { Throw, surroundingAgent } from '#self';
+import { Throw, surroundingAgent, ScalarRestLengthAllowed } from '#self';
 
 /** An intrinsic's destination geometry, after its ordinary argument processing.
  * No element reads, conversions, callbacks or writes belong in this plan. */
@@ -21,6 +21,7 @@ export function ValidateArrayMutation(object: ObjectValue, plan: ArrayMutationPl
   if (typed.TypedExtent !== undefined && plan.length !== typed.TypedExtent) {
     return Throw.TypeError('a fixed-extent array cannot change length');
   }
+  if (!ScalarRestLengthAllowed(object, plan.length)) return Throw.TypeError('the mutation would violate a required scalar run count');
   const shape = typed.TypedTuple;
   if (!shape) return undefined;
   const length = TupleBackingLength(object);

@@ -1,14 +1,15 @@
+import type { ScalarRestPattern } from './scalar-rests.mts';
 import type { TypeRecord, TupleElementRecord } from './records.mts';
 import { CanonicalizeType } from './intern.mts';
 import { SameType } from './relations.mts';
-import { ObjectValue, NumberValue, Value, R } from '#self';
+import { ObjectValue, NumberValue, Value, R, ScalarRestLengthRange, ScalarRestTypeAt, ScalarRestRun } from '#self';
 
 /** A complete positional or required prefix/rest/suffix domain, or its conjunction with
  * other acquired domains. No observed partition or element values are stored. */
 export type TupleStorageShape = {
   Positions: readonly TypeRecord[], Rest: TypeRecord | undefined,
   Suffix?: readonly TypeRecord[], Conjuncts?: readonly TupleStorageShape[],
-  MinimumLength?: number,
+  MinimumLength?: number, ScalarRuns?: ScalarRestPattern,
   Runs?: { Prefix: readonly TupleStorageRunRecord[], Suffix: readonly TupleStorageRunRecord[], PrefixLength: number, SuffixLength: number },
 };
 
@@ -181,6 +182,7 @@ export function TupleLengthRange(shape: TupleStorageShape): { min: number, max: 
     return { min: ranges.reduce((n, r) => Math.max(n, r.min), 0),
       max: ranges.reduce((n, r) => Math.min(n, r.max), Infinity) };
   }
+  if (shape.ScalarRuns) return ScalarRestLengthRange(shape.ScalarRuns);
   const width = TuplePrefixLength(shape) + TupleSuffixLength(shape);
   return { min: shape.MinimumLength ?? width, max: shape.Rest === undefined ? width : Infinity };
 }
@@ -192,6 +194,7 @@ export function TupleStorageTypeAt(shape: TupleStorageShape, index: number, leng
     if (types.some((type) => type === undefined)) return undefined;
     return CanonicalizeType({ Kind: 'intersection', Members: types as TypeRecord[] });
   }
+  if (shape.ScalarRuns) return ScalarRestTypeAt(shape.ScalarRuns, index, length);
   if (!shape.Runs) {
     if (index < shape.Positions.length) return shape.Positions[index];
     const suffix = shape.Suffix ?? [];
@@ -207,6 +210,7 @@ export function TupleStorageTypeAt(shape: TupleStorageShape, index: number, leng
 /** Distance to the next declared contract boundary; skip repeated finite runs. */
 export function TupleStorageRun(shape: TupleStorageShape, index: number, length: number, direction = 1): number {
   if (shape.Conjuncts) return shape.Conjuncts.reduce((run, part) => Math.min(run, TupleStorageRun(part, index, length, direction)), Infinity);
+  if (shape.ScalarRuns) return ScalarRestRun(shape.ScalarRuns, index, length, direction);
   if (!shape.Runs) {
     const end = length - (shape.Suffix?.length ?? 0);
     if (index < shape.Positions.length || index >= end) return 1;
@@ -264,6 +268,18 @@ export function TupleStorageLengths(shapes: readonly TupleStorageShape[], min: n
   const prefix = new Set([0]);
   const suffix = new Set([0]);
   for (const shape of shapes.flatMap(leaves)) {
+    if (shape.ScalarRuns) {
+      let count = 0;
+      for (const run of shape.ScalarRuns) {
+        count += run.Min;
+        prefix.add(count);
+      }
+      count = 0;
+      for (const run of [...shape.ScalarRuns].reverse()) {
+        count += run.Min;
+        suffix.add(count);
+      }
+    }
     let n = 0;
     for (const run of runs(shape)) {
       n += run.Count;
@@ -288,6 +304,7 @@ export function TupleStorageLengths(shapes: readonly TupleStorageShape[], min: n
 /** Search includes unoccupied declared domains; conjunctions retain all
  * possible alignments without expanding a finite repeated segment. */
 export function TupleSearchTypes(shape: TupleStorageShape): TypeRecord[] {
+  if (shape.ScalarRuns) return shape.ScalarRuns.map((run) => run.Type);
   if (!shape.Conjuncts) return [...runs(shape), ...runs(shape, true)].map((run) => run.Type).concat(shape.Rest ? [shape.Rest] : []);
   const result: TypeRecord[] = [];
   const range = TupleLengthRange(shape);

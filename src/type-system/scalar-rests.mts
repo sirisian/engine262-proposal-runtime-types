@@ -4,32 +4,101 @@ import { SameType } from './relations.mts';
 import { TupleBackingLength } from './tuple-storage.mts';
 import { CanonicalizeType } from './intern.mts';
 
-export type ScalarRestPattern = readonly (TypeRecord & { Kind: 'primitive' })[];
+export type ScalarRestType = TypeRecord & { Kind: 'primitive' };
+export type ScalarRestRunRecord = { Type: ScalarRestType, Min: number, Max: number };
+export type ScalarRestPattern = readonly ScalarRestRunRecord[];
 export type ScalarRestStorage = ObjectValue & { ScalarRestGuards?: readonly ScalarRestPattern[] };
 
 export function ScalarRestProjection(pattern: ScalarRestPattern): TypeRecord {
-  return CanonicalizeType({ Kind: 'union', Members: pattern });
+  return CanonicalizeType({ Kind: 'union', Members: pattern.filter((run) => run.Max > 0).map((run) => run.Type) });
 }
 
-/** A prefix-closed ordered language. Fixed runs, defaults, metadata and object
- * elements deliberately do not acquire this specialization. */
+export function ScalarRestShape(pattern: ScalarRestPattern): import('./tuple-storage.mts').TupleStorageShape {
+  return { Positions: [], Rest: ScalarRestProjection(pattern), ScalarRuns: pattern };
+}
+
+export function ScalarRestLengthRange(pattern: ScalarRestPattern): { min: number, max: number } {
+  return { min: pattern.reduce((n, run) => n + run.Min, 0), max: pattern.reduce((n, run) => n + run.Max, 0) };
+}
+
+export function ScalarRestLengthAllowed(object: ObjectValue, length: number): boolean {
+  return (ScalarRestOwner(object).ScalarRestGuards ?? []).every((pattern) => {
+    const range = ScalarRestLengthRange(pattern);
+    return length >= range.min && length <= range.max;
+  });
+}
+
+/** Compact required scalar positions, finite array runs and dynamic runs.
+ * Defaults, metadata, object elements and unresolved counts stay outside this
+ * specialization. Do not expand a declared extent into individual records. */
 export function ScalarRestsOf(type: TypeRecord): ScalarRestPattern | undefined {
-  if (type.Kind !== 'tuple' || type.Elements.length < 2) return undefined;
-  const result: (TypeRecord & { Kind: 'primitive' })[] = [];
-  for (const element of type.Elements) {
-    if (!element.Rest || element.Type.Kind !== 'array' || element.Type.Extent !== 'dynamic') return undefined;
-    const item = element.Type.Element;
-    if (item.Kind !== 'primitive') return undefined;
+  if (type.Kind !== 'tuple') return undefined;
+  const result: ScalarRestRunRecord[] = [];
+  const active = new Set<TypeRecord>();
+  const append = (item: TypeRecord, Min: number, Max: number): boolean => {
+    if (item.Kind !== 'primitive') return false;
     if (item.Name === 'int' || item.Name === 'uint') {
-      if (item.Arguments.length !== 1 || typeof item.Arguments[0] !== 'number') return undefined;
+      if (item.Arguments.length !== 1 || typeof item.Arguments[0] !== 'number') return false;
     } else if (!['number', 'string', 'boolean', 'bigint', 'symbol', 'null', 'undefined', 'float16', 'float32', 'float64'].includes(item.Name)
-        || item.Arguments.length !== 0) return undefined;
-    result.push(item);
-  }
+        || item.Arguments.length !== 0) return false;
+    if (Max > 0) result.push({ Type: item, Min, Max });
+    return true;
+  };
+  const visit = (tuple: TypeRecord & { Kind: 'tuple' }): boolean => {
+    if (active.has(tuple)) return false;
+    active.add(tuple);
+    for (const element of tuple.Elements) {
+      if (element.Initial !== 'none' || element.DeclaredDefault) return false;
+      if (!element.Rest) {
+        if (!append(element.Type, 1, 1)) return false;
+      } else if (element.Type.Kind === 'tuple') {
+        if (!visit(element.Type)) return false;
+      } else if (element.Type.Kind === 'array') {
+        const count = element.Type.Extent;
+        if (count === 'dynamic') {
+          if (!append(element.Type.Element, 0, Infinity)) return false;
+        } else if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0
+            || !append(element.Type.Element, count, count)) return false;
+      } else return false;
+    }
+    active.delete(tuple);
+    return true;
+  };
+  if (!visit(type) || !Number.isSafeInteger(ScalarRestLengthRange(result).min)) return undefined;
   return result;
 }
 
-export function ScalarRestMember(value: Value, type: ScalarRestPattern[number]): boolean {
+/** Possible occupancy comes only from declared counts and total length. */
+function intervals(pattern: ScalarRestPattern, length: number): { Type: ScalarRestType, start: number, end: number }[] {
+  const range = ScalarRestLengthRange(pattern);
+  if (length < range.min || length > range.max) return [];
+  let prefixMin = 0;
+  let prefixMax = 0;
+  return pattern.map((run, i) => {
+    if (run.Max === 0) return { Type: run.Type, start: 0, end: 0 };
+    const suffix = ScalarRestLengthRange(pattern.slice(i + 1));
+    const low = Math.max(prefixMin, length - suffix.max - run.Max);
+    const high = Math.min(prefixMax, length - suffix.min - run.Min);
+    const start = low;
+    const end = run.Max === Infinity ? length - suffix.min : high + run.Max;
+    prefixMin += run.Min;
+    prefixMax += run.Max;
+    return { Type: run.Type, start, end: low <= high ? end : start };
+  }).filter((run) => run.start < run.end);
+}
+
+export function ScalarRestTypeAt(pattern: ScalarRestPattern, index: number, length: number): TypeRecord | undefined {
+  const members = intervals(pattern, length).filter((run) => index >= run.start && index < run.end).map((run) => run.Type);
+  return members.length ? CanonicalizeType({ Kind: 'union', Members: members }) : undefined;
+}
+
+export function ScalarRestRun(pattern: ScalarRestPattern, index: number, length: number, direction: number): number {
+  const boundaries = [0, length, ...intervals(pattern, length).flatMap((run) => [run.start, run.end])];
+  return direction === 1 ? Math.min(...boundaries.filter((n) => n > index)) - index
+    : index - Math.max(...boundaries.filter((n) => n <= index)) + 1;
+}
+
+export function ScalarRestMember(value: Value, type: ScalarRestType): boolean {
   if (value instanceof TypedNumberValue) {
     const numeric = value as TypedNumberValue;
     const record = numeric.TypeRecord as TypeRecord;
@@ -51,14 +120,40 @@ export function ScalarRestMember(value: Value, type: ScalarRestPattern[number]):
   return type.Name === 'number' && value instanceof NumberValue;
 }
 
-/** Earliest matching run retains every possible later continuation. */
-export function ScalarRestsAccept(pattern: ScalarRestPattern, values: readonly Value[]): boolean {
-  let run = 0;
-  for (const value of values) {
-    while (run < pattern.length && !ScalarRestMember(value, pattern[run]!)) run += 1;
-    if (run === pattern.length) return false;
+type State = readonly [run: number, used: number];
+type States = readonly State[];
+
+function closure(pattern: ScalarRestPattern, states: States): States {
+  const result = new Map<string, State>();
+  for (let [run, used] of states) {
+    for (;;) {
+      result.set(`${run}:${used}`, [run, used]);
+      if (run === pattern.length || used < pattern[run]!.Min) break;
+      run += 1;
+      used = 0;
+    }
   }
-  return true;
+  return [...result.values()].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+}
+
+function advance(pattern: ScalarRestPattern, states: States, admits: (type: ScalarRestType) => boolean): States {
+  const next: State[] = [];
+  for (const [run, used] of states) {
+    const item = pattern[run];
+    if (item && used < item.Max && admits(item.Type)) next.push([run, item.Max === Infinity ? 0 : used + 1]);
+  }
+  return closure(pattern, next);
+}
+
+export function ScalarRestsAccept(pattern: ScalarRestPattern, values: readonly Value[]): boolean {
+  const range = ScalarRestLengthRange(pattern);
+  if (values.length < range.min || values.length > range.max) return false;
+  let states = closure(pattern, [[0, 0]]);
+  for (const value of values) {
+    states = advance(pattern, states, (type) => ScalarRestMember(value, type));
+    if (!states.length) return false;
+  }
+  return states.some(([run]) => run === pattern.length);
 }
 
 export function ScalarRestOwner(object: ObjectValue): ScalarRestStorage {
@@ -97,28 +192,35 @@ export function ScalarRestDefinitionAllowed(object: ObjectValue, key: unknown, d
   return ScalarRestGuardsAccept(object, values);
 }
 
-/** Greedy counts for the first acquired pattern, subject to all other acquired
- * patterns. State includes their run positions; no value conversions run here.
- * Recursion is over written runs, never over the length of the input. */
+/** Greedy counts for the first acquired pattern, subject to every other
+ * guard. Retain all reachable states: a finite separator can require giving
+ * back an earlier match of the same type. No conversions run in this search. */
 export function AssignScalarRests(patterns: readonly ScalarRestPattern[], length: number,
-  admits: (index: number, type: ScalarRestPattern[number]) => boolean): ScalarRestPattern[number][] | undefined {
+  admits: (index: number, type: ScalarRestType) => boolean): ScalarRestType[] | undefined {
+  if (patterns.some((pattern) => {
+    const range = ScalarRestLengthRange(pattern);
+    return length < range.min || length > range.max;
+  })) return undefined;
   const first = patterns[0]!;
+  const others = patterns.slice(1);
   const memo = new Map<string, number[] | null>();
-  const solve = (run: number, at: number, states: number[]): number[] | null => {
-    if (run === first.length) return at === length ? [] : null;
-    const key = `${run}:${at}:${states.join(',')}`;
+  const solve = (run: number, at: number, states: readonly States[]): number[] | null => {
+    if (run === first.length) return at === length && states.every((set, i) => set.some(([r]) => r === others[i]!.length)) ? [] : null;
+    const key = `${run}:${at}:${JSON.stringify(states)}`;
     if (memo.has(key)) return memo.get(key)!;
-    const type = first[run]!;
-    let limit = 0;
-    while (at + limit < length && admits(at + limit, type)) limit += 1;
-    const next = states.map((state, i) => {
-      const pattern = patterns[i + 1]!;
-      while (state < pattern.length && !SameType(type, pattern[state]!)) state += 1;
-      return state;
-    });
-    if (next.some((state, i) => state === patterns[i + 1]!.length)) limit = 0;
-    for (let count = limit; count >= 0; count -= 1) {
-      const tail = solve(run + 1, at + count, count ? next : states);
+    const item = first[run]!;
+    const suffix = ScalarRestLengthRange(first.slice(run + 1));
+    const limit = Math.min(item.Max, length - at - suffix.min);
+    const next = [states];
+    let count = 0;
+    while (count < limit && admits(at + count, item.Type)) {
+      const advanced = next[count]!.map((set, i) => advance(others[i]!, set, (type) => SameType(item.Type, type)));
+      if (advanced.some((set) => !set.length)) break;
+      next.push(advanced);
+      count += 1;
+    }
+    for (; count >= Math.max(item.Min, length - at - suffix.max); count -= 1) {
+      const tail = solve(run + 1, at + count, next[count]!);
       if (tail) {
         const result = [count, ...tail];
         memo.set(key, result);
@@ -128,6 +230,6 @@ export function AssignScalarRests(patterns: readonly ScalarRestPattern[], length
     memo.set(key, null);
     return null;
   };
-  const counts = solve(0, 0, patterns.slice(1).map(() => 0));
-  return counts?.flatMap((count, i) => Array.from({ length: count }, () => first[i]!));
+  const counts = solve(0, 0, others.map((pattern) => closure(pattern, [[0, 0]])));
+  return counts?.flatMap((count, i) => Array.from({ length: count }, () => first[i]!.Type));
 }

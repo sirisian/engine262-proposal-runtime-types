@@ -83,7 +83,7 @@ import { SelfThisTypeRecord } from './check.mts';
 import { SameType } from './relations.mts';
 import { IsSubtype } from './relations.mts';
 import {
-  DeclaredReferenceLocationType, ScalarRestsOf, ScalarRestProjection, type ScalarRestPattern, type ScalarRestStorage,
+  DeclaredReferenceLocationType, ScalarRestsOf, ScalarRestShape, type ScalarRestPattern, type ScalarRestStorage,
   Call, Get, GetValue, HasProperty, IsCallable, OrdinaryFunctionCreate, R, ResolveBinding, SameValue, surroundingAgent, Throw, ToBoolean,
 } from '#self';
 
@@ -3264,8 +3264,17 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       const shape = TupleStorageShapeOf(t);
       const scalar = !shape && ScalarRestsOf(t);
       if (scalar) {
-        const out = X(ArrayCreate(0));
-        (out as { TypedTuple?: TupleStorageShape }).TypedTuple = { Positions: [], Rest: ScalarRestProjection(scalar) };
+        const length = scalar.reduce((n, run) => n + run.Min, 0);
+        const out = Q(ArrayCreate(length));
+        let index = 0;
+        for (const run of scalar) {
+          for (let count = 0; count < run.Min; count += 1) {
+            const value = Q(yield* DefaultValueOf(run.Type));
+            if (value === undefined) return undefined;
+            X(CreateDataPropertyOrThrow(out, Value(String(index++)), value));
+          }
+        }
+        (out as { TypedTuple?: TupleStorageShape }).TypedTuple = ScalarRestShape(scalar);
         (out as ScalarRestStorage).ScalarRestGuards = [scalar];
         return out;
       }
@@ -4463,7 +4472,7 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         else if (isArrayExoticObject(value)) {
           const scalar = ScalarRestsOf(t);
           if (scalar) storage.push({ kind: 'tuple', object: value,
-            shape: { Positions: [], Rest: ScalarRestProjection(scalar) }, scalarRest: scalar });
+            shape: ScalarRestShape(scalar), scalarRest: scalar });
         }
       }
       retainSequence();

@@ -1,0 +1,704 @@
+{
+  "cases": [
+    {
+      "name": "implicit required String witness",
+      "steps": [
+        {
+          "source": "type T=[...[].<uint8>,...[1].<string>,...[].<boolean>];const raw:any=[1,2,3];const t:T=raw;String(t[0] is uint8)+\"/\"+typeof t[2]+\"/\"+t.join(\",\")+\"/\"+String(t is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/string/1,2,3/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit required String witness",
+      "steps": [
+        {
+          "source": "type T=[...[].<uint8>,...[1].<string>,...[].<boolean>];const raw:any=[1,2,3];const t=(raw:=T);String(t[0] is uint8)+\"/\"+typeof t[2]+\"/\"+t.join(\",\")+\"/\"+String(t is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/string/1,2,3/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite run reserves two positions",
+      "steps": [
+        {
+          "source": "type T=[...[].<uint8>,...[2].<string>,...[].<boolean>];const raw:any=[1,2,3];const t:T=raw;String(t[0] is uint8)+\"/\"+typeof t[1]+\"/\"+typeof t[2]+\"/\"+String(t is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/string/string/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed required scalar",
+      "steps": [
+        {
+          "source": "type T=[...[].<uint8>,string,...[].<boolean>];const raw:any=[1,2,3];const t:T=raw;typeof t[2]+\"/\"+String(t is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested finite scalar run",
+      "steps": [
+        {
+          "source": "type Inner=[...[2].<string>];type T=[...[].<uint8>,...Inner,...[].<boolean>];const raw:any=[1,2,3];const t:T=raw;typeof t[1]+\"/\"+String(t is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "whole membership retains identity",
+      "steps": [
+        {
+          "source": "type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const t:T=raw;String(t===raw)+\"/\"+String(t is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "position zero excludes Boolean",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const t:T=raw;let calls=0;function f(ref n:number|string){calls++;n=2;}f(ref raw[0]);calls+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/2,s,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "last position excludes Number",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const t:T=raw;function f(ref n:string|boolean){n=false;}f(ref raw[2]);raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,s,false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "middle position includes all three",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const t:T=raw;function f(ref n:number|string|boolean){n=\"t\";}f(ref raw[1]);raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,t,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "narrow reference fails before body",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const t:T=raw;let calls=0;function f(ref n:string){calls++;}const e=attempt(()=>f(ref raw[1]));e+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "growth changing surviving contract is refused",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const t:T=raw;let calls=0;class C{operator boolean(){calls++;return true;}}const e=attempt(()=>raw.push(new C()));e+\"/\"+calls+\"/\"+raw.length+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/3/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "length growth contract preflight",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const t:T=raw;const e=attempt(()=>{raw.length=4;});e+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shrink changing surviving contract is refused",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const t:T=raw;const e=attempt(()=>raw.pop());e+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,s,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier broad backing permits compatible growth",
+      "steps": [
+        {
+          "source": "type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const a:[...[].<number|string|boolean>]=raw;const t:T=raw;raw.push(false);raw.join(\",\")+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,s,true,false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier broad backing still enforces minimum",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[\"s\"];const a:[...[].<number|string|boolean>]=raw;const t:T=raw;const e=attempt(()=>{raw.length=0;});e+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier broad backing cannot truncate required String",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const a:[...[].<number|string|boolean>]=raw;const t:T=raw;const e=attempt(()=>{raw.length=1;});e+\"/\"+raw.join(\",\")+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,s,true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid prefix truncation with earlier broad backing",
+      "steps": [
+        {
+          "source": "type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const a:[...[].<number|string|boolean>]=raw;const t:T=raw;raw.length=2;raw.join(\",\")+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,s/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "minimal default supplies required finite run",
+      "steps": [
+        {
+          "source": "type T=[...[].<number>,...[1].<string>,...[].<boolean>];let t:T;const raw:any=t;raw.length+\"/\"+typeof raw[0]+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/string/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero count does not request Symbol default",
+      "steps": [
+        {
+          "source": "type T=[...[].<number>,...[0].<symbol>,...[1].<string>,...[].<boolean>];let t:T;const raw:any=t;raw.length+\"/\"+typeof raw[0]+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/string/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "membership is not earliest-match greedy",
+      "steps": [
+        {
+          "source": "type T=[...[].<number>,...[1].<number>,...[].<string>];const raw:any=[1,\"s\"];const t:T=raw;String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "other finite guard retains all assignments",
+      "steps": [
+        {
+          "source": "type A=[...[].<number>,...[].<string>];type B=[...[].<number>,...[1].<string>,...[].<string>];const raw:any=[1,\"s\"];const a:A=raw;const b:B=raw;raw.push(\"t\");raw.join(\",\")+\"/\"+String(raw is A)+\"/\"+String(raw is B);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,s,t/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "required numeric separator must give back identical run",
+      "steps": [
+        {
+          "source": "type A=[...[].<number>,...[].<string>];type B=[...[].<number>,...[1].<number>,...[].<string>];const raw:any=[1,\"s\"];const a:A=raw;const b:B=raw;raw[0]=2;raw.join(\",\")+\"/\"+String(raw is B);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2,s/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected operator once after finite reservation",
+      "steps": [
+        {
+          "source": "type T=[...[].<number>,...[1].<string>,...[].<boolean>];let trace=\"\";class C{operator number(){trace+=\"n\";return 7;}operator string(){trace+=\"s\";return \"v\";}operator boolean(){trace+=\"b\";return true;}}const raw:any=[new C(),new C()];const t:T=raw;trace+\"/\"+t.join(\",\")+\"/\"+String(t is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ns/7,v/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected throwing operator never retries",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type T=[...[].<number>,...[1].<string>,...[].<boolean>];let trace=\"\";class C{operator number(){trace+=\"n\";return 7;}operator string(){trace+=\"s\";throw new RangeError(\"chosen\");}operator boolean(){trace+=\"b\";return true;}}const raw:any=[new C()];const e=attempt(()=>{const t:T=raw;});e+\"/\"+trace;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite conversion observes each source once",
+      "steps": [
+        {
+          "source": "type T=[...[].<uint8>,...[1].<string>,...[].<boolean>];let reads=0;const raw:any=[];for(let i=0;i<3;i++)Object.defineProperty(raw,String(i),{get(){reads++;return i+1;}});const t:T=raw;reads+\"/\"+String(t is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflective replacement keeps required separator",
+      "steps": [
+        {
+          "source": "type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const t:T=raw;Object.defineProperty(raw,\"1\",{value:2});typeof raw[1]+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Proxy alias obeys length sensitive contracts",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const t:T=raw;const p:any=new Proxy(raw,{});const e=attempt(()=>{p.length=4;});e+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested finite guard acquisition",
+      "steps": [
+        {
+          "source": "type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const b:{items:T}={items:raw};raw[1]=2;typeof raw[1]+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "union finite guard acquisition",
+      "steps": [
+        {
+          "source": "type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const b:T|null=raw;raw[1]=2;typeof raw[1]+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "parameter finite guard acquisition",
+      "steps": [
+        {
+          "source": "type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];function f(x:T){}f(raw);raw[1]=2;typeof raw[1]+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "return finite guard acquisition",
+      "steps": [
+        {
+          "source": "type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];function f():T{return raw;}f();raw[1]=2;typeof raw[1]+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "string/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed scalar conversion acquires no source guard",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[Symbol()];const e=attempt(()=>{const t:T=raw;});raw[0]=3;e+\"/\"+raw[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pure membership does not acquire finite guard",
+      "steps": [
+        {
+          "source": "type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const fit=raw is T;raw[1]=2;String(fit)+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid blocked truncation refuses before deleting",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type U=[...[].<number>,...[].<string>,...[2].<number>];const raw:any=[1,2,\"s\",3,4];const a:[...[].<number|string>]=raw;const t:U=raw;Object.defineProperty(raw,\"2\",{configurable:false});const e=attempt(()=>{raw.length=2;});e+\"/\"+raw.join(\",\")+\"/\"+String(raw is U);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,2,s,3,4/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid blocked truncation preserves ordinary partial removal",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type U=[...[].<number>,...[].<string>,...[2].<number>];const raw:any=[1,2,3,4,5];const a:[...[].<number|string>]=raw;const t:U=raw;Object.defineProperty(raw,\"2\",{configurable:false});const e=attempt(()=>{raw.length=2;});e+\"/\"+raw.join(\",\")+\"/\"+String(raw is U);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,2,3/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed property blocks truncation with ordinary partial removal",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type U=[...[].<number>,...[].<string>,...[2].<number>];const raw:any=[1,2,3,4,5];const a:[...[].<number|string>]=raw;const t:U=raw;const p:{2:number}=raw;const e=attempt(()=>{raw.length=2;});e+\"/\"+raw.join(\",\")+\"/\"+String(raw is U);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,2,3/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid typed-property barrier refuses before deleting",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type U=[...[].<number>,...[].<string>,...[2].<number>];const raw:any=[1,2,\"s\",3,4];const a:[...[].<number|string>]=raw;const t:U=raw;const p:{2:string}=raw;const e=attempt(()=>{raw.length=2;});e+\"/\"+raw.join(\",\")+\"/\"+String(raw is U);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,2,s,3,4/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid truncation leaves the requested exact prefix",
+      "steps": [
+        {
+          "source": "type U=[...[].<number>,...[].<string>,...[2].<number>];const raw:any=[1,2,\"s\",3,4];const a:[...[].<number|string>]=raw;const t:U=raw;raw.length=2;raw.join(\",\")+\"/\"+String(raw is U);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,2/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nonwritable length returns false before prefix guard check",
+      "steps": [
+        {
+          "source": "type U=[...[].<number>,...[].<string>,...[2].<number>];const raw:any=[1,2,\"s\",3,4];const a:[...[].<number|string>]=raw;const t:U=raw;Object.defineProperty(raw,\"length\",{writable:false});String(Reflect.defineProperty(raw,\"length\",{value:3}))+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/1,2,s,3,4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unchanged reacquisition of finite guard",
+      "steps": [
+        {
+          "source": "type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const t:T=raw;class C{operator string(){const again:T=raw;return \"v\";}}raw[1]=new C();raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1,v,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reentrant finite store preserves independent effects",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const t:T=raw;class C{operator string(){raw[0]=2;return \"v\";}}const e=attempt(()=>{raw[1]=new C();});e+\"/\"+raw.join(\",\")+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/2,s,true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite length rejection precedes indexed Gets",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type T=[...[].<number>,...[1000000000].<string>,...[].<boolean>];let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return \"s\";}});const e=attempt(()=>{const t:T=raw;});e+\"/\"+reads;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "growth refusal preserves live reference",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const t:T=raw;let ref r=raw[1];const e=attempt(()=>{raw.length=20;});r=\"v\";e+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,v,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gap store refuses before conversion on changed projection",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const t:T=raw;let calls=0;class C{operator boolean(){calls++;return true;}}const e=attempt(()=>{raw[4]=new C();});e+\"/\"+calls+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflective gap refuses before conversion",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const t:T=raw;let calls=0;class C{operator boolean(){calls++;return true;}}const e=attempt(()=>Object.defineProperty(raw,\"4\",{value:new C()}));e+\"/\"+calls+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "minimum count preflight precedes shift element work",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[\"s\"];const a:[...[].<number|string|boolean>]=raw;const t:T=raw;const e=attempt(()=>raw.shift());e+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "search considers unoccupied scalar domains",
+      "steps": [
+        {
+          "source": "type T=[...[].<number>,...[1].<string>,...[].<boolean>];let t:T;const raw:any=t;String(raw.includes(\"\"))+\"/\"+String(raw.includes(1))+\"/\"+String(raw.includes(true));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same-length reverse uses declared position geometry",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type T=[...[].<number>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const t:T=raw;const e=attempt(()=>raw.reverse());e+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,s,true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "different required counts are distinct acquired guards",
+      "steps": [
+        {
+          "source": "function attempt(f:any){try{f();return \"ok\";}catch(e){return e.name;}}type A=[...[].<number>,...[1].<number>,...[].<string>];type B=[...[].<number>,...[2].<number>,...[].<string>];const raw:any=[1,2];const a:A=raw;const b:B=raw;const e=attempt(()=>{raw.length=1;});e+\"/\"+raw.join(\",\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite required run converts Boolean to String",
+      "steps": [
+        {
+          "source": "type T=[...[].<number>,...[2].<string>,...[].<boolean>];const raw:any=[1,\"s\",true];const t:T=raw;const result:any=t;typeof result[0]+\"/\"+typeof result[1]+\"/\"+typeof result[2]+\"/\"+String(result is T)+\"/\"+String(result===raw)+\"/\"+typeof raw[2];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "number/string/string/true/false/boolean"
+          }
+        }
+      ]
+    }
+  ]
+}

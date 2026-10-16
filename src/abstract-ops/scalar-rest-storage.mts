@@ -1,6 +1,6 @@
-import { AssignScalarRests, ScalarRestMember, ScalarRestOwner, ScalarRestValues, ScalarRestGuardsAccept, type ScalarRestPattern } from '../type-system/scalar-rests.mts';
+import { AssignScalarRests, ScalarRestMember, ScalarRestOwner, ScalarRestValues, ScalarRestGuardsAccept, ScalarRestLengthAllowed, type ScalarRestPattern } from '../type-system/scalar-rests.mts';
 import { CarriedTypeRecordOf, DefaultValueOf, RuntimeTypeOf } from '../type-system/runtime.mts';
-import { TupleBackingLength, TupleStorageTypeAt, type TupleStorageShape } from '../type-system/tuple-storage.mts';
+import { TupleBackingLength, TupleStorageTypeAt, TupleResizePreserves, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { IsSubtype } from '../type-system/relations.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { ObjectValue, ReferenceValue, Value, type Descriptor } from '../value.mts';
@@ -19,7 +19,7 @@ export function* ConvertScalarRestItems(patterns: readonly ScalarRestPattern[], 
   const unchanged = AssignScalarRests(patterns, items.length, (i, type) => items[i]!.value !== undefined
     && ScalarRestMember(items[i]!.value!, type) && accepts(i, type, items[i]!.value));
   if (unchanged) return items.map((item) => item.value!);
-  const types = [...new Set(patterns[0]!)];
+  const types = [...new Set(patterns[0]!.map((run) => run.Type))];
   const candidates: Map<TypeRecord, { value?: Value }>[] = [];
   let failure: ThrowCompletion | undefined;
   for (const item of items) {
@@ -78,6 +78,9 @@ export function* PrepareScalarRestValues(object: ObjectValue, length: number,
     TypedProperties?: Map<string, { TypeRecord: TypeRecord }> };
   const tuple = backing.TypedTuple;
   const element = backing.TypedElement;
+  if (!ScalarRestLengthAllowed(owner, length) || (tuple && !TupleResizePreserves(tuple, oldLength, length))) {
+    return Throw.TypeError('scalar rest resize would change a surviving position contract or required count');
+  }
   const values = Q(yield* ConvertScalarRestItems(guards, items, RequireType, (index, type, value) => {
     const targets = [tuple ? TupleStorageTypeAt(tuple, index, length) : undefined, element,
       backing.TypedProperties?.get(String(index))?.TypeRecord].filter((target): target is TypeRecord => target !== undefined);
