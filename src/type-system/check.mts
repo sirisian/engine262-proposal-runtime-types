@@ -20,7 +20,7 @@ import { firstUnreadableControl, readClassControls, readFieldControls } from '..
 import { FirstEvaluabilityViolation, FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
 import { isRangeObject, endpointOf, type RangeObject } from '../intrinsics/Range.mts';
 import type { EnvironmentRecord } from '../execution-context/Environment.mts';
-import { TupleStorageShapeOf, TupleStorageTypeAt, TupleLengthRange, TupleIndexType, TuplePrefixElement, TuplePrefixLength, TupleDefaultPlacementError } from './tuple-storage.mts';
+import { TupleStorageShapeOf, TupleSequenceLengthRange, TupleStorageTypeAt, TupleLengthRange, TupleIndexType, TuplePrefixElement, TuplePrefixLength, TupleDefaultPlacementError } from './tuple-storage.mts';
 import { MetadataKeys, MetadataEntries, MetadataKey } from './metadata-keys.mts';
 import { RawOperatorResultType } from './operator-result.mts';
 import { TypeDiagnosticOf, CreateTypeDiagnostic, ReportTypeDiagnostic } from './diagnostics.mts';
@@ -20987,6 +20987,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
       if (!rest && minimumPosition > target.Elements.length) report({ Kind: 'array', Element: anyTypeRecord, Extent: minimumPosition }, target);
+      return;
+    }
+    // Even several dynamic rests cannot erase a finite collected extent.
+    // Exact literal/spread length supplies this negative arity proof without
+    // selecting a value-dependent partition or inventing positional context.
+    const sequenceRange = TupleSequenceLengthRange(target);
+    if (sequenceRange && (elements.length < sequenceRange.min || elements.length > sequenceRange.max)) {
+      report({ Kind: 'tuple', Elements: elements.map(() => ({ Type: anyTypeRecord, Rest: false, Initial: 'none' })) }, target);
+      for (const element of elements) walk(element);
       return;
     }
     // One homogeneous rest has a unique partition at a known literal length,

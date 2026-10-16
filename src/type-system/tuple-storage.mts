@@ -71,6 +71,29 @@ export function TuplePrefixElement(type: TypeRecord & { Kind: 'tuple' }, index: 
   return undefined;
 }
 
+/** Length facts for an ordered sequence even when several dynamic rests
+ * prevent a unique positional backing map. Counts remain compact. */
+export function TupleSequenceLengthRange(type: TypeRecord, active = new Set<TypeRecord>()): { min: number, max: number } | undefined {
+  if (type.Kind === 'array') {
+    if (type.Extent === 'dynamic') return { min: 0, max: Infinity };
+    return typeof type.Extent === 'number' && Number.isSafeInteger(type.Extent) && type.Extent >= 0
+      ? { min: type.Extent, max: type.Extent } : undefined;
+  }
+  if (type.Kind !== 'tuple' || active.has(type)) return undefined;
+  const nested = new Set(active).add(type);
+  let min = 0;
+  let max = 0;
+  for (const element of type.Elements) {
+    const range = element.Rest ? TupleSequenceLengthRange(element.Type, nested)
+      : { min: element.Initial !== 'none' || element.DeclaredDefault ? 0 : 1, max: 1 };
+    if (!range) return undefined;
+    min += range.min;
+    max += range.max;
+    if (!Number.isSafeInteger(min) || (max !== Infinity && !Number.isSafeInteger(max))) return undefined;
+  }
+  return { min, max };
+}
+
 export function TupleStorageShapeOf(type: TypeRecord): TupleStorageShape | undefined {
   if (type.Kind !== 'tuple') return undefined;
   const prefix: TupleStorageRunRecord[] = [];

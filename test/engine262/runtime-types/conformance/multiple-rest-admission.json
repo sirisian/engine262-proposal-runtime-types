@@ -1,0 +1,1066 @@
+{
+  "cases": [
+    {
+      "name": "finite rest too short",
+      "steps": [
+        {
+          "source": "String([1,\"s\",true] is [...[].<number>,...[2].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite rest exact",
+      "steps": [
+        {
+          "source": "String([1,\"s\",\"t\",true] is [...[].<number>,...[2].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite rest too long",
+      "steps": [
+        {
+          "source": "String([1,\"s\",\"t\",\"u\",true] is [...[].<number>,...[2].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested ordered fixed rest",
+      "steps": [
+        {
+          "source": "String([true,1,\"s\",false] is [...[].<boolean>,...[string,number],...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "empty required nested rest",
+      "steps": [
+        {
+          "source": "String([] is [...[].<boolean>,...[string,number],...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero finite never",
+      "steps": [
+        {
+          "source": "String([true,false] is [...[].<boolean>,...[0].<never>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite shorter direct conversion",
+      "steps": [
+        {
+          "source": "const raw:any=[1,\"s\",true];const t:[...[].<number>,...[2].<string>,...[].<boolean>]=raw;\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type too short",
+      "steps": [
+        {
+          "source": "const raw:any=[1];const t:[...[].<number>,...[2].<number>,...[].<number>]=raw;\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "defaults cannot skip supplied prefix",
+      "steps": [
+        {
+          "source": "const raw:any=[\"x\"];String(raw is [number=7,...[].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "required finite length before getter",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any={length:1,get 0(){reads++;return 1;}};String(raw is [...[].<number>,...[2].<number>,...[].<number>])+\"/\"+reads;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite zero does not absorb",
+      "steps": [
+        {
+          "source": "String([\"s\"] is [...[].<number>,...[0].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type giveback",
+      "steps": [
+        {
+          "source": "const raw:any=[1,2];String(raw is [...[].<number>,...[2].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default missing is optional",
+      "steps": [
+        {
+          "source": "const raw:any=[];String(raw is [number=7,...[].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit impossible arity",
+      "steps": [
+        {
+          "source": "const raw:any=[1];const t=raw := [...[].<number>,...[2].<number>,...[].<number>];\"accepted\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static short literal",
+      "steps": [
+        {
+          "source": "const t:[...[].<number>,...[2].<number>,...[].<number>]=[1];\"ran\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "static short spread",
+      "steps": [
+        {
+          "source": "const a:[number]=[1];const t:[...[].<number>,...[2].<number>,...[].<number>]=[...a];\"ran\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static uncalled",
+      "steps": [
+        {
+          "source": "function f(){const t:[...[].<number>,...[2].<number>,...[].<number>]=[1];} \"ran\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "established composite spread too short",
+      "steps": [
+        {
+          "source": "const c:Composite.<[number]>=Composite.<[number]>([1]);const t:[...[].<number>,...[2].<number>,...[].<number>]=[...c];\"ran\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "established composite spread sufficient",
+      "steps": [
+        {
+          "source": "const c:Composite.<[number,number]>=Composite.<[number,number]>([1,2]);const t:[...[].<number>,...[2].<number>,...[].<number>]=[...c];String(t.length);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 0 with 0 values",
+      "steps": [
+        {
+          "source": "const raw:any=[];String(raw is [...[].<number>,...[0].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 0 with 1 values",
+      "steps": [
+        {
+          "source": "const raw:any=[0];String(raw is [...[].<number>,...[0].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 0 with 2 values",
+      "steps": [
+        {
+          "source": "const raw:any=[0, 1];String(raw is [...[].<number>,...[0].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 0 with 3 values",
+      "steps": [
+        {
+          "source": "const raw:any=[0, 1, 2];String(raw is [...[].<number>,...[0].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 0 with 4 values",
+      "steps": [
+        {
+          "source": "const raw:any=[0, 1, 2, 3];String(raw is [...[].<number>,...[0].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 0 with 5 values",
+      "steps": [
+        {
+          "source": "const raw:any=[0, 1, 2, 3, 4];String(raw is [...[].<number>,...[0].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 1 with 0 values",
+      "steps": [
+        {
+          "source": "const raw:any=[];String(raw is [...[].<number>,...[1].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 1 with 1 values",
+      "steps": [
+        {
+          "source": "const raw:any=[0];String(raw is [...[].<number>,...[1].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 1 with 2 values",
+      "steps": [
+        {
+          "source": "const raw:any=[0, 1];String(raw is [...[].<number>,...[1].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 1 with 3 values",
+      "steps": [
+        {
+          "source": "const raw:any=[0, 1, 2];String(raw is [...[].<number>,...[1].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 1 with 4 values",
+      "steps": [
+        {
+          "source": "const raw:any=[0, 1, 2, 3];String(raw is [...[].<number>,...[1].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 1 with 5 values",
+      "steps": [
+        {
+          "source": "const raw:any=[0, 1, 2, 3, 4];String(raw is [...[].<number>,...[1].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 2 with 0 values",
+      "steps": [
+        {
+          "source": "const raw:any=[];String(raw is [...[].<number>,...[2].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 2 with 1 values",
+      "steps": [
+        {
+          "source": "const raw:any=[0];String(raw is [...[].<number>,...[2].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 2 with 2 values",
+      "steps": [
+        {
+          "source": "const raw:any=[0, 1];String(raw is [...[].<number>,...[2].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 2 with 3 values",
+      "steps": [
+        {
+          "source": "const raw:any=[0, 1, 2];String(raw is [...[].<number>,...[2].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 2 with 4 values",
+      "steps": [
+        {
+          "source": "const raw:any=[0, 1, 2, 3];String(raw is [...[].<number>,...[2].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 2 with 5 values",
+      "steps": [
+        {
+          "source": "const raw:any=[0, 1, 2, 3, 4];String(raw is [...[].<number>,...[2].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 5 with 0 values",
+      "steps": [
+        {
+          "source": "const raw:any=[];String(raw is [...[].<number>,...[5].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 5 with 1 values",
+      "steps": [
+        {
+          "source": "const raw:any=[0];String(raw is [...[].<number>,...[5].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 5 with 2 values",
+      "steps": [
+        {
+          "source": "const raw:any=[0, 1];String(raw is [...[].<number>,...[5].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 5 with 3 values",
+      "steps": [
+        {
+          "source": "const raw:any=[0, 1, 2];String(raw is [...[].<number>,...[5].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 5 with 4 values",
+      "steps": [
+        {
+          "source": "const raw:any=[0, 1, 2, 3];String(raw is [...[].<number>,...[5].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same type finite 5 with 5 values",
+      "steps": [
+        {
+          "source": "const raw:any=[0, 1, 2, 3, 4];String(raw is [...[].<number>,...[5].<number>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct finite 0 with 0 strings",
+      "steps": [
+        {
+          "source": "const raw:any=[1, true];String(raw is [...[].<number>,...[0].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct finite 0 with 1 strings",
+      "steps": [
+        {
+          "source": "const raw:any=[1, \"s\", true];String(raw is [...[].<number>,...[0].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct finite 0 with 2 strings",
+      "steps": [
+        {
+          "source": "const raw:any=[1, \"s\", \"s\", true];String(raw is [...[].<number>,...[0].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct finite 0 with 3 strings",
+      "steps": [
+        {
+          "source": "const raw:any=[1, \"s\", \"s\", \"s\", true];String(raw is [...[].<number>,...[0].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct finite 1 with 0 strings",
+      "steps": [
+        {
+          "source": "const raw:any=[1, true];String(raw is [...[].<number>,...[1].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct finite 1 with 1 strings",
+      "steps": [
+        {
+          "source": "const raw:any=[1, \"s\", true];String(raw is [...[].<number>,...[1].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct finite 1 with 2 strings",
+      "steps": [
+        {
+          "source": "const raw:any=[1, \"s\", \"s\", true];String(raw is [...[].<number>,...[1].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct finite 1 with 3 strings",
+      "steps": [
+        {
+          "source": "const raw:any=[1, \"s\", \"s\", \"s\", true];String(raw is [...[].<number>,...[1].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct finite 2 with 0 strings",
+      "steps": [
+        {
+          "source": "const raw:any=[1, true];String(raw is [...[].<number>,...[2].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct finite 2 with 1 strings",
+      "steps": [
+        {
+          "source": "const raw:any=[1, \"s\", true];String(raw is [...[].<number>,...[2].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct finite 2 with 2 strings",
+      "steps": [
+        {
+          "source": "const raw:any=[1, \"s\", \"s\", true];String(raw is [...[].<number>,...[2].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct finite 2 with 3 strings",
+      "steps": [
+        {
+          "source": "const raw:any=[1, \"s\", \"s\", \"s\", true];String(raw is [...[].<number>,...[2].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "separated finite runs valid",
+      "steps": [
+        {
+          "source": "const raw:any=[1,\"a\",\"b\",true,1n,2];String(raw is [...[].<number>,...[2].<string>,...[].<boolean>,...[1].<bigint>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "separated finite runs missing",
+      "steps": [
+        {
+          "source": "const raw:any=[1,\"a\",\"b\",true,2];String(raw is [...[].<number>,...[2].<string>,...[].<boolean>,...[1].<bigint>,...[].<number>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested finite expansion exact",
+      "steps": [
+        {
+          "source": "type Mid=[...[2].<string>,number];const raw:any=[true,\"a\",\"b\",1,false];String(raw is [...[].<boolean>,...Mid,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested finite expansion wrong count",
+      "steps": [
+        {
+          "source": "type Mid=[...[2].<string>,number];const raw:any=[true,\"a\",1,false];String(raw is [...[].<boolean>,...Mid,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic finite extent",
+      "steps": [
+        {
+          "source": "type T<N:number>=[...[].<number>,...[N].<string>,...[].<boolean>];const raw:any=[1,\"a\",true];String(raw is T.<1>)+\"/\"+String(raw is T.<2>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "billion extent no expansion or getters",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any={length:1,get 0(){reads++;return 1;}};String(raw is [...[].<number>,...[1000000000].<number>,...[].<number>])+\"/\"+reads;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "membership indexed getters once",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any={length:3,get 0(){reads++;return \"a\";},get 1(){reads++;return \"b\";},get 2(){reads++;return \"c\";}};String(raw is [...[].<string>,...[2].<string>,...[].<string>])+\"/\"+reads;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed length leaves source untyped",
+      "steps": [
+        {
+          "source": "let reads=0;const raw:any=[];Object.defineProperty(raw,\"0\",{get(){reads++;return 1;},configurable:true});let status=\"\";try{const t:[...[].<number>,...[2].<number>,...[].<number>]=raw;}catch(e){status=e.name;}raw[1]=false;status+\"/\"+reads+\"/\"+raw[1];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed membership does not acquire",
+      "steps": [
+        {
+          "source": "const raw:any=[\"a\"];String(raw is [...[].<number>,...[2].<string>,...[].<boolean>])+\"/\"+(raw[0]=false);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prefix omission all absent",
+      "steps": [
+        {
+          "source": "const raw:any=[];String(raw is [number=7,string=\"s\",...[].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prefix omission partial",
+      "steps": [
+        {
+          "source": "const raw:any=[1];String(raw is [number=7,string=\"s\",...[].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "prefix omission no skipping later value",
+      "steps": [
+        {
+          "source": "const raw:any=[1,true];String(raw is [number=7,string=\"s\",...[].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "supplied undefined not omission",
+      "steps": [
+        {
+          "source": "const raw:any=[undefined];String(raw is [number=7,...[].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "hole not omission",
+      "steps": [
+        {
+          "source": "const raw:any=[,];String(raw is [number=7,...[].<string>,...[].<boolean>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fixed trailing requirement in general rest",
+      "steps": [
+        {
+          "source": "const raw:any=[];String(raw is [...[].<number>,...[].<string>,boolean]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unchanged ordinary two-rest correlation",
+      "steps": [
+        {
+          "source": "String([1,\"a\"] is [...[].<number>,...[].<string>])+\"/\"+String([\"a\",1] is [...[].<number>,...[].<string>]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown spread arity stays dynamic",
+      "steps": [
+        {
+          "source": "function f(xs:any){const t:[...[].<number>,...[2].<number>,...[].<number>]=[...xs];return t.length;}String(f([1,2]));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same finite no-rest conversion control",
+      "steps": [
+        {
+          "source": "const raw:any=[1,2];const t:[...[2].<uint8>]=raw;String(t[0] is uint8)+\"/\"+t.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain default control",
+      "steps": [
+        {
+          "source": "const raw:any=[];const t:[number=7]=raw;String(t[0]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "multiple rest getter abrupt propagates",
+      "steps": [
+        {
+          "source": "const token={};const raw:any={length:2,get 0(){throw token;},get 1(){throw new Error(\"later\");}};let caught=false;try{raw is [...[].<number>,...[2].<number>,...[].<number>];}catch(e){caught=e===token;}String(caught);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

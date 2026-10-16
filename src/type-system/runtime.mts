@@ -66,7 +66,7 @@ import {
 import { CanonicalizeType, GetTypeObject, isTypeObject, isClassTypeObject } from './intern.mts';
 import { invalidTupleRest } from './tuple-rests.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization, ClassTypeEnvironmentOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
-import { TupleStorageShapeOf, TupleLengthRange, TupleStorageTypeAt, TuplePrefixLength, TupleSuffixLength, TuplePrefixElement, TupleDefaultPlacementError, type TupleStorageShape } from './tuple-storage.mts';
+import { TupleStorageShapeOf, TupleSequenceLengthRange, TupleLengthRange, TupleStorageTypeAt, TuplePrefixLength, TupleSuffixLength, TuplePrefixElement, TupleDefaultPlacementError, type TupleStorageShape } from './tuple-storage.mts';
 import { MetadataStorageKey, MetadataKey, MetadataEntries } from './metadata-keys.mts';
 import { GenericWhereVerified } from './generic-where.mts';
 import { GenericAliasContextOf } from './generic-alias-context.mts';
@@ -4316,6 +4316,8 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
       // and a rest element's Type is the ARRAY it stands for, so comparing an
       // element against it directly meant no rest ever matched anything.
       const tupleShape = TupleStorageShapeOf(t);
+      const sequenceRange = TupleSequenceLengthRange(t);
+      if (sequenceRange && (len < sequenceRange.min || len > sequenceRange.max)) return false;
       if (tupleShape?.Runs) {
         const range = TupleLengthRange(tupleShape);
         if (len < range.min || len > range.max) return false;
@@ -4401,7 +4403,17 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         evidence.push(records);
       }
       const slots = t.Elements.map((e) => ({ Rest: e.Rest, Optional: e.Initial !== 'none' }));
-      const counts = SequenceAssignment(slots, len, (i, k) => admitted[i][k]);
+      // A finite rest constrains its whole collected run, not merely each
+      // item's type. Check this during greedy giveback, so a rejected count
+      // can still leave a valid shorter assignment for the remaining slots.
+      const ranges = t.Elements.map((element) => element.Rest ? TupleSequenceLengthRange(element.Type) : undefined);
+      const counts = SequenceAssignment(slots, len, (i, k) => admitted[i][k], (start, count, k) => {
+        const range = ranges[k];
+        if (range && (count < range.min || count > range.max)) return false;
+        // Defaults omit an unsupplied trailing prefix position; they cannot
+        // skip a present incompatible item so a later rest can receive it.
+        return !slots[k].Optional || count !== 0 || start === len;
+      });
       if (counts === 'unmatched') return false;
       if (storage) {
         let at = 0;

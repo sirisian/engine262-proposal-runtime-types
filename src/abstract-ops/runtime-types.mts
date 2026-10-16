@@ -1,4 +1,4 @@
-import { TupleStorageShapeOf, TupleLengthRange, TupleStorageTypeAt, TuplePrefixLength, TuplePrefixElement, TupleFixedPositions, TupleBackingLength, type TupleStorageShape } from '../type-system/tuple-storage.mts';
+import { TupleStorageShapeOf, TupleSequenceLengthRange, TupleLengthRange, TupleStorageTypeAt, TuplePrefixLength, TuplePrefixElement, TupleFixedPositions, TupleBackingLength, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { MetadataStorageKey, MetadataKey, MetadataKeys, MetadataEntries } from '../type-system/metadata-keys.mts';
 import { isRegExpObject } from '../intrinsics/RegExp.mts';
 import type { CapturedTypeContext } from '../type-system/runtime.mts';
@@ -6562,7 +6562,7 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
   // default, and the supplied length may fall anywhere from there to the
   // position count.
   const requiredCount = elements.filter((e) => !e.Rest && e.Initial === 'none').length;
-  const range = shape?.Runs ? TupleLengthRange(shape) : undefined;
+  const range = TupleSequenceLengthRange(t);
   if (range ? len < range.min || len > range.max : len < requiredCount || (rest === undefined && len > fixedCount)) {
     return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
   }
