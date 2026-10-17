@@ -2,54 +2,104 @@ import { AssignScalarRests, ScalarRestsAccept, ScalarRestMember, ScalarRestOwner
 import { CarriedTypeRecordOf, DefaultValueOf, RuntimeTypeOf } from '../type-system/runtime.mts';
 import { TupleBackingLength, TupleStorageTypeAt, TupleResizePreserves, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { IsSubtype } from '../type-system/relations.mts';
-import { displayType, type TypeRecord } from '../type-system/records.mts';
+import { displayType, anyType, type TypeRecord } from '../type-system/records.mts';
 import { ObjectValue, ReferenceValue, Value, type Descriptor } from '../value.mts';
 import { Q, EnsureCompletion, type ThrowCompletion } from '../completion.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { RequireType, ConvertValue, ScalarRestConversionApplicable, LookupClassOperator } from './runtime-types.mts';
-import { SameValue, Throw, isDecimalObject, isRationalObject, isFloat128Object, OwnMemberDeclarationOf, OrdinaryNominalPrototype, IsValueTypeClass, Construct, IsConstructor, AcquireNominalPrototype } from '#self';
+import { SameValue, Throw, isDecimalObject, isRationalObject, isFloat128Object, OwnMemberDeclarationOf, OrdinaryNominalPrototype, IsValueTypeClass, Construct, Call, IsCallable, IsConstructor, AcquireNominalPrototype, OrdinarySourceConversions, OrdinaryInboundConversions } from '#self';
 
 type Convert = (value: Value, type: TypeRecord) => ValueEvaluator;
 export type ScalarRestItem = { value?: Value, convert?: boolean };
-type Candidate = { value?: Value, execute?: () => ValueEvaluator };
+type Candidate = { value?: Value, execute?: () => ValueEvaluator, error?: ThrowCompletion };
+type Admission = { parameter: TypeRecord } | { failure: ThrowCompletion } | { unsupported: true } | undefined;
+type Planned = { candidate: Candidate } | { failure: ThrowCompletion } | undefined;
 
-/** A declaration-resolved, simple constructor parameter can supply a pure
- * applicability proof. Never invoke construction or resolve an annotation in
- * the caller's environment to discover that proof. More general signatures
- * and conversion operators need their own selected plans. */
-function* nominalConstructorCandidate(value: Value, type: TypeRecord): PlainEvaluator<{ candidate: Candidate } | { failure: ThrowCompletion } | undefined> {
-  if (type.Kind !== 'nominal' || !OrdinaryNominalPrototype(type) || value instanceof ReferenceValue) return undefined;
-  const ctor = type.Constructor;
-  if (!ctor || !IsConstructor(ctor)) return undefined;
-  const formals = (ctor as { FormalParameters?: readonly {
+/** Pure declaration-context parameter admission. Unknown effectful checks are
+ * distinguished from a proved inapplicable parameter: they cannot justify
+ * falling through to a lower-precedence conversion form. */
+function* ordinaryParameterAdmission(value: Value, fn: Value, declared?: TypeRecord): PlainEvaluator<Admission> {
+  const formals = (fn as { FormalParameters?: readonly {
     type: string, Initializer?: unknown, TypeAnnotation?: unknown, Ref?: boolean, Optional?: boolean,
   }[] }).FormalParameters;
-  if (formals?.length !== 1 || formals[0]!.type !== 'SingleNameBinding' || formals[0]!.Initializer
-      || formals[0]!.Ref || formals[0]!.Optional) return undefined;
-  const declared = OwnMemberDeclarationOf(ctor, 'constructor', false, 'ClassMethod')?.type;
+  if (formals?.length !== 1) return undefined;
+  if (formals[0]!.Ref || formals[0]!.type === 'BindingRestElement') return undefined;
+  if (formals[0]!.type !== 'SingleNameBinding' || formals[0]!.Initializer || formals[0]!.Optional) return { unsupported: true };
   const parameter = declared?.Kind === 'function' && declared.Signatures.length === 1
     ? declared.Signatures[0]!.Parameters[0] : undefined;
-  if (parameter?.Ref || parameter?.Rest || parameter?.Optional) return undefined;
-  if (formals[0]!.TypeAnnotation && !parameter) return undefined;
-  const target = parameter?.Type;
-  if (target && target.Kind !== 'any') {
-    if (target.Kind !== 'primitive' && target.Kind !== 'nominal') return undefined;
-    if (target.Kind === 'nominal' && IsValueTypeClass(target)) return undefined;
+  if (parameter?.Ref || parameter?.Rest) return undefined;
+  if (parameter?.Optional || (formals[0]!.TypeAnnotation && !parameter)) return { unsupported: true };
+  const target = parameter?.Type ?? anyType;
+  if (target.Kind !== 'any') {
+    if (target.Kind !== 'primitive' && target.Kind !== 'nominal') return { unsupported: true };
+    if (target.Kind === 'nominal' && IsValueTypeClass(target)) return { unsupported: true };
     if (!ScalarRestMember(value, target)) {
-      if (!pureScalarConversion(value, target, RequireType)) return undefined;
+      if (!pureScalarConversion(value, target, RequireType)) {
+        return target.Kind === 'primitive' && !ScalarRestConversionApplicable(value, target, RequireType)
+          ? undefined : { unsupported: true };
+      }
       const admitted = EnsureCompletion(yield* RequireType(value, target));
       if (admitted.Type === 'throw') return { failure: admitted };
       if (admitted.Type !== 'normal' || !ScalarRestMember(admitted.Value, target)) return undefined;
     }
   }
-  return { candidate: { execute: function* () {
-    // Parameter admission still happens at the actual invocation. It is a
-    // checked boundary even for an explicitly cast enclosing tuple.
-    const result = Q(yield* Construct(ctor, [value]));
-    if (!ScalarRestMember(result, type)) return Throw.TypeError('a constructor returned a value outside its selected rest');
+  return { parameter: target };
+}
+
+/** Preserve one selected callable and its receiver/argument. A completed
+ * selected conversion establishes its own exact obligation. */
+function nominalOperation(type: TypeRecord & { Kind: 'nominal' }, execute: () => ValueEvaluator): Candidate {
+  return { execute: function* () {
+    const result = Q(yield* execute());
+    if (!ScalarRestMember(result, type)) return Throw.TypeError('a conversion returned a value outside its selected rest');
     Q(AcquireNominalPrototype(result, type));
     return result;
-  } } };
+  } };
+}
+
+function* nominalConversionCandidate(value: Value, type: TypeRecord): PlainEvaluator<Planned> {
+  if (type.Kind !== 'nominal' || !OrdinaryNominalPrototype(type) || value instanceof ReferenceValue) return undefined;
+  let failure: ThrowCompletion | undefined;
+  const ctor = type.Constructor;
+  if (ctor && IsConstructor(ctor)) {
+    // Overloaded constructors need a separate applicability proof; never infer
+    // precedence from only the first body's signature.
+    if ((ctor as { OverloadFunctions?: readonly Value[] }).OverloadFunctions?.length) return undefined;
+    const declared = OwnMemberDeclarationOf(ctor, 'constructor', false, 'ClassMethod')?.type;
+    const admission = Q(yield* ordinaryParameterAdmission(value, ctor, declared));
+    if (admission && 'unsupported' in admission) return undefined;
+    if (admission && 'parameter' in admission) {
+      return { candidate: nominalOperation(type, function* (): ValueEvaluator {
+        return Q(yield* Construct(ctor, [value]));
+      }) };
+    }
+    if (admission && 'failure' in admission) failure = admission.failure;
+  }
+  const source = OrdinarySourceConversions(value, type).filter((entry) => IsCallable(entry.Function));
+  if (source.length > 1) return { candidate: { error: Throw.TypeError('ambiguous source conversion for an ordered rest') } };
+  if (source.length === 1) {
+    const fn = source[0]!.Function;
+    return { candidate: nominalOperation(type, function* (): ValueEvaluator {
+      return Q(yield* Call(fn, value, []));
+    }) };
+  }
+  const inbound: { fn: Value, parameter: TypeRecord }[] = [];
+  for (const entry of OrdinaryInboundConversions(type)) {
+    if (!IsCallable(entry.Function)) continue;
+    const admission = Q(yield* ordinaryParameterAdmission(value, entry.Function, entry.Signature));
+    if (admission && 'unsupported' in admission) return undefined;
+    if (admission && 'parameter' in admission) inbound.push({ fn: entry.Function, parameter: admission.parameter });
+    if (admission && 'failure' in admission) failure ??= admission.failure;
+  }
+  const best = inbound.filter((a) => !inbound.some((b) => IsSubtype(b.parameter, a.parameter, []) && !IsSubtype(a.parameter, b.parameter, [])));
+  if (best.length > 1) return { candidate: { error: Throw.TypeError('ambiguous inbound conversion for an ordered rest') } };
+  if (best.length === 1) {
+    const fn = best[0]!.fn;
+    return { candidate: nominalOperation(type, function* (): ValueEvaluator {
+      return Q(yield* Call(fn, Value.undefined, [value]));
+    }) };
+  }
+  return failure ? { failure } : undefined;
 }
 
 /** These real numeric values use ObjectValue only as an interpreter
@@ -95,7 +145,7 @@ export function* ConvertScalarRestItems(patterns: readonly ScalarRestPattern[], 
       } else if (ScalarRestMember(item.value, type)) retain(type, item.value);
       else if (item.convert) {
         if (type.Kind === 'nominal') {
-          const candidate = Q(yield* nominalConstructorCandidate(item.value, type));
+          const candidate = Q(yield* nominalConversionCandidate(item.value, type));
           if (candidate && 'failure' in candidate) failure ??= candidate.failure;
           else if (candidate && accepts(candidates.length, type)) row.set(type, candidate.candidate);
         } else if (pureScalarConversion(item.value, type, convert)) {
@@ -112,6 +162,12 @@ export function* ConvertScalarRestItems(patterns: readonly ScalarRestPattern[], 
     return value === undefined ? IsSubtype(chosen, required, []) : ScalarRestMember(value, required);
   });
   if (!selected) return failure ?? Throw.TypeError('no ordered scalar rest assignment admits the sequence');
+  // Ambiguity is a selected applicability error, diagnosed before any user
+  // conversion runs; it is not permission to retry a less-greedy assignment.
+  for (let i = 0; i < selected.length; i += 1) {
+    const error = candidates[i]!.get(selected[i]!)!.error;
+    if (error) return error;
+  }
   const values: Value[] = [];
   for (let i = 0; i < selected.length; i += 1) {
     const type = selected[i]!;

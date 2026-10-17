@@ -62,7 +62,7 @@ import { TakeEvaluatedMethodKey, BeginPartialMemberAddition } from './MethodDefi
 import {
   surroundingAgent,
   OrdinaryFunctionCreate,
-  RegisterClassOperator, AddClassOperator, BeginPartialOperatorAddition,
+  RegisterClassOperator, AddClassOperator, BeginPartialOperatorAddition, RegisterOrdinaryConversion,
   DeclarativeEnvironmentRecord,
   PrivateEnvironmentRecord,
 
@@ -1273,6 +1273,11 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           const privEnv = surroundingAgent.runningExecutionContext.PrivateEnvironment;
           const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', e.FormalParameters as never, e.FunctionBody, 'non-lexical-this', env, privEnv);
           RegisterClassOperator(e.static ? F : proto, 'convert-from', opFn);
+          if (!e.static) {
+            const target = Q(yield* TypeNodeToTypeRecord(conversionType));
+            const signature = Q(yield* MemberFunctionTypeRecord(e));
+            RegisterOrdinaryConversion(proto, { Target: target, Function: opFn, Signature: signature, Source: false });
+          }
           continue;
         }
         if (e.type === 'OperatorDefinition' && !e.OperatorName && conversionType && e.FunctionBody) {
@@ -1282,6 +1287,9 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           const opFn = OrdinaryFunctionCreate(surroundingAgent.intrinsic('%Function.prototype%'), 'operator', (e.FormalParameters ?? []) as never, e.FunctionBody, 'non-lexical-this', env, privEnv);
           ((globalThis as unknown as { __z?: string[] }).__z ??= []).push('REG=' + `convert ${displayType(resolved as never)}`);
           RegisterClassOperator(e.static ? F : proto, `convert ${displayType(resolved as never)}`, opFn);
+          if (!e.static && (e.FormalParameters?.length ?? 0) === 0) {
+            RegisterOrdinaryConversion(proto, { Target: resolved, Function: opFn, Source: true });
+          }
         }
         // proposal-runtime-types decorators.md "Order": a declaration's
         // sub-targets apply before the declaration itself. An OperatorDefinition
