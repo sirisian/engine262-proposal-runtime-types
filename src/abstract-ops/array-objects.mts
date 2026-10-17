@@ -480,7 +480,10 @@ export function* PrepareScalarRestStore(object: ObjectValue, key: JSStringValue,
   for (const i of supplied.keys()) length = Math.max(length, i + 1);
   const movement = movementWrites.get(object);
   const moving = movement && movement.key === key && movement.context === surroundingAgent.executionContextStack.at(-1);
-  const values = Q(yield* PrepareScalarRestValues(object, length, supplied, !moving));
+  // Other supplied entries belong to the already prepared private tail.
+  // Relocation and earlier inserted values cannot be converted again while
+  // selecting this one store, even when its new value requires conversion.
+  const values = Q(yield* PrepareScalarRestValues(object, length, supplied, moving ? false : new globalThis.Set([index])));
   return values![index]!;
 }
 

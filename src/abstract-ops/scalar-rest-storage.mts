@@ -1,4 +1,4 @@
-import { AssignScalarRests, ScalarRestMember, ScalarRestOwner, ScalarRestValues, ScalarRestGuardsAccept, ScalarRestLengthAllowed, type ScalarRestPattern } from '../type-system/scalar-rests.mts';
+import { AssignScalarRests, ScalarRestsAccept, ScalarRestMember, ScalarRestOwner, ScalarRestValues, ScalarRestGuardsAccept, ScalarRestLengthAllowed, type ScalarRestPattern } from '../type-system/scalar-rests.mts';
 import { CarriedTypeRecordOf, DefaultValueOf, RuntimeTypeOf } from '../type-system/runtime.mts';
 import { TupleBackingLength, TupleStorageTypeAt, TupleResizePreserves, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { IsSubtype } from '../type-system/relations.mts';
@@ -7,10 +7,50 @@ import { ObjectValue, ReferenceValue, Value, type Descriptor } from '../value.mt
 import { Q, EnsureCompletion, type ThrowCompletion } from '../completion.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { RequireType, ConvertValue, ScalarRestConversionApplicable, LookupClassOperator } from './runtime-types.mts';
-import { SameValue, Throw, isDecimalObject, isRationalObject, isFloat128Object } from '#self';
+import { SameValue, Throw, isDecimalObject, isRationalObject, isFloat128Object, OwnMemberDeclarationOf, OrdinaryNominalPrototype, IsValueTypeClass, Construct, IsConstructor, AcquireNominalPrototype } from '#self';
 
 type Convert = (value: Value, type: TypeRecord) => ValueEvaluator;
 export type ScalarRestItem = { value?: Value, convert?: boolean };
+type Candidate = { value?: Value, execute?: () => ValueEvaluator };
+
+/** A declaration-resolved, simple constructor parameter can supply a pure
+ * applicability proof. Never invoke construction or resolve an annotation in
+ * the caller's environment to discover that proof. More general signatures
+ * and conversion operators need their own selected plans. */
+function* nominalConstructorCandidate(value: Value, type: TypeRecord): PlainEvaluator<{ candidate: Candidate } | { failure: ThrowCompletion } | undefined> {
+  if (type.Kind !== 'nominal' || !OrdinaryNominalPrototype(type) || value instanceof ReferenceValue) return undefined;
+  const ctor = type.Constructor;
+  if (!ctor || !IsConstructor(ctor)) return undefined;
+  const formals = (ctor as { FormalParameters?: readonly {
+    type: string, Initializer?: unknown, TypeAnnotation?: unknown, Ref?: boolean, Optional?: boolean,
+  }[] }).FormalParameters;
+  if (formals?.length !== 1 || formals[0]!.type !== 'SingleNameBinding' || formals[0]!.Initializer
+      || formals[0]!.Ref || formals[0]!.Optional) return undefined;
+  const declared = OwnMemberDeclarationOf(ctor, 'constructor', false, 'ClassMethod')?.type;
+  const parameter = declared?.Kind === 'function' && declared.Signatures.length === 1
+    ? declared.Signatures[0]!.Parameters[0] : undefined;
+  if (parameter?.Ref || parameter?.Rest || parameter?.Optional) return undefined;
+  if (formals[0]!.TypeAnnotation && !parameter) return undefined;
+  const target = parameter?.Type;
+  if (target && target.Kind !== 'any') {
+    if (target.Kind !== 'primitive' && target.Kind !== 'nominal') return undefined;
+    if (target.Kind === 'nominal' && IsValueTypeClass(target)) return undefined;
+    if (!ScalarRestMember(value, target)) {
+      if (!pureScalarConversion(value, target, RequireType)) return undefined;
+      const admitted = EnsureCompletion(yield* RequireType(value, target));
+      if (admitted.Type === 'throw') return { failure: admitted };
+      if (admitted.Type !== 'normal' || !ScalarRestMember(admitted.Value, target)) return undefined;
+    }
+  }
+  return { candidate: { execute: function* () {
+    // Parameter admission still happens at the actual invocation. It is a
+    // checked boundary even for an explicitly cast enclosing tuple.
+    const result = Q(yield* Construct(ctor, [value]));
+    if (!ScalarRestMember(result, type)) return Throw.TypeError('a constructor returned a value outside its selected rest');
+    Q(AcquireNominalPrototype(result, type));
+    return result;
+  } } };
+}
 
 /** These real numeric values use ObjectValue only as an interpreter
  * representation. Their intrinsic payload conversions are pure; ordinary
@@ -38,10 +78,10 @@ export function* ConvertScalarRestItems(patterns: readonly ScalarRestPattern[], 
   (i, _chosen, required) => ScalarRestMember(items[i]!.value!, required));
   if (unchanged) return items.map((item) => item.value!);
   const types = [...new Set(patterns[0]!.map((run) => run.Type))];
-  const candidates: Map<TypeRecord, { value?: Value }>[] = [];
+  const candidates: Map<TypeRecord, Candidate>[] = [];
   let failure: ThrowCompletion | undefined;
   for (const item of items) {
-    const row = new Map<TypeRecord, { value?: Value }>();
+    const row = new Map<TypeRecord, Candidate>();
     const retain = (type: TypeRecord, value?: Value) => {
       if (accepts(candidates.length, type, value)) row.set(type, { value });
     };
@@ -54,7 +94,11 @@ export function* ConvertScalarRestItems(patterns: readonly ScalarRestPattern[], 
         if (value !== undefined) retain(type, value);
       } else if (ScalarRestMember(item.value, type)) retain(type, item.value);
       else if (item.convert) {
-        if (pureScalarConversion(item.value, type, convert)) {
+        if (type.Kind === 'nominal') {
+          const candidate = Q(yield* nominalConstructorCandidate(item.value, type));
+          if (candidate && 'failure' in candidate) failure ??= candidate.failure;
+          else if (candidate && accepts(candidates.length, type)) row.set(type, candidate.candidate);
+        } else if (pureScalarConversion(item.value, type, convert)) {
           const result = EnsureCompletion(yield* convert(item.value, type));
           if (result.Type === 'normal' && ScalarRestMember(result.Value, type)) retain(type, result.Value);
           else if (result.Type === 'throw') failure ??= result;
@@ -74,10 +118,17 @@ export function* ConvertScalarRestItems(patterns: readonly ScalarRestPattern[], 
     const candidate = candidates[i]!.get(type)!;
     let value = candidate.value;
     if (value === undefined) {
-      value = Q(yield* convert(items[i]!.value!, type));
+      if (candidate.execute) {
+        value = Q(yield* candidate.execute());
+      } else {
+        value = Q(yield* convert(items[i]!.value!, type));
+      }
     }
     if (!ScalarRestMember(value, type)) return Throw.TypeError('a scalar conversion returned a value outside its selected rest');
     values.push(value);
+  }
+  if (!patterns.every((pattern) => ScalarRestsAccept(pattern, values))) {
+    return Throw.TypeError('conversion effects invalidated the completed rest sequence');
   }
   return values;
 }
@@ -85,7 +136,7 @@ export function* ConvertScalarRestItems(patterns: readonly ScalarRestPattern[], 
 /** Retain data rather than replaying property Gets. Reentrant changes to any
  * consulted element or acquired guard invalidate this receiving operation. */
 export function* PrepareScalarRestValues(object: ObjectValue, length: number,
-  supplied: ReadonlyMap<number, Descriptor>, converting: boolean): PlainEvaluator<Value[] | undefined> {
+  supplied: ReadonlyMap<number, Descriptor>, converting: boolean | ReadonlySet<number>): PlainEvaluator<Value[] | undefined> {
   const owner = ScalarRestOwner(object);
   const guards = owner.ScalarRestGuards;
   if (!guards?.length) return undefined;
@@ -93,7 +144,7 @@ export function* PrepareScalarRestValues(object: ObjectValue, length: number,
   const old = ScalarRestValues(owner, oldLength);
   if (!old) return Throw.TypeError('a scalar rest guard requires initialized own data elements');
   const items = Array.from({ length }, (_, index): ScalarRestItem => supplied.has(index)
-    ? { value: supplied.get(index)!.Value, convert: converting }
+    ? { value: supplied.get(index)!.Value, convert: converting === true || (converting !== false && converting.has(index)) }
     : { value: old[index] });
   const backing = owner as typeof owner & { TypedTuple?: TupleStorageShape, TypedElement?: TypeRecord,
     TypedProperties?: Map<string, { TypeRecord: TypeRecord }> };

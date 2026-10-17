@@ -123,3 +123,4 @@ export * from './type-system/nominal-prototype.mts';
 export * from './type-system/nominal-rests.mts';
 export { IsValueTypeClass } from './type-system/layout.mts';
 export { TupleBackingLength } from './type-system/tuple-storage.mts';
+export { OwnMemberDeclarationOf } from './runtime-semantics/ClassDefinitionEvaluation.mts';

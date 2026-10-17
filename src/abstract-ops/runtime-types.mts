@@ -42,7 +42,7 @@ import { TakeBodyContext } from '../type-system/runtime.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { describeParameters, minimumArity, resolveOverloadChecked, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature, operatorTableKey } from '../type-system/overloads.mts';
 import {
-  ScalarRestsOf, ScalarRestsAccept, ScalarRestShape, ScalarRestValues, type ScalarRestStorage, type ScalarRestPattern, type ScalarRestType, ConvertScalarRestItems,
+  OrdinaryRestsOf, ScalarRestsAccept, ScalarRestShape, ScalarRestValues, type ScalarRestStorage, type ScalarRestPattern, type ScalarRestType, ConvertScalarRestItems,
   wellKnownSymbols,
   SetArrayAdmission, OrdinaryGetOwnProperty, ValidateAndApplyPropertyDescriptor, IsDataDescriptor, Assert, type OrdinaryObject,
   Call, R, Throw, WithoutMetadata, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate, GetValue, Evaluate,
@@ -6619,7 +6619,7 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
   const len = Q(yield* SequenceConversionLength(value, observation));
   const elements = t.Elements;
   const shape = TupleStorageShapeOf(t);
-  const scalar = !shape && ScalarRestsOf(t);
+  const scalar = !shape && OrdinaryRestsOf(t);
   if (scalar) {
     const range = TupleLengthRange(ScalarRestShape(scalar));
     if (len < range.min || len > range.max) return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
@@ -6635,6 +6635,7 @@ function* ConvertTupleElementwise(value: ObjectValue, t: TypeRecord & { Kind: 't
     }
     (out as { TypedTuple?: TupleStorageShape }).TypedTuple = ScalarRestShape(scalar);
     (out as ScalarRestStorage).ScalarRestGuards = [scalar];
+    RefreshNominalRestDependencies(out);
     return out;
   }
   const rest = elements.find((e) => e.Rest);

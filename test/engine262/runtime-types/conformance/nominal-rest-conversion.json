@@ -1,0 +1,508 @@
+{
+  "cases": [
+    {
+      "name": "required String reserves one item before constructor execution",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(v:any){calls++;}}type T=[...[].<C>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\"];const t:T=raw;const x:any=t;calls+\"/\"+String(x is T)+\"/\"+x[1]+\"/\"+String(x===raw);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true/s/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit tuple cast uses the same selected constructor",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(v:any){calls++;}}type T=[...[].<C>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\"];const x:any=raw:=T;calls+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "whole membership wins over converting constructors",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(v:any){calls++;}}type T=[...[].<C>,...[1].<string>,...[].<boolean>];const raw:any=[\"s\",true];const t:T=raw;const x:any=t;calls+\"/\"+String(x===raw)+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "untyped simple constructor is applicable",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(v){calls++;}}type T=[...[].<C>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\"];const t:T=raw;const x:any=t;calls+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "parameter applicability gives back to a later String run",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(v:boolean){calls++;}}type T=[...[].<C>,...[].<string>];const raw:any=[1,\"s\"];const t:T=raw;const x:any=t;calls+\"/\"+String(x is T)+\"/\"+x[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked numeric constructor parameter is admitted",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{constructor(v:uint8){log+=String(v is uint8);}}type T=[...[].<C>,...[1].<string>,...[].<boolean>];const raw:any=[7,\"s\"];const t:T=raw;const x:any=t;log+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed numeric candidate does not preempt a valid assignment",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(v:uint8){calls++;}}type T=[...[].<C>,...[].<string>];const raw:any=[257,\"s\"];const t:T=raw;const x:any=t;calls+\"/\"+String(x is T)+\"/\"+x[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/true/257"
+          }
+        }
+      ]
+    },
+    {
+      "name": "no viable assignment retains checked parameter range failure",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(v:uint8){calls++;}}type T=[...[1].<C>,...[].<string>,...[].<boolean>];let e=\"\";try{const raw:any=[257,\"s\"];const t:T=raw;}catch(x){e=x.name;}e+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit tuple cast does not wrap a constructor argument",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(v:uint8){calls++;}}type T=[...[1].<C>,...[].<string>,...[].<boolean>];let e=\"\";try{const raw:any=[257,\"s\"];const t=raw:=T;}catch(x){e=x.name;}e+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor effects occur once in index order",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{constructor(v:any){log+=String(v);}}type T=[...[].<C>,...[1].<string>,...[].<boolean>];const raw:any=[1,2,\"s\"];const t:T=raw;const x:any=t;log+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "12/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected constructor failure does not try another class",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{constructor(v:any){log+=\"c\";throw new RangeError(\"selected\");}}class D{constructor(v:any){log+=\"d\";}}type T=[...[].<C>,...[].<D>,...[1].<string>];let e=\"\";try{const raw:any=[1,\"s\"];const t:T=raw;}catch(x){e=x.name;}e+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/c"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong constructor result is refused without retry",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{constructor(v:any){log+=\"c\";return {};}}class D{constructor(v:any){log+=\"d\";}}type T=[...[].<C>,...[].<D>,...[1].<string>];let e=\"\";try{const raw:any=[1,\"s\"];const t:T=raw;}catch(x){e=x.name;}e+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/c"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unused constructors are not speculatively executed",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{constructor(v:any){log+=\"c\";}}class D{constructor(v:any){log+=\"d\";throw new Error(\"unused\");}}type T=[...[].<C>,...[].<D>,...[1].<string>];const raw:any=[1,\"s\"];const t:T=raw;const x:any=t;log+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "c/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "all retained source Gets precede selected constructors",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{constructor(v:any){log+=\"c\"+v;}}type T=[...[].<C>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\"];Object.defineProperty(raw,\"0\",{get(){log+=\"g0\";return 1;}});Object.defineProperty(raw,\"1\",{get(){log+=\"g1\";return \"s\";}});const t:T=raw;const x:any=t;log+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "g0g1c1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "required count failure runs no constructor",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(v:any){calls++;}}type T=[...[].<C>,...[1].<string>,...[].<boolean>];let e=\"\";try{const raw:any=[];const t:T=raw;}catch(x){e=x.name;}e+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero nominal run never invokes its constructor",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(v:any){calls++;}}type T=[...[0].<C>,...[].<string>,...[].<boolean>];const raw:any=[1];const t:T=raw;const x:any=t;calls+\"/\"+String(x is T)+\"/\"+x[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested tuple spread retains the required count",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(v:any){calls++;}}type Inner=[...[].<C>,...[1].<string>];type T=[...Inner,...[].<boolean>];const raw:any=[1,\"s\"];const t:T=raw;const x:any=t;calls+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh converted owner refuses an invalid later ordering",
+      "steps": [
+        {
+          "source": "class C{constructor(v:any){}}type T=[...[].<C>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\"];const t:T=raw;const x:any=t;let e=\"\";try{x[1]=new C(2);}catch(err){e=err.name;}e+\"/\"+String(x is T)+\"/\"+x[1];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true/s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh converted owner guards a retained unconverted child",
+      "steps": [
+        {
+          "source": "class D{}class C{constructor(v:any){}}type T=[...[].<D>,...[].<C>,...[1].<string>];const child:any=new D();const raw:any=[child,1,\"s\"];const t:T=raw;const x:any=t;String(Reflect.setPrototypeOf(child,null))+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "removal releases only the correlated retained child",
+      "steps": [
+        {
+          "source": "class D{}class C{constructor(v:any){}}type T=[...[].<D>,...[].<C>,...[].<string>];const child:any=new D();const raw:any=[child,1,\"s\"];const t:T=raw;const x:any=t;x.shift();String(Reflect.setPrototypeOf(child,null))+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "completed selected C conversion keeps its exact obligation",
+      "steps": [
+        {
+          "source": "let saved:any;class C{constructor(v:any){saved=this;}}type T=[...[].<C>,...[].<string>];const raw:any=[1,\"s\"];const t:T=raw;const x:any=t;x.pop();String(Reflect.setPrototypeOf(saved,null))+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later constructor effects invalidate a retained earlier role",
+      "steps": [
+        {
+          "source": "let child:any;let calls=0;class D{}class C{constructor(v:any){calls++;Object.setPrototypeOf(child,null);}}type T=[...[].<D>,...[].<C>,...[1].<string>];child=new D();let e=\"\";try{const raw:any=[child,1,\"s\"];const t:T=raw;}catch(x){e=x.name;}e+\"/\"+calls+\"/\"+String(Object.getPrototypeOf(child)===null);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier exact conversion survives later selected failure",
+      "steps": [
+        {
+          "source": "let saved:any;let calls=0;class C{constructor(v:any){calls++;if(v===2)throw new Error(\"later\");saved=this;}}type T=[...[].<C>,...[1].<string>,...[].<boolean>];let e=\"\";try{const raw:any=[1,2,\"s\"];const t:T=raw;}catch(x){e=x.name;}e+\"/\"+calls+\"/\"+String(Reflect.setPrototypeOf(saved,null));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "Error/2/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "indexed replacement uses selected nominal conversion",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(v:any){calls++;}}type T=[...[].<C>,...[1].<string>,...[].<boolean>];const raw:any=[new C(0),\"s\"];const t:T=raw;calls=0;raw[0]=1;calls+\"/\"+String(raw is T)+\"/\"+String(raw[0] is C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "insertion respects existing position contracts before construction",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(v:any){calls++;}}type T=[...[].<C>,...[1].<string>,...[].<boolean>];const raw:any=[\"s\"];const t:T=raw;let e=\"\";try{raw.unshift(1);}catch(x){e=x.name;}e+\"/\"+calls+\"/\"+String(raw is T)+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/0/true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflective writes execute a selected nominal conversion",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(v:any){calls++;}}type T=[...[].<C>,...[1].<string>,...[].<boolean>];const raw:any=[new C(0),\"s\"];const t:T=raw;calls=0;let e=\"\";try{Object.defineProperty(raw,\"0\",{value:1});}catch(x){e=x.name;}e+\"/\"+calls+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "/1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor mutation of the destination is retained but outer store fails",
+      "steps": [
+        {
+          "source": "let raw:any;let calls=0;class C{constructor(v:any){calls++;if(v===1)raw[1]=\"changed\";}}type T=[...[].<C>,...[1].<string>,...[].<boolean>];raw=[new C(0),\"s\"];const t:T=raw;calls=0;let e=\"\";try{raw[0]=1;}catch(x){e=x.name;}e+\"/\"+calls+\"/\"+raw[1]+\"/\"+String(raw is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1/changed/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "type alias parameter uses class declaration context",
+      "steps": [
+        {
+          "source": "let calls=0;type P=uint8;class C{constructor(v:P){calls++;}}type T=[...[].<C>,...[1].<string>,...[].<boolean>];function go(){type P=boolean;const raw:any=[1,\"s\"];const t:T=raw;const x:any=t;return String(x is T);}const answer=go();calls+\"/\"+answer;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed numeric source prohibition is not hidden by constructor planning",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(v:uint8){calls++;}}type T=[...[].<C>,...[].<string>];const number:float64=7;const raw:any=[number,\"s\"];const t:T=raw;const x:any=t;calls+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two conjunctive guards can select one compatible constructor",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(v:any){calls++;}}type T=[...[].<C>,...[1].<string>,...[].<boolean>];type U=[...[].<C>,...[].<string>];const raw:any=[new C(0),\"s\"];const t:T=raw;const u:U=raw;calls=0;raw[0]=1;calls+\"/\"+String(raw is T)+\"/\"+String(raw is U);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two-parameter constructor supplies no conversion candidate",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(a:any,b:any){calls++;}}type T=[...[].<C>,...[].<string>];const raw:any=[1,\"s\"];const t:T=raw;const x:any=t;calls+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "insertion into stable projected domains constructs once",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(v:any){calls++;}}type T=[...[].<C>,...[].<string>];const raw:any=[\"s\"];const t:T=raw;raw.unshift(1);calls+\"/\"+String(raw is T)+\"/\"+raw.length;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "narrow reference still refuses a projected nominal position",
+      "steps": [
+        {
+          "source": "class C{constructor(v:any){}}type T=[...[].<C>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\"];const t:T=raw;const x:any=t;let entered=false;function take(ref v:C){entered=true;}let e=\"\";try{take(ref x[0]);}catch(err){e=err.name;}e+\"/\"+String(entered)+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor is preferred over the source conversion operator",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{constructor(v:any){log+=\"c\";}}class S{operator C(){log+=\"s\";return new C(0);}}type T=[...[].<C>,...[1].<string>,...[].<boolean>];const raw:any=[new S(),\"s\"];const t:T=raw;const x:any=t;log+\"/\"+String(x is T);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "c/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid constructor effects may repartition an earlier child",
+      "steps": [
+        {
+          "source": "let child:any;class D{}class C{constructor(v:any){Object.setPrototypeOf(child,C.prototype);}}type T=[...[].<D>,...[].<C>,...[1].<string>];child=new D();const raw:any=[child,1,\"s\"];const t:T=raw;const x:any=t;String(x is T)+\"/\"+String(Reflect.setPrototypeOf(child,null));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unannotated reference constructor is not a value conversion candidate",
+      "steps": [
+        {
+          "source": "let calls=0;class C{constructor(ref v){calls++;}}type T=[...[].<C>,...[].<string>];const raw:any=[1,\"s\"];const t:T=raw;const x:any=t;calls+\"/\"+String(x is T)+\"/\"+x[0];",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/true/1"
+          }
+        }
+      ]
+    }
+  ]
+}

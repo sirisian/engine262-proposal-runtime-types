@@ -36,8 +36,8 @@ export function ScalarRestsOf(type: TypeRecord): ScalarRestPattern | undefined {
   return OrdinaryRestsOf(type, false);
 }
 
-/** Already-admitted identity class values can also carry a correlated ordinary
- * prototype guard. This does not enable speculative nominal conversion. */
+/** Identity class values can carry a correlated ordinary prototype guard.
+ * Effectful constructor candidates require a separate selected plan. */
 export function OrdinaryRestsOf(type: TypeRecord, nominal = true): ScalarRestPattern | undefined {
   if (type.Kind !== 'tuple') return undefined;
   const result: ScalarRestRunRecord[] = [];
