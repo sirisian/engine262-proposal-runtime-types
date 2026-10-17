@@ -37908,7 +37908,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const pushedClassScopeForBody = pushTypeParameterScopeOf(n, 'type-only');
         try {
           for (const el of (n as { ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null }).ClassTail?.ClassBody ?? []) {
-            const self = el.type === 'ClassStaticBlock' || (el as { static?: boolean }).static
+            // #sec-user-defined-conversions: the inbound form receives its
+            // input as an argument, with undefined as receiver. Its parameter
+            // initializers, body and lexical arrows share that context; the
+            // parameterless source form still receives the source instance.
+            const inbound = el.type === 'OperatorDefinition' && !el.OperatorName && el.Type
+              && el.FormalParameters?.length === 1;
+            const self = inbound ? undefinedType : el.type === 'ClassStaticBlock' || (el as { static?: boolean }).static
               ? classObjectTypeOfNode(n) : instanceType;
             thisTypeFrames.push(self);
             try {

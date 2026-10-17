@@ -1,0 +1,537 @@
+{
+  "cases": [
+    {
+      "name": "direct inbound comparison",
+      "steps": [
+        {
+          "source": "let result=\"\";class C{operator C(v:any){result=String(this===undefined);return new C();}}const raw:any=1;const c:C=raw;result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "undefined typed binding",
+      "steps": [
+        {
+          "source": "let result=\"\";class C{operator C(v:any){const receiver:undefined=this;result=String(receiver===undefined);return new C();}}const raw:any=1;const c:C=raw;result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contextual arrow result",
+      "steps": [
+        {
+          "source": "let result=\"\";class C{operator C(v:any){const read:()=>undefined=()=>this;result=String(read()===undefined);return new C();}}const raw:any=1;const c:C=raw;result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inferred arrow result",
+      "steps": [
+        {
+          "source": "let result=\"\";class C{operator C(v:any){const read=()=>this;const receiver:undefined=read();result=String(receiver===undefined);return new C();}}const raw:any=1;const c:C=raw;result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested arrows",
+      "steps": [
+        {
+          "source": "let result=\"\";class C{operator C(v:any){const read=()=>()=>this;const receiver:undefined=read()();result=String(receiver===undefined);return new C();}}const raw:any=1;const c:C=raw;result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured receiver with explicit return contract",
+      "steps": [
+        {
+          "source": "let result=\"\";class C{operator C(v:any){const receiver=this;function read():undefined{return receiver;}const u:undefined=read();result=String(u===undefined);return new C();}}const raw:any=1;const c:C=raw;result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary nested function has own receiver",
+      "steps": [
+        {
+          "source": "let result=\"\";class C{operator C(v:any){const read=function(){return this;};const obj={read};result=String(obj.read()===obj);return new C();}}const raw:any=1;const c:C=raw;result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary nested declaration has own receiver",
+      "steps": [
+        {
+          "source": "let result=\"\";class C{operator C(v:any){function read(){return this;}const obj={read};result=String(obj.read()===obj);return new C();}}const raw:any=1;const c:C=raw;result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested object method has own receiver",
+      "steps": [
+        {
+          "source": "let result=\"\";class C{operator C(v:any){const obj={read():any{return this;}};result=String(obj.read()===obj);return new C();}}const raw:any=1;const c:C=raw;result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested class restores inbound receiver",
+      "steps": [
+        {
+          "source": "let result=\"\";class C{operator C(v:any){class D{read(){return this;}}const d=new D();const receiver:undefined=this;result=String(d.read()===d&&receiver===undefined);return new C();}}const raw:any=1;const c:C=raw;result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class expression inbound",
+      "steps": [
+        {
+          "source": "let result=\"\";const K=class C{operator C(v:any){result=String(this===undefined);return new C();}};const raw:any=1;const c:K=raw;result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "derived inbound declaration",
+      "steps": [
+        {
+          "source": "let result=\"\";class B{}class C extends B{operator C(v:any){result=String(this===undefined);return new C();}}const raw:any=1;const c:C=raw;result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "enclosing method receiver does not leak",
+      "steps": [
+        {
+          "source": "let result=\"\";const outer={run(){class C{operator C(v:any){result=String(this===undefined);return new C();}}const raw:any=1;const c:C=raw;return result;} }; outer.run();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured generic environment",
+      "steps": [
+        {
+          "source": "function make<T:type>(x:T){let result=\"\";class C{operator C(v:any){const captured:T=x;const receiver:undefined=this;result=String(receiver===undefined)+\"/\"+String(captured);return new C();}}const raw:any=1;const c:C=raw;return result;}make.<string>(\"ok\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic class declaration receiver",
+      "steps": [
+        {
+          "source": "class C<T:type=string>{operator C(v:any){const receiver:undefined=this;return new C.<T>();}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static inbound declaration receiver",
+      "steps": [
+        {
+          "source": "class C{static operator C(v:any){const receiver:undefined=this;return new C();}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "parameter initializer receiver",
+      "steps": [
+        {
+          "source": "class C{operator C(v:any=this===undefined){return new C();}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rest planner direct receiver",
+      "steps": [
+        {
+          "source": "let result=\"\";class C{operator C(v:any){result=String(this===undefined);return new C();}}type T=[...[].<C>,...[1].<string>,...[].<boolean>];const raw:any=[1,\"s\"];const t:T=raw;result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit conversion direct receiver",
+      "steps": [
+        {
+          "source": "let result=\"\";class C{operator C(v:any){result=String(this===undefined);return new C();}}const raw:any=1;const c=raw:=C;result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "argument boundary direct receiver",
+      "steps": [
+        {
+          "source": "let result=\"\";class C{operator C(v:any){result=String(this===undefined);return new C();}}function f(c:C){}const raw:any=1;f(raw);result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "return boundary direct receiver",
+      "steps": [
+        {
+          "source": "let result=\"\";class C{operator C(v:any){result=String(this===undefined);return new C();}}function f():C{const raw:any=1;return raw;}f();result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source conversion retains instance receiver",
+      "steps": [
+        {
+          "source": "class S{value:string=\"ok\";operator string(){const read=()=>this;const s:S=read();return s.value;}}const s:any=new S();const text:string=s;text;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inherited source receiver retains declaration context",
+      "steps": [
+        {
+          "source": "class S{value:string=\"ok\";operator string(){const read=()=>this;const s:S=read();return s.value;}}class D extends S{}const s:any=new D();const text:string=s;text;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "following instance and static contexts restored",
+      "steps": [
+        {
+          "source": "class C{value:string=\"ok\";static value:string=\"static\";operator C(v:any){const receiver:undefined=this;return new C();}read():string{return this.value;}static read():string{return this.value;}}new C().read()+\"/\"+C.read();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok/static"
+          }
+        }
+      ]
+    },
+    {
+      "name": "following arithmetic operator receiver restored",
+      "steps": [
+        {
+          "source": "class C{value:number=2;operator C(v:any){const receiver:undefined=this;return new C();}operator +(other:C):number{return this.value+other.value;}}String(new C()+new C());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inbound return cannot borrow containing instance",
+      "steps": [
+        {
+          "source": "class C{operator C(v:number){return this;}}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "contextual arrow cannot lend fictitious instance",
+      "steps": [
+        {
+          "source": "class C{operator C(v:number){const read:()=>undefined=()=>this;const c:C=read();return new C();}}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured this cannot lend fictitious instance",
+      "steps": [
+        {
+          "source": "class C{operator C(v:number){const receiver=this;function read(){return receiver;}const c:C=read();return new C();}}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "inbound property read has no instance",
+      "steps": [
+        {
+          "source": "class C{value:number=1;operator C(v:any){const value:number=this.value;return new C();}}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_PROPERTY_RECEIVER",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "source receiver cannot be undefined",
+      "steps": [
+        {
+          "source": "class S{operator string(){const receiver:undefined=this;return \"ok\";}}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "partial inbound declaration receiver",
+      "steps": [
+        {
+          "source": "class C{}partial class C{operator C(v:any){const receiver:undefined=this;return new C();}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static inbound cannot borrow class receiver",
+      "steps": [
+        {
+          "source": "class C{static value:number=1;static operator C(v:any){const value:number=this.value;return new C();}}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_PROPERTY_RECEIVER",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "parameter initializer observes receiver at invocation",
+      "steps": [
+        {
+          "source": "let result=\"\";class C{operator C(v:any=(result=String(this===undefined))){return new C();}}const raw:any=undefined;const c:C=raw;result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "undefined capture follows existing void inference rule",
+      "steps": [
+        {
+          "source": "class C{operator C(v:any){const receiver=this;function read(){return receiver;}const u:undefined=read();return new C();}}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "arguments": [
+                "\"void\"",
+                "\"undefined\"",
+                "\"read\"",
+                "\"receiver\""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "source body still rejects disjoint receiver comparison",
+      "steps": [
+        {
+          "source": "class S{operator string(){const answer=this===undefined;return \"ok\";}}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_DISJOINT_COMPARISON"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "description": "Inbound conversion receiver checking matches the undefined call receiver without changing source or nested ordinary receiver contracts."
+}
