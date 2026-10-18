@@ -1,7 +1,9 @@
-import { anyType, type TypeRecord, type PropertyTypeRecord } from './records.mts';
+import { anyType, makePrimitive, mentionsTypeParameter, type TypeRecord, type PropertyTypeRecord } from './records.mts';
+import { SameArgumentList } from './relations.mts';
 import { ObjectValue, ReferenceRecord, JSStringValue, EnvironmentRecord, RefBindingHolder,
   EnsureCompletion, Evaluate, GetValue, IsDataDescriptor, type PropertyKeyValue, SymbolValue, NormalCompletion, type Value,
-  type ValueEvaluator, type ParseNode, IsSymbolicPropertyKey, InitializedSymbolKey } from '#self';
+  type ValueEvaluator, type ParseNode, IsSymbolicPropertyKey, InitializedSymbolKey,
+  ClassFamilyOf, NumberValue, isTypedNumber, Value as MakeValue } from '#self';
 
 // These keys are internal completions, immutable bindings or data descriptors, never returned values,
 // function values or shared syntax. A forwarded dependency is only a candidate
@@ -21,26 +23,84 @@ function propertyIdentity(key: PropertyKeyValue): string | SymbolValue {
 }
 
 function sourceNominal(type: TypeRecord | undefined): type is Extract<TypeRecord, { Kind: 'nominal' }> {
-  return type?.Kind === 'nominal' && type.Declaration.type === 'ClassDeclaration'
-    && !type.DeclarationIdentity && type.Arguments.length === 0;
+  return type?.Kind === 'nominal' && type.Declaration.type === 'ClassDeclaration';
 }
 
 /** Complete matching nominal and Symbol-key dependencies in a private view. */
 export function InstantiateReturnDependency(type: TypeRecord, completion?: object): TypeRecord {
   const dependency = completion && forwarded.get(completion);
   const seen = new Map<TypeRecord, Map<TypeRecord | undefined, TypeRecord>>();
-  const complete = (target: TypeRecord, evidence: TypeRecord | undefined): TypeRecord => {
-    if (sourceNominal(target) && !target.Constructor && sourceNominal(evidence)
-        && evidence.Declaration === target.Declaration && evidence.Constructor instanceof ObjectValue) {
-      return { ...target, Constructor: evidence.Constructor };
-    }
-    if (target.Kind !== 'object') return target;
-    let alternatives = seen.get(target);
-    if (!alternatives) seen.set(target, alternatives = new Map());
+  const signatureSeen = new Map<TypeRecord, Map<TypeRecord | undefined, TypeRecord>>();
+  const complete = (target: TypeRecord, evidence: TypeRecord | undefined, signature = false): TypeRecord => {
+    if (target.Kind !== 'object' && target.Kind !== 'function' && !sourceNominal(target)) return target;
+    const memo = signature ? signatureSeen : seen;
+    let alternatives = memo.get(target);
+    if (!alternatives) memo.set(target, alternatives = new Map());
     const prior = alternatives.get(evidence);
     if (prior) return prior;
     const copy = { ...target };
     alternatives.set(evidence, copy);
+    if (sourceNominal(target) && sourceNominal(copy)) {
+      const parameters = (target.Declaration as ParseNode.ClassDeclaration).TypeParameters?.TypeParameterList ?? [];
+      if (!signature) {
+        // A compact number in a TYPE parameter position already means the
+        // literal Number type. Its domain cannot come from a replacement.
+        copy.Arguments = target.Arguments.map((argument, i) => typeof argument === 'number' && parameters[i] && !parameters[i].IsValueParameter
+          ? { Kind: 'literal', Value: MakeValue(argument), Base: makePrimitive('number') } : argument);
+      }
+      const unresolved = copy.Arguments.some((argument, i) => argument !== target.Arguments[i]) ? copy : target;
+      if (target.Constructor || !sourceNominal(evidence)
+        || evidence.Declaration !== target.Declaration || !(evidence.Constructor instanceof ObjectValue)
+        || (target.DeclarationIdentity && target.DeclarationIdentity !== evidence.DeclarationIdentity)
+        || (!signature && target.Arguments.some((argument) => typeof argument !== 'number' && mentionsTypeParameter(argument)))) {
+        alternatives.set(evidence, unresolved);
+        return unresolved;
+      }
+      // Complete nested declaration dependencies before comparing arguments.
+      // Equal source syntax alone never replaces an already completed argument.
+      const arguments_ = copy.Arguments.map((argument, i) => {
+        const supplied = evidence.Arguments[i];
+        if (typeof argument !== 'number') return complete(argument, typeof supplied === 'number' ? undefined : supplied, signature);
+        // A compact checking-time number denotes this exact argument, not an
+        // untyped substitute for a value parameter's admitted numeric domain.
+        // Reify it only from the same declaration position's checked binding.
+        if (typeof supplied === 'number' || supplied?.Kind !== 'literal') return argument;
+        const value = supplied.Value;
+        if (isTypedNumber(value)) {
+          if (!parameters[i]?.IsValueParameter) return argument;
+          const same = typeof value.value === 'bigint'
+            ? Number.isInteger(argument) && BigInt(argument) === value.value : Object.is(argument, value.value);
+          return same ? supplied : argument;
+        }
+        // eslint-disable-next-line @engine262/mathematical-value -- compare the exact stored numeric argument, including negative zero
+        return value instanceof NumberValue && Object.is(argument, value.numberValue()) ? supplied : argument;
+      });
+      if (!SameArgumentList(arguments_, evidence.Arguments, [])) {
+        alternatives.set(evidence, unresolved);
+        return unresolved;
+      }
+      copy.Arguments = arguments_;
+      copy.Constructor = signature ? ClassFamilyOf(evidence.Constructor) : evidence.Constructor;
+      copy.DeclarationIdentity = evidence.DeclarationIdentity;
+      return copy;
+    }
+    if (target.Kind === 'function' && copy.Kind === 'function') {
+      // A single retained callable contract has one corresponding result
+      // position. Its own generic binders remain declarations, not arguments
+      // of the enclosing invocation. Overload correspondence is separate.
+      if (target.Signatures.length !== 1 || evidence?.Kind !== 'function' || evidence.Signatures.length !== 1) return target;
+      const to = target.Signatures[0], from = evidence.Signatures[0];
+      const parameters = to.TypeParameters ?? [], supplied = from.TypeParameters ?? [];
+      if (parameters.length !== supplied.length || parameters.some((parameter, i) => parameter.Declaration !== supplied[i].Declaration)
+        || to.Parameters.some((parameter, i) => parameter.Optional !== from.Parameters[i]?.Optional || parameter.Rest !== from.Parameters[i]?.Rest || parameter.Ref !== from.Parameters[i]?.Ref)
+        || !SameArgumentList(to.Parameters.map((parameter) => parameter.Type), from.Parameters.map((parameter) => parameter.Type), [])) return target;
+      copy.Signatures = [{ ...to,
+        Return: to.Return ? complete(to.Return, from.Return ?? undefined, true) : to.Return,
+        InferredReturn: to.InferredReturn ? complete(to.InferredReturn, from.InferredReturn ?? undefined, true) : to.InferredReturn,
+      }];
+      return copy;
+    }
+    if (target.Kind !== 'object' || copy.Kind !== 'object') return target;
     const contributed = evidence?.Kind === 'object' ? evidence.Properties : [];
     const properties = new Map(contributed.map((property) => [property.key, property]));
     const keys = new Map(contributed.filter((property) => property.keyDependency)
@@ -59,7 +119,7 @@ export function InstantiateReturnDependency(type: TypeRecord, completion?: objec
           key = actual;
         }
       }
-      return { ...property, key, keyDependency, type: complete(property.type, properties.get(key)?.type) };
+      return { ...property, key, keyDependency, type: complete(property.type, properties.get(key)?.type, signature) };
     });
     return copy;
   };
@@ -69,7 +129,7 @@ export function InstantiateReturnDependency(type: TypeRecord, completion?: objec
 /** Called after the ordinary boundary check, with that boundary's target. */
 export function RetainCheckedResult(completion: object | undefined, type: TypeRecord): void {
   if (!completion) return;
-  if (type.Kind === 'object' || (sourceNominal(type) && type.Constructor instanceof ObjectValue)) accepted.set(completion, type);
+  if (type.Kind === 'object' || type.Kind === 'function' || (sourceNominal(type) && type.Constructor instanceof ObjectValue)) accepted.set(completion, type);
   else accepted.delete(completion);
 }
 

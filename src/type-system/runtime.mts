@@ -85,7 +85,7 @@ import { SameType } from './relations.mts';
 import { IsSubtype } from './relations.mts';
 import { CloseInferredNominal } from './inferred-nominals.mts';
 import {
-  ClassDeclarationIdentity, ClassFamilyOf, ClassFamilyIdentityOf, ClassFamilyConstructorOf, DeclaredReferenceLocationType, OrdinaryRestsOf, ScalarRestsOf, ScalarRestShape, type ScalarRestPattern, type ScalarRestStorage,
+  LexicalClassFamily, ClassDeclarationIdentity, ClassFamilyOf, ClassFamilyIdentityOf, ClassFamilyConstructorOf, DeclaredReferenceLocationType, OrdinaryRestsOf, ScalarRestsOf, ScalarRestShape, type ScalarRestPattern, type ScalarRestStorage,
   Call, Get, GetValue, HasProperty, IsCallable, OrdinaryFunctionCreate, R, ResolveBinding, SameValue, surroundingAgent, Throw, ToBoolean, SymbolKeyDependencyOf,
 } from '#self';
 
@@ -5864,14 +5864,16 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
         return makePrimitive('undefined');
       }
       const ref = Q(yield* ResolveTypeName(Value(name)));
-      // The binding is consulted first, since an initialized one carries the
-      // interned Type Object and everything downstream of it. Where it is in
-      // its DEAD ZONE - which a class's own name is for the whole of its
-      // declaration, and a class declared later is until it runs - the
-      // DECLARATION answers instead: #sec-compile-time-evaluability says type
-      // evaluation "reads declarations rather than run-time bindings", and the
-      // dead zone is a property of the binding.
-      const resolved = EnsureCompletion(yield* GetValue(ref));
+      // A source class type denotes its declaration's evaluated family, even
+      // after assignment changes the ordinary value binding. Aliases and
+      // unevaluated declarations retain the existing resolution/TDZ path.
+      const familyDeclaration = ResolveBindingDeclaration(node, name)?.node;
+      const family = familyDeclaration?.type === 'ClassDeclaration' && familyDeclaration === sourceDeclaration
+        ? LexicalClassFamily(sourceDeclaration, surroundingAgent.runningExecutionContext.LexicalEnvironment) : undefined;
+      // Registration precedes field-type evaluation. Until the family has a
+      // published class type, self-references still use the forward/TDZ path.
+      const familyType = family && LookupClassType(family);
+      const resolved = family && isTypeObject(familyType) ? EnsureCompletion(family) : EnsureCompletion(yield* GetValue(ref));
       let declared;
       let declarationRecord: TypeRecord | undefined;
       if (resolved.Type === 'throw') {

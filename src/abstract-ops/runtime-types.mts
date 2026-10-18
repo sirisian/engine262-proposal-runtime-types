@@ -43,7 +43,7 @@ import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime
 import { describeParameters, minimumArity, resolveOverloadChecked, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature, operatorTableKey } from '../type-system/overloads.mts';
 import {
   PlanOrdinaryNominalConversion, OrdinaryRestsOf, ScalarRestsAccept, ScalarRestShape, ScalarRestValues, type ScalarRestStorage, type ScalarRestPattern, type ScalarRestType, ConvertScalarRestItems,
-  wellKnownSymbols, InstantiateReturnDependency, RetainCheckedResult,
+  wellKnownSymbols, InstantiateReturnDependency, RetainCheckedResult, InstantiateCheckedBindings, NormalizeInferredClassArguments,
   SetArrayAdmission, OrdinaryGetOwnProperty, ValidateAndApplyPropertyDescriptor, IsDataDescriptor, Assert, type OrdinaryObject,
   Call, R, Throw, WithoutMetadata, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate, GetValue, Evaluate,
   IsComposite, CompositeFromShape } from '#self';
@@ -5720,8 +5720,13 @@ export function* EnforceReturnType(fn: AnnotatedFunction, value: Value, completi
     // the published type is a claim nothing verifies: the checker hands it to
     // every caller and no boundary ever tests that the value leaving the
     // function is of it.
-    const symbolic = publishedReturnTypeOfFunction(fn, currentTypeParameterFrame());
-    const published = symbolic && InstantiateReturnDependency(symbolic, completion);
+    let symbolic = publishedReturnTypeOfFunction(fn, currentTypeParameterFrame());
+    if (symbolic) {
+      symbolic = Q(yield* NormalizeInferredClassArguments(symbolic));
+    }
+    const dependency = symbolic && InstantiateReturnDependency(symbolic, completion);
+    const published = dependency && InstantiateCheckedBindings(new Map([['result', dependency]]),
+      surroundingAgent.runningExecutionContext.LexicalEnvironment).get('result');
     if (published && published.Kind !== 'void') {
       // `void` is vacuous here for the reason #sec-void-type gives for a
       // declared one: it constrains the consumer, not the value leaving.

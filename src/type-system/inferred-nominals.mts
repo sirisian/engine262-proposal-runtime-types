@@ -3,6 +3,8 @@ import { DeclarativeEnvironmentRecord, GlobalEnvironmentRecord, type Environment
 import { ObjectValue, Value } from '../value.mts';
 import { ResolveBindingDeclaration } from './compile-time-evaluability.mts';
 import type { TypeRecord } from './records.mts';
+import { SameArgumentList } from './relations.mts';
+import { InstantiateCheckedBindings } from './checked-bindings.mts';
 import { LookupClassType, isTypeObject } from '#self';
 
 // Read only ordinary, initialized value bindings. In particular, this operation
@@ -90,14 +92,16 @@ function sourcesOf(body: ParseNode): readonly ForwardingSource[] | undefined {
   return sources.length ? sources : undefined;
 }
 
-/** Close a non-generic source class from its declaring context, never a result. */
+/** Close a source class from its declaring context, never a returned value. */
 export function CloseInferredNominal(type: TypeRecord, value: unknown,
   publication: (fn: unknown) => TypeRecord | undefined): TypeRecord {
-  if (type.Kind !== 'nominal' || type.Constructor || type.DeclarationIdentity || type.Arguments.length
+  if (type.Kind !== 'nominal' || type.Constructor || type.DeclarationIdentity
     || type.Declaration.type !== 'ClassDeclaration') return type;
   const seen = new Set<unknown>();
   const pending: unknown[] = [value];
   let constructor: ObjectValue | undefined;
+  let declarationIdentity: object | undefined;
+  let arguments_: readonly (TypeRecord | number)[] | undefined;
   const admitConstructor = (candidate: ObjectValue): boolean => {
     if (constructor && constructor !== candidate) return false;
     constructor = candidate;
@@ -117,11 +121,28 @@ export function CloseInferredNominal(type: TypeRecord, value: unknown,
         const dependency = bindingValue(fn.Environment, source.reference.name, true);
         const result = dependency instanceof ObjectValue ? publication(dependency) : undefined;
         if (result?.Kind !== 'nominal' || result.Declaration !== type.Declaration
-          || result.Arguments.length || result.DeclarationIdentity) return type;
+          || !SameArgumentList(result.Arguments, type.Arguments, [])) return type;
         if (result.Constructor instanceof ObjectValue) {
           if (!admitConstructor(result.Constructor)) return type;
+          if (declarationIdentity && declarationIdentity !== result.DeclarationIdentity) return type;
+          declarationIdentity = result.DeclarationIdentity;
+          if (arguments_ && !SameArgumentList(arguments_, result.Arguments, [])) return type;
+          arguments_ = result.Arguments;
         } else pending.push(dependency);
       }
+      continue;
+    }
+    if (type.Declaration.TypeParameters?.TypeParameterList.length) {
+      // The family belongs to the declaration's lexical activation. This pure
+      // completion neither reads a mutable class name nor evaluates a class
+      // specialization. Existing admission handles any required evaluation.
+      const closed = InstantiateCheckedBindings(new Map([['result', type]]), fn.Environment).get('result')!;
+      if (closed.Kind !== 'nominal' || !(closed.Constructor instanceof ObjectValue)
+        || !admitConstructor(closed.Constructor)) return type;
+      if (declarationIdentity && declarationIdentity !== closed.DeclarationIdentity) return type;
+      declarationIdentity = closed.DeclarationIdentity;
+      if (arguments_ && !SameArgumentList(arguments_, closed.Arguments, [])) return type;
+      arguments_ = closed.Arguments;
       continue;
     }
     const name: string | undefined = (type.Declaration as ParseNode.ClassDeclaration).BindingIdentifier?.name;
@@ -131,5 +152,5 @@ export function CloseInferredNominal(type: TypeRecord, value: unknown,
       || bound.TypeRecord.Declaration !== type.Declaration || bound.TypeRecord.Arguments.length
       || !admitConstructor(ctor)) return type;
   }
-  return constructor ? { ...type, Constructor: constructor } : type;
+  return constructor ? { ...type, Constructor: constructor, DeclarationIdentity: declarationIdentity, Arguments: arguments_ ?? type.Arguments } : type;
 }

@@ -1,0 +1,787 @@
+{
+  "cases": [
+    {
+      "name": "generic nominal direct result",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const p=choose(false);p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic nominal named object path",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const h={result:choose(false)};const p=h.result;p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct closure",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const p=b(\"x\");p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct closure erased destination",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const p:any=b(\"x\");p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selector erased destination",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const p:any=choose(false);p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selector no destination",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}choose(false).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same captured source forwarding",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const b=make(\"b\");function forward(){return b(\"x\");}const p=forward();p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const p=choose(true);p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a:a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested named paths",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const h={left:{p:choose(true)},right:{p:choose(false)}};h.left.p.tag+h.right.p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab:ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Symbol named path",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");const h={[k]:choose(false)};h[k].tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "getter result",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const h={get p(){return choose(false);}};const p=h.p;p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "array extracted result",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const [p]=[choose(false)];p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written return annotation",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any):P.<uint8>=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const p=choose(false);p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection before call",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const target=Reflect.getReflection(Reflect.typeOf(b)).signatures[0].return.type;const p:any=b(\"x\");String(p instanceof target)+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection two activations",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const ta=Reflect.getReflection(Reflect.typeOf(a)).signatures[0].return.type;const tb=Reflect.getReflection(Reflect.typeOf(b)).signatures[0].return.type;const p:any=b(\"x\");String(p instanceof ta)+\":\"+String(p instanceof tb)+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false:true:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same spelling caller class",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function call(){class P<T:type>{tag:string=\"wrong\";}const p=choose(false);return p.tag;}call()+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic closure distinct arguments",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T:type>{tag:string=tag;value:T;constructor(v:T){this.value=v;log+=tag;}}return function get<T:type>(v:any){const p:P.<T>=v;return p;};}const f=make(\"a\"),g=make(\"b\");const h={n:f.<uint8>(1),s:f.<string>(\"x\")};String(h.n.value)+h.s.value+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1x:aa"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic closure distinct families and arguments",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T:type>{tag:string=tag;value:T;constructor(v:T){this.value=v;log+=tag;}}return function get<T:type>(v:any){const p:P.<T>=v;return p;};}const f=make(\"a\"),g=make(\"b\");const h={n:f.<uint8>(1),s:g.<string>(\"x\")};String(h.n.value)+h.s.value+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1x:ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic forwarding selected activation",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T:type>{tag:string=tag;value:T;constructor(v:T){this.value=v;log+=tag;}}return function get<T:type>(v:any){const p:P.<T>=v;return p;};}const f=make(\"a\"),g=make(\"b\");function select<T:type>(flag:boolean,v:T){if(flag)return f.<T>(v);return g.<T>(v);}const h={n:select.<uint8>(false,1),s:select.<string>(true,\"x\")};String(h.n.value)+h.s.value+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1x:ba"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong activation after ordinary alias write",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const h={p:a(\"x\")};function change(o:any,v:any){o.p=v;}change(h,b(\"x\"));try{const p=h.p;\"accepted\";}catch(e){e.name+\":\"+log;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong arguments after ordinary alias write",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{value:T;constructor(v:T){this.value=v;}}const x:any=1,y:any=\"x\";const n:P.<uint8>=x;const s:P.<string>=y;const h={p:n};function change(o:any){o.p=s;}change(h);try{const p=h.p;return \"accepted\";}catch(e){return e.name;}}make();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written member any erases evidence",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const h:{p:any}={p:choose(false)};const p=h.p;p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "raw literal projection",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(){return ({p:choose(false)}).p;}const p=use();p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "immutable result alias chain",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const p=choose(false),q=p,r=q;r.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured immutable callee alias chain",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const b=make(\"b\");function use(){const x=b,y=x;return y(\"x\");}const p=use();p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "recursive selected result",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(n:uint8){if(n>0)return use(0);return choose(false);}const p=use(1);p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "returned binding copied by spread",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const source={p:choose(false)};const h={...source};const p=h.p;p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "returned binding copied by rest",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const source={p:choose(false),drop:1};const {drop,...h}=source;const p=h.p;p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written callback erasure remains ordinary",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const b:any=make(\"b\");const p:any=b(\"x\");p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured class binding replacement preserves type",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{tag:string=\"original\";constructor(v:string){}}const read=(v:any)=>{const p:P.<uint8>=v;return p;};class Other<T:type>{tag:string=\"replacement\";constructor(v:string){}}P=Other;return read;}const f=make();const p=f(\"x\");p.tag;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "original"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection does not evaluate static block",
+      "steps": [
+        {
+          "source": "let events=\"\";function make(){class P<T:type>{static{events+=\"s\";}constructor(v:string){events+=\"c\";}}return (v:any)=>{const p:P.<uint8>=v;return p;};}const f=make();const before=events;Reflect.getReflection(Reflect.typeOf(f));String(before===events);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection type stable after application",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P<T: type>{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const before=Reflect.getReflection(Reflect.typeOf(b)).signatures[0].return.type;const p:any=b(\"x\");const after=Reflect.getReflection(Reflect.typeOf(b)).signatures[0].return.type;String(before===after)+\":\"+String(p instanceof before)+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true:true:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured outer generic type binds inner class",
+      "steps": [
+        {
+          "source": "function make<U:type>(saved:U){class P<T:type>{value:U=saved;constructor(v:string){}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make.<string>(\"x\"),b=make.<number>(2);function take<V:type>(){return b(\"y\");}const p=take.<boolean>();String(p.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured value parameter with generic result",
+      "steps": [
+        {
+          "source": "function make<N:uint32>(){class P<T:type>{n:uint32=N;constructor(v:string){}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make.<3>(),b=make.<7>();function take(){return b(\"y\");}const p=take();String(p.n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value generic class arguments",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{n:uint32=N;constructor(v:string){}}return(v:any)=>{const p:P.<3>=v;return p;};}const f=make();function take(){return f(\"x\");}const p=take();String(p.n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "literal generic class arguments",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{value:T;constructor(v:T){this.value=v;}}return(v:any)=>{const p:P.<\"x\">=v;return p;};}const f=make();function take(){return f(\"x\");}const p=take();p.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "x"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested generic class argument",
+      "steps": [
+        {
+          "source": "class C<T:type>{}function make(){class P<T:type>{tag:string=\"ok\";constructor(v:string){}}return(v:any)=>{const p:P.<C.<uint8>>=v;return p;};}const f=make();function take(){return f(\"x\");}const p=take();p.tag;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "recursive factory selected closure",
+      "steps": [
+        {
+          "source": "function make(n:uint8){class P<T:type>{n:uint8=n;constructor(v:string){}}if(n>0)return make(0);return(v:any)=>{const p:P.<uint8>=v;return p;};}const f=make(1);const p=f(\"x\");String(p.n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "recursive factory selected generic closure",
+      "steps": [
+        {
+          "source": "function make(n:uint8){class P<T:type>{n:uint8=n;constructor(v:string){}}if(n>0)return make(0);return function f<T:type>(v:any){const p:P.<T>=v;return p;};}const f=make(1);const p=f.<uint8>(\"x\");String(p.n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "recursive factory erased receiving binding control",
+      "steps": [
+        {
+          "source": "function make(n:uint8){class P<T:type>{n:uint8=n;constructor(v:string){}}if(n>0)return make(0);return(v:any)=>{const p:P.<uint8>=v;return p;};}const f:any=make(1);const p:any=f(\"x\");String(p.n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "returned callable alias view",
+      "steps": [
+        {
+          "source": "function make(n:uint8){class P<T:type>{n:uint8=n;constructor(v:string){}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const f=make(1),g=make(2);const alias=f;const p=alias(\"x\"),q=g(\"y\");String(p.n)+String(q.n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "12"
+          }
+        }
+      ]
+    },
+    {
+      "name": "returned callable nested object view",
+      "steps": [
+        {
+          "source": "function make(n:uint8){class P<T:type>{n:uint8=n;constructor(v:string){}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const h={a:{f:make(1)},b:{f:make(2)}};const p=h.a.f(\"x\"),q=h.b.f(\"y\");String(p.n)+String(q.n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "12"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same named generic caller does not replace captured class argument",
+      "steps": [
+        {
+          "source": "function make<T:type>(){class P<U:type>{value:T;constructor(v:T){this.value=v;}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const f=make.<string>();function call<T:type>(){return f(\"x\");}const p=call.<boolean>();p.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "x"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic local class specialization case result",
+      "steps": [
+        {
+          "source": "function make(n:uint8){class P<T:type>{n:uint8=n;constructor(v:string){}}class P<string>{n:uint8=n+1;constructor(v:string){}}return(v:any)=>{const p:P.<string>=v;return p;};}const f=make(1);function use(){return f(\"x\");}const p=use();String(p.n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default generic class argument result",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type=string>{value:T;constructor(v:T){this.value=v;}}return(v:any)=>{const p:P=v;return p;};}const f=make();function use(){return f(\"x\");}const p=use();p.value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "x"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic result failure leaves prior binding",
+      "steps": [
+        {
+          "source": "function make(n:uint8){class P<T:type>{n:uint8=n;constructor(v:string){}}return(v:any)=>{const p:P.<uint8>=v;return p;};}const a=make(1),b=make(2);const seed={p:a(\"x\")};function mutate(o:any){o.p=b(\"y\");}mutate(seed);const bad=seed.p;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "String(seed.p.n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        },
+        {
+          "source": "bad;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "ReferenceError"
+          }
+        },
+        {
+          "source": "const next=a(\"z\");String(next.n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested local generic argument from same activation",
+      "steps": [
+        {
+          "source": "function make(n:uint8){class C<T:type>{}class P<T:type>{n:uint8=n;constructor(v:string){}}return(v:any)=>{const p:P.<C.<uint8>>=v;return p;};}const a=make(1),b=make(2);function choose(){return b(\"x\");}const p=choose();String(p.n);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested nominal argument identity distinguishes activations",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(n:uint8){class C<T:type>{}return(v:any)=>{const p:P.<C.<uint8>>=v;return p;};}const a=make(1),b=make(2);const h={p:a(\"x\")};function mutate(o:any){o.p=b(\"y\");}mutate(h);try{const p=h.p;\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source class type versus ordinary class value",
+      "steps": [
+        {
+          "source": "class P<T:type>{tag:string=\"original\";constructor(v:string){}}class Other<T:type>{tag:string=\"other\";constructor(v:string){}}P=Other;const v:any=\"x\";const p:P.<uint8>=v;const q:any=new P.<uint8>(\"y\");p.tag+\":\"+q.tag;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "original:other"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nearer const class alias retains its target",
+      "steps": [
+        {
+          "source": "class P<T:type>{tag:string=\"outer\";constructor(v:string){}}class Other<T:type>{tag:string=\"alias\";constructor(v:string){}}function read(){const P=Other;const v:any=\"x\";const p:P.<uint8>=v;return p;}const p=read();p.tag;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "alias"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value generic different arguments stay distinct",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{n:uint32=N;constructor(v:string){}}const a=(v:any)=>{const p:P.<3>=v;return p;};const b=(v:any)=>{const p:P.<7>=v;return p;};const h={p:a(\"x\")};function mutate(o:any){o.p=b(\"y\");}mutate(h);try{const p=h.p;return \"accepted\";}catch(e){return e.name;}}make();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide value generic arguments stay distinct",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint64>{n:uint64=N;constructor(v:string){}}const a=(v:any)=>{const p:P.<3>=v;return p;};const b=(v:any)=>{const p:P.<7>=v;return p;};const h={p:a(\"x\")};function mutate(o:any){o.p=b(\"y\");}mutate(h);try{const p=h.p;return \"accepted\";}catch(e){return e.name;}}make();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric literal type argument in named object result",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{value:T;constructor(v:T){this.value=v;}}return(v:any)=>{const p:P.<3>=v;return p;};}const f=make();const h={p:f(3)};String(h.p.value);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "numeric literal type argument domain remains authoritative",
+      "steps": [
+        {
+          "source": "type Narrow=Reflect.makeType({kind:\"literal\",value:uint8(3),base:type uint8});class P<T:type>{constructor(v:string){}}function first(v:any){const p:P.<3>=v;return p;}function second(v:any){const p:P.<Narrow>=v;return p;}const bag={f:first};function mutate(o:any){o.f=second;}mutate(bag);try{const h={p:bag.f(\"x\")};\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    }
+  ]
+}

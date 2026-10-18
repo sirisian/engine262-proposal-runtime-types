@@ -137,3 +137,5 @@ export { InstantiateCheckedBindings } from './type-system/checked-bindings.mts';
 export { LexicalClassFamily, SpecializedClassConstructor } from './runtime-semantics/RuntimeTypesDeclarations.mts';
 
 export * from './type-system/symbol-key-dependencies.mts';
+
+export { NormalizeInferredClassArguments } from './type-system/inferred-binding.mts';

@@ -3,11 +3,25 @@ import type { PlainEvaluator } from '../evaluator.mts';
 import { Value } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { RequireType } from '../abstract-ops/runtime-types.mts';
-import { IsOfType, BindTypeArgumentRecords, toNumericArgument, currentTypeParameterFrame } from './runtime.mts';
+import { IsOfType, BindTypeArgumentRecords, currentTypeParameterFrame } from './runtime.mts';
 import { InferredConstTypeOf } from './check.mts';
 import { substituteParametersNamed } from './unify.mts';
 import { makePrimitive, type TypeRecord } from './records.mts';
-import { InstantiateReturnDependency, ForwardResultDependency, RetainCheckedResult, CheckedPropertyKeyOf } from '#self';
+import { InstantiateReturnDependency, ForwardResultDependency, RetainCheckedResult, CheckedPropertyKeyOf, InstantiateCheckedBindings, surroundingAgent } from '#self';
+
+/** Reify the checker's compact numeric arguments before runtime admission. */
+export function* NormalizeInferredClassArguments(target: TypeRecord): PlainEvaluator<TypeRecord> {
+  if (target.Kind === 'nominal' && !target.LibraryName) {
+    const typeParameters = (target.Declaration as ParseNode.ClassDeclaration | undefined)?.TypeParameters?.TypeParameterList;
+    if (typeParameters?.length && target.Arguments.length) {
+      const argumentsAsTypes = target.Arguments.map((arg) => typeof arg === 'number'
+        ? { Kind: 'literal', Value: Value(arg), Base: makePrimitive('number') } as TypeRecord : arg);
+      const bound = Q(yield* BindTypeArgumentRecords(typeParameters, argumentsAsTypes, [], 'inferred const'));
+      target = { ...target, Arguments: bound };
+    }
+  }
+  return target;
+}
 
 /** The inferred initialization boundary, shared by plain and extracted bindings. */
 export function* EnforceInferredBinding(node: object, value: Value, initializer?: ParseNode | null, completion?: object): PlainEvaluator<{ value: Value, type?: TypeRecord }> {
@@ -15,16 +29,9 @@ export function* EnforceInferredBinding(node: object, value: Value, initializer?
   if (!inferred) return { value };
   const parameters = currentTypeParameterFrame();
   let target = parameters ? (substituteParametersNamed(inferred, parameters) ?? inferred) : inferred;
+  target = Q(yield* NormalizeInferredClassArguments(target));
   if (completion) target = InstantiateReturnDependency(target, ForwardResultDependency(completion, completion));
-  if (target.Kind === 'nominal' && !target.LibraryName) {
-    const typeParameters = (target.Declaration as ParseNode.ClassDeclaration | undefined)?.TypeParameters?.TypeParameterList;
-    if (typeParameters?.length && target.Arguments.length) {
-      const argumentsAsTypes = target.Arguments.map((arg) => typeof arg === 'number'
-        ? { Kind: 'literal', Value: Value(arg), Base: makePrimitive('number') } as TypeRecord : arg);
-      const bound = Q(yield* BindTypeArgumentRecords(typeParameters, argumentsAsTypes, [], 'inferred const'));
-      target = { ...target, Arguments: bound.map(toNumericArgument) };
-    }
-  }
+  target = InstantiateCheckedBindings(new Map([['result', target]]), surroundingAgent.runningExecutionContext.LexicalEnvironment).get('result')!;
   // Const stabilizes its destination, not a replaceable callee or property
   // used by the initializer. Keep the initialization boundary.
   let writtenInitializer = initializer;
