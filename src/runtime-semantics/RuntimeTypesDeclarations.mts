@@ -43,7 +43,7 @@ import { OriginOfNode, RecordTypeOrigin, RecordDeclaredMemberOrigins } from '../
 import { BindTypeParameterTyped, toNumericArgument,
   GenericAliasDeclarationShape, InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord, spreadElementsOf,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
-import { currentTypeParameterFrame, BindTypeArgumentsInto, MetadataObjectFromType } from '../type-system/runtime.mts';
+import { currentTypeParameterFrame, BindTypeArgumentsInto, MetadataObjectFromType, publishedReturnTypeOfFunction } from '../type-system/runtime.mts';
 import { InferGenericBindings, TakePendingCalleeContext, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import { bindLibraryTypeArguments, RememberLibraryApplication } from '../type-system/library-type-arguments.mts';
 import { classTypeParameterFrame } from './CallExpression.mts';
@@ -68,7 +68,7 @@ import { ClassDefinitionEvaluation, PartialClassMergeEvaluation } from './ClassD
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
 import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
-import { EnvironmentRecord, RefBindingHolder, Assert, OrdinaryObjectCreate, CreateDataProperty, InCapturedTypeContext, BindTypeArgumentRecordsInto, specializationDepthExhausted, type CapturedTypeContext } from '#self';
+import { EnvironmentRecord, RefBindingHolder, Assert, OrdinaryObjectCreate, CreateDataProperty, InCapturedTypeContext, BindTypeArgumentRecordsInto, specializationDepthExhausted, CompleteSpecializationResult, type CapturedTypeContext } from '#self';
 import { ClaimMetaKey, MetaTypeClaiming, CreateDataPropertyOrThrow, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaShape, NormalizeMetadataRecord, MetadataSatisfiesShape, RegisterMetaHook, RegisterMetaTypeName, RegisterMetaTypeParameterName, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
 
 /**
@@ -2769,7 +2769,7 @@ export function* SpecializeGenericFunction(fn: ObjectValue, ref: unknown, node: 
     const specialized = CreateBuiltinFunction(function* SpecializedCall(args: Arguments, context: { thisValue?: Value }): ValueEvaluator {
       pushTypeParameterFrame(frame);
       try {
-        return Q(yield* Call(fn, context.thisValue ?? Value.undefined, Array.from(args, (a) => a ?? Value.undefined)));
+        return yield* Call(fn, context.thisValue ?? Value.undefined, Array.from(args, (a) => a ?? Value.undefined));
       } finally {
         popTypeParameterFrame();
       }
@@ -2786,7 +2786,9 @@ export function* SpecializeGenericFunction(fn: ObjectValue, ref: unknown, node: 
           bindings.set(tp.Parameter, b);
         }
       }
-      const generic = { Kind: 'function', Signatures: [{ Parameters: sig.Parameters, Return: sig.ReturnType ?? null, Narrows: sig.Narrows, TypeParameters: sig.TypeParameters }] } as unknown as TypeRecord;
+      const generic = { Kind: 'function', Signatures: [{ Parameters: sig.Parameters,
+        Return: sig.ReturnType ?? publishedReturnTypeOfFunction(fn, frame) ?? null,
+        Narrows: sig.Narrows, TypeParameters: sig.TypeParameters }] } as unknown as TypeRecord;
       RegisterSpecializedFunctionType(specialized as unknown as object, substituteParameterRecords(generic, bindings));
     }
     table.set(key, specialized);
@@ -2878,12 +2880,12 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
       const choice = Q(yield* SelectExplicitCase(caseMembers, node.TypeArguments.TypeArgumentList as unknown as ParseNode[], groupName, undefined,
         classFrameOfObject((ref as { Base?: unknown } | undefined)?.Base)));
       if (!choice.owner && choice.frame) {
-        return StoredCaseValue(choice.fn, choice.frame, groupName, value);
+        return CompleteSpecializationResult(StoredCaseValue(choice.fn, choice.frame, groupName, value));
       }
       const specialized = Q(yield* SpecializeGenericFunction(choice.fn as ObjectValue, inspected.Value, node, functionTypeParameters(choice.fn as never) ?? [], choice.frame));
       // The owner's fallback records its group, for reflection.
       RecordSelection(specialized as Value, value, choice.fn, undefined);
-      return specialized;
+      return CompleteSpecializationResult(specialized);
     }
     // A GENERIC FUNCTION (a declaration or a method with its own type
     // parameters) applied in expression position is its specialization value.
@@ -2896,7 +2898,8 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
     // by the explicit call alone).
     const kindedFn = fnParams?.some((q) => ((q as { Arity?: number }).Arity ?? 0) > 0) ?? false;
     if (!asCallee && !kindedFn && fnParams && fnParams.length > 0 && !LookupClassType(value as unknown as object)) {
-      return Q(yield* SpecializeGenericFunction(value, inspected.Value, node, fnParams));
+      const specialized = Q(yield* SpecializeGenericFunction(value, inspected.Value, node, fnParams));
+      return CompleteSpecializationResult(specialized);
     }
     if (fnParams?.length && !LookupClassType(value as unknown as object)) return ref;
     // MakeOverloadedFunction's dispatcher keeps the declarations in its slots;

@@ -87,6 +87,7 @@ import { CloseInferredNominal } from './inferred-nominals.mts';
 import {
   LexicalClassFamily, ClassDeclarationIdentity, ClassFamilyOf, ClassFamilyIdentityOf, ClassFamilyConstructorOf, DeclaredReferenceLocationType, OrdinaryRestsOf, ScalarRestsOf, ScalarRestShape, type ScalarRestPattern, type ScalarRestStorage,
   Call, Get, GetValue, HasProperty, IsCallable, OrdinaryFunctionCreate, R, ResolveBinding, SameValue, surroundingAgent, Throw, ToBoolean, SymbolKeyDependencyOf,
+  NormalCompletion, RetainCheckedResult,
 } from '#self';
 
 /**
@@ -2431,6 +2432,19 @@ export function ResolveTypeName(name: JSStringValue) {
 const specializedFunctionTypes = new WeakMap<object, TypeRecord>();
 export function RegisterSpecializedFunctionType(fn: object, record: TypeRecord): void {
   specializedFunctionTypes.set(fn, record);
+}
+
+/** The successful application owns its selected declaration's contract.
+ * This is called only by specialization evaluation, not by admission of an
+ * arbitrary callable. Cache hits still produce a fresh completion dependency.
+ */
+export function CompleteSpecializationResult(value: Value): NormalCompletion<Value> {
+  const result = NormalCompletion(value);
+  const contract = value instanceof ObjectValue
+    ? specializedFunctionTypes.get(value) ?? (SelectionOfValue(value)?.frame ? SignatureTypeOf(value) : undefined)
+    : undefined;
+  if (contract) RetainCheckedResult(result, contract);
+  return result;
 }
 
 /** Read completed call metadata without deriving a type or evaluating annotations. */

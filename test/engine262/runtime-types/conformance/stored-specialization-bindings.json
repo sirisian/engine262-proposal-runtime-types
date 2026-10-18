@@ -1,0 +1,704 @@
+{
+  "cases": [
+    {
+      "name": "case inferred declaration direct",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const selected=f.<uint8>;const result=selected(1);const again=f.<uint8>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(1)))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "case inferred declaration parenthesized",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const selected=((f.<uint8>));const result=selected(1);const again=f.<uint8>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(1)))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "case inferred expression direct",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const selected=f.<uint8>;const result=selected(1);const again=f.<uint8>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(1)))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "case inferred expression parenthesized",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const selected=((f.<uint8>));const result=selected(1);const again=f.<uint8>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(1)))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "case written declaration direct",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8):C{return new C();}return f;}const f=make();const selected=f.<uint8>;const result=selected(1);const again=f.<uint8>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(1)))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "case written declaration parenthesized",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8):C{return new C();}return f;}const f=make();const selected=((f.<uint8>));const result=selected(1);const again=f.<uint8>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(1)))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "case written expression direct",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8):C{return new C();}return f;}const f=make();const selected=f.<uint8>;const result=selected(1);const again=f.<uint8>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(1)))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "case written expression parenthesized",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8):C{return new C();}return f;}const f=make();const selected=((f.<uint8>));const result=selected(1);const again=f.<uint8>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(1)))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "owner inferred declaration direct",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const selected=f.<string>;const result=selected(\"x\");const again=f.<string>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(\"x\")))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "owner inferred declaration parenthesized",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const selected=((f.<string>));const result=selected(\"x\");const again=f.<string>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(\"x\")))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "owner inferred expression direct",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const selected=f.<string>;const result=selected(\"x\");const again=f.<string>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(\"x\")))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "owner inferred expression parenthesized",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const selected=((f.<string>));const result=selected(\"x\");const again=f.<string>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(\"x\")))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "owner written declaration direct",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T):C{return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const selected=f.<string>;const result=selected(\"x\");const again=f.<string>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(\"x\")))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "owner written declaration parenthesized",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T):C{return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const selected=((f.<string>));const result=selected(\"x\");const again=f.<string>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(\"x\")))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "owner written expression direct",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f<T:type>(v:T):C{return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const selected=f.<string>;const result=selected(\"x\");const again=f.<string>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(\"x\")))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "owner written expression parenthesized",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f<T:type>(v:T):C{return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const selected=((f.<string>));const result=selected(\"x\");const again=f.<string>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(\"x\")))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain inferred declaration direct",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}return f;}const f=make();const selected=f.<uint8>;const result=selected(1);const again=f.<uint8>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(1)))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain inferred declaration parenthesized",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}return f;}const f=make();const selected=((f.<uint8>));const result=selected(1);const again=f.<uint8>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(1)))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain inferred expression direct",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f<T:type>(v:T){return new C();}return f;}const f=make();const selected=f.<uint8>;const result=selected(1);const again=f.<uint8>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(1)))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain inferred expression parenthesized",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f<T:type>(v:T){return new C();}return f;}const f=make();const selected=((f.<uint8>));const result=selected(1);const again=f.<uint8>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(1)))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain written declaration direct",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T):C{return new C();}return f;}const f=make();const selected=f.<uint8>;const result=selected(1);const again=f.<uint8>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(1)))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain written declaration parenthesized",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T):C{return new C();}return f;}const f=make();const selected=((f.<uint8>));const result=selected(1);const again=f.<uint8>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(1)))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain written expression direct",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f<T:type>(v:T):C{return new C();}return f;}const f=make();const selected=f.<uint8>;const result=selected(1);const again=f.<uint8>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(1)))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain written expression parenthesized",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f<T:type>(v:T):C{return new C();}return f;}const f=make();const selected=((f.<uint8>));const result=selected(1);const again=f.<uint8>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(1)))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "case forwarding selection",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}function select(){const f=make();return f.<uint8>;}function forward(){return select();}const selected=forward();const result=selected(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "case binding alias",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const first=f.<uint8>;const alias=first;const result=alias(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "case distinct activations",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make(),g=make();const a=f.<uint8>,b=g.<uint8>;if(a===b)throw new Error(\"selection\");const x=a(1),y=b(1);if(Reflect.typeOf(x)===Reflect.typeOf(y))throw new Error(\"activation\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "case reflection captured result",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const selected=f.<uint8>;const signature=Reflect.typeOf(selected);const x=selected(1);if(Reflect.getReflection(signature).signatures[0].return.type!==Reflect.typeOf(x))throw new Error(\"result type\");if(Reflect.typeOf(selected)!==signature)throw new Error(\"stable\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "case same activation replacement",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make(),g=make();const a=f.<uint8>,b=g.<uint8>;const h={selected:a};function replace(o:any){o.selected=a;}replace(h);let rejected=false;try{const selected=h.selected;const x=selected(1);}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(rejected!==false)throw new Error(\"admission\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "case wrong activation replacement",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make(),g=make();const a=f.<uint8>,b=g.<uint8>;const h={selected:a};function replace(o:any){o.selected=b;}replace(h);let rejected=false;try{const selected=h.selected;const x=selected(1);}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(rejected!==true)throw new Error(\"admission\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "owner forwarding selection",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}function select(){const f=make();return f.<string>;}function forward(){return select();}const selected=forward();const result=selected(\"x\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "owner binding alias",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const first=f.<string>;const alias=first;const result=alias(\"x\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "owner distinct activations",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make(),g=make();const a=f.<string>,b=g.<string>;if(a===b)throw new Error(\"selection\");const x=a(\"x\"),y=b(\"x\");if(Reflect.typeOf(x)===Reflect.typeOf(y))throw new Error(\"activation\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "owner reflection captured result",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const selected=f.<string>;const signature=Reflect.typeOf(selected);const x=selected(\"x\");if(Reflect.getReflection(signature).signatures[0].return.type!==Reflect.typeOf(x))throw new Error(\"result type\");if(Reflect.typeOf(selected)!==signature)throw new Error(\"stable\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "owner same activation replacement",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make(),g=make();const a=f.<string>,b=g.<string>;const h={selected:a};function replace(o:any){o.selected=a;}replace(h);let rejected=false;try{const selected=h.selected;const x=selected(\"x\");}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(rejected!==false)throw new Error(\"admission\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "owner wrong activation replacement",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make(),g=make();const a=f.<string>,b=g.<string>;const h={selected:a};function replace(o:any){o.selected=b;}replace(h);let rejected=false;try{const selected=h.selected;const x=selected(\"x\");}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(rejected!==true)throw new Error(\"admission\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain forwarding selection",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}return f;}function select(){const f=make();return f.<uint8>;}function forward(){return select();}const selected=forward();const result=selected(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain binding alias",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}return f;}const f=make();const first=f.<uint8>;const alias=first;const result=alias(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain distinct activations",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}return f;}const f=make(),g=make();const a=f.<uint8>,b=g.<uint8>;if(a===b)throw new Error(\"selection\");const x=a(1),y=b(1);if(Reflect.typeOf(x)===Reflect.typeOf(y))throw new Error(\"activation\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain reflection captured result",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}return f;}const f=make();const selected=f.<uint8>;const signature=Reflect.typeOf(selected);const x=selected(1);if(Reflect.getReflection(signature).signatures[0].return.type!==Reflect.typeOf(x))throw new Error(\"result type\");if(Reflect.typeOf(selected)!==signature)throw new Error(\"stable\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain same activation replacement",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}return f;}const f=make(),g=make();const a=f.<uint8>,b=g.<uint8>;const h={selected:a};function replace(o:any){o.selected=a;}replace(h);let rejected=false;try{const selected=h.selected;const x=selected(1);}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(rejected!==false)throw new Error(\"admission\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain wrong activation replacement",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}return f;}const f=make(),g=make();const a=f.<uint8>,b=g.<uint8>;const h={selected:a};function replace(o:any){o.selected=b;}replace(h);let rejected=false;try{const selected=h.selected;const x=selected(1);}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(rejected!==true)throw new Error(\"admission\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selection and reflection do not run body",
+      "steps": [
+        {
+          "source": "let calls=0;function make(){class C{}function f<T:type>(v:T){calls++;return new C();}function f<uint8>(v:uint8){calls++;return new C();}return f;}const f=make();const a=f.<uint8>,b=f.<string>;Reflect.typeOf(a);Reflect.typeOf(b);if(calls!==0)throw new Error(\"executed\");const x=a(1),y=b(\"x\");if(calls!==2)throw new Error(\"count\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit any remains erased",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T):any{return new C();}return f;}const f=make();const selected=f.<uint8>;if(Reflect.getReflection(Reflect.typeOf(selected)).signatures[0].return.type!==any)throw new Error(\"erasure\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured application type argument",
+      "steps": [
+        {
+          "source": "class P<T:type>{}function make<T:type>(){class C{}function f<U:type>(v:U){return new P.<T>();}return f;}const f=make.<uint8>();const selected=f.<string>;const x=selected(\"x\");if(!(x instanceof P.<uint8>))throw new Error(\"capture\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic default specialization",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type=uint8>(v:T){return new C();}return f;}const f=make();const a=f.<>;const b=f.<uint8>;if(a!==b)throw new Error(\"default\");const x=a(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "case wrapper abrupt result cleanup",
+      "steps": [
+        {
+          "source": "let calls=0;function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){calls++;throw new Error(\"body\");return new C();}return f;}const f=make();const bad=f.<uint8>,good=f.<string>;let rejected=false;try{bad(1);}catch(e){if(e.message!==\"body\")throw e;rejected=true;}if(!rejected||calls!==1)throw new Error(\"effects\");const x=good(\"x\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain specialization finalizer once",
+      "steps": [
+        {
+          "source": "let calls=0;function make(){class C{}function f<T:type>(v:T){try{return new C();}finally{calls++;}}return f;}const f=make();const selected=f.<uint8>;const x=selected(1);if(calls!==1)throw new Error(\"effects\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored selected callable (f.<uint8>)",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const selected=(f.<uint8>);const x=selected(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected getter executes once",
+      "steps": [
+        {
+          "source": "let gets=0;function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const holder={get f(){gets++;return f;}};const selected=holder.f.<uint8>;if(gets!==1)throw new Error(\"get\");const x=selected(1);if(gets!==1)throw new Error(\"reread\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    }
+  ]
+}
