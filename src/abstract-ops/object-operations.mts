@@ -22,7 +22,7 @@ import { __ts_cast__, isArray } from '../utils/language.mts';
 import { isBoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { NamedCallItemsOf } from './named-call.mts';
-import { RetainPropertyResult, ProjectResultDependency } from '#self';
+import { RetainPropertyResult, ProjectResultDependency, RetainCopiedPropertyKey } from '#self';
 import {
   surroundingAgent,
 } from '#self';
@@ -544,6 +544,7 @@ export function* CopyDataProperties(target: ObjectValue, source: Value, excluded
         ProjectResultDependency(sourceResult, nextKey, propResult);
         X(CreateDataProperty(target, nextKey, propResult.Value));
         RetainPropertyResult(target, nextKey, propResult);
+        RetainCopiedPropertyKey(target, nextKey, sourceResult);
       }
     }
   }

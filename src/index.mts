@@ -135,3 +135,5 @@ export { ConstructSelectedOrdinaryConstructor } from './abstract-ops/function-op
 export * from './type-system/result-dependencies.mts';
 export { InstantiateCheckedBindings } from './type-system/checked-bindings.mts';
 export { LexicalClassFamily, SpecializedClassConstructor } from './runtime-semantics/RuntimeTypesDeclarations.mts';
+
+export * from './type-system/symbol-key-dependencies.mts';

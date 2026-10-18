@@ -1,0 +1,903 @@
+{
+  "cases": [
+    {
+      "name": "symbol key",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");const h={[k]:choose(false)};const p=h[k];p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scalar fresh key",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");const h={[k]:uint8(1)};String(h[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "key alias",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");const alias=k;const h={[alias]:uint8(2)};String(h[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested object key",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");const h={inner:{[k]:uint8(3)}};String(h.inner[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed parenthesized key",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");const h={[(k)]:uint8(4)};String(h[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh duplicate key",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");const h={[k]:uint8(1),[k]:uint8(2)};String(h[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct equal descriptions",
+      "steps": [
+        {
+          "source": "const a=Symbol(\"p\"),b=Symbol(\"p\");const h={[a]:uint8(1),[b]:uint8(2)};String(h[a])+String(h[b])+\":\"+String(Object.getOwnPropertySymbols(h).length);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "12:2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same spelling nested scope",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");const h={[k]:uint8(1)};let text=\"\";{const k=Symbol(\"p\");const h={[k]:uint8(2)};text=String(h[k]);}text+String(h[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "21"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function local key result",
+      "steps": [
+        {
+          "source": "function build(n:uint8){const k=Symbol(\"p\");return {[k]:n};}const h=build(3);String(h[Object.getOwnPropertySymbols(h)[0]]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forwarded local key result",
+      "steps": [
+        {
+          "source": "function build(n:uint8){const k=Symbol(\"p\");return {[k]:n};}function relay(n:uint8){return build(n);}const h=relay(4);String(h[Object.getOwnPropertySymbols(h)[0]]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "4"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two activations distinct paths",
+      "steps": [
+        {
+          "source": "function build(n:uint8){const k=Symbol(\"p\");return {[k]:n};}const h={a:build(1),b:build(2)};const a=Object.getOwnPropertySymbols(h.a)[0],b=Object.getOwnPropertySymbols(h.b)[0];String(h.a[a])+String(h.b[b])+\":\"+String(a===b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "12:false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closure captures key",
+      "steps": [
+        {
+          "source": "function make(){const k=Symbol(\"p\");return(n:uint8)=>({[k]:n});}const a=make(),b=make();const x=a(1),y=b(2),z=a(3);const kx=Object.getOwnPropertySymbols(x)[0],ky=Object.getOwnPropertySymbols(y)[0],kz=Object.getOwnPropertySymbols(z)[0];String(x[kx])+String(y[ky])+String(z[kz])+\":\"+String(kx===kz)+\":\"+String(kx===ky);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "123:true:false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local block key result",
+      "steps": [
+        {
+          "source": "function build(){let ignored=1;{const k=Symbol(\"p\");return {[k]:uint8(1)};}}const h=build();String(h[Object.getOwnPropertySymbols(h)[0]]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "immutable copy",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");const h={[k]:uint8(1)};const copy=h;String(copy[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed keyed destructuring",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");const {[k]:v}={[k]:uint8(2)};String(v);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit written property type",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");const h:{[k]:uint8}={[k]:uint8(2)};String(h[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "method key",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");const h={[k]():uint8{return 2;}};String(h[k]());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "getter key",
+      "steps": [
+        {
+          "source": "let calls=0;const k=Symbol(\"p\");const h={get [k]():uint8{calls++;return 2;}};String(calls)+\":\"+String(h[k])+\":\"+String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0:2:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written getter key",
+      "steps": [
+        {
+          "source": "let calls=0;const k=Symbol(\"p\");const h:{[k]:uint8}={get [k]():uint8{calls++;return 2;}};String(h[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "well known key",
+      "steps": [
+        {
+          "source": "const k=Symbol.iterator;const h={[k]:uint8(1)};String(h[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "registry key",
+      "steps": [
+        {
+          "source": "const k=Symbol.for(\"p\");const h={[k]:uint8(1)};String(h[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shadow Symbol callee",
+      "steps": [
+        {
+          "source": "const Symbol=(s)=>\"p\";const k=Symbol(\"p\");const h={[k]:uint8(1)};String(h[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "earlier source key",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");\"seed\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "seed"
+          }
+        },
+        {
+          "source": "const h={[k]:uint8(1)};String(h[k]);",
+          "expected": {
+            "completion": "normal",
+            "value": "1",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "local binding each activation",
+      "steps": [
+        {
+          "source": "function build(n:uint8){const k=Symbol(\"p\");const h={[k]:n};return h;}const a=build(1),b=build(2);const ka=Object.getOwnPropertySymbols(a)[0],kb=Object.getOwnPropertySymbols(b)[0];String(a[ka])+String(b[kb])+\":\"+String(ka===kb);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "12:false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "recursive selected key",
+      "steps": [
+        {
+          "source": "function build(n:uint8){const k=Symbol(\"p\");if(n>0)return build(0);const h={[k]:n};return h;}const h=build(1);String(h[Object.getOwnPropertySymbols(h)[0]]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written escaping object return",
+      "steps": [
+        {
+          "source": "function make(){const k=Symbol(\"p\");function result():{[k]:uint8}{return {[k]:uint8(1)};}return result;}const f=make(),g=make();const a=f(),b=g();const ka=Object.getOwnPropertySymbols(a)[0],kb=Object.getOwnPropertySymbols(b)[0];String(a[ka])+String(b[kb])+\":\"+String(ka===kb);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "11:false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written any member key",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");function result():{[k]:any}{return {[k]:uint8(1)};}const h=result();String(h[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed parameter view",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");function read(o:{[k]:uint8}){const h=o;return h[k];}String(read({[k]:uint8(1)}));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "untyped result with lexical key",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");function f():{[k]:uint8}{return {[k]:uint8(1)};}function change(o:any){o.f=()=>({[k]:uint8(2)});}const table={f};change(table);const h=table.f();String(h[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong same description decorator key",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\"),wrong=Symbol(\"p\");let seen=\"\";function move(c){const o=c.objectContext;const v=o[k];delete o[k];o[wrong]=v;seen+=\"d\";}try{const h=@move {[k]:uint8(1)};\"accepted\";}catch(e){e.name+\":\"+seen;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:d"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong scalar after construction",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");function change(c){c.objectContext[k]=Symbol(\"bad\");}try{const h=@change {[k]:uint8(1)};\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain storage still mutable",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");const h={[k]:uint8(1)};function change(o:any){o[k]=\"changed\";o.extra=1;}change(h);String(h[k])+\":\"+String(h.extra)+\":\"+String(Object.isExtensible(h));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "changed:1:true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scalar receiving boundary still checks",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");const h={[k]:uint8(1)};function change(o:any){o[k]=Symbol(\"bad\");}change(h);try{const n=h[k];\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed getter copy admission only",
+      "steps": [
+        {
+          "source": "let calls=0;const k=Symbol(\"p\");const h={get [k]():uint8{calls++;return 2;}};const copy=h;String(calls)+\":\"+String(copy[k])+\":\"+String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1:2:2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "well known getter is not eager",
+      "steps": [
+        {
+          "source": "let calls=0;const h={get [Symbol.iterator]():uint8{calls++;return 2;}};String(calls)+\":\"+String(h[Symbol.iterator])+\":\"+String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0:2:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed string getter is not eager",
+      "steps": [
+        {
+          "source": "let calls=0;const h={get [\"p\"]():uint8{calls++;return 2;}};String(calls)+\":\"+String(h.p)+\":\"+String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0:2:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later getter replaces data contribution",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");let calls=0;const h={[k]:uint8(1),get [k]():uint8{calls++;return 2;}};String(calls)+\":\"+String(h[k])+\":\"+String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0:2:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later data replaces getter",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");let calls=0;const h={get [k]():uint8{calls++;return 1;},[k]:uint8(2)};String(h[k])+\":\"+String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2:0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fresh spread Symbol key",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");const h={...{[k]:uint8(1)}};String(h[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary spread Symbol key",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");const source={[k]:uint8(1)};const h={...source};String(h[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Symbol key rest",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");const source={[k]:uint8(1),drop:2};const {drop,...h}=source;String(h[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "immutable key assignment fails",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");const h={[k]:uint8(1)};let name=\"\";try{k=Symbol(\"q\");}catch(e){name=e.name;}name+\":\"+String(h[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "key TDZ remains ordinary",
+      "steps": [
+        {
+          "source": "const h={[k]:uint8(1)};const k=Symbol(\"p\");",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "ReferenceError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed symbol creation leaves TDZ",
+      "steps": [
+        {
+          "source": "function fail(){throw new Error(\"stop\");}const k=Symbol(fail());",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "Error"
+          }
+        },
+        {
+          "source": "k;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "ReferenceError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed object admission preserves key and earlier binding",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\"),wrong=Symbol(\"p\");function move(c){const o=c.objectContext;const v=o[k];delete o[k];o[wrong]=v;}const seed={[k]:uint8(1)};const bad=@move {[k]:uint8(2)};",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          }
+        },
+        {
+          "source": "String(seed[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        },
+        {
+          "source": "bad;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "ReferenceError"
+          }
+        },
+        {
+          "source": "const next={[k]:uint8(3)};String(next[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "direct eval captured key",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");String(eval(\"const h={[k]:uint8(1)};h[k];\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 2,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same spelling caller cannot supply key",
+      "steps": [
+        {
+          "source": "function make(){const k=Symbol(\"p\");return()=>{const h={[k]:uint8(1)};return h;};}const f=make();function caller(){const k=Symbol(\"p\");const h=f();return String(h[k])+\":\"+String(h[Object.getOwnPropertySymbols(h)[0]]);}caller();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "raw getter nominal true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");function use(){return ({get [k](){return choose(true);}})[k];}const p=use();p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a:a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "raw data nominal true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");function use(){return ({[k]:choose(true)})[k];}const p=use();p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a:a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "raw getter copy nominal true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");function use(){return ({...{get [k](){return choose(true);}}})[k];}const p=use();p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a:a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bound getter nominal true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");const h={get [k](){return choose(true);}};const p=h[k];p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a:a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "raw getter nominal false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");function use(){return ({get [k](){return choose(false);}})[k];}const p=use();p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "raw data nominal false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");function use(){return ({[k]:choose(false)})[k];}const p=use();p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "raw getter copy nominal false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");function use(){return ({...{get [k](){return choose(false);}}})[k];}const p=use();p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bound getter nominal false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const k=Symbol(\"p\");const h={get [k](){return choose(false);}};const p=h[k];p.tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b:b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested independent key activations",
+      "steps": [
+        {
+          "source": "function build(n:uint8){const k=Symbol(\"p\");const h={[k]:n};return h;}const h={a:{inner:build(1)},b:{inner:build(2)}};const a=Object.getOwnPropertySymbols(h.a.inner)[0],b=Object.getOwnPropertySymbols(h.b.inner)[0];String(h.a.inner[a])+String(h.b.inner[b])+\":\"+String(a===b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "12:false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "symbol annotation remains ordinary",
+      "steps": [
+        {
+          "source": "const k:symbol=Symbol(\"p\");const v:symbol=k;String(v===k);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "effectful Symbol description only once",
+      "steps": [
+        {
+          "source": "let count=0;const k=Symbol({toString(){count++;return \"p\";}});const h={[k]:uint8(1)};String(h[k])+\":\"+String(count);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "key aliases chain",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");const a=k,b=a;const h={[b]:uint8(1)};String(h[k]);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "key shadow across call remains lexical",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");function f(){const h={[k]:uint8(1)};return h;}function g(){const k=Symbol(\"p\");const h=f();return String(h[k])+\":\"+String(h[Object.getOwnPropertySymbols(h)[0]]);}g();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "undefined:1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "later data after getter retains admission",
+      "steps": [
+        {
+          "source": "const k=Symbol(\"p\");function change(c){c.objectContext[k]=Symbol(\"bad\");}try{const h=@change {get [k]():uint8{return 1;},[k]:uint8(2)};\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    }
+  ]
+}

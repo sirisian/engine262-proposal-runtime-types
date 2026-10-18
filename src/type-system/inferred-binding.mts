@@ -7,7 +7,7 @@ import { IsOfType, BindTypeArgumentRecords, toNumericArgument, currentTypeParame
 import { InferredConstTypeOf } from './check.mts';
 import { substituteParametersNamed } from './unify.mts';
 import { makePrimitive, type TypeRecord } from './records.mts';
-import { InstantiateReturnDependency, ForwardResultDependency, RetainCheckedResult } from '#self';
+import { InstantiateReturnDependency, ForwardResultDependency, RetainCheckedResult, CheckedPropertyKeyOf } from '#self';
 
 /** The inferred initialization boundary, shared by plain and extracted bindings. */
 export function* EnforceInferredBinding(node: object, value: Value, initializer?: ParseNode | null, completion?: object): PlainEvaluator<{ value: Value, type?: TypeRecord }> {
@@ -32,12 +32,18 @@ export function* EnforceInferredBinding(node: object, value: Value, initializer?
   if (target.Kind === 'object' && writtenInitializer?.type === 'ObjectLiteral') {
     // The declaration on a fresh accessor checks its result when called.
     // Inferring the object's type must not call that accessor now.
-    const accessors = new Set(writtenInitializer.PropertyDefinitionList.flatMap((member) => {
-      if (member.type !== 'MethodDefinition' || member.UniqueFormalParameters) return [];
-      const key = member.ClassElementName as { name?: string, value?: string };
-      return [key.name ?? key.value];
-    }));
-    target = { ...target, Properties: target.Properties.filter((property) => !accessors.has(property.key as string)) };
+    const accessors = new Set<ReturnType<typeof CheckedPropertyKeyOf>>();
+    for (const member of writtenInitializer.PropertyDefinitionList) {
+      const keyNode = member.type === 'PropertyDefinition' ? member.PropertyName
+        : 'ClassElementName' in member ? member.ClassElementName : member;
+      if (!keyNode) continue;
+      const key = CheckedPropertyKeyOf(keyNode)
+        ?? ('name' in keyNode ? keyNode.name : 'value' in keyNode ? String(keyNode.value) : undefined);
+      if (key === undefined) continue;
+      if (member.type === 'MethodDefinition' && !member.UniqueFormalParameters) accessors.add(key);
+      else accessors.delete(key); // A later data property or method replaces it.
+    }
+    target = { ...target, Properties: target.Properties.filter((property) => !accessors.has(property.keyDependency ?? property.key)) };
   }
   // Inference preserves an existing value. Do not promote an already
   // conforming plain aggregate into typed storage merely to check it.

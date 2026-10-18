@@ -1,5 +1,5 @@
 import {
-  Value, NullValue, ObjectValue, type PropertyKeyValue, JSStringValue, BooleanValue, Descriptor,
+  Value, NullValue, ObjectValue, SymbolValue, type PropertyKeyValue, JSStringValue, BooleanValue, Descriptor,
 } from '../value.mts';
 import {
   StringValue,
@@ -26,7 +26,7 @@ import { GetTypeObject } from '../type-system/intern.mts';
 import { NamedEvaluation, MethodDefinitionEvaluation, Evaluate_PropertyName } from './all.mts';
 import { ApplyDecorators, ApplySubTargetDecorators } from './ClassDefinitionEvaluation.mts';
 import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
-import { EnsureCompletion, EvaluateResultValue, GetResultValue, RetainPropertyResult, RetainCheckedResult } from '#self';
+import { EnsureCompletion, EvaluateResultValue, GetResultValue, RetainPropertyResult, RetainCheckedResult, RetainObjectPropertyKey, SymbolKeyDependencyOf, TakeEvaluatedMethodKey } from '#self';
 import {
   surroundingAgent,
   Assert,
@@ -141,6 +141,11 @@ function* PropertyDefinitionEvaluation_PropertyDefinition(PropertyDefinition: Pa
   const decorators = (PropertyDefinition as { Decorators?: readonly ParseNode.Decorator[] | null }).Decorators;
   if (surroundingAgent.feature('runtime-types')) {
     const result = Q(yield* PropertyDefinitionEvaluation_PropertyDefinitionInner(PropertyDefinition, object, enumerable));
+    if (PropertyDefinition.type === 'MethodDefinition' || PropertyDefinition.type === 'GeneratorMethod'
+        || PropertyDefinition.type === 'AsyncMethod' || PropertyDefinition.type === 'AsyncGeneratorMethod') {
+      const key = TakeEvaluatedMethodKey(PropertyDefinition);
+      if (key instanceof SymbolValue) RetainObjectPropertyKey(object, key, SymbolKeyDependencyOf(PropertyDefinition.ClassElementName));
+    }
     const kind = objectMemberContextKind(PropertyDefinition);
     const name = objectMemberName(PropertyDefinition);
     // The SUB-TARGETS run whether or not the member itself is decorated: a
@@ -398,6 +403,7 @@ function* PropertyDefinitionEvaluation_PropertyDefinitionInner(PropertyDefinitio
       RetainCheckedResult(propResult, record);
       RetainPropertyResult(object, propKey as PropertyKeyValue, propResult);
     }
+    RetainObjectPropertyKey(object, propKey as PropertyKeyValue, SymbolKeyDependencyOf(PropertyName));
     return defined;
   }
   // 8. Assert: enumerable is true.
@@ -406,6 +412,7 @@ function* PropertyDefinitionEvaluation_PropertyDefinitionInner(PropertyDefinitio
   // 10. Return ! CreateDataPropertyOrThrow(object, propKey, propValue).
   const created = X(CreateDataPropertyOrThrow(object, propKey as PropertyKeyValue, X(propValue)));
   if (propResult) RetainPropertyResult(object, propKey as PropertyKeyValue, propResult);
+  RetainObjectPropertyKey(object, propKey as PropertyKeyValue, SymbolKeyDependencyOf(PropertyName));
   return created;
 }
 

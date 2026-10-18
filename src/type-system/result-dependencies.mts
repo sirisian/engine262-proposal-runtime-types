@@ -1,7 +1,7 @@
-import type { TypeRecord } from './records.mts';
+import { anyType, type TypeRecord, type PropertyTypeRecord } from './records.mts';
 import { ObjectValue, ReferenceRecord, JSStringValue, EnvironmentRecord, RefBindingHolder,
-  EnsureCompletion, Evaluate, GetValue, IsDataDescriptor, type PropertyKeyValue, type SymbolValue, NormalCompletion, type Value,
-  type ValueEvaluator, type ParseNode } from '#self';
+  EnsureCompletion, Evaluate, GetValue, IsDataDescriptor, type PropertyKeyValue, SymbolValue, NormalCompletion, type Value,
+  type ValueEvaluator, type ParseNode, IsSymbolicPropertyKey, InitializedSymbolKey } from '#self';
 
 // These keys are internal completions, immutable bindings or data descriptors, never returned values,
 // function values or shared syntax. A forwarded dependency is only a candidate
@@ -11,7 +11,10 @@ const forwarded = new WeakMap<object, TypeRecord>();
 const receivers = new WeakMap<ReferenceRecord, TypeRecord>();
 // Construction evidence is a ledger of source contributions, not a snapshot of
 // current member values. A decorator can change backing before admission.
-const constructions = new WeakMap<ObjectValue, Map<string | SymbolValue, TypeRecord>>();
+const constructions = new WeakMap<ObjectValue, Map<string | SymbolValue, { type?: TypeRecord, keyDependency?: SymbolValue }>>();
+// A construction can supply a key without supplying a value contract, notably
+// for an accessor. This is distinct from a checked member whose target is any.
+const keyOnly = new WeakSet<PropertyTypeRecord>();
 
 function propertyIdentity(key: PropertyKeyValue): string | SymbolValue {
   return key instanceof JSStringValue ? key.stringValue() : key;
@@ -22,26 +25,42 @@ function sourceNominal(type: TypeRecord | undefined): type is Extract<TypeRecord
     && !type.DeclarationIdentity && type.Arguments.length === 0;
 }
 
-/** Complete matching unresolved nominal leaves in a private named-object view. */
+/** Complete matching nominal and Symbol-key dependencies in a private view. */
 export function InstantiateReturnDependency(type: TypeRecord, completion?: object): TypeRecord {
   const dependency = completion && forwarded.get(completion);
-  const seen = new Map<TypeRecord, Map<TypeRecord, TypeRecord>>();
+  const seen = new Map<TypeRecord, Map<TypeRecord | undefined, TypeRecord>>();
   const complete = (target: TypeRecord, evidence: TypeRecord | undefined): TypeRecord => {
     if (sourceNominal(target) && !target.Constructor && sourceNominal(evidence)
         && evidence.Declaration === target.Declaration && evidence.Constructor instanceof ObjectValue) {
       return { ...target, Constructor: evidence.Constructor };
     }
-    if (target.Kind !== 'object' || evidence?.Kind !== 'object') return target;
+    if (target.Kind !== 'object') return target;
     let alternatives = seen.get(target);
     if (!alternatives) seen.set(target, alternatives = new Map());
     const prior = alternatives.get(evidence);
     if (prior) return prior;
     const copy = { ...target };
     alternatives.set(evidence, copy);
-    const properties = new Map(evidence.Properties.map((property) => [property.key, property.type]));
-    copy.Properties = target.Properties.map((property) => ({
-      ...property, type: complete(property.type, properties.get(property.key)),
-    }));
+    const contributed = evidence?.Kind === 'object' ? evidence.Properties : [];
+    const properties = new Map(contributed.map((property) => [property.key, property]));
+    const keys = new Map(contributed.filter((property) => property.keyDependency)
+      .map((property) => [property.keyDependency!, property]));
+    copy.Properties = target.Properties.map((property) => {
+      let key = property.key;
+      let keyDependency = property.keyDependency;
+      if (IsSymbolicPropertyKey(key)) {
+        // A selected contribution supplies its activation before a lexical
+        // fallback. Recursive calls must not use the caller's own fresh key.
+        const supplied = keys.get(key)?.key;
+        const actual = supplied instanceof SymbolValue && !IsSymbolicPropertyKey(supplied)
+          ? supplied : InitializedSymbolKey(key);
+        if (actual) {
+          keyDependency = key;
+          key = actual;
+        }
+      }
+      return { ...property, key, keyDependency, type: complete(property.type, properties.get(key)?.type) };
+    });
     return copy;
   };
   return complete(type, dependency);
@@ -71,8 +90,10 @@ export function RetainPropertyResult(object: ObjectValue, key: PropertyKeyValue,
     TransferResultDependency(completion, descriptor);
     const construction = constructions.get(object);
     const type = accepted.get(completion);
-    if (type) construction?.set(propertyIdentity(key), type);
-    else construction?.delete(propertyIdentity(key));
+    const identity = propertyIdentity(key);
+    const keyDependency = construction?.get(identity)?.keyDependency;
+    if (type || keyDependency) construction?.set(identity, { type, keyDependency });
+    else construction?.delete(identity);
   }
 }
 
@@ -80,6 +101,23 @@ export function RetainPropertyResult(object: ObjectValue, key: PropertyKeyValue,
  * This does not apply to an arbitrary backing mutation by a decorator. */
 export function ForgetObjectPropertyContribution(object: ObjectValue, key: PropertyKeyValue): void {
   constructions.get(object)?.delete(propertyIdentity(key));
+}
+
+/** Retain the already evaluated key's source identity, independently of data. */
+export function RetainObjectPropertyKey(object: ObjectValue, key: PropertyKeyValue, keyDependency?: SymbolValue): void {
+  const construction = constructions.get(object);
+  const identity = propertyIdentity(key);
+  const type = construction?.get(identity)?.type;
+  if (key instanceof SymbolValue && keyDependency) construction?.set(identity, { type, keyDependency });
+  else if (type) construction?.set(identity, { type });
+  else construction?.delete(identity);
+}
+
+export function RetainCopiedPropertyKey(object: ObjectValue, key: PropertyKeyValue, source?: object): void {
+  const type = source && accepted.get(source);
+  const identity = propertyIdentity(key);
+  const property = type?.Kind === 'object' ? type.Properties.find((entry) => entry.key === identity) : undefined;
+  RetainObjectPropertyKey(object, key, property?.keyDependency);
 }
 
 export function BeginObjectResult(object: ObjectValue): void {
@@ -96,9 +134,11 @@ export function CompleteObjectResult(object: ObjectValue): NormalCompletion<Obje
   const entries = constructions.get(object);
   if (entries?.size) accepted.set(result, {
     Kind: 'object', IndexSignatures: [],
-    Properties: [...entries].map(([key, type]) => ({
-      key, type, optional: false, readonly: false,
-    })),
+    Properties: [...entries].map(([key, entry]): PropertyTypeRecord => {
+      const property = { key, type: entry.type ?? anyType, keyDependency: entry.keyDependency, optional: false, readonly: false };
+      if (!entry.type) keyOnly.add(property);
+      return property;
+    }),
   });
   return result;
 }
@@ -109,7 +149,7 @@ function project(type: TypeRecord | undefined, key: PropertyKeyValue, result: ob
   const property = type.Properties.find((entry) => entry.key === identity);
   // A checked view is authoritative, including an erased member. A missing
   // named entry (for example a fresh accessor) supplies no replacement target.
-  if (property) RetainCheckedResult(result, property.type);
+  if (property && !keyOnly.has(property)) RetainCheckedResult(result, property.type);
 }
 
 /** Project the established source view, independently of replaceable backing. */

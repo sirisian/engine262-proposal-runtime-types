@@ -114,7 +114,7 @@ import { prepareFamilyPattern, finishFamilyPattern, FamilyPatternError, hasDefer
 import { bindIntrinsicArguments, intrinsicParameters, isHigherKindedArgument } from './intrinsic-generics.mts';
 import { rememberDeclaredConstraint, rememberDeclaredDefault, rememberGenericTypeCaptures } from './records.mts';
 import {
-  R, Throw, wellKnownSymbols,
+  R, Throw, wellKnownSymbols, RegisterSymbolKeyDeclaration, RememberCheckedPropertyKey,
 } from '#self';
 
 /**
@@ -6382,7 +6382,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const classElementKey = (key: ParseNode.ClassElementName | null | undefined): string | SymbolValue | undefined => {
     if (!key) return undefined;
-    if (key.type === 'PropertyName') return memberKey({ Expression: key.ComputedPropertyName });
+    if (key.type === 'PropertyName') {
+      const value = memberKey({ Expression: key.ComputedPropertyName });
+      RememberCheckedPropertyKey(key, value);
+      return value;
+    }
     if (key.type === 'IdentifierName' || key.type === 'PrivateIdentifier') return key.name;
     return String(key.value);
   };
@@ -6853,6 +6857,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!minted) {
       minted = new SymbolValue(Value(symbolDescriptionOf(declaration) ?? 'symbol key'));
       symbolKeys.set(declaration, minted);
+      RegisterSymbolKeyDeclaration(minted, declaration);
     }
     return minted;
   };
@@ -6869,7 +6874,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return String(literal);
     }
     const computed = propertyName?.ComputedPropertyName;
-    return computed ? memberKey({ Expression: computed as ParseNode }) : undefined;
+    const key = computed ? memberKey({ Expression: computed as ParseNode }) : undefined;
+    if (propertyName) RememberCheckedPropertyKey(propertyName, key);
+    return key;
   };
 
   // ---- interfaces ---------------------------------------------------

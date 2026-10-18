@@ -86,7 +86,7 @@ import { IsSubtype } from './relations.mts';
 import { CloseInferredNominal } from './inferred-nominals.mts';
 import {
   ClassDeclarationIdentity, ClassFamilyOf, ClassFamilyIdentityOf, ClassFamilyConstructorOf, DeclaredReferenceLocationType, OrdinaryRestsOf, ScalarRestsOf, ScalarRestShape, type ScalarRestPattern, type ScalarRestStorage,
-  Call, Get, GetValue, HasProperty, IsCallable, OrdinaryFunctionCreate, R, ResolveBinding, SameValue, surroundingAgent, Throw, ToBoolean,
+  Call, Get, GetValue, HasProperty, IsCallable, OrdinaryFunctionCreate, R, ResolveBinding, SameValue, surroundingAgent, Throw, ToBoolean, SymbolKeyDependencyOf,
 } from '#self';
 
 /**
@@ -6577,7 +6577,8 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
           // refused at the call, wherever the call came from.
           initial = Q(yield* evaluateTypeInitializer(memberInitializer, type, 'an object member default'));
         }
-        Properties.push({ key, type, optional: member.Optional, readonly: member.Readonly, initial });
+        const keyDependency = member.PropertyName ? SymbolKeyDependencyOf(member.PropertyName) : undefined;
+        Properties.push({ key, keyDependency, type, optional: member.Optional, readonly: member.Readonly, initial });
       }
       return { Kind: 'object', Properties, IndexSignatures };
     }

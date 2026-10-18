@@ -26,6 +26,8 @@ export interface PropertyTypeRecord {
    * hatch primitivemetadata.md promises third-party libraries.
    */
   readonly key: string | SymbolValue;
+  /** Private origin of a completed computed Symbol key; not a new type identity. */
+  readonly keyDependency?: SymbolValue;
   readonly type: TypeRecord;
   /** Effective setter contract, when distinct from the readable type. */
   readonly writeType?: TypeRecord;
