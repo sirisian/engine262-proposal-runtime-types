@@ -83,6 +83,7 @@ import { IsAssignable, COLLECTION_LIBRARY_NAMES } from './relations.mts';
 import { SelfThisTypeRecord } from './check.mts';
 import { SameType } from './relations.mts';
 import { IsSubtype } from './relations.mts';
+import { CloseInferredNominal } from './inferred-nominals.mts';
 import {
   ClassDeclarationIdentity, ClassFamilyOf, ClassFamilyIdentityOf, ClassFamilyConstructorOf, DeclaredReferenceLocationType, OrdinaryRestsOf, ScalarRestsOf, ScalarRestShape, type ScalarRestPattern, type ScalarRestStorage,
   Call, Get, GetValue, HasProperty, IsCallable, OrdinaryFunctionCreate, R, ResolveBinding, SameValue, surroundingAgent, Throw, ToBoolean,
@@ -344,6 +345,11 @@ export function instantiateGenericCapture(capture: GenericTypeCapture,
 
 /** Instantiate a closure's publication before applying this call's own binders. */
 export function publishedReturnTypeOfFunction(value: unknown, application?: ReadonlyMap<string, TypeRecord>): TypeRecord | undefined {
+  const published = instantiatePublishedReturn(value, application);
+  return published && CloseInferredNominal(published, value, instantiatePublishedReturn);
+}
+
+function instantiatePublishedReturn(value: unknown, application?: ReadonlyMap<string, TypeRecord>): TypeRecord | undefined {
   const fn = value as { ECMAScriptCode?: { parent?: object } | null, TypeParameterFrame?: ReadonlyMap<string, TypeRecord> };
   const declaration = fn.ECMAScriptCode?.parent as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } } | undefined;
   const published = declaration && PublishedReturnTypeOf(declaration);
