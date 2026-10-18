@@ -8,7 +8,7 @@ import {
   EvaluatePropertyAccessWithExpressionKey,
   EvaluatePropertyAccessWithIdentifierKey,
 } from './all.mts';
-import { GetValue, MakePrivateReference } from '#self';
+import { EnsureCompletion, EvaluateResultValue, RetainPropertyReceiver, GetValue, MakePrivateReference } from '#self';
 import type { PlainEvaluator, ReferenceRecord } from '#self';
 
 /** https://tc39.es/ecma262/#sec-property-accessors-runtime-semantics-evaluation */
@@ -16,15 +16,17 @@ import type { PlainEvaluator, ReferenceRecord } from '#self';
 //   CallExpression : CallExpression `[` Expression `]`
 function* Evaluate_MemberExpression_Expression({ strict, MemberExpression, Expression }: ParseNode.MemberExpression): PlainEvaluator<ReferenceRecord> {
   // 1. Let baseReference be the result of evaluating |MemberExpression|.
-  const baseReference = Q(yield* Evaluate(MemberExpression));
+  const baseResult = EnsureCompletion(yield* EvaluateResultValue(MemberExpression));
+  if (baseResult.Type !== 'normal') return baseResult;
   // 2. Let baseValue be ? GetValue(baseReference).
   // proposal-runtime-types (references extension): the base of a property
   // access is a position that consumes a value, so a reference value that
   // reaches it decays to its referent before the access is built.
-  const baseValue = Q(yield* DereferenceReferenceValue(Q(yield* GetValue(baseReference))));
+  const baseValue = Q(yield* DereferenceReferenceValue(baseResult.Value));
   // 3. If the code matched by this |MemberExpression| is strict mode code, let strict be true; else let strict be false.
   // 4. Return ? EvaluatePropertyAccessWithExpressionKey(baseValue, |Expression|, strict).
-  return Q(yield* EvaluatePropertyAccessWithExpressionKey(baseValue, Expression!, strict));
+  const reference = Q(yield* EvaluatePropertyAccessWithExpressionKey(baseValue, Expression!, strict));
+  return RetainPropertyReceiver(baseResult, reference);
 }
 
 /** https://tc39.es/ecma262/#sec-property-accessors-runtime-semantics-evaluation */
@@ -32,14 +34,16 @@ function* Evaluate_MemberExpression_Expression({ strict, MemberExpression, Expre
 //   CallExpression : CallExpression `.` IdentifierName
 function* Evaluate_MemberExpression_IdentifierName({ strict, MemberExpression, IdentifierName }: ParseNode.MemberExpression): PlainEvaluator<ReferenceRecord> {
   // 1. Let baseReference be the result of evaluating |MemberExpression|.
-  const baseReference = Q(yield* Evaluate(MemberExpression));
+  const baseResult = EnsureCompletion(yield* EvaluateResultValue(MemberExpression));
+  if (baseResult.Type !== 'normal') return baseResult;
   // 2. Let baseValue be ? GetValue(baseReference).
   // proposal-runtime-types (references extension): see the expression-key
   // form above; the base of the access decays.
-  const baseValue = Q(yield* DereferenceReferenceValue(Q(yield* GetValue(baseReference))));
+  const baseValue = Q(yield* DereferenceReferenceValue(baseResult.Value));
   // 3. If the code matched by this |MemberExpression| is strict mode code, let strict be true; else let strict be false.
   // 4. Return ! EvaluatePropertyAccessWithIdentifierKey(baseValue, |IdentifierName|, strict).
-  return X(EvaluatePropertyAccessWithIdentifierKey(baseValue, IdentifierName!, strict));
+  const reference = X(EvaluatePropertyAccessWithIdentifierKey(baseValue, IdentifierName!, strict));
+  return RetainPropertyReceiver(baseResult, reference);
 }
 
 /** https://tc39.es/ecma262/#sec-property-accessors-runtime-semantics-evaluation */

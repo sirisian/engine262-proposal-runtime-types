@@ -32,7 +32,7 @@ import {
   Throw,
   OrdinaryObjectCreate,
   CreateDataProperty,
-  GetResultValue, RetainBindingResult,
+  GetResultValue, EvaluateResultValue, RetainBindingResult,
 } from '#self';
 import { pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
@@ -307,15 +307,16 @@ export function recordDeclaredType(lhs: unknown, record: unknown): void {
 //   LexicalBinding : BindingPattern Initializer
 function* Evaluate_LexicalBinding_BindingPattern(LexicalBinding: ParseNode.LexicalBinding) {
   const { BindingPattern, Initializer } = LexicalBinding;
-  const rhs = Q(yield* Evaluate(Initializer!));
-  const value = Q(yield* GetValue(rhs));
+  const valueResult = EnsureCompletion(yield* EvaluateResultValue(Initializer!));
+  if (valueResult.Type !== 'normal') return valueResult;
+  const value = valueResult.Value;
   const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
   // OUTSTANDING item H: the annotation types the value BEING destructured, so it
   // is enforced before the pattern takes names out of it - the same rule as the
   // parameter path, at the declaration's own site.
   const annotated = (LexicalBinding as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation;
-  const bound = annotated ? Q(yield* EnforceAnnotation(annotated, value)) : value;
-  return yield* BindingInitialization(BindingPattern!, bound, env);
+  const bound = annotated ? Q(yield* EnforceAnnotation(annotated, value, valueResult)) : value;
+  return yield* BindingInitialization(BindingPattern!, bound, env, valueResult);
 }
 
 /**

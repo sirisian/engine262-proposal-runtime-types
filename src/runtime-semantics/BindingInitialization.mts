@@ -45,25 +45,25 @@ export function* InitializeBoundName(name: JSStringValue, value: Value, environm
 //   `{` BindingPropertyList `}`
 //   `{` BindingRestProperty `}`
 //   `{` BindingPropertyList `,` BindingRestProperty `}`
-function* BindingInitialization_ObjectBindingPattern({ BindingPropertyList, BindingRestProperty }: ParseNode.ObjectBindingPattern, value: Value, environment: EnvironmentRecord | UndefinedValue): PlainEvaluator {
+function* BindingInitialization_ObjectBindingPattern({ BindingPropertyList, BindingRestProperty }: ParseNode.ObjectBindingPattern, value: Value, environment: EnvironmentRecord | UndefinedValue, sourceResult?: object): PlainEvaluator {
   // 1. Perform ? PropertyBindingInitialization for BindingPropertyList using value and environment as the arguments.
-  const excludedNames = Q(yield* PropertyBindingInitialization(BindingPropertyList, value, environment));
+  const excludedNames = Q(yield* PropertyBindingInitialization(BindingPropertyList, value, environment, sourceResult));
   if (BindingRestProperty) {
-    Q(yield* RestBindingInitialization(BindingRestProperty, value, environment, excludedNames));
+    Q(yield* RestBindingInitialization(BindingRestProperty, value, environment, excludedNames, sourceResult));
   }
   // 2. Return NormalCompletion(empty).
   return NormalCompletion(undefined);
 }
 
-export function* BindingInitialization(node: ParseNode.ForBinding | ParseNode.ForDeclaration | ParseNode.BindingIdentifier | ParseNode.ObjectBindingPattern | ParseNode.ArrayBindingPattern | ParseNode.BindingPattern, value: Value, environment: EnvironmentRecord | UndefinedValue): PlainEvaluator {
+export function* BindingInitialization(node: ParseNode.ForBinding | ParseNode.ForDeclaration | ParseNode.BindingIdentifier | ParseNode.ObjectBindingPattern | ParseNode.ArrayBindingPattern | ParseNode.BindingPattern, value: Value, environment: EnvironmentRecord | UndefinedValue, sourceResult?: object): PlainEvaluator {
   switch (node.type) {
     case 'ForBinding':
       if (node.BindingIdentifier) {
-        return yield* BindingInitialization(node.BindingIdentifier, value, environment);
+        return yield* BindingInitialization(node.BindingIdentifier, value, environment, sourceResult);
       }
-      return yield* BindingInitialization(node.BindingPattern!, value, environment);
+      return yield* BindingInitialization(node.BindingPattern!, value, environment, sourceResult);
     case 'ForDeclaration':
-      return yield* BindingInitialization(node.ForBinding, value, environment);
+      return yield* BindingInitialization(node.ForBinding, value, environment, sourceResult);
     case 'BindingIdentifier': {
       // 1. Let name be StringValue of Identifier.
       const name = StringValue(node);
@@ -74,7 +74,7 @@ export function* BindingInitialization(node: ParseNode.ForBinding | ParseNode.Fo
       // 1. Perform ? RequireObjectCoercible(value).
       Q(RequireObjectCoercible(value));
       // 2. Return the result of performing BindingInitialization for ObjectBindingPattern using value and environment as arguments.
-      return yield* BindingInitialization_ObjectBindingPattern(node, value, environment);
+      return yield* BindingInitialization_ObjectBindingPattern(node, value, environment, sourceResult);
     }
     case 'ArrayBindingPattern': {
       // proposal-runtime-types sec-user-defined-conversions: "a conversion to a

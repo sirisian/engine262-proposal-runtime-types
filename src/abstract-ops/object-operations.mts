@@ -22,7 +22,7 @@ import { __ts_cast__, isArray } from '../utils/language.mts';
 import { isBoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { NamedCallItemsOf } from './named-call.mts';
-import { RetainPropertyResult } from '#self';
+import { RetainPropertyResult, ProjectResultDependency } from '#self';
 import {
   surroundingAgent,
 } from '#self';
@@ -521,7 +521,7 @@ export function GetFunctionRealm(obj: FunctionObject): PlainCompletion<Realm> {
 }
 
 /** https://tc39.es/ecma262/#sec-copydataproperties */
-export function* CopyDataProperties(target: ObjectValue, source: Value, excludedItems: readonly PropertyKeyValue[]): ValueEvaluator<ObjectValue> {
+export function* CopyDataProperties(target: ObjectValue, source: Value, excludedItems: readonly PropertyKeyValue[], sourceResult?: object): ValueEvaluator<ObjectValue> {
   Assert(target instanceof ObjectValue);
   Assert(excludedItems.every((i) => IsPropertyKey(i)));
   if (source === Value.undefined || source === Value.null) {
@@ -541,6 +541,7 @@ export function* CopyDataProperties(target: ObjectValue, source: Value, excluded
       if (!(desc instanceof UndefinedValue) && desc.Enumerable === Value.true) {
         const propResult = EnsureCompletion(yield* Get(from, nextKey));
         if (propResult.Type !== 'normal') return propResult;
+        ProjectResultDependency(sourceResult, nextKey, propResult);
         X(CreateDataProperty(target, nextKey, propResult.Value));
         RetainPropertyResult(target, nextKey, propResult);
       }

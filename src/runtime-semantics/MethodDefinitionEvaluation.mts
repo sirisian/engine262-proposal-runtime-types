@@ -8,7 +8,7 @@ import { OutOfRange } from '../utils/language.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { ClassElementDefinitionRecord, DefineMethod, Evaluate_PropertyName } from './all.mts';
-import { surroundingAgent, Throw } from '#self';
+import { surroundingAgent, Throw, ForgetObjectPropertyContribution } from '#self';
 import {
   OrdinaryObjectCreate,
   OrdinaryFunctionCreate,
@@ -153,6 +153,7 @@ function* DefineMethodProperty(key: PropertyKeyValue | PrivateName, homeObject: 
     });
     // b. Perform ? DefinePropertyOrThrow(homeObject, key, desc).
     Q(yield* DefinePropertyOrThrow(homeObject, key, desc));
+    ForgetObjectPropertyContribution(homeObject, key);
     // c. Return empty.
     return undefined;
   }
@@ -223,6 +224,7 @@ function* MethodDefinitionEvaluation_MethodDefinition(MethodDefinition: ParseNod
           });
           // b. Perform ? DefinePropertyOrThrow(object, propKey, desc).
           Q(yield* DefinePropertyOrThrow(object, propKey, desc));
+          ForgetObjectPropertyContribution(object, propKey);
           // c. Return empty.
           return undefined;
         }
@@ -273,6 +275,7 @@ function* MethodDefinitionEvaluation_MethodDefinition(MethodDefinition: ParseNod
           });
           // b. Perform ? DefinePropertyOrThrow(object, propKey, desc).
           Q(yield* DefinePropertyOrThrow(object, propKey, desc));
+          ForgetObjectPropertyContribution(object, propKey);
           // c. Return empty.
           return undefined;
         }

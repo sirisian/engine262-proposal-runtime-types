@@ -10,7 +10,7 @@ import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import {
   PropertyDefinitionEvaluation_PropertyDefinitionList,
 } from './all.mts';
-import { surroundingAgent, OrdinaryObjectCreate, GetValue, IsArray, HasProperty, CreateDataProperty } from '#self';
+import { BeginObjectResult, EndObjectResult, CompleteObjectResult, type ObjectValue, surroundingAgent, OrdinaryObjectCreate, GetValue, IsArray, HasProperty, CreateDataProperty } from '#self';
 import { IsComposite } from '../intrinsics/Composite.mts';
 import { Evaluate } from '../evaluator.mts';
 
@@ -27,9 +27,18 @@ const evaluatedDefaults = new WeakMap<object, Value>();
 //     `{` PropertyDefinitionList `}`
 //     `{` PropertyDefinitionList `,` `}`
 export function* Evaluate_ObjectLiteral(node: ParseNode.ObjectLiteral): ValueEvaluator {
-  const { PropertyDefinitionList, Decorators } = node;
   // 1. Let obj be OrdinaryObjectCreate(%Object.prototype%).
   const obj = OrdinaryObjectCreate(surroundingAgent.intrinsic('%Object.prototype%'));
+  BeginObjectResult(obj);
+  try {
+    return yield* PopulateObjectLiteral(node, obj);
+  } finally {
+    EndObjectResult(obj);
+  }
+}
+
+function* PopulateObjectLiteral(node: ParseNode.ObjectLiteral, obj: ObjectValue): ValueEvaluator {
+  const { PropertyDefinitionList, Decorators } = node;
   if (PropertyDefinitionList.length > 0) {
     // 2. Perform ? PropertyDefinitionEvaluation of PropertyDefinitionList with arguments obj and true.
     Q(yield* PropertyDefinitionEvaluation_PropertyDefinitionList(PropertyDefinitionList, obj, Value.true));
@@ -93,7 +102,7 @@ export function* Evaluate_ObjectLiteral(node: ParseNode.ObjectLiteral): ValueEva
   if (surroundingAgent.feature('runtime-types') && Decorators?.length) {
     Q(yield* ApplyDecorators(Decorators, Q(yield* ObjectMemberDecoratorContext('Object', Value.undefined, obj as Value))));
   }
-  return obj;
+  return CompleteObjectResult(obj);
 }
 
 /**

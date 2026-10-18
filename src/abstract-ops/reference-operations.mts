@@ -36,7 +36,7 @@ import {
   getActiveScriptId,
 } from './all.mts';
 import {
-  WithArrayDefinitionCheck, ScalarRestOwner,
+  EnsureCompletion, ReadPropertyResult, WithArrayDefinitionCheck, ScalarRestOwner,
   DynamicParsedCodeRecord, surroundingAgent, EnvironmentRecord, GetGlobalObject, Throw, Call,
 } from '#self';
 
@@ -231,7 +231,10 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
       V.ReferencedName = Q(yield* ToPropertyKey(V.ReferencedName as Value));
     }
     // c. Return ? baseObj.[[Get]](V.[[ReferencedName]], GetThisValue(V)).
-    return yield* baseObj.Get(V.ReferencedName, GetThisValue(V));
+    const result = EnsureCompletion(yield* baseObj.Get(V.ReferencedName, GetThisValue(V)));
+    if (result.Type !== 'normal') return result;
+    ReadPropertyResult(V, V.ReferencedName, result);
+    return result;
   } else { // 5. Else,
     // a. Let base be V.[[Base]].
     const base = V.Base;

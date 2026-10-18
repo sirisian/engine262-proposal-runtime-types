@@ -6,6 +6,7 @@ import { EnforceAnnotation } from '../abstract-ops/runtime-types.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { recordDeclaredType } from './LexicalDeclaration.mts';
 import {
+  BeginObjectResult, EndObjectResult, CompleteObjectResult, RetainBindingResult,
   surroundingAgent,
   CopyDataProperties,
   InitializeReferencedBinding,
@@ -16,14 +17,21 @@ import {
 import type { EnvironmentRecord, PropertyKeyValue, UndefinedValue } from '#self';
 
 // BindingRestProperty : `...` BindingIdentifier
-export function* RestBindingInitialization(node: ParseNode.BindingRestProperty, value: Value, environment: EnvironmentRecord | UndefinedValue, excludedNames: readonly PropertyKeyValue[]) {
+export function* RestBindingInitialization(node: ParseNode.BindingRestProperty, value: Value, environment: EnvironmentRecord | UndefinedValue, excludedNames: readonly PropertyKeyValue[], sourceResult?: object) {
   const { BindingIdentifier, TypeAnnotation } = node;
   // 1. Let lhs be ? ResolveBinding(StringValue of BindingIdentifier, environment).
   const lhs = Q(yield* ResolveBinding(StringValue(BindingIdentifier), environment, BindingIdentifier.strict));
   // 2. Let restObj be OrdinaryObjectCreate(%Object.prototype%).
   const restObj = OrdinaryObjectCreate(surroundingAgent.intrinsic('%Object.prototype%'));
   // 3. Perform ? CopyDataProperties(restObj, value, excludedNames).
-  Q(yield* CopyDataProperties(restObj, value, excludedNames));
+  BeginObjectResult(restObj);
+  let valueResult;
+  try {
+    Q(yield* CopyDataProperties(restObj, value, excludedNames, sourceResult));
+    valueResult = CompleteObjectResult(restObj);
+  } finally {
+    EndObjectResult(restObj);
+  }
   // proposal-runtime-types #sec-typed-destructuring: a rest's annotation is the
   // type of what it COLLECTS - an object type, since an object rest collects an
   // Object - and is enforced at this binding as any annotation is. It is the
@@ -31,9 +39,9 @@ export function* RestBindingInitialization(node: ParseNode.BindingRestProperty, 
   // named, which is why leaving it untypeable typed the wrong half of the
   // pattern.
   let bound = TypeAnnotation
-    ? Q(yield* EnforceAnnotation(TypeAnnotation, restObj))
+    ? Q(yield* EnforceAnnotation(TypeAnnotation, restObj, valueResult))
     : restObj;
-  const inferred = Q(yield* EnforceInferredBinding(node, bound));
+  const inferred = Q(yield* EnforceInferredBinding(node, bound, undefined, valueResult));
   bound = inferred.value;
   // 4. If environment is undefined, return PutValue(lhs, restObj).
   if (environment === Value.undefined) {
@@ -42,5 +50,6 @@ export function* RestBindingInitialization(node: ParseNode.BindingRestProperty, 
   // 5. Return InitializeReferencedBinding(lhs, restObj).
   const initialized = Q(yield* InitializeReferencedBinding(lhs, bound));
   if (inferred.type) recordDeclaredType(lhs, inferred.type);
+  if (TypeAnnotation || inferred.type) RetainBindingResult(lhs, valueResult);
   return initialized;
 }

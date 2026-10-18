@@ -4,7 +4,6 @@ import { EnforceAnnotation, IsOfTypeNode } from '../abstract-ops/runtime-types.m
 import { CreateRefBinding, RefBindingHolder } from '../execution-context/Environment.mts';
 import { Throw } from '../host-defined/error-messages.mts';
 import { NormalCompletion } from '../completion.mts';
-import { Evaluate } from '../evaluator.mts';
 import { StringValue, IsAnonymousFunctionDefinition } from '../static-semantics/all.mts';
 import { Q } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
@@ -14,7 +13,7 @@ import {
   NamedEvaluation,
   BindingInitialization,
 } from './all.mts';
-import { EnsureCompletion, EvaluateResultValue, RetainBindingResult } from '#self';
+import { EnsureCompletion, EvaluateResultValue, RetainBindingResult, ProjectResultDependency } from '#self';
 import {
   GetV,
   GetValue,
@@ -28,19 +27,22 @@ import type {
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-runtime-semantics-keyedbindinginitialization */
-export function* KeyedBindingInitialization(node: ParseNode.BindingElement | ParseNode.SingleNameBinding, value: Value, environment: EnvironmentRecord | UndefinedValue, propertyName: PropertyKeyValue) {
+export function* KeyedBindingInitialization(node: ParseNode.BindingElement | ParseNode.SingleNameBinding, value: Value, environment: EnvironmentRecord | UndefinedValue, propertyName: PropertyKeyValue, sourceResult?: object) {
   if (node.type === 'BindingElement') {
     // 1. Let v be ? GetV(value, propertyName).
-    let v = Q(yield* GetV(value, propertyName));
+    let valueResult = EnsureCompletion(yield* GetV(value, propertyName));
+    if (valueResult.Type !== 'normal') return valueResult;
+    ProjectResultDependency(sourceResult, propertyName, valueResult);
+    let v = valueResult.Value;
     // 2. If Initializer is present and v is undefined, then
     if (node.Initializer && v === Value.undefined) {
       // a. Let defaultValue be the result of evaluating Initializer.
-      const defaultValue = Q(yield* Evaluate(node.Initializer));
-      // b. Set v to ? GetValue(defaultValue).
-      v = Q(yield* GetValue(defaultValue));
+      valueResult = EnsureCompletion(yield* EvaluateResultValue(node.Initializer));
+      if (valueResult.Type !== 'normal') return valueResult;
+      v = valueResult.Value;
     }
     // 2. Return the result of performing BindingInitialization for BindingPattern passing v and environment as arguments.
-    return yield* BindingInitialization(node.BindingPattern, v, environment);
+    return yield* BindingInitialization(node.BindingPattern, v, environment, valueResult);
   } else {
     // 1. Let bindingId be StringValue of BindingIdentifier.
     const bindingId = StringValue(node.BindingIdentifier);
@@ -49,6 +51,7 @@ export function* KeyedBindingInitialization(node: ParseNode.BindingElement | Par
     // 3. Let v be ? GetV(value, propertyName).
     let valueResult = EnsureCompletion(yield* GetV(value, propertyName));
     if (valueResult.Type !== 'normal') return valueResult;
+    ProjectResultDependency(sourceResult, propertyName, valueResult);
     let v = valueResult.Value;
     const usedDefault = !!node.Initializer && v === Value.undefined;
     if (node.Initializer && v === Value.undefined) {

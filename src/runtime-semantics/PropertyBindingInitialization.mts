@@ -13,7 +13,7 @@ import type {
 // BindingProperty :
 //   SingleNameBinding
 //   PropertyName `:` BindingElement
-export function* PropertyBindingInitialization(node: ParseNode.BindingPropertyList | ParseNode.BindingPropertyLike, value: Value, environment: EnvironmentRecord | UndefinedValue): PlainEvaluator<PropertyKeyValue[]> {
+export function* PropertyBindingInitialization(node: ParseNode.BindingPropertyList | ParseNode.BindingPropertyLike, value: Value, environment: EnvironmentRecord | UndefinedValue, sourceResult?: object): PlainEvaluator<PropertyKeyValue[]> {
   if (isArray(node)) {
     // 1. Let boundNames be ? PropertyBindingInitialization of BindingPropertyList with arguments value and environment.
     // 2. Let nextNames be ? PropertyBindingInitialization of BindingProperty with arguments value and environment.
@@ -21,7 +21,7 @@ export function* PropertyBindingInitialization(node: ParseNode.BindingPropertyLi
     // 4. Return boundNames.
     const boundNames: PlainCompletion<PropertyKeyValue[]> = [];
     for (const item of node) {
-      const nextNames = Q(yield* PropertyBindingInitialization(item, value, environment));
+      const nextNames = Q(yield* PropertyBindingInitialization(item, value, environment, sourceResult));
       boundNames.push(...nextNames);
     }
     return boundNames;
@@ -31,14 +31,14 @@ export function* PropertyBindingInitialization(node: ParseNode.BindingPropertyLi
     const P = yield* Evaluate_PropertyName(node.PropertyName);
     Q(P);
     // 3. Perform ? KeyedBindingInitialization of BindingElement with value, environment, and P as the arguments.
-    Q(yield* KeyedBindingInitialization(node.BindingElement, value, environment, P as PropertyKeyValue));
+    Q(yield* KeyedBindingInitialization(node.BindingElement, value, environment, P as PropertyKeyValue, sourceResult));
     // 4. Return a new List containing P.
     return [P as PropertyKeyValue];
   } else {
     // 1. Let name be the string that is the only element of BoundNames of SingleNameBinding.
     const name = BoundNames(node)[0];
     // 2. Perform ? KeyedBindingInitialization for SingleNameBinding using value, environment, and name as the arguments.
-    Q(yield* KeyedBindingInitialization(node as ParseNode.SingleNameBinding, value, environment, name));
+    Q(yield* KeyedBindingInitialization(node as ParseNode.SingleNameBinding, value, environment, name, sourceResult));
     // 3. Return a new List containing name.
     return [name];
   }

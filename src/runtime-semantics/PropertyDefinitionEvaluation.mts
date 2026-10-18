@@ -32,7 +32,6 @@ import {
   Assert,
   CheckedConvertValue,
   DefinePropertyOrThrow,
-  GetValue,
   CreateDataPropertyOrThrow,
   CopyDataProperties,
   DefineMethodProperty,
@@ -306,13 +305,13 @@ function* PropertyDefinitionEvaluation_PropertyDefinitionInner(PropertyDefinitio
   const { PropertyName, AssignmentExpression } = PropertyDefinition;
   if (!PropertyName) {
     // 1. Let exprValue be the result of evaluating AssignmentExpression.
-    const exprValue = Q(yield* Evaluate(AssignmentExpression));
-    // 2. Let fromValue be ? GetValue(exprValue).
-    const fromValue = Q(yield* GetValue(exprValue));
+    const sourceResult = EnsureCompletion(yield* EvaluateResultValue(AssignmentExpression));
+    if (sourceResult.Type !== 'normal') return sourceResult;
+    const fromValue = sourceResult.Value;
     // 3. Let excludedNames be a new empty List.
     const excludedNames: PropertyKeyValue[] = [];
     // 4. Return ? CopyDataProperties(object, fromValue, excludedNames).
-    return Q(yield* CopyDataProperties(object, fromValue, excludedNames));
+    return Q(yield* CopyDataProperties(object, fromValue, excludedNames, sourceResult));
   }
   // 1. Let propKey be the result of evaluating PropertyName.
   const propKey = Q(yield* Evaluate_PropertyName(PropertyName));
