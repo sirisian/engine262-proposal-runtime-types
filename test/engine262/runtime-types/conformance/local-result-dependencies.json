@@ -1,0 +1,382 @@
+{
+  "cases": [
+    {
+      "name": "forwarding through a const created inside the caller",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(){const local=convert;return local(\"yes\");}use();log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "t"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two return sites retain one dependency",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(flag:boolean){if(flag)return convert(\"yes\");return convert(\"yes\");}use(true);log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "t"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local alias chain and parentheses",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(){const first=(convert);const second=(first);return (second)(\"yes\");}use();log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "t"
+          }
+        }
+      ]
+    },
+    {
+      "name": "alias initializer keeps its own lexical lookup",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(){const local=convert;{const convert=(v:any)=>false;return local(\"yes\");}}use();log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "t"
+          }
+        }
+      ]
+    },
+    {
+      "name": "body alias shadows an unrelated outer function",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}const convert=make.<string>();const local=()=>false;function use(){const local=convert;return local(\"yes\");}use();log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "t"
+          }
+        }
+      ]
+    },
+    {
+      "name": "block alias declarations agree by source identity",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(flag:boolean){if(flag){const local=convert;return local(\"yes\");}else{const local=convert;return local(\"yes\");}}use(false);use(true);log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "tt"
+          }
+        }
+      ]
+    },
+    {
+      "name": "aliases across nested blocks",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(flag:boolean){const first=convert;if(flag){const second=first;return second(\"yes\");}return first(\"yes\");}use(true);use(false);log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "tt"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct captured bindings preserve the same closure",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}const convert=make.<string>();const other=convert;function use(flag:boolean){if(flag)return other(\"yes\");return convert(\"yes\");}use(false);use(true);log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "tt"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct wrappers converge on the same class identity",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}const convert=make.<string>();const one=(v:any)=>convert(v);const two=(v:any)=>{const local=convert;return local(v);};function use(flag:boolean){if(flag)return one(\"yes\");return two(\"yes\");}use(true);use(false);log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "tt"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shared dependency graph is order independent",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}const convert=make.<string>();const leaf=(v:any)=>convert(v);const one=(v:any)=>leaf(v);const two=(v:any)=>leaf(v);function use(flag:boolean){if(flag)return two(\"yes\");return one(\"yes\");}use(false);use(true);log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "tt"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local aliases retain factory generic arguments",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use<T:type>(flag:boolean){const local=convert;if(flag)return local(\"yes\");return convert(\"yes\");}use.<boolean>(true);use.<uint8>(false);log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "tt"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed alias call restores the caller frame",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use<T:type>(v:any){const local=convert;return local(v);}try{use.<boolean>(1);}catch(e){log+=String(e instanceof TypeError);}use.<uint8>(\"yes\");log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "truet"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local alias TDZ is not bypassed by contract completion",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(flag:boolean){if(flag)return local(\"yes\");const local=convert;return local(\"yes\");}try{use(true);}catch(e){log+=String(e instanceof ReferenceError);}use(false);log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "truet"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection neither invokes nor initializes local aliases",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(flag:boolean){log+=\"u\";const local=convert;if(flag)return local(\"yes\");return convert(\"yes\");}Reflect.typeOf(use);const before=log;use(false);before+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "/ut"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection preserves completed forwarding result",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(flag:boolean){const local=convert;if(flag)return local(\"yes\");return convert(\"yes\");}const target=Reflect.getReflection(Reflect.typeOf(use)).signatures[0].return.type;const raw:any=use(true);String(raw instanceof target)+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/t"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finally replacement retains the common result dependency",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(flag:boolean){const local=convert;try{return local(\"one\");}finally{if(flag)return convert(\"two\");}}use(true);use(false);log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ttt"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested declarations do not contribute returns",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(){function unused(){return \"wrong\";}class Q{method(){return \"wrong\";}}const local=convert;return local(\"yes\");}use();log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "t"
+          }
+        }
+      ]
+    },
+    {
+      "name": "caller class shadow supplies no nominal identity",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}const convert=make.<string>();class P{constructor(v:string){log+=\"wrong\";}}function use(flag:boolean){const local=convert;if(flag)return local(\"yes\");return convert(\"yes\");}use(true);use(false);log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "tt"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unrelated instance does not choose the inferred target",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}const convert=make.<string>();class Q{}function use(v:any){const local=convert;return local(v);}const raw:any=new Q();try{use(raw);}catch(e){log+=String(e instanceof TypeError);}use(\"yes\");log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "truet"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value-preserving local aliases keep side-effect order",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(){log+=\"before\";const local=convert;log+=\"after\";return local(\"yes\");}use();log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "beforeaftert"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outer source TDZ remains observable and later call succeeds",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}function use(){const local=convert;return local(\"yes\");}try{use();}catch(e){log+=String(e instanceof ReferenceError);}const convert=make.<string>();use();log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "truet"
+          }
+        }
+      ]
+    },
+    {
+      "name": "separate activations retain their own alias target",
+      "steps": [
+        {
+          "source": "function make(tag:string){class P{tag:string=tag;constructor(v:string){}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function one(){const local=a;return local(\"x\");}function two(){const local=b;return local(\"x\");}one().tag+two().tag+one().tag;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "aba"
+          }
+        }
+      ]
+    },
+    {
+      "name": "foreign activation cannot satisfy an alias target",
+      "steps": [
+        {
+          "source": "function make(tag:string){class P{tag:string=tag;constructor(v:string){}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function one(v:any){const local=a;return local(v);}const raw:any=b(\"x\");let result=\"\";try{one(raw);}catch(e){result=String(e instanceof TypeError);}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "untyped callable aliases preserve their any boundary",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(){const local:(any)=>any=convert;return local(\"yes\");}use();log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "t"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary plain value aliases remain unchanged",
+      "steps": [
+        {
+          "source": "function use(){const value=\"saved\";const local=value;return local;}use();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "saved"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written return still checks a replaced callee",
+      "steps": [
+        {
+          "source": "class P{}let read:()=>P=()=>new P();function use():P{return read();}const bad:any=()=>({});read=bad;let result=\"\";try{use();}catch(e){result=String(e instanceof TypeError);}result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflecting a reference-local body performs no getter read",
+      "steps": [
+        {
+          "source": "class P{}let reads=0;const holder={get run():(any)=>P{reads++;return(v:any):P=>new P();}};function use(){const ref local=holder.run;return local(\"x\");}Reflect.typeOf(use);String(reads);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    }
+  ]
+}

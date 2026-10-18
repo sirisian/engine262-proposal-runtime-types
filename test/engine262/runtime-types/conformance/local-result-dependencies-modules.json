@@ -1,0 +1,42 @@
+{
+  "cases": [
+    {
+      "name": "Module body-local and multiple-return dependency",
+      "modules": {
+        "main": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(flag:boolean){const local=convert;if(flag)return local(\"yes\");return convert(\"yes\");}use(true);use(false);await 0;if(log!==\"tt\")throw new Error(\"wrong result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "retained imported closure crosses local alias path",
+      "modules": {
+        "dep": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return(v:any)=>{const p:P=v;return p;};}export const convert=make.<string>();",
+        "main": "import {convert} from \"dep\";const retained=convert;function use(flag:boolean){const local=retained;if(flag)return local(\"yes\");return retained(\"yes\");}use(true);use(false);await 0;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "Module alias activations remain independent",
+      "modules": {
+        "main": "function make(tag:string){class P{tag:string=tag;constructor(v:string){}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function one(){const local=a;return local(\"x\");}function two(){const local=b;return local(\"x\");}const result=one().tag+two().tag+one().tag;await 0;if(result!==\"aba\")throw new Error(\"wrong activation\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}
