@@ -1,7 +1,9 @@
 import type { TypeRecord } from './records.mts';
-import { ObjectValue } from '#self';
+import { ObjectValue, ReferenceRecord, JSStringValue, EnvironmentRecord, RefBindingHolder,
+  EnsureCompletion, Evaluate, GetValue, type NormalCompletion, type Value,
+  type ValueEvaluator, type ParseNode } from '#self';
 
-// These keys are individual internal completions, never returned values,
+// These keys are internal completions or immutable bindings, never returned values,
 // function values or shared syntax. A forwarded dependency is only a candidate
 // until the receiving function's own result admission succeeds.
 const accepted = new WeakMap<object, TypeRecord>();
@@ -39,4 +41,29 @@ export function ForwardResultDependency<T extends object>(from: object, to: T): 
   const type = accepted.get(from);
   if (type) forwarded.set(to, type);
   return to;
+}
+
+/** Read once and preserve only the contract of the value actually obtained. */
+export function* GetResultValue(result: NormalCompletion<ReferenceRecord | Value>): ValueEvaluator {
+  const read = EnsureCompletion(yield* GetValue(result.Value));
+  if (read.Type !== 'normal') return read;
+  // A binding read supplies its own evidence after TDZ/reference checks. Do not
+  // transfer metadata from a reference evaluated before the value was read.
+  if (result.Value instanceof ReferenceRecord) return read;
+  return TransferResultDependency(result, read);
+}
+
+/** Value-preserving expression evaluation, including ordinary GetValue. */
+export function* EvaluateResultValue(node: ParseNode.AssignmentExpressionOrHigher): ValueEvaluator {
+  const result = EnsureCompletion(yield* Evaluate(node));
+  if (result.Type !== 'normal') return result;
+  return yield* GetResultValue(result);
+}
+
+/** Only a successfully initialized immutable ordinary binding retains evidence. */
+export function RetainBindingResult(reference: ReferenceRecord, completion: object): void {
+  if (!(reference.Base instanceof EnvironmentRecord) || !(reference.ReferencedName instanceof JSStringValue)) return;
+  const binding = RefBindingHolder(reference.Base, reference.ReferencedName)?.bindings.get(reference.ReferencedName);
+  if (!binding?.initialized || binding.mutable !== false || binding.indirect || binding.refLocation) return;
+  TransferResultDependency(completion, binding);
 }

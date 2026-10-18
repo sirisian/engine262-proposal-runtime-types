@@ -35,7 +35,7 @@ import {
   type Body,
   functionHasAnnotations,
   EnforceParameterTypes,
-  EnforceReturnType, ConversionResultTypeNode,
+  EnforceReturnType, ConversionResultTypeNode, GetResultValue,
   VerifyContracts,
   InferGenericCallBindings,
   functionTypeParameters,
@@ -146,11 +146,11 @@ export function* Evaluate_ExpressionBody({ AssignmentExpression }: ParseNode.Exp
   // 1. Let exprRef be the result of evaluating AssignmentExpression.
   const expressionResult = EnsureCompletion(yield* Evaluate(AssignmentExpression));
   if (expressionResult.Type !== 'normal') return expressionResult;
-  const exprRef = expressionResult.Value;
-  // 2. Let exprValue be ? GetValue(exprRef).
-  const exprValue = Q(yield* GetValue(exprRef));
+  const valueResult = EnsureCompletion(yield* GetResultValue(expressionResult));
+  if (valueResult.Type !== 'normal') return valueResult;
+  const exprValue = valueResult.Value;
   // 3. Return Completion { [[Type]]: return, [[Value]]: exprValue, [[Target]]: empty }.
-  return ForwardResultDependency(expressionResult, new Completion({ Type: 'return', Value: exprValue, Target: undefined }));
+  return ForwardResultDependency(valueResult, new Completion({ Type: 'return', Value: exprValue, Target: undefined }));
 }
 
 /** https://tc39.es/ecma262/#sec-arrow-function-definitions-runtime-semantics-evaluatebody */

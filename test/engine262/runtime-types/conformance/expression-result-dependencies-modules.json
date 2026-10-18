@@ -1,0 +1,30 @@
+{
+  "cases": [
+    {
+      "name": "Module stored selected result",
+      "modules": {
+        "main": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const result=flag?a(\"x\"):b(\"x\");return result;}if(use(false).tag!==\"b\"||log!==\"b\")throw \"bad result\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "Module indirect immutable result read",
+      "modules": {
+        "dep": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}export const first=choose(true);export const second=choose(false);",
+        "main": "import {first,second} from \"dep\";function use(flag:boolean){return flag?first:second;}if(use(true).tag!==\"a\"||use(false).tag!==\"b\")throw \"bad result\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    }
+  ]
+}

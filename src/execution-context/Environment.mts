@@ -37,6 +37,7 @@ import {
   type ECMAScriptFunctionObject,
   Throw,
   type FunctionObject,
+  TransferResultDependency,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-environment-records */
@@ -406,7 +407,7 @@ export class DeclarativeEnvironmentRecord extends EnvironmentRecord {
       return uninitializedBindingRead(binding, N);
     }
     // 4. Return the value currently bound to N in envRec.
-    return NormalCompletion(binding.value!);
+    return TransferResultDependency(binding, NormalCompletion(binding.value!));
   }
 
   /** https://tc39.es/ecma262/#sec-declarative-environment-records-deletebinding-n */
@@ -597,7 +598,7 @@ export class ModuleEnvironmentRecord extends DeclarativeEnvironmentRecord {
       return uninitializedBindingRead(binding, N);
     }
     // 6. Return the value currently bound to N in envRec.
-    return NormalCompletion(binding.value!);
+    return TransferResultDependency(binding, NormalCompletion(binding.value!));
   }
 
   /** https://tc39.es/ecma262/#sec-module-environment-records-deletebinding-n */

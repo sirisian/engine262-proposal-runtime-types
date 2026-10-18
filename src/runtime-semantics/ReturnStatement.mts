@@ -10,7 +10,7 @@ import {
   ThrowCompletion,
 } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { GetValue, GetGeneratorKind, surroundingAgent, ForwardResultDependency } from '#self';
+import { GetGeneratorKind, surroundingAgent, ForwardResultDependency, GetResultValue } from '#self';
 
 /** https://tc39.es/ecma262/#sec-return-statement-runtime-semantics-evaluation */
 //  ReturnStatement :
@@ -38,13 +38,13 @@ export function* Evaluate_ReturnStatement({ Expression }: ParseNode.ReturnStatem
     expressionResult = EnsureCompletion(yield* Evaluate(Expression));
   }
   if (expressionResult.Type !== 'normal') return expressionResult;
-  const exprRef = expressionResult.Value;
-  // 1. Let exprValue be ? GetValue(exprRef).
-  let exprValue = Q(yield* GetValue(exprRef));
+  const valueResult = EnsureCompletion(yield* GetResultValue(expressionResult));
+  if (valueResult.Type !== 'normal') return valueResult;
+  let exprValue = valueResult.Value;
   // 1. If ! GetGeneratorKind() is async, set exprValue to ? Await(exprValue).
   if (X(GetGeneratorKind()) === 'async') {
     exprValue = Q(yield* Await(exprValue));
   }
   // 1. Return Completion { [[Type]]: return, [[Value]]: exprValue, [[Target]]: empty }.
-  return ForwardResultDependency(expressionResult, new Completion({ Type: 'return', Value: exprValue, Target: undefined }));
+  return ForwardResultDependency(valueResult, new Completion({ Type: 'return', Value: exprValue, Target: undefined }));
 }

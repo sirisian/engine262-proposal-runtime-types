@@ -32,6 +32,7 @@ import {
   Throw,
   OrdinaryObjectCreate,
   CreateDataProperty,
+  GetResultValue, RetainBindingResult,
 } from '#self';
 import { pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
@@ -98,6 +99,7 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
     // 2. Let lhs be ResolveBinding(bindingId).
     const lhs = X(ResolveBinding(bindingId, undefined, strict));
     let value: Value;
+    let valueResult;
     // 3. If IsAnonymousFunctionDefinition(Initializer) is true, then
     if (IsAnonymousFunctionDefinition(Initializer)) {
       // a. Let value be NamedEvaluation of Initializer with argument bindingId.
@@ -147,18 +149,22 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
       let rhs;
       try {
         // a. Let rhs be the result of evaluating Initializer.
-        rhs = Q(yield* Evaluate(Initializer));
+        rhs = EnsureCompletion(yield* Evaluate(Initializer));
       } finally {
         popContextualType();
       }
-      // b. Let value be ? GetValue(rhs).
-      value = Q(yield* GetValue(rhs));
+      if (rhs.Type !== 'normal') return rhs;
+      valueResult = EnsureCompletion(yield* GetResultValue(rhs));
+      if (valueResult.Type !== 'normal') return valueResult;
+      value = valueResult.Value;
     }
     // proposal-runtime-types: the annotation check at the binding boundary.
-    value = Q(yield* EnforceAnnotation(TypeAnnotation, value));
-    const inferred = InferredConstTypeOf(node);
+    value = Q(yield* EnforceAnnotation(TypeAnnotation, value, valueResult));
+    let inferred = InferredConstTypeOf(node);
     if (!TypeAnnotation && inferred) {
-      value = Q(yield* EnforceInferredBinding(node, value, Initializer)).value;
+      const checked = Q(yield* EnforceInferredBinding(node, value, Initializer, valueResult));
+      value = checked.value;
+      inferred = checked.type;
     }
     // #sec-value-type-copying: initializing a binding from a value of a value
     // type class COPIES it - and CONSTRUCTION does not, the clause requiring
@@ -180,6 +186,7 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
     } else if (inferred) {
       recordDeclaredType(lhs, inferred);
     }
+    if (valueResult && (TypeAnnotation || inferred)) RetainBindingResult(lhs, valueResult);
     if (lhs.Base instanceof EnvironmentRecord) PublishStringConstant(lhs.Base, bindingId, StringConstantEvidenceOf(node));
     return initialized;
   } else {

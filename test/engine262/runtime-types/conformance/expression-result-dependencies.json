@@ -1,0 +1,582 @@
+{
+  "cases": [
+    {
+      "name": "conditional true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){return flag?a(\"x\"):b(\"x\");}use(true).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a/a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored result true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const result=choose(flag);return result;}use(true).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a/a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored conditional true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const result=flag?a(\"x\"):b(\"x\");const alias=result;return alias;}use(true).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a/a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "concise conditional true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const use=(flag:boolean)=>flag?a(\"x\"):b(\"x\");use(true).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a/a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "conditional false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){return flag?a(\"x\"):b(\"x\");}use(false).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored result false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const result=choose(flag);return result;}use(false).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored conditional false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const result=flag?a(\"x\"):b(\"x\");const alias=result;return alias;}use(false).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "concise conditional false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const use=(flag:boolean)=>flag?a(\"x\"):b(\"x\");use(false).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "logical or left",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(){return a(\"x\")||b(\"x\");}use().tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a/a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "logical or right",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(){return false||b(\"x\");}use().tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "logical and right",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(){return a(\"x\")&&b(\"x\");}use().tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "coalesce left",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(){return a(\"x\")??b(\"x\");}use().tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a/a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "coalesce right",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(){return null??b(\"x\");}use().tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "comma last dependency",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(){return (a(\"x\"),b(\"x\"));}use().tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unreachable selected expression remains rejected",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){return (a(\"x\"),(flag?a(\"x\"):b(\"x\"))||a(\"x\"));}use(false).tag+\"/\"+log;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_UNREACHABLE_OPERAND",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "global const result",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const result=choose(false);function use(){return result;}use().tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "block const survives block",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(){ { const result=choose(false);return result;} }use().tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "escaped binding closure",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function factory(flag:boolean){const result=choose(flag);return()=>result;}const first=factory(true);const second=factory(false);first().tag+second().tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab/ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same named binding activations",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const result=choose(flag);return result;}use(true).tag+use(false).tag+use(true).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "aba/aba"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reentry cannot replace stored result",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const result=choose(flag);if(flag)use(false);return result;}use(true).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a/ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "normal finally preserves stored result",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(){const result=choose(true);try{return result;}finally{choose(false);}}use().tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a/ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "replacing finally selects own expression",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(){const result=choose(true);try{return result;}finally{return false?a(\"x\"):b(\"x\");}}use().tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "throwing finally exports no result",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(){const result=choose(true);try{return result;}finally{throw \"stop\";}}let text=\"\";try{use();}catch(e){text=e;}text+\"/\"+choose(false).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "stop/b/ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected expression evaluates once",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}let count=0;function condition():boolean{count++;return false;}function use(){return condition()?a(\"x\"):b(\"x\");}use().tag+\"/\"+count+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/1/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ambient spelling cannot replace dependency",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}class P{tag:string=\"wrong\";}function use(){const result=choose(false);return result;}use().tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const alias annotation erases dependency",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use():any{const result:any=choose(false);return result;}use().tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed const write preserves checked binding",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(){const result=choose(true);try{eval(\"result=choose(false)\");}catch(e){}return result;}use().tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 2,
+            "value": "a/ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "conditional throws selected error",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function fail():never{throw \"stop\";}function use(flag:boolean){return flag?a(\"x\"):fail();}let text=\"\";try{use(false);}catch(e){text=e;}text+\"/\"+use(true).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "stop/a/a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unselected expression has no effects",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){return flag?a(\"x\"):b(1);}use(true).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a/a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "short circuit primitives",
+      "steps": [
+        {
+          "source": "function use(){return (false&&\"bad\")+\"/\"+(true||\"bad\")+\"/\"+(null??\"ok\");}use();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested conditional comma",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){return (a(\"x\"),flag?a(\"x\"):b(\"x\"));}use(false).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic invocation frame const result",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use<T:type>(flag:boolean){const result=choose(flag);return result;}use.<string>(false).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected result followed by unrelated argument call",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function first(x:any,y:any):any{return x;}function use(){const result=choose(true);first(0,choose(false));return result;}use().tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a/ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "TDZ is not bypassed by retained initializer source",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(){return result;const result=choose(false);}let text=\"\";try{use();}catch(e){text=\"caught\";}text+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "caught/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shadowed binding has its own dependency",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(){const result=choose(true);{const result=choose(false);return result;}}use().tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored typed object keeps prototype protection",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(){const result=choose(false);Object.setPrototypeOf(result,{});return result;}use();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "Could not set prototype"
+        },
+        {
+          "source": "log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written return target rejects selected stored class",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}class Q{tag:string=\"q\";}function use():Q{const result=choose(false);return result;}use();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored result control: a foreign activation is rejected by the callee before forwarding",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function use(v:any){const local=a;const result=local(v);return result;}const raw:any=b(\"x\");let caught=\"\";try{use(raw);}catch(e){caught=String(e instanceof TypeError);}caught+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored result control: a written return remains authoritative",
+      "steps": [
+        {
+          "source": "class P{}let read:()=>P=()=>new P();function use():P{const result=read();return result;}const bad:any=()=>({});read=bad;let caught=\"\";try{use();}catch(e){caught=String(e instanceof TypeError);}caught;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored result control: reflection does not publish the last executed contribution",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){const result=flag?a(\"x\"):b(\"x\");return result;}const before=Reflect.getReflection(Reflect.typeOf(choose)).signatures[0].return.type;choose(true);choose(false);const after=Reflect.getReflection(Reflect.typeOf(choose)).signatures[0].return.type;String(before===after)+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/ab"
+          }
+        }
+      ]
+    }
+  ]
+}

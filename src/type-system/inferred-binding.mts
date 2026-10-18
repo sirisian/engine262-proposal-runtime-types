@@ -7,13 +7,15 @@ import { IsOfType, BindTypeArgumentRecords, toNumericArgument, currentTypeParame
 import { InferredConstTypeOf } from './check.mts';
 import { substituteParametersNamed } from './unify.mts';
 import { makePrimitive, type TypeRecord } from './records.mts';
+import { InstantiateReturnDependency, ForwardResultDependency, RetainCheckedResult } from '#self';
 
 /** The inferred initialization boundary, shared by plain and extracted bindings. */
-export function* EnforceInferredBinding(node: object, value: Value, initializer?: ParseNode | null): PlainEvaluator<{ value: Value, type?: TypeRecord }> {
+export function* EnforceInferredBinding(node: object, value: Value, initializer?: ParseNode | null, completion?: object): PlainEvaluator<{ value: Value, type?: TypeRecord }> {
   const inferred = InferredConstTypeOf(node);
   if (!inferred) return { value };
   const parameters = currentTypeParameterFrame();
   let target = parameters ? (substituteParametersNamed(inferred, parameters) ?? inferred) : inferred;
+  if (completion) target = InstantiateReturnDependency(target, ForwardResultDependency(completion, completion));
   if (target.Kind === 'nominal' && !target.LibraryName) {
     const typeParameters = (target.Declaration as ParseNode.ClassDeclaration | undefined)?.TypeParameters?.TypeParameterList;
     if (typeParameters?.length && target.Arguments.length) {
@@ -42,5 +44,6 @@ export function* EnforceInferredBinding(node: object, value: Value, initializer?
   if (!Q(yield* IsOfType(value, target))) {
     value = Q(yield* RequireType(value, target));
   }
+  RetainCheckedResult(completion, target);
   return { value, type: target };
 }

@@ -1,18 +1,14 @@
-import { Evaluate } from '../evaluator.mts';
-import { Q } from '../completion.mts';
+import { EnsureCompletion, type NormalCompletion } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { GetValue } from '#self';
-import type { Value, ValueEvaluator } from '#self';
+import { EvaluateResultValue, type Value, type ValueEvaluator } from '#self';
 
 /** https://tc39.es/ecma262/#sec-comma-operator-runtime-semantics-evaluation */
-//   Expression :
-//     AssignmentExpression
-//     Expression `,` AssignmentExpression
 export function* Evaluate_CommaOperator({ ExpressionList }: ParseNode.CommaOperator): ValueEvaluator {
-  let result!: Value;
+  let result!: NormalCompletion<Value>;
   for (const Expression of ExpressionList) {
-    const lref = Q(yield* Evaluate(Expression));
-    result = Q(yield* GetValue(lref));
+    const next = EnsureCompletion(yield* EvaluateResultValue(Expression));
+    if (next.Type !== 'normal') return next;
+    result = next;
   }
   return result;
 }

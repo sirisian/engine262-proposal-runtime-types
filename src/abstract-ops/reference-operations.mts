@@ -238,7 +238,7 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
     // b. Assert: base is an Environment Record.
     Assert(base instanceof EnvironmentRecord);
     // c. Return ? base.GetBindingValue(V.[[ReferencedName]], V.[[Strict]]).
-    return Q(yield* base.GetBindingValue(V.ReferencedName as JSStringValue, V.Strict));
+    return yield* base.GetBindingValue(V.ReferencedName as JSStringValue, V.Strict);
   }
 }
 

@@ -2,7 +2,7 @@ import { Value } from '../value.mts';
 import { Evaluate, type ValueEvaluator } from '../evaluator.mts';
 import { Q, X } from '../completion.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { ToBoolean, GetValue } from '#self';
+import { ToBoolean, GetValue, EvaluateResultValue } from '#self';
 
 /** https://tc39.es/ecma262/#sec-conditional-operator-runtime-semantics-evaluation */
 //   ConditionalExpression :
@@ -18,14 +18,8 @@ export function* Evaluate_ConditionalExpression({
   const lval = X(ToBoolean(Q(yield* GetValue(lref))));
   // 3. If lval is true, then
   if (lval === Value.true) {
-    // a. Let trueRef be the result of evaluating the first AssignmentExpression.
-    const trueRef = Q(yield* Evaluate(AssignmentExpression_a));
-    // b. Return ? GetValue(trueRef).
-    return Q(yield* GetValue(trueRef));
+    return yield* EvaluateResultValue(AssignmentExpression_a);
   } else { // 4. Else,
-    // a. Let falseRef be the result of evaluating the second AssignmentExpression.
-    const falseRef = Q(yield* Evaluate(AssignmentExpression_b));
-    // b. Return ? GetValue(falseRef).
-    return Q(yield* GetValue(falseRef));
+    return yield* EvaluateResultValue(AssignmentExpression_b);
   }
 }
