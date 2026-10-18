@@ -49,7 +49,7 @@ import type { EnvironmentRecord } from '../execution-context/Environment.mts';
 import { bindLibraryTypeArguments, RememberLibraryApplication } from '../type-system/library-type-arguments.mts';
 import { classTypeParameterFrame } from './CallExpression.mts';
 import { substituteParameterRecords } from '../type-system/relations.mts';
-import { orderTypeArguments, typeArgumentNameOf } from '../type-system/type-argument-order.mts';
+import { typeArgumentNameOf } from '../type-system/type-argument-order.mts';
 import { builtinTypeRecord, displayType, propertyKeyValue } from '../type-system/records.mts';
 import { markBuiltinFunctionAsConstructor } from '../abstract-ops/function-operations.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
@@ -69,7 +69,7 @@ import { ClassDefinitionEvaluation, PartialClassMergeEvaluation } from './ClassD
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
 import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
-import { Assert, OrdinaryObjectCreate, CreateDataProperty, InCapturedTypeContext, type CapturedTypeContext } from '#self';
+import { Assert, OrdinaryObjectCreate, CreateDataProperty, InCapturedTypeContext, BindTypeArgumentRecordsInto, specializationDepthExhausted, type CapturedTypeContext } from '#self';
 import { ClaimMetaKey, MetaTypeClaiming, CreateDataPropertyOrThrow, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaShape, NormalizeMetadataRecord, MetadataSatisfiesShape, RegisterMetaHook, RegisterMetaTypeName, RegisterMetaTypeParameterName, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
 
 /**
@@ -1963,7 +1963,7 @@ function* ApplyPartialClass(extension: PartialClassExtension, primary: ParseNode
   }
 }
 
-function* RegisterPartialClassStructure(primary: ParseNode.ClassDeclaration, node: ParseNode.ClassDeclaration): PlainEvaluator<void> {
+function* RegisterPartialClassStructure(primary: ParseNode.ClassDeclaration, node: ParseNode.ClassDeclaration, family?: Value): PlainEvaluator<void> {
   const frame = new Map<string, TypeRecord>();
   for (const parameter of [...(primary.TypeParameters?.TypeParameterList ?? []), ...(node.TypeParameters?.Captures ?? [])]) {
     frame.set(parameter.BindingIdentifier.name, { Kind: 'parameter', Name: parameter.BindingIdentifier.name });
@@ -1977,13 +1977,14 @@ function* RegisterPartialClassStructure(primary: ParseNode.ClassDeclaration, nod
   }
   const published = PublishedClassTypeOf(node);
   if (published?.Kind !== 'nominal') return undefined;
-  const parts = RuntimePartialContributions(primary);
+  const parts = RuntimePartialContributions(family ? ClassFamilyIdentityOf(family) : primary);
   if (!parts.some((part) => part.Declaration === node)) {
     parts.push({ Declaration: node, Structure: () => published.Structure ?? null, Resolve: (type) => types.get(type) ?? null });
   }
   const updates: { record: TypeRecord, merged: TypeRecord }[] = [];
   let conflict: string | undefined;
   for (const record of NominalRecordsOf(primary)) {
+    if (family && (record.Kind !== 'nominal' || record.DeclarationIdentity !== ClassFamilyIdentityOf(family))) continue;
     updates.push({ record, merged: MergePartialStructures(record, parts, (key) => {
       conflict ??= key;
     }) });
@@ -2006,57 +2007,53 @@ export function* RegisterPartialClass(ctor: Value, node: ParseNode.ClassDeclarat
   }
   const extension = { node, environment: surroundingAgent.runningExecutionContext.LexicalEnvironment,
     privateEnvironment: surroundingAgent.runningExecutionContext.PrivateEnvironment };
-  const extensions = partialClassExtensions.get(declaration) ?? [];
+  const extensions = partialClassExtensions.get(ClassFamilyOf(ctor)) ?? [];
   if (extensions.some((entry) => entry.node === node && entry.environment === extension.environment)) return undefined;
-  for (const specialized of classSpecializations.get(declaration)?.values() ?? []) {
+  for (const specialized of classSpecializations.get(ClassFamilyOf(ctor))?.values() ?? []) {
     const type = LookupClassType(specialized);
     if (type && isTypeObject(type) && type.TypeRecord.Kind === 'nominal') {
       Q(yield* ApplyPartialClass(extension, declaration, specialized, type.TypeRecord.Arguments));
     }
   }
-  Q(yield* RegisterPartialClassStructure(declaration, node));
+  Q(yield* RegisterPartialClassStructure(declaration, node, ClassFamilyOf(ctor)));
   extensions.push(extension);
-  partialClassExtensions.set(declaration, extensions);
+  partialClassExtensions.set(ClassFamilyOf(ctor), extensions);
   return undefined;
 }
 
-/** One specialization per declaration and argument list. */
-const classSpecializations = new Map<unknown, Map<string, Value>>();
+/** One specialization per evaluated family and ordered argument list. */
+const classSpecializations = new WeakMap<Value, Map<string, Value>>();
+const classFamilies = new WeakMap<Value, Value>();
 
-/**
- * The constructor a generic class's application produced, if one has been built.
- *
- * `SpecializeGenericClass` builds a
- * distinct constructor per argument list and registers a record naming it; an
- * ANNOTATION resolving `Box.<uint8>` builds its own record and would otherwise
- * carry the declaration's constructor, which a specialized instance's prototype
- * chain never reaches.
- *
- * Answers undefined where no application has been evaluated yet - the annotation
- * then keeps the record it had, which is what it did before.
- */
-/**
- * Declarations whose specialization is being built right now.
- *
- * An annotation inside a generic class's OWN body names an application that is
- * part of what is being made: `class L<T> { next: L.<T> | null = null; }`
- * resolving `L.<T>` would materialise `L`, whose body resolves `L.<T>`, without
- * end - the linked list of `#sec-layout-finiteness`, which is not an exotic
- * shape. Such an annotation falls through to the record it had, which is right
- * rather than a compromise: the specialization it wants is the one in progress.
- */
-/**
- * The specializations whose class bodies are being evaluated right now, by
- * declaration, each with the cache key of the application under way and - once
- * the body has reached a use of the class's own name - the constructor that
- * name is bound to.
- *
- * The constructor is recorded from the APPLICATION SITE rather than here,
- * because `SpecializeFromFrame` does not have it until `ClassDefinitionEvaluation`
- * returns, while a static field initializer inside that evaluation may apply
- * the class's own name before it does. See `EvaluateTypeArgumentsExpression`.
- */
-const specializationsInProgress = new Map<unknown, { key: string, ctor?: Value }>();
+const classFamilyIdentities = new WeakMap<Value, object>();
+const classFamilyConstructors = new WeakMap<object, Value>();
+const classBindingIdentities = new WeakMap<object, object>();
+
+/** A forward type and the class which later initializes its binding agree. */
+export function ClassDeclarationIdentity(environment: EnvironmentRecord, name: string): object | undefined {
+  const binding = DeclarativeBindingIdentity(environment, Value(name));
+  return binding && (classBindingIdentities.get(binding) ?? binding);
+}
+
+export function ClassFamilyConstructorOf(identity: object): Value | undefined {
+  return classFamilyConstructors.get(identity);
+}
+
+export function ClassFamilyIdentityOf(ctor: Value): object {
+  const family = ClassFamilyOf(ctor);
+  return classFamilyIdentities.get(family) ?? family;
+}
+
+/** The evaluated family shared by its declaration and concrete constructors. */
+export function ClassFamilyOf(ctor: Value): Value {
+  return classFamilies.get(ctor) ?? ctor;
+}
+
+// Exact in-progress applications allow recursive self references without
+// conflating another argument list or another evaluation of the same syntax.
+// ClassDefinitionEvaluation records the fresh constructor before static fields
+// run; neither source text nor the most recently evaluated declaration is a key.
+const specializationsInProgress = new WeakMap<Value, Map<string, { declaration: ParseNode.ClassDeclaration, ctor?: Value }>>();
 
 /**
  * Create the specialization for an application, whatever named it.
@@ -2082,12 +2079,15 @@ export function* MaterializeSpecialization(
   argRecords: readonly (TypeRecord | number)[],
   declarationConstructor?: Value,
 ): ValueEvaluator {
-  // Target-side conversions retain the actual declaration constructor, whose
-  // context must win over the caller's lexical and generic environment.
-  const captured = declarationConstructor && classTypeContexts.get(declarationConstructor);
-  if (captured) {
-    return yield* InCapturedTypeContext(captured, () => MaterializeSpecialization(declaration, argRecords));
-  }
+  if (!declarationConstructor) return undefined as never;
+  const family = ClassFamilyOf(declarationConstructor);
+  const captured = classTypeContexts.get(family);
+  if (!captured) return undefined as never;
+  return yield* InCapturedTypeContext(captured, () => MaterializeClassApplication(declaration, argRecords, family));
+}
+
+function* MaterializeClassApplication(declaration: ParseNode.ClassDeclaration,
+  argRecords: readonly (TypeRecord | number)[], family: Value): ValueEvaluator {
   const params = declaration.TypeParameters?.TypeParameterList ?? [];
   // Only a CLASS is specialized by evaluating a body. A generic INTERFACE
   // reaches this same annotation arm and has no |ClassTail|, so it has nothing
@@ -2100,7 +2100,6 @@ export function* MaterializeSpecialization(
     && ((a as { Kind?: string }).Kind === 'parameter' || (a as { Kind?: string }).Kind === 'deferred'));
   if (declaration.ClassTail === undefined
     || unbound
-    || specializationsInProgress.has(declaration)
     || params.some((q) => (q as { IsVariadic?: boolean }).IsVariadic === true)
     || params.length !== argRecords.length) {
     return undefined as never;
@@ -2116,7 +2115,7 @@ export function* MaterializeSpecialization(
     }
     key.push(specializationKeyOf(record as never));
   }
-  return yield* SpecializeFromFrame(declaration, frame, argRecords, key.join(','));
+  return yield* SpecializeFromFrame(declaration, frame, argRecords, key.join(','), family);
 }
 
 /**
@@ -2136,8 +2135,21 @@ export function* MaterializeSpecialization(
 const classTypeEnvironments = new WeakMap<Value, EnvironmentRecord>();
 const classTypeContexts = new WeakMap<Value, CapturedTypeContext>();
 export function RegisterClassTypeEnvironment(ctor: Value, environment: EnvironmentRecord,
-  privateEnvironment = surroundingAgent.runningExecutionContext.PrivateEnvironment): void {
+  privateEnvironment = surroundingAgent.runningExecutionContext.PrivateEnvironment,
+  application: { family?: Value, key?: string, declaration?: ParseNode.ClassDeclaration | ParseNode.ClassExpression } = {}): void {
+  const { family, key: applicationKey, declaration } = application;
   classTypeEnvironments.set(ctor, environment);
+  classFamilies.set(ctor, family ?? ctor);
+  const name = declaration?.BindingIdentifier?.name;
+  const outerIdentity = declaration?.type === 'ClassDeclaration' && name && environment.OuterEnv
+    ? ClassDeclarationIdentity(environment.OuterEnv, name) : undefined;
+  const identity = family ? ClassFamilyIdentityOf(family) : outerIdentity ?? ctor;
+  classFamilyIdentities.set(ctor, identity);
+  if (!family) classFamilyConstructors.set(identity, ctor);
+  const inner = name && DeclarativeBindingIdentity(environment, Value(name));
+  if (inner) classBindingIdentities.set(inner, identity);
+  const progress = family && applicationKey !== undefined && specializationsInProgress.get(family)?.get(applicationKey);
+  if (progress) progress.ctor = ctor;
   const context = surroundingAgent.runningExecutionContext;
   classTypeContexts.set(ctor, {
     Environment: environment, PrivateEnvironment: privateEnvironment,
@@ -2176,6 +2188,7 @@ export function* ResolveImplementedInterfaces(node: ParseNode.ClassDeclaration |
     frame.set(node.BindingIdentifier.name, {
       ...(published?.Kind === 'nominal' ? published : {}),
       Kind: 'nominal', Declaration: node, Constructor: ctor,
+      DeclarationIdentity: node.TypeParameters?.TypeParameterList.length ? ClassFamilyIdentityOf(ctor) : undefined,
       Arguments: (node.TypeParameters?.TypeParameterList ?? []).map((p) => frame.get(p.BindingIdentifier.name)!),
     });
   }
@@ -2235,6 +2248,7 @@ export function contextualBindingsFor(
   declaration: ParseNode.ClassDeclaration,
   params: readonly ParseNode.TypeParameter[],
   contextual: TypeRecord | null | undefined,
+  familyIdentity?: object,
 ): Map<string, TypeRecord> | undefined {
   if (!contextual) {
     return undefined;
@@ -2248,6 +2262,8 @@ export function contextualBindingsFor(
   if (!candidate || candidate.Kind !== 'nominal') {
     return undefined;
   }
+  if (candidate.DeclarationIdentity !== undefined && familyIdentity !== undefined
+    && candidate.DeclarationIdentity !== familyIdentity) return undefined;
   const args = (candidate as { Arguments?: readonly (TypeRecord | number)[] }).Arguments ?? [];
   if (args.length !== params.length) {
     return undefined;
@@ -2283,28 +2299,17 @@ export function* SpecializationForConstruction(
   declaration: ParseNode.ClassDeclaration,
   ctor: Value,
   args: readonly Value[],
-  environment?: EnvironmentRecord,
 ): PlainEvaluator<Value | undefined> {
   const params = declaration.TypeParameters?.TypeParameterList ?? [];
   const formals = ((ctor as unknown as { FormalParameters?: readonly ParseNode[] }).FormalParameters) ?? [];
   // The contextual type is the CONSTRUCTION's own position, handed in by
   // EvaluateNew or the target-typed form (TakePendingCalleeContext); a
   // `Reflect.construct` has none. Read before the scope below changes.
-  const preBound = contextualBindingsFor(declaration, params, TakePendingCalleeContext());
-  // The declaration's scope, for two reasons. A type parameter's default and
-  // constraint are written at the declaration and resolve there, not at
-  // whichever `new` first reached this application; and the DEFAULT constructor
-  // is a built-in whose execution context has no LexicalEnvironment at all, so
-  // resolving `uint32` in `H: uint32 = 2` from it found no environment to ask.
-  // A written constructor's [[Environment]] is the class scope; the default
-  // constructor's closure hands its class scope in.
-  const scope = environment ?? (ctor as unknown as { Environment?: EnvironmentRecord }).Environment;
-  const context = surroundingAgent.runningExecutionContext;
-  const savedLexical = context.LexicalEnvironment;
-  if (scope !== undefined) {
-    context.LexicalEnvironment = scope;
-  }
-  try {
+  const preBound = contextualBindingsFor(declaration, params, TakePendingCalleeContext(), ClassFamilyIdentityOf(ctor));
+  const family = ClassFamilyOf(ctor);
+  const captured = classTypeContexts.get(family);
+  if (!captured) return undefined;
+  return yield* InCapturedTypeContext(captured, function* infer(): PlainEvaluator<Value | undefined> {
     const frame = Q(yield* InferGenericBindings(params, formals, args, preBound));
     const argRecords: TypeRecord[] = [];
     for (const param of params) {
@@ -2315,10 +2320,8 @@ export function* SpecializationForConstruction(
       }
       argRecords.push(record);
     }
-    return yield* MaterializeSpecialization(declaration, argRecords);
-  } finally {
-    context.LexicalEnvironment = savedLexical;
-  }
+    return yield* MaterializeClassApplication(declaration, argRecords, family);
+  });
 }
 
 /**
@@ -2336,13 +2339,10 @@ export function* DefaultSpecializationOf(
   ctor: Value,
 ): PlainEvaluator<Value | undefined> {
   const params = declaration.TypeParameters?.TypeParameterList ?? [];
-  const scope = (ctor as unknown as { Environment?: EnvironmentRecord }).Environment;
-  const context = surroundingAgent.runningExecutionContext;
-  const savedLexical = context.LexicalEnvironment;
-  if (scope !== undefined) {
-    context.LexicalEnvironment = scope;
-  }
-  try {
+  const family = ClassFamilyOf(ctor);
+  const captured = classTypeContexts.get(family);
+  if (!captured) return undefined;
+  return yield* InCapturedTypeContext(captured, function* defaults(): PlainEvaluator<Value | undefined> {
     const frame = Q(yield* InferGenericBindings(params, [], [], undefined));
     const argRecords: TypeRecord[] = [];
     for (const param of params) {
@@ -2353,10 +2353,8 @@ export function* DefaultSpecializationOf(
       }
       argRecords.push(record);
     }
-    return yield* MaterializeSpecialization(declaration, argRecords);
-  } finally {
-    context.LexicalEnvironment = savedLexical;
-  }
+    return yield* MaterializeClassApplication(declaration, argRecords, family);
+  });
 }
 
 /**
@@ -2372,8 +2370,8 @@ export function* DefaultSpecializationOf(
  * one. Read from the specialization table rather than through a `constructor`
  * property, so no user getter is observed.
  */
-export function* IsInstanceOfSomeSpecialization(declaration: ParseNode.ClassDeclaration, O: ObjectValue): PlainEvaluator<boolean> {
-  const byArgs = classSpecializations.get(declaration);
+export function* IsInstanceOfSomeSpecialization(family: Value, O: ObjectValue): PlainEvaluator<boolean> {
+  const byArgs = classSpecializations.get(ClassFamilyOf(family));
   if (byArgs === undefined || byArgs.size === 0) {
     return false;
   }
@@ -2430,11 +2428,12 @@ function* SpecializeFromFrame(
   frame: Map<string, TypeRecord>,
   argRecords: readonly (TypeRecord | number)[],
   cacheKey: string,
+  family: Value,
 ): ValueEvaluator {
-  let byArgs = classSpecializations.get(declaration);
+  let byArgs = classSpecializations.get(family);
   if (byArgs === undefined) {
     byArgs = new Map();
-    classSpecializations.set(declaration, byArgs);
+    classSpecializations.set(family, byArgs);
   }
   const cached = byArgs.get(cacheKey);
   if (cached !== undefined) {
@@ -2446,10 +2445,11 @@ function* SpecializeFromFrame(
   // construction. Its cache entry is not written until the body finishes, so
   // without this it missed the cache and re-entered here, and
   // `classes/declared-zero`'s `static default = new Bx.<T>()` recursed. The
-  // application site records the constructor the inner binding holds (below),
+  // class evaluation records the constructor the inner binding holds,
   // and the same key means the same class.
-  const underWay = specializationsInProgress.get(declaration);
-  if (underWay !== undefined && underWay.key === cacheKey && underWay.ctor !== undefined) {
+  let progress = specializationsInProgress.get(family);
+  const underWay = progress?.get(cacheKey);
+  if (underWay !== undefined) {
     return underWay.ctor as never;
   }
   // Phase 5: the application selects its body - a case's, complete, or the
@@ -2466,7 +2466,11 @@ function* SpecializeFromFrame(
     }
   }
   pushTypeParameterFrame(bodyFrame);
-  specializationsInProgress.set(declaration, { key: cacheKey });
+  if (!progress) {
+    progress = new Map();
+    specializationsInProgress.set(family, progress);
+  }
+  progress.set(cacheKey, { declaration });
   let specialized;
   try {
     const className = Value(declaration.BindingIdentifier?.name ?? '');
@@ -2481,9 +2485,12 @@ function* SpecializeFromFrame(
       (body as unknown as { sourceText?: string }).sourceText ?? '',
       [],
       true,
+      family,
+      cacheKey,
     ));
   } finally {
-    specializationsInProgress.delete(declaration);
+    progress.delete(cacheKey);
+    if (progress.size === 0) specializationsInProgress.delete(family);
     popTypeParameterFrame();
   }
   if (specialized.Type !== 'normal') {
@@ -2494,19 +2501,19 @@ function* SpecializeFromFrame(
   let conflict: string | undefined;
   const record = MergePartialStructures({
     ...(published?.Kind === 'nominal' ? published : {}),
-    Kind: 'nominal', Declaration: declaration as never, Arguments: argRecords, Constructor: ctor,
+    Kind: 'nominal', Declaration: declaration as never, DeclarationIdentity: ClassFamilyIdentityOf(family), Arguments: argRecords, Constructor: ctor,
     Implements: Q(yield* ResolveImplementedInterfaces(body, ctor, argRecords)),
     Base: RuntimeClassBaseOf(ctor) ?? (published?.Kind === 'nominal' ? published.Base : undefined),
-  } as TypeRecord, RuntimePartialContributions(declaration), (key) => {
+  } as TypeRecord, RuntimePartialContributions(ClassFamilyIdentityOf(family)), (key) => {
     conflict ??= key;
   });
   if (conflict) return Throw.TypeError('$1 is already declared on this class', Value(conflict));
   Q(yield* InstallTypeLayoutProperties(ctor as ObjectValue, record));
   AssociateClassType(ctor, GetTypeObject(record));
-  byArgs.set(cacheKey, ctor);
-  for (const extension of partialClassExtensions.get(declaration) ?? []) {
+  for (const extension of partialClassExtensions.get(family) ?? []) {
     Q(yield* ApplyPartialClass(extension, declaration, ctor, argRecords));
   }
+  byArgs.set(cacheKey, ctor);
   selectedDeclarations.set(ctor as object, body);
   if (body !== declaration) {
     caseBuiltConstructors.add(ctor as object);
@@ -2544,152 +2551,63 @@ export function SelectedDeclarationOf(ctor: unknown): string | undefined {
 
 /** Constructors built from a CASE body; layout reads their own. */
 const caseBuiltConstructors = new WeakSet<object>();
-setCaseSpecializationLookup((declaration, args) => {
-  const ctor = SpecializedClassConstructor(declaration, args);
+setCaseSpecializationLookup((declaration, args, constructor) => {
+  const ctor = SpecializedClassConstructor(declaration, args, constructor as Value | undefined);
   return ctor !== undefined && caseBuiltConstructors.has(ctor as object) ? ctor : undefined;
 });
 
 export function SpecializedClassConstructor(
   declaration: unknown,
   argRecords: readonly (TypeRecord | number)[],
+  constructor?: Value,
 ): Value | undefined {
-  const byArgs = classSpecializations.get(declaration as never);
+  if (!constructor) return undefined;
+  const family = ClassFamilyOf(constructor);
+  if (GenericClassDeclarationOf(family) !== declaration) return undefined;
+  const byArgs = classSpecializations.get(family);
   if (byArgs === undefined) {
     return undefined;
   }
   return byArgs.get(argRecords.map((a) => specializationKeyOf(a as never)).join(','));
 }
 
-function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration, node: ParseNode.TypeArgumentsExpression): ValueEvaluator {
+function* SpecializeGenericClass(declaration: ParseNode.ClassDeclaration,
+  node: ParseNode.TypeArgumentsExpression, ctor: Value): ValueEvaluator {
   const params = declaration.TypeParameters?.TypeParameterList ?? [];
-  const args = node.TypeArguments.TypeArgumentList;
-  const className = declaration.BindingIdentifier?.name ?? 'a class';
-  // A list with a variadic parameter, or an argument list with a
-  // spread, binds by the engine's BindTypeArguments; the pack-free path is
-  // unchanged.
-  const usesPacks = params.some((q) => (q as { IsVariadic?: boolean }).IsVariadic === true)
-    || args.some((a) => (a as { IsSpread?: boolean }).IsSpread === true);
-  // Order named
-  // arguments into parameter order before anything resolves; a hole then takes
-  // the parameter's default under the same frame the positional path uses.
-  const argNames = args.map((a) => typeArgumentNameOf(a));
-  const namedArgs = argNames.some((n) => n !== undefined);
-  let orderedNodes: readonly (ParseNode.Type | undefined)[] | null = null;
-  if (namedArgs && !usesPacks) {
-    const order = orderTypeArguments(
-      params.map((p) => (p as unknown as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name),
-      args,
-      argNames,
-    );
-    if (!order.ok) {
-      switch (order.kind) {
-        case 'positional-after-named':
-          return Throw.TypeError('a positional type argument cannot follow a named one in $1', Value(className));
-        case 'unknown-name':
-          return Throw.TypeError('$1 does not name a type parameter of $2', Value(order.name), Value(className));
-        case 'supplied-twice':
-          return Throw.TypeError('the type parameter $1 of $2 is supplied twice', Value(order.name), Value(className));
-        default:
-          return Throw.TypeError('$1 takes $2 type arguments; $3 expects one taking $4', Value(className), Value(String(args.length)), Value('the declaration'), Value(String(params.length)));
-      }
-    }
-    orderedNodes = order.ordered;
+  if (params.some((p) => p.IsVariadic) || node.TypeArguments.TypeArgumentList.some((a) => (a as { IsSpread?: boolean }).IsSpread)) {
+    const exhausted = specializationDepthExhausted();
+    if (exhausted) return exhausted;
   }
-  // #sec-generics: a trailing parameter with a default may be omitted, so a
-  // class every one of whose parameters has a default may be applied with none.
-  const firstDefault = params.findIndex((p) => (p as unknown as { TypeParameterDefault?: unknown }).TypeParameterDefault);
-  const leastArgs = firstDefault === -1 ? params.length : firstDefault;
-  if (!namedArgs && !usesPacks && (args.length < leastArgs || args.length > params.length)) {
-    return Throw.TypeError('$1 takes $2 type arguments; $3 expects one taking $4', Value(declaration.BindingIdentifier?.name ?? 'a class'), Value(String(args.length)), Value('the declaration'), Value(String(params.length)));
-  }
-  const frame = new Map<string, TypeRecord>();
-  const key: string[] = [];
-  // The arguments the specialization's TYPE carries. A `B.<Identity>` used as
-  // an annotation resolves to the nominal with these arguments, so the type of
-  // an instance built from the specialization has to carry them too - without
-  // them `const b: B.<Identity> = new B.<Identity>()` refused its own value.
-  const argRecords: TypeRecord[] = [];
-  if (usesPacks) {
-    const boundAll = Q(yield* BindTypeArgumentsInto(params, args, frame, className));
-    for (const r of boundAll) {
-      key.push(specializationKeyOf(r));
-      argRecords.push(r);
+  const args: TypeRecord[] = [];
+  const names: (string | undefined)[] = [];
+  // Written arguments resolve in the caller. Defaults, constraints, selection
+  // and class evaluation belong to the actual evaluated family below.
+  for (const nodeArg of node.TypeArguments.TypeArgumentList) {
+    const name = typeArgumentNameOf(nodeArg);
+    const param = name === undefined ? params[args.length] : params.find((p) => p.BindingIdentifier.name === name);
+    const asDeclaration = Q(yield* TypeArgumentAsDeclaration(nodeArg, param?.Arity ?? 0));
+    let record = asDeclaration;
+    if (!record) {
+      record = Q(yield* TypeNodeToTypeRecord(nodeArg));
     }
-  } else {
-  for (let i = 0; i < params.length; i += 1) {
-    const param = params[i] as unknown as {
-      BindingIdentifier?: { name?: string },
-      TypeParameterConstraint?: ParseNode.Type | null,
-    };
-    const name = param.BindingIdentifier?.name;
-    // A parameter past the supplied arguments takes its default, resolved with
-    // the frame built so far so that a default may name an earlier parameter.
-    // With named arguments, "past the supplied" is a HOLE in the ordered list.
-    const supplied = namedArgs ? orderedNodes![i] : (i < args.length ? args[i] : undefined);
-    const argNode = supplied ?? (param as { TypeParameterDefault?: ParseNode.Type | null }).TypeParameterDefault;
-    if (!argNode) {
-      return Throw.TypeError('the type parameter $1 of $2 has no argument and no default', Value(name ?? String(i)), Value(className));
-    }
-    // The declaration attempt happens OUTSIDE the frame.
-    //
-    // The frame binds this application's parameters for substituting into the
-    // class BODY. An argument is read before any substitution, and reading it
-    // under the frame is what stopped the recovery working here: the same
-    // helper recovers on the annotation path, which has no frame pushed.
-    const asDecl = Q(EnsureCompletion(yield* TypeArgumentAsDeclaration(argNode, params[i]?.Arity ?? 0))) as TypeRecord | undefined;
-    let record;
-    if (asDecl !== undefined) {
-      record = asDecl;
+    if ((nodeArg as { IsSpread?: boolean }).IsSpread) {
+      const elements = spreadElementsOf(record);
+      if (!elements) return Throw.TypeError('$1', Value('a spread class type argument must be a tuple or an array of stated extent'));
+      args.push(...elements);
+      names.push(...elements.map(() => undefined));
     } else {
-      pushTypeParameterFrame(frame);
-      try {
-        record = Q(yield* TypeNodeToTypeRecord(argNode));
-      } finally {
-        popTypeParameterFrame();
-      }
+      args.push(record);
+      names.push(name);
     }
-    // #sec-type-parameters: a VALUE parameter's argument "is a value of the
-    // named type", so the literal type it binds carries a value OF that type.
-    // Without this `W: uint32` bound the plain number the argument was written
-    // as, and a body mixing it with typed values - the design's `y * W + x`,
-    // whose other operands are `uint32` - reported that the two numeric types
-    // do not mix.
-    if (record.Kind === 'literal' && param.TypeParameterConstraint) {
-      // #sec-computed-constraints: resolved UNDER the frame, and a value
-      // the constraint refuses is a refusal, not a silent literal of the wrong
-      // type.
-      pushTypeParameterFrame(frame);
-      let declared;
-      try {
-        declared = Q(yield* TypeNodeToTypeRecord(param.TypeParameterConstraint));
-      } finally {
-        popTypeParameterFrame();
-      }
-      const converted = EnsureCompletion(yield* CheckedConvertValue(record.Value as Value, declared as never));
-      if (converted.Type !== 'normal') {
-        return converted as never;
-      }
-      // Both halves of the literal move - its VALUE to one of the constraint's
-      // and its BASE to the constraint - as the inferred path's do
-      // (InferGenericBindingsFrom). With the base left at `number` the formal
-      // `n: N` refused a plain `4` against a `uint32` 4: `new G.<4>(4)` and
-      // `h.<4>((4 := uint32))` both failed their own parameter boundary.
-      record = { ...record, Value: converted.Value as Value, Base: declared as TypeRecord } as never;
-    }
-    // Canonical BEFORE it binds: the frame's record and the stored argument
-    // must be one object, since a frame later derived from the instance's
-    // [[Arguments]] (a method's `where` over the class's parameters) reads the
-    // value-parameter mark off that very record. A literal is rebuilt by
-    // CanonicalizeType, so canonicalizing after binding split them.
-    record = CanonicalizeType(record);
-    if (name) {
-      Q(yield* BindTypeParameterTyped(frame, name, record, param));
-    }
-    key.push(specializationKeyOf(record));
-    argRecords.push(record);
   }
-  }
-  return yield* SpecializeFromFrame(declaration, frame, argRecords, key.join(','));
+  const family = ClassFamilyOf(ctor);
+  const captured = classTypeContexts.get(family);
+  if (!captured) return undefined as never;
+  return yield* InCapturedTypeContext(captured, function* apply(): ValueEvaluator {
+    const frame = new Map<string, TypeRecord>();
+    const bound = Q(yield* BindTypeArgumentRecordsInto(params, args, names, frame, declaration.BindingIdentifier?.name ?? 'a class'));
+    return yield* SpecializeFromFrame(declaration, frame, bound, bound.map(specializationKeyOf).join(','), family);
+  });
 }
 
 /**
@@ -2944,27 +2862,10 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
     let declaration = classType && isTypeObject(classType) && classType.TypeRecord.Kind === 'nominal'
       ? classType.TypeRecord.Declaration as unknown as { type?: string, TypeParameters?: { TypeParameterList?: readonly unknown[] }, ClassTail?: unknown, BindingIdentifier?: { name?: string } }
       : undefined;
-    // A class whose specialization is STILL BEING EVALUATED has no class type
-    // yet: `AssociateClassType` follows `ClassDefinitionEvaluation`, and a
-    // static field initializer runs inside it, after the inner class binding
-    // is initialized to the fresh constructor. So `Bx.<T>` in `static default
-    // = new Bx.<T>()` held a constructor `LookupClassType` knew nothing about,
-    // and fell to the refusal below as a non-generic callable - while the same
-    // expression in a static METHOD, run after the association, worked. The
-    // constructor is matched to its declaration by the source text
-    // `SpecializeFromFrame` now gives it, and recorded on the in-progress
-    // entry so the self-referential case can answer it.
-    if (declaration === undefined && specializationsInProgress.size > 0) {
-      const sourceText = (value as unknown as { SourceText?: string }).SourceText;
-      if (typeof sourceText === 'string' && sourceText.length > 0) {
-        for (const [candidate, entry] of specializationsInProgress) {
-          if ((candidate as { sourceText?: string }).sourceText === sourceText) {
-            entry.ctor = value;
-            declaration = candidate as typeof declaration;
-            break;
-          }
-        }
-      }
+    // Registration associates the in-progress constructor with its exact
+    // family before static initializers run. Source text is not identity.
+    if (declaration === undefined) {
+      declaration = [...(specializationsInProgress.get(ClassFamilyOf(value))?.values() ?? [])].find((entry) => entry.ctor === value)?.declaration as typeof declaration;
     }
     const params = declaration?.TypeParameters?.TypeParameterList;
     // A kinded parameter no longer excludes specialization: its argument
@@ -2972,7 +2873,7 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
     // requires that two applications binding different declarations be distinct
     // types.
     if (declaration !== undefined && params && params.length > 0 && declaration.ClassTail) {
-      return Q(yield* SpecializeGenericClass(declaration as never, node));
+      return Q(yield* SpecializeGenericClass(declaration as never, node, value));
     }
   }
   if (isTypeObject(value)) {

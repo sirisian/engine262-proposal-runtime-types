@@ -1,0 +1,489 @@
+{
+  "cases": [
+    {
+      "name": "escaped family retains outer type",
+      "steps": [
+        {
+          "source": "function make<T:type>(saved:T){class C<U:type>{read(){const x:T=saved;return String(x);}}return C;}const Family=make.<string>(\"s\");new Family.<number>().read();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct family conversions retain values",
+      "steps": [
+        {
+          "source": "function make(label:string){class C<T:type>{operator C(v:T){return new C.<T>();}read(){return label;}}return function use(){const raw:any=\"x\";const c:C.<string>=raw;return c.read();};}const a=make(\"a\");const b=make(\"b\");a()+\"/\"+b();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same arguments distinct evaluated families",
+      "steps": [
+        {
+          "source": "function make(){return class C<T:type>{};}const A=make();const B=make();String(A.<string>===A.<string>)+\"/\"+String(A.<string>===B.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "family instanceof does not include another evaluation",
+      "steps": [
+        {
+          "source": "function make(){return class C<T:type>{};}const A=make();const B=make();const a=new A.<string>();String(a instanceof A)+\"/\"+String(a instanceof B);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "specialized instanceof stays separate",
+      "steps": [
+        {
+          "source": "function make(){return class C<T:type>{};}const A=make();const B=make();const a=new A.<string>();String(a instanceof A.<string>)+\"/\"+String(a instanceof B.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct captured types and values",
+      "steps": [
+        {
+          "source": "function make<T:type>(saved:T){return class C<U:type>{read(){const x:T=saved;return String(x);}};}const A=make.<string>(\"s\");const B=make.<number>(2);new A.<boolean>().read()+\"/\"+new B.<boolean>().read();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured value parameter survives escape",
+      "steps": [
+        {
+          "source": "function make<N:uint32>(){return class C<T:type>{read(){return String(N);}};}const A=make.<3>();const B=make.<7>();new A.<string>().read()+\"/\"+new B.<string>().read();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3/7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "field initializer keeps captured type",
+      "steps": [
+        {
+          "source": "function make<T:type>(saved:T){return class C<U:type>{value:T=saved;};}const A=make.<string>(\"s\");new A.<number>().value;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit argument reads caller type with same name",
+      "steps": [
+        {
+          "source": "function make<T:type>(saved:T){return class C<U:type>{read(v:U){const x:T=saved;return String(x)+\"/\"+String(v);}};}const A=make.<string>(\"s\");function use<T:type>(v:T){return new A.<T>().read(v);}use.<number>(2);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "default type reads declaration capture",
+      "steps": [
+        {
+          "source": "function make<T:type>(saved:T){return class C<U:type=T>{read(v:U){return String(v)+\"/\"+String(saved);}};}const A=make.<string>(\"s\");function use<T:type>(){return new A.<>().read(\"x\");}use.<boolean>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "x/s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bare default construction retains capture",
+      "steps": [
+        {
+          "source": "function make<T:type>(saved:T){return class C<U:type=number>{read(){const x:T=saved;return String(x);}};}const A=make.<string>(\"s\");new A().read();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inferred construction retains capture",
+      "steps": [
+        {
+          "source": "function make<T:type>(saved:T){return class C<U:type>{value:U;constructor(v:U){this.value=v;}read(){const x:T=saved;return String(x)+\"/\"+String(this.value);}};}const A=make.<string>(\"s\");new A(2).read();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inferred and explicit construction use one specialization",
+      "steps": [
+        {
+          "source": "function make(){return class C<T:type>{constructor(v:T){}};}const A=make();const a=new A(\"s\");String(a instanceof A.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "heritage default retains declaration context",
+      "steps": [
+        {
+          "source": "function make<T:type>(saved:T){return class C<U:type=number>{read(){const x:T=saved;return String(x);}};}const A=make.<string>(\"s\");class D extends A{}new D().read();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "heritage explicit retains declaration context",
+      "steps": [
+        {
+          "source": "function make<T:type>(saved:T){return class C<U:type>{read(){const x:T=saved;return String(x);}};}const A=make.<string>(\"s\");class D extends A.<number>{}new D().read();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static initialization once per family application",
+      "steps": [
+        {
+          "source": "let effects=0;function make(){return class C<T:type>{static value=++effects;};}const A=make();const B=make();const a=A.<string>;const again=A.<string>;const b=B.<string>;String(a.value)+\"/\"+String(b.value)+\"/\"+effects;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/2/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed specialization retries without merging families",
+      "steps": [
+        {
+          "source": "let fail=true;let calls=0;function make(label:string){return class C<T:type>{static value=(()=>{calls++;if(fail)throw new RangeError(\"fail\");return label;})();};}const A=make(\"a\");let caught=false;try{A.<string>;}catch(e){caught=e instanceof RangeError;}fail=false;const B=make(\"b\");String(caught)+\"/\"+A.<string>.value+\"/\"+B.<string>.value+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/a/b/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "caller type restores after explicit specialization failure",
+      "steps": [
+        {
+          "source": "class C<T:type>{static fail=(()=>{throw new RangeError(\"build\");})();}function use<T:type>(v:T){let failed=false;try{C.<number>;}catch(e){failed=e instanceof RangeError;}const same:T=v;return String(failed)+\"/\"+String(same);}use.<string>(\"caller\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/caller"
+          }
+        }
+      ]
+    },
+    {
+      "name": "recursive static self stays in its family",
+      "steps": [
+        {
+          "source": "function make(){class C<T:type>{static value=new C.<T>();}return C;}const A=make();const B=make();const a=A.<string>;const b=B.<string>;String(a.value instanceof a)+\"/\"+String(a.value instanceof b)+\"/\"+String(b.value instanceof b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "private declaration scope survives escape",
+      "steps": [
+        {
+          "source": "class Outer{#value:string;constructor(v:string){this.#value=v;}make(){const self=this;return class C<T:type>{read(){return self.#value;}};}}const A=new Outer(\"a\").make();const B=new Outer(\"b\").make();new A.<string>().read()+\"/\"+new B.<string>().read();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection distinguishes family applications",
+      "steps": [
+        {
+          "source": "function make(){return class C<T:type>{};}const A=make();const B=make();const a=new A.<string>();const b=new B.<string>();String(Reflect.typeOf(a)===Reflect.typeOf(b))+\"/\"+String(Reflect.typeOf(a)===Reflect.typeOf(new A.<string>()));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "concrete construction does not replay declaration capture",
+      "steps": [
+        {
+          "source": "let calls=0;function make(){calls++;return class C<T:type>{};}const A=make();new A.<string>();new A.<number>();String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct own arguments remain distinct",
+      "steps": [
+        {
+          "source": "class C<T:type>{}String(C.<string>===C.<number>)+\"/\"+String(C.<T:string>===C.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit named argument uses caller alias",
+      "steps": [
+        {
+          "source": "class C<T:type>{read(v:T){return String(v);}}type A=string;new C.<T:A>().read(\"s\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declaration defaults do not run until application",
+      "steps": [
+        {
+          "source": "let count=0;function make(){return class C<T:type=string>{static value=++count;};}const A=make();const before=count;A.<>;String(before)+\"/\"+count;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reapplied specialized constructor keeps original family",
+      "steps": [
+        {
+          "source": "function make(){return class C<T:type>{};}const A=make();const B=make();const S=A.<string>;String(S.<number>===A.<number>)+\"/\"+String(S.<number>===B.<number>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected case captures factory lexical values",
+      "steps": [
+        {
+          "source": "function make(label:string){class C<T:type>{read(){return \"base/\"+label;}}class C<string>{read(){return \"case/\"+label;}}return C;}const A=make(\"a\");const B=make(\"b\");new A.<string>().read()+\"/\"+new B.<string>().read();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "case/a/case/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic source conversion retains separate captures",
+      "steps": [
+        {
+          "source": "function make(label:string){return class C<T:type>{operator string(){return label;}};}const A=make(\"a\");const B=make(\"b\");const x:any=new A.<number>();const y:any=new B.<number>();const a:string=x;const b:string=y;a+\"/\"+b;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nongeneric factory control",
+      "steps": [
+        {
+          "source": "function make(label:string){return class C{read(){return label;}};}const A=make(\"a\");const B=make(\"b\");new A().read()+\"/\"+new B().read();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored family survives separate Script evaluations",
+      "steps": [
+        {
+          "source": "function make<T:type>(saved:T){return class C<U:type>{read(){const x:T=saved;return String(x);}};}const A=make.<string>(\"s\");\"ready\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ready"
+          }
+        },
+        {
+          "source": "new A.<number>().read();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite nested applications retain both in-progress entries",
+      "steps": [
+        {
+          "source": "class C<N:uint32>{static next=N===0?null:new C.<0>();}const a=C.<1>;String(a.next instanceof C.<0>)+\"/\"+String(a===C.<1>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "partial methods retain their evaluated family",
+      "steps": [
+        {
+          "source": "function make(label:string){class C<T:type>{}partial class C{read(){return label;}}return C;}const A=make(\"a\");const B=make(\"b\");new A.<string>().read()+\"/\"+new B.<string>().read();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "partial extensions update only their family existing applications",
+      "steps": [
+        {
+          "source": "function make(label:string){class C<T:type>{}const S=C.<string>;partial class C{read(){return label;}}return S;}const A=make(\"a\");const B=make(\"b\");new A().read()+\"/\"+new B().read();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed nominal boundary refuses another evaluated family",
+      "steps": [
+        {
+          "source": "function make(){class C<T:type>{}return {value:new C.<string>(),take(v:any){const c:C.<string>=v;return c;}};}const a:any=make();const b:any=make();let rejected=false;try{b.take(a.value);}catch(e){rejected=e instanceof TypeError;}String(rejected);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

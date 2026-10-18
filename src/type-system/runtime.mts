@@ -84,7 +84,7 @@ import { SelfThisTypeRecord } from './check.mts';
 import { SameType } from './relations.mts';
 import { IsSubtype } from './relations.mts';
 import {
-  DeclaredReferenceLocationType, OrdinaryRestsOf, ScalarRestsOf, ScalarRestShape, type ScalarRestPattern, type ScalarRestStorage,
+  ClassDeclarationIdentity, ClassFamilyOf, ClassFamilyIdentityOf, ClassFamilyConstructorOf, DeclaredReferenceLocationType, OrdinaryRestsOf, ScalarRestsOf, ScalarRestShape, type ScalarRestPattern, type ScalarRestStorage,
   Call, Get, GetValue, HasProperty, IsCallable, OrdinaryFunctionCreate, R, ResolveBinding, SameValue, surroundingAgent, Throw, ToBoolean,
 } from '#self';
 
@@ -3452,7 +3452,7 @@ export function* DefaultValueOf(t: TypeRecord): PlainEvaluator<Value | undefined
       let ctorValue = t.Constructor as Value | undefined;
       const appliedEarly = (t as { Arguments?: readonly (TypeRecord | number)[] }).Arguments ?? [];
       if (ctorValue !== undefined && appliedEarly.length > 0 && GenericClassDeclarationOf(ctorValue) !== undefined) {
-        const specialized = Q(yield* MaterializeSpecialization((t as { Declaration: ParseNode.ClassDeclaration }).Declaration, appliedEarly));
+        const specialized = Q(yield* MaterializeSpecialization((t as { Declaration: ParseNode.ClassDeclaration }).Declaration, appliedEarly, ctorValue));
         if (specialized !== undefined) {
           ctorValue = specialized;
         }
@@ -4576,7 +4576,8 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         if (!(value instanceof ObjectValue)) {
           return false;
         }
-        let ctor: Value | null = (t.Constructor as Value | undefined) ?? null;
+        let ctor: Value | null = (t.Constructor as Value | undefined)
+          ?? (t.DeclarationIdentity && ClassFamilyConstructorOf(t.DeclarationIdentity)) ?? null;
         // A class expression's node knows the constructor it evaluated to,
         // named or not (#sec-typed-classes).
         if (!ctor && t.Declaration.type === 'ClassExpression') {
@@ -4593,6 +4594,17 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         }
         if (!(ctor instanceof ObjectValue)) {
           return false;
+        }
+        // A runtime check may receive a symbolic method/partial contract.
+        // Complete its family from the declaration binding, never from the
+        // value being tested, and find only that family's requested application.
+        if (t.Arguments.length && GenericClassDeclarationOf(ClassFamilyOf(ctor))) {
+          const identity = ClassFamilyIdentityOf(ctor);
+          if (t.DeclarationIdentity !== undefined && t.DeclarationIdentity !== identity) return false;
+          const application = SpecializedClassConstructor(t.Declaration, t.Arguments, ctor) ?? ClassFamilyOf(ctor);
+          if (!(application instanceof ObjectValue)) return false;
+          ctor = application;
+          t = { ...t, DeclarationIdentity: identity, Constructor: ctor };
         }
         const protoValue = Q(yield* Get(ctor, Value('prototype')));
         if (!(protoValue instanceof ObjectValue)) {
@@ -5915,7 +5927,9 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
           // single attach point for type arguments below. Returning the record
           // directly from here would drop them, and a `Box.<uint32>` would
           // intern as a bare `Box`.
-          declared = GetTypeObject({ Kind: 'nominal', Declaration: declaration, Arguments: [] });
+          declared = GetTypeObject({ Kind: 'nominal', Declaration: declaration, Arguments: [],
+            DeclarationIdentity: declaration.TypeParameters?.TypeParameterList.length && ref.Base instanceof EnvironmentRecord
+              ? ClassDeclarationIdentity(ref.Base, name) : undefined });
         }
       }
       let value: Value;
@@ -6130,7 +6144,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
           // that flips is a declaration's, not a constructor's. Three
           // measurements narrowed that and none closed it, so the call is left
           // out rather than left failing.
-          const specializedCtor = SpecializedClassConstructor(baseRecord.Declaration, argRecords);
+          const specializedCtor = SpecializedClassConstructor(baseRecord.Declaration, argRecords, baseRecord.Constructor as Value | undefined);
           if (specializedCtor !== undefined) {
             return { ...baseRecord, Arguments: argRecords, Constructor: specializedCtor };
           }

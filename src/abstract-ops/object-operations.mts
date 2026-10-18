@@ -438,7 +438,7 @@ export function* OrdinaryHasInstance(constructor: Value, O: Value): ValueEvaluat
   // declaration, so nothing else pays for it.
   if (surroundingAgent.feature('runtime-types')) {
     const declaration = GenericClassDeclarationOf(constructor);
-    if (declaration !== undefined && Q(yield* IsInstanceOfSomeSpecialization(declaration, instance))) {
+    if (declaration !== undefined && Q(yield* IsInstanceOfSomeSpecialization(constructor, instance))) {
       return Value.true;
     }
   }

@@ -628,7 +628,7 @@ export function LayoutOf(t: TypeRecord): Layout | null {
     // primary's with the arguments substituted, so its layout is the one its
     // own constructor computed from that body.
     if (args && args.length > 0 && caseSpecializationOf !== null) {
-      const selected = caseSpecializationOf((t as { Declaration?: unknown }).Declaration, args) as
+      const selected = caseSpecializationOf((t as { Declaration?: unknown }).Declaration, args, constructor) as
         { InstanceLayout?: ClassLayout | null } | undefined;
       if (selected) {
         return selected.InstanceLayout ?? null;
@@ -894,7 +894,7 @@ let substituteForLayout:
  * The constructor an application of a class family built from a CASE body, or
  * *undefined* - set by the declaration runtime, which owns the specializations.
  */
-let caseSpecializationOf: ((declaration: unknown, args: readonly (TypeRecord | number)[]) => unknown) | null = null;
+let caseSpecializationOf: ((declaration: unknown, args: readonly (TypeRecord | number)[], constructor?: unknown) => unknown) | null = null;
 export function setCaseSpecializationLookup(fn: typeof caseSpecializationOf): void {
   caseSpecializationOf = fn;
 }

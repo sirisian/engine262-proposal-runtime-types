@@ -602,7 +602,7 @@ const INITIALIZABLE_CONTEXTS: readonly string[] = [
 /** The constructor each class node last evaluated to (#sec-typed-classes). */
 export const classConstructorOfNode = new WeakMap<object, ObjectValue>();
 
-export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, classBinding: JSStringValue | UndefinedValue, className: PropertyKeyValue | PrivateName, sourceText: string, decorators: readonly DecoratorDefinitionRecord[], specialization = false): ValueEvaluator<FunctionObject> {
+export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, classBinding: JSStringValue | UndefinedValue, className: PropertyKeyValue | PrivateName, sourceText: string, decorators: readonly DecoratorDefinitionRecord[], specialization = false, family?: Value, applicationKey?: string): ValueEvaluator<FunctionObject> {
   const { ClassHeritage, ClassBody } = ClassTail;
   // 1. Let env be the LexicalEnvironment of the running execution context.
   const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
@@ -763,7 +763,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
           if ((F as unknown) !== NewTarget) {
             return Throw.TypeError('$1 is a generic class; it is constructed through a specialization, not through its declaration', F);
           }
-          const specialization = Q(yield* SpecializationForConstruction(declaration, F, args as readonly Value[], classScope));
+          const specialization = Q(yield* SpecializationForConstruction(declaration, F, args as readonly Value[]));
           if (specialization !== undefined && specialization !== (F as unknown as Value)) {
             return Q(yield* Construct(specialization as FunctionObject, args, specialization as FunctionObject));
           }
@@ -845,7 +845,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     }
   }
   if (surroundingAgent.feature('runtime-types')) {
-    RegisterClassTypeEnvironment(F, classScope, outerPrivateEnvironment);
+    RegisterClassTypeEnvironment(F, classScope, outerPrivateEnvironment, { family, key: applicationKey, declaration: (ClassTail as { parent?: ParseNode.ClassDeclaration | ParseNode.ClassExpression }).parent });
   }
   __ts_cast__<Mutable<DefaultConstructorBuiltinFunction>>(F);
   F.HostInitialName = className;
@@ -1643,9 +1643,9 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
       // which exists once the application is materialized - so materialize it
       // before this layout reads it, rather than substitute into the primary's.
       for (const { type } of laidOut) {
-        const applied = type as { Kind?: string, Declaration?: unknown, Arguments?: readonly (TypeRecord | number)[] } | undefined;
+        const applied = type as { Kind?: string, Declaration?: unknown, Constructor?: Value, Arguments?: readonly (TypeRecord | number)[] } | undefined;
         if (applied?.Kind === 'nominal' && (applied.Arguments?.length ?? 0) > 0 && HasClassCases(applied.Declaration)) {
-          Q(yield* MaterializeSpecialization(applied.Declaration as never, applied.Arguments!));
+          Q(yield* MaterializeSpecialization(applied.Declaration as never, applied.Arguments!, applied.Constructor));
         }
       }
       const computed = complete ? ComputeClassLayout(baseLayout, laidOut, classControls, (ClassTail as { parent?: unknown }).parent) : null;

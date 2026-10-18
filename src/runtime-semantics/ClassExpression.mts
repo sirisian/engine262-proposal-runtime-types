@@ -11,7 +11,7 @@ import { GetTypeObject } from '../type-system/intern.mts';
 import { AssociateClassType } from '../abstract-ops/runtime-types.mts';
 import { ResolveImplementedInterfaces, RuntimeClassBaseOf } from './RuntimeTypesDeclarations.mts';
 import { ClassDefinitionEvaluation, DecoratorListEvaluation } from './all.mts';
-import { surroundingAgent } from '#self';
+import { ClassFamilyIdentityOf, surroundingAgent } from '#self';
 
 /** https://tc39.es/ecma262/#sec-class-definitions-runtime-semantics-evaluation */
 // ClassExpression :
@@ -39,6 +39,7 @@ export function* Evaluate_ClassExpression(ClassExpression: ParseNode.ClassExpres
       Declaration: ClassExpression,
       Arguments: [],
       Constructor: value,
+      DeclarationIdentity: ClassExpression.TypeParameters?.TypeParameterList.length ? ClassFamilyIdentityOf(value) : undefined,
       // As at ClassDeclaration: the relation
       // reads these two and this record carried neither.
       Implements: Q(yield* ResolveImplementedInterfaces(ClassExpression, value)),

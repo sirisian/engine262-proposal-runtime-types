@@ -126,4 +126,6 @@ export { TupleBackingLength } from './type-system/tuple-storage.mts';
 export { OwnMemberDeclarationOf } from './runtime-semantics/ClassDefinitionEvaluation.mts';
 export * from './type-system/ordinary-conversions.mts';
 
-export { InCapturedTypeContext, type CapturedTypeContext } from './type-system/runtime.mts';
+export { InCapturedTypeContext, BindTypeArgumentRecordsInto, specializationDepthExhausted, type CapturedTypeContext } from './type-system/runtime.mts';
+
+export { ClassFamilyOf, ClassFamilyIdentityOf, ClassFamilyConstructorOf, ClassDeclarationIdentity } from './runtime-semantics/RuntimeTypesDeclarations.mts';

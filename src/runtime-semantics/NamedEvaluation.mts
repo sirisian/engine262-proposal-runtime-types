@@ -20,7 +20,7 @@ import {
   InstantiateAsyncArrowFunctionExpression,
   DecoratorListEvaluation,
 } from './all.mts';
-import { surroundingAgent } from '#self';
+import { ClassFamilyIdentityOf, surroundingAgent } from '#self';
 import type {
   FunctionDeclaration, FunctionObject, PrivateName, PropertyKeyValue,
 } from '#self';
@@ -86,6 +86,7 @@ function* NamedEvaluation_ClassExpression(ClassExpression: ParseNode.ClassExpres
       Declaration: ClassExpression,
       Arguments: [],
       Constructor: value,
+      DeclarationIdentity: ClassExpression.TypeParameters?.TypeParameterList.length ? ClassFamilyIdentityOf(value) : undefined,
       // As at ClassDeclaration: the relation
       // reads these two and this record carried neither.
       Implements: Q(yield* ResolveImplementedInterfaces(ClassExpression, value)),

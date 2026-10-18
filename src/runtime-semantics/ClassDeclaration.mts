@@ -17,7 +17,7 @@ import {
   ApplyDecorators, ClassDecoratorContext,
 } from './all.mts';
 import {
-  surroundingAgent, ResolveBinding, GetValue, PutValue, IsConstructor, Throw,
+  ClassFamilyIdentityOf, surroundingAgent, ResolveBinding, GetValue, PutValue, IsConstructor, Throw,
 } from '#self';
 
 /** https://tc39.es/ecma262/#sec-runtime-semantics-bindingclassdeclarationevaluation */
@@ -61,6 +61,7 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
       const record: TypeRecord = {
         ...(published?.Kind === 'nominal' ? published : {}),
         Kind: 'nominal', Declaration: ClassDeclaration, Arguments: [], Constructor: anon,
+        DeclarationIdentity: ClassDeclaration.TypeParameters?.TypeParameterList.length ? ClassFamilyIdentityOf(anon) : undefined,
         Implements: Q(yield* ResolveImplementedInterfaces(ClassDeclaration, anon)),
         Base: RuntimeClassBaseOf(anon) ?? (published?.Kind === 'nominal' ? published.Base : undefined),
       };
@@ -91,6 +92,7 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
       Declaration: ClassDeclaration,
       Arguments: [],
       Constructor: value,
+      DeclarationIdentity: ClassDeclaration.TypeParameters?.TypeParameterList.length ? ClassFamilyIdentityOf(value) : undefined,
       // The relation walks [[Base]] for the
       // inheritance chain and compares [[Structure]] to satisfy an interface,
       // and this record carried neither - so reflection answered *false* for
