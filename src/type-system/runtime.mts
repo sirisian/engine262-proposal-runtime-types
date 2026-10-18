@@ -1,3 +1,4 @@
+import type { ExecutionContext } from '../execution-context/ExecutionContext.mts';
 import { GenericMapTypeOf } from '../abstract-ops/generic-map.mts';
 import type { PrivateEnvironmentRecord } from '../execution-context/PrivateEnvironment.mts';
 import { EnvironmentRecord, DeclarativeEnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity } from '../execution-context/Environment.mts';
@@ -383,26 +384,43 @@ export interface CapturedTypeContext {
   readonly Environment: EnvironmentRecord;
   readonly PrivateEnvironment: PrivateEnvironmentRecord | null;
   readonly TypeParameterFrame?: ReadonlyMap<string, TypeRecord>;
+  readonly Realm?: ExecutionContext['Realm'];
+  readonly ScriptOrModule?: ExecutionContext['ScriptOrModule'];
 }
 
 /** Resolve a signature without inheriting a caller's same-spelled generic inputs. */
 export function* TypeNodeToTypeRecordInContext(
   node: ParseNode.Type, captured: CapturedTypeContext, bindings?: ReadonlyMap<string, TypeRecord>,
 ): PlainEvaluator<TypeRecord> {
+  return yield* InCapturedTypeContext(captured, () => TypeNodeToTypeRecord(node), bindings);
+}
+
+/** Run declaration work with isolated captured bindings, restoring on failure. */
+export function* InCapturedTypeContext<T>(captured: CapturedTypeContext, action: () => PlainEvaluator<T>,
+  bindings?: ReadonlyMap<string, TypeRecord>): PlainEvaluator<T> {
   const context = surroundingAgent.runningExecutionContext;
   const environment = context.LexicalEnvironment;
+  const variableEnvironment = context.VariableEnvironment;
   const privateEnvironment = context.PrivateEnvironment;
+  const realm = context.Realm;
+  const scriptOrModule = context.ScriptOrModule;
   const frames = typeParameterFrames.splice(0);
   context.LexicalEnvironment = captured.Environment;
+  context.VariableEnvironment = captured.Environment;
   context.PrivateEnvironment = captured.PrivateEnvironment;
+  if (captured.Realm) context.Realm = captured.Realm;
+  if (captured.ScriptOrModule) context.ScriptOrModule = captured.ScriptOrModule;
   if (captured.TypeParameterFrame) pushTypeParameterFrame(copyTypeParameterFrame(captured.TypeParameterFrame));
   if (bindings) pushTypeParameterFrame(copyTypeParameterFrame(bindings));
   try {
-    return yield* TypeNodeToTypeRecord(node);
+    return yield* action();
   } finally {
     typeParameterFrames.splice(0, typeParameterFrames.length, ...frames);
     context.LexicalEnvironment = environment;
+    context.VariableEnvironment = variableEnvironment;
     context.PrivateEnvironment = privateEnvironment;
+    context.Realm = realm;
+    context.ScriptOrModule = scriptOrModule;
   }
 }
 

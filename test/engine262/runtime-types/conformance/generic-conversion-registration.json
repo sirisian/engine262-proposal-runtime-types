@@ -1,0 +1,538 @@
+{
+  "description": "Generic conversion registration and target materialization in declaration context",
+  "cases": [
+    {
+      "name": "required type parameter declaration",
+      "steps": [
+        {
+          "source": "class C<T:type>{operator C(v:any){return new C.<T>();}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "required value parameter declaration",
+      "steps": [
+        {
+          "source": "class C<N:uint32>{operator C(v:any){return new C.<N>();}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit self target declaration",
+      "steps": [
+        {
+          "source": "class C<T:type>{operator C.<T>(v:any){return new C.<T>();}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "required parameters are not implicitly defaulted",
+      "steps": [
+        {
+          "source": "class C<T:type>{operator C(v:any){return new C.<T>();}}new C();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_GENERIC_ARGUMENT"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "one concrete inbound conversion",
+      "steps": [
+        {
+          "source": "let result=\"\";class C<T:type>{operator C(v:any){result=String(this===undefined);return new C.<T>();}}const raw:any=1;const c:C.<string>=raw;result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "concrete inbound parameter contracts",
+      "steps": [
+        {
+          "source": "class C<T:type>{operator C(v:T){return new C.<T>();}}const raw:any=\"s\";const c:C.<string>=raw;String(c instanceof C.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two concrete inbound applications",
+      "steps": [
+        {
+          "source": "let seen=\"\";class C<T:type>{operator C(v:T){seen+=String(v);return new C.<T>();}}const s:any=\"s\";const n:any=2;const a:C.<string>=s;const b:C.<number>=n;seen+\"/\"+String(a instanceof C.<string>)+\"/\"+String(b instanceof C.<number>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s2/true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source conversion sees concrete parameter",
+      "steps": [
+        {
+          "source": "class C<T:type>{value:T;constructor(value:T){this.value=value;}operator T(){return this.value;}}const raw:any=new C.<string>(\"s\");const s:string=raw;s;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declaration does not materialize default application",
+      "steps": [
+        {
+          "source": "let effects=0;class C<T:type=string>{static marker=++effects;operator C(v:any){return new C.<T>();}}String(effects);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "specialization evaluates elements once",
+      "steps": [
+        {
+          "source": "let effects=0;class C<T:type=string>{static marker=++effects;operator C(v:any){return new C.<T>();}}const raw:any=1;const a:C.<string>=raw;const b:C.<string>=raw;const c:C.<number>=raw;String(effects);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested generic declaration does not borrow outer frame",
+      "steps": [
+        {
+          "source": "function f<T:type>(){class C<U:type>{operator C(v:any){return new C.<U>();}}return \"ok\";}f.<number>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same name nested parameter is not specialized by outer binding",
+      "steps": [
+        {
+          "source": "let effects=0;function f<T:type>(){class C<T:type>{static marker=++effects;operator C(v:any){return new C.<T>();}}return String(effects);}f.<number>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested application uses its own type argument",
+      "steps": [
+        {
+          "source": "function f<T:type>(){class C<U:type>{operator C(v:U){return new C.<U>();}}const raw:any=\"s\";const c:C.<string>=raw;return String(c instanceof C.<string>);}f.<number>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same name nested application uses inner type argument",
+      "steps": [
+        {
+          "source": "function f<T:type>(){class C<T:type>{operator C(v:T){return new C.<T>();}}const raw:any=\"s\";const c:C.<string>=raw;return String(c instanceof C.<string>);}f.<number>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested ordinary class retains captured parameter",
+      "steps": [
+        {
+          "source": "function f<T:type>(input:T){let seen=\"\";class C{operator C(v:T){seen=String(v);return new C();}}const raw:any=input;const c:C=raw;return seen;}f.<string>(\"s\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "derived generic inbound declaration",
+      "steps": [
+        {
+          "source": "class B{}class C<T:type> extends B{operator C(v:any){return new C.<T>();}}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "derived concrete inbound conversion",
+      "steps": [
+        {
+          "source": "class B{}class C<T:type> extends B{operator C(v:any){return new C.<T>();}}const raw:any=1;const c:C.<string>=raw;String(c instanceof B);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class expression generic declaration",
+      "steps": [
+        {
+          "source": "const K=class C<T:type>{operator C(v:any){return new C.<T>();}};\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class expression generic conversion",
+      "steps": [
+        {
+          "source": "const K=class C<T:type>{operator C(v:any){return new C.<T>();}};const raw:any=1;const c:K.<string>=raw;String(c instanceof K.<string>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nongeneric inbound control",
+      "steps": [
+        {
+          "source": "class C{operator C(v:any){return new C();}}const raw:any=1;const c:C=raw;String(c instanceof C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nongeneric source control",
+      "steps": [
+        {
+          "source": "class C{operator string(){return \"s\";}}const raw:any=new C();const s:string=raw;s;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid inbound receiver still checked before declaration",
+      "steps": [
+        {
+          "source": "class C<T:type>{value:number=1;operator C(v:any){const n:number=this.value;return new C.<T>();}}\"entered\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_PROPERTY_RECEIVER"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "value parameter reaches inbound body",
+      "steps": [
+        {
+          "source": "let seen=\"\";class C<N:uint32>{operator C(v:any){seen=String(N);return new C.<N>();}}const raw:any=1;const c:C.<3>=raw;seen;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong dynamic argument stops before operator body",
+      "steps": [
+        {
+          "source": "let calls=0;class C<T:type>{operator C(v:T){calls++;return new C.<T>();}}const raw:any=\"s\";let failed=false;try{const c:C.<number>=raw;}catch(e){failed=e instanceof TypeError;}String(failed)+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected inbound error is not retried",
+      "steps": [
+        {
+          "source": "let calls=0;class C<T:type>{operator C(v:any){calls++;throw new RangeError(\"selected\");}}const raw:any=1;let failed=false;try{const c:C.<string>=raw;}catch(e){failed=e instanceof RangeError;}String(failed)+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor priority remains intact",
+      "steps": [
+        {
+          "source": "let seen=\"\";class C<T:type>{constructor(v:T){seen+=\"ctor\";}operator C(v:any){seen+=\"op\";return new C.<T>(v);}}const raw:any=\"s\";const c:C.<string>=raw;seen;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ctor"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source priority before inbound remains intact",
+      "steps": [
+        {
+          "source": "let seen=\"\";class C<T:type>{operator C(v:any){seen+=\"in\";return new C.<T>();}}class S{operator C.<string>(){seen+=\"out\";return new C.<string>();}}const raw:any=new S();const c:C.<string>=raw;seen;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "out"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic source two specializations",
+      "steps": [
+        {
+          "source": "class C<T:type>{value:T;constructor(value:T){this.value=value;}operator T(){return this.value;}}const a:any=new C.<string>(\"s\");const b:any=new C.<number>(2);const s:string=a;const n:number=b;s+\"/\"+n;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured outer type and own inner type coexist while active",
+      "steps": [
+        {
+          "source": "function f<T:type>(input:T){let seen=\"\";class C<U:type>{operator C(v:U){const saved:T=input;seen=String(saved)+\"/\"+String(v);return new C.<U>();}}const raw:any=2;const c:C.<number>=raw;return seen;}f.<string>(\"s\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic class nested in specialized class method",
+      "steps": [
+        {
+          "source": "class Outer<T:type>{run(){let seen=\"\";class C<T:type>{operator C(v:T){seen=String(v);return new C.<T>();}}const raw:any=\"s\";const c:C.<string>=raw;return seen;}}new Outer.<number>().run();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested static fields wait for their own application",
+      "steps": [
+        {
+          "source": "let effects=0;function f<T:type>(){class C<U:type>{static marker=++effects;operator C(v:any){return new C.<U>();}}const before=effects;const raw:any=1;const c:C.<string>=raw;return before+\"/\"+effects;}f.<number>();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stored application uses existing specialization",
+      "steps": [
+        {
+          "source": "let calls=0;class C<T:type>{operator C(v:any){calls++;return new C.<T>();}}const Held=C.<string>;const raw:any=1;const c:Held=raw;String(c instanceof Held)+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "separate Script declaration and application",
+      "steps": [
+        {
+          "source": "let seen=\"\";class C<T:type>{operator C(v:T){seen=String(v);return new C.<T>();}}\"declared\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "declared"
+          }
+        },
+        {
+          "source": "const raw:any=\"later\";const c:C.<string>=raw;seen;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "later"
+          }
+        }
+      ]
+    },
+    {
+      "name": "caller parameter cannot replace declaration capture",
+      "steps": [
+        {
+          "source": "function outer<T:type>(saved:T){let seen=\"\";class C<U:type>{operator C(v:U){const x:T=saved;seen=String(x)+\"/\"+String(v);return new C.<U>();}}function use<T:type>(){const raw:any=2;const c:C.<number>=raw;}use.<boolean>();return seen;}outer.<string>(\"s\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "caller lexical shadow does not redirect operator writes",
+      "steps": [
+        {
+          "source": "let seen=\"\";class C<T:type>{operator C(v:T){seen=String(v);return new C.<T>();}}function use(){const seen=\"shadow\";const raw:any=\"right\";const c:C.<string>=raw;return seen;}use()+\"/\"+seen;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "shadow/right"
+          }
+        }
+      ]
+    },
+    {
+      "name": "caller context is restored after specialization failure",
+      "steps": [
+        {
+          "source": "class C<T:type>{static fail=(()=>{throw new RangeError(\"build\");})();operator C(v:any){return new C.<T>();}}function use<T:type>(v:T){let failed=false;try{const raw:any=1;const c:C.<number>=raw;}catch(e){failed=e instanceof RangeError;}const same:T=v;return String(failed)+\"/\"+String(same);}use.<string>(\"caller\");",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/caller"
+          }
+        }
+      ]
+    },
+    {
+      "name": "outer private scope reaches specialized conversion",
+      "steps": [
+        {
+          "source": "let seen=\"\";class Outer{#value:string=\"private\";run(){const self=this;class C<T:type>{operator C(v:any){seen=self.#value;return new C.<T>();}}const raw:any=1;const c:C.<string>=raw;}}new Outer().run();seen;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "private"
+          }
+        }
+      ]
+    }
+  ]
+}

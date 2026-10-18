@@ -69,7 +69,7 @@ import { ClassDefinitionEvaluation, PartialClassMergeEvaluation } from './ClassD
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
 import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
-import { Assert, OrdinaryObjectCreate, CreateDataProperty } from '#self';
+import { Assert, OrdinaryObjectCreate, CreateDataProperty, InCapturedTypeContext, type CapturedTypeContext } from '#self';
 import { ClaimMetaKey, MetaTypeClaiming, CreateDataPropertyOrThrow, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaShape, NormalizeMetadataRecord, MetadataSatisfiesShape, RegisterMetaHook, RegisterMetaTypeName, RegisterMetaTypeParameterName, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
 
 /**
@@ -2080,7 +2080,14 @@ const specializationsInProgress = new Map<unknown, { key: string, ctor?: Value }
 export function* MaterializeSpecialization(
   declaration: ParseNode.ClassDeclaration,
   argRecords: readonly (TypeRecord | number)[],
+  declarationConstructor?: Value,
 ): ValueEvaluator {
+  // Target-side conversions retain the actual declaration constructor, whose
+  // context must win over the caller's lexical and generic environment.
+  const captured = declarationConstructor && classTypeContexts.get(declarationConstructor);
+  if (captured) {
+    return yield* InCapturedTypeContext(captured, () => MaterializeSpecialization(declaration, argRecords));
+  }
   const params = declaration.TypeParameters?.TypeParameterList ?? [];
   // Only a CLASS is specialized by evaluating a body. A generic INTERFACE
   // reaches this same annotation arm and has no |ClassTail|, so it has nothing
@@ -2127,8 +2134,15 @@ export function* MaterializeSpecialization(
 // Defaults are evaluated in the class declaration's scope, including for a
 // built-in default constructor that has no ECMAScript [[Environment]] slot.
 const classTypeEnvironments = new WeakMap<Value, EnvironmentRecord>();
-export function RegisterClassTypeEnvironment(ctor: Value, environment: EnvironmentRecord): void {
+const classTypeContexts = new WeakMap<Value, CapturedTypeContext>();
+export function RegisterClassTypeEnvironment(ctor: Value, environment: EnvironmentRecord,
+  privateEnvironment = surroundingAgent.runningExecutionContext.PrivateEnvironment): void {
   classTypeEnvironments.set(ctor, environment);
+  const context = surroundingAgent.runningExecutionContext;
+  classTypeContexts.set(ctor, {
+    Environment: environment, PrivateEnvironment: privateEnvironment,
+    TypeParameterFrame: currentTypeParameterFrame(), Realm: context.Realm, ScriptOrModule: context.ScriptOrModule,
+  });
 }
 export function ClassTypeEnvironmentOf(ctor: Value): EnvironmentRecord | undefined {
   return classTypeEnvironments.get(ctor) ?? (ctor as { Environment?: EnvironmentRecord }).Environment;
@@ -2466,6 +2480,7 @@ function* SpecializeFromFrame(
       // below has not happened yet and `LookupClassType` answers nothing.
       (body as unknown as { sourceText?: string }).sourceText ?? '',
       [],
+      true,
     ));
   } finally {
     specializationsInProgress.delete(declaration);

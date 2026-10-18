@@ -602,7 +602,7 @@ const INITIALIZABLE_CONTEXTS: readonly string[] = [
 /** The constructor each class node last evaluated to (#sec-typed-classes). */
 export const classConstructorOfNode = new WeakMap<object, ObjectValue>();
 
-export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, classBinding: JSStringValue | UndefinedValue, className: PropertyKeyValue | PrivateName, sourceText: string, decorators: readonly DecoratorDefinitionRecord[]): ValueEvaluator<FunctionObject> {
+export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, classBinding: JSStringValue | UndefinedValue, className: PropertyKeyValue | PrivateName, sourceText: string, decorators: readonly DecoratorDefinitionRecord[], specialization = false): ValueEvaluator<FunctionObject> {
   const { ClassHeritage, ClassBody } = ClassTail;
   // 1. Let env be the LexicalEnvironment of the running execution context.
   const env = surroundingAgent.runningExecutionContext.LexicalEnvironment;
@@ -655,14 +655,15 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
   // application's bindings. Only a heritage that actually reads a parameter is
   // deferred: one that does not evaluates at the declaration as it always has.
   //
-  // "Unspecialized" is the declaration of a generic class evaluated with no
-  // application's bindings in scope: the name is bound, and the parts that
-  // depend on a parameter wait for an application to supply one.
+  // Only the specialization entry point supplies this class's application.
+  // An ambient frame may belong to an enclosing generic function or class;
+  // even identical parameter names do not specialize the nested declaration.
+  // The name is bound, and dependent elements wait for its own application.
   let unspecializedGeneric = false;
   if (surroundingAgent.feature('runtime-types')) {
     const owner = (ClassTail as unknown as { parent?: { TypeParameters?: { TypeParameterList?: readonly unknown[] } } }).parent;
     const params = owner?.TypeParameters?.TypeParameterList;
-    if (params && params.length > 0 && currentTypeParameterFrame() === undefined) {
+    if (params && params.length > 0 && !specialization) {
       unspecializedGeneric = true;
     }
   }
@@ -844,7 +845,7 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     }
   }
   if (surroundingAgent.feature('runtime-types')) {
-    RegisterClassTypeEnvironment(F, classScope);
+    RegisterClassTypeEnvironment(F, classScope, outerPrivateEnvironment);
   }
   __ts_cast__<Mutable<DefaultConstructorBuiltinFunction>>(F);
   F.HostInitialName = className;
@@ -1263,6 +1264,11 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
         // from the annotation's resolved record, so both sides agree without
         // sharing one.
         const conversionType = (e as unknown as { Type?: ParseNode.Type }).Type;
+        // Register a generic conversion when its own application supplies the
+        // target and signature bindings, without applying declaration defaults.
+        if (e.type === 'OperatorDefinition' && !e.OperatorName && conversionType && unspecializedGeneric) {
+          continue;
+        }
         // Form 3, `operator T(value: S)`: declared on the TARGET and taking a
         // parameter, so it registers under a fixed key on the target's prototype
         // rather than under the target's display - the boundary reaches it from

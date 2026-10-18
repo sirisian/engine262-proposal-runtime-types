@@ -2092,12 +2092,8 @@ function restElementType(collected: TypeRecord): TypeRecord {
   return collected;
 }
 
-/**
- * sec-user-defined-conversions, form 1. Returns the constructed value, or
- * ~undefined~ where the target declares no converting constructor, so the caller
- * reports exactly as it did before.
- */
-function* ConstructThroughConvertingConstructor(value: Value, t: TypeRecord): PlainEvaluator<Value | undefined> {
+/** Both target-side conversion forms belong to the target's specialization. */
+function* ConversionTargetConstructor(t: TypeRecord): PlainEvaluator<Value | undefined> {
   if (t.Kind !== 'nominal') {
     return undefined;
   }
@@ -2120,11 +2116,20 @@ function* ConstructThroughConvertingConstructor(value: Value, t: TypeRecord): Pl
     if (args.length === 0) {
       return undefined;
     }
-    const specialized = Q(yield* MaterializeSpecialization((t as unknown as { Declaration: ParseNode.ClassDeclaration }).Declaration, args));
+    const specialized = Q(yield* MaterializeSpecialization((t as unknown as { Declaration: ParseNode.ClassDeclaration }).Declaration, args, ctor));
     if (specialized === undefined || !IsConstructor(specialized)) {
       return undefined;
     }
     ctor = specialized;
+  }
+  return ctor;
+}
+
+/** sec-user-defined-conversions, form 1. */
+function* ConstructThroughConvertingConstructor(value: Value, t: TypeRecord): PlainEvaluator<Value | undefined> {
+  const ctor = Q(yield* ConversionTargetConstructor(t));
+  if (ctor === undefined) {
+    return undefined;
   }
   // One parameter EXACTLY: the clause says a constructor "taking one parameter",
   // and a constructor of two is reached through target-typed construction.
@@ -2153,7 +2158,7 @@ function* ConvertThroughInboundOperator(value: Value, t: TypeRecord): PlainEvalu
   // A nominal's [[Constructor]] is absent for a type with no class behind it -
   // an intrinsic interface such as `ClassMetadata` - and `Get` asserts on a
   // non-object, so the guard is the object test and not merely presence.
-  const ctor = (t as unknown as { Constructor?: Value }).Constructor;
+  const ctor = Q(yield* ConversionTargetConstructor(t));
   if (!(ctor instanceof ObjectValue)) {
     return undefined;
   }

@@ -125,3 +125,5 @@ export { IsValueTypeClass } from './type-system/layout.mts';
 export { TupleBackingLength } from './type-system/tuple-storage.mts';
 export { OwnMemberDeclarationOf } from './runtime-semantics/ClassDefinitionEvaluation.mts';
 export * from './type-system/ordinary-conversions.mts';
+
+export { InCapturedTypeContext, type CapturedTypeContext } from './type-system/runtime.mts';
