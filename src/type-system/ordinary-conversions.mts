@@ -7,6 +7,18 @@ export type OrdinaryConversionDeclaration = {
   Target: TypeRecord, Function: Value, Signature?: TypeRecord, Source: boolean,
 };
 const declarations = new WeakMap<Value, readonly OrdinaryConversionDeclaration[]>();
+export type OrdinaryConstructorDeclaration = { Function: Value, Signature?: TypeRecord };
+const constructors = new WeakMap<Value, readonly OrdinaryConstructorDeclaration[]>();
+
+/** Constructor bodies retain their own declaration-context signatures. The
+ * reflection record for the first constructor is not an overload table. */
+export function RegisterOrdinaryConstructors(owner: Value, entries: readonly OrdinaryConstructorDeclaration[]): void {
+  constructors.set(owner, entries);
+}
+
+export function OrdinaryConstructors(owner: Value): readonly OrdinaryConstructorDeclaration[] | undefined {
+  return constructors.get(owner);
+}
 
 /** Keep declaration identity and all same-form alternatives. A display-keyed
  * dispatch table cannot distinguish shadowed class names or retain overloads. */

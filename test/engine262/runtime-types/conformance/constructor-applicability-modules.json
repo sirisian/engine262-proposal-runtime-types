@@ -1,0 +1,46 @@
+{
+  "cases": [
+    {
+      "name": "imported overloaded constructor leaves source available",
+      "modules": {
+        "dep": "export let log=\"\";export class P{x:uint8=1;constructor(v:boolean=true){log+=\"b\";}constructor(v:string){log+=\"t\";}}export class S{operator P(){log+=\"s\";return new P(true);}}",
+        "main": "import {P,S,log} from \"dep\";const raw:any=new S();const p:P=raw;await 0;if(log!==\"sb\"||String(p.x)!==\"1\")throw new Error(\"wrong selection\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported constructor default sees supplied undefined",
+      "modules": {
+        "dep": "export let log=\"\";export class P{x:uint8=1;constructor(v:boolean=true){log+=\"b\";}constructor(v:string){log+=\"t\";}}export class S{operator P(){log+=\"s\";return new P(true);}}",
+        "main": "import {P as Imported,log} from \"dep\";const raw:any=undefined;const p:Imported=raw;await 0;if(log!==\"b\"||String(p.x)!==\"1\")throw new Error(\"wrong default\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported constructor chooses nonfirst body",
+      "modules": {
+        "dep": "export let log=\"\";export class P{x:uint8=1;constructor(v:boolean=true){log+=\"b\";}constructor(v:string){log+=\"t\";}}export class S{operator P(){log+=\"s\";return new P(true);}}",
+        "main": "import {P,log} from \"dep\";const raw:any=\"yes\";const p:P=raw;await 0;if(log!==\"t\")throw new Error(\"wrong body\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    }
+  ]
+}

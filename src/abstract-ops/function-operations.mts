@@ -551,7 +551,15 @@ function* FunctionCallSlot(this: FunctionObject, thisArgument: Value, argumentsL
 }
 
 /** https://tc39.es/ecma262/#sec-ecmascript-function-objects-construct-argumentslist-newtarget */
-function* FunctionConstructSlot(this: FunctionObject, argumentsList: Arguments, newTarget: FunctionObject): ValueEvaluator<ObjectValue> {
+/** Execute a retained converting-constructor body with the class's allocation,
+ * fields, private environment and new.target. Selection is not repeated after
+ * field initializers or earlier conversions have performed effects. */
+export function* ConstructSelectedOrdinaryConstructor(ctor: FunctionObject, argumentsList: Arguments, body: Value): ValueEvaluator<ObjectValue> {
+  Assert(ctor.Construct === FunctionConstructSlot && isECMAScriptFunctionObject(body));
+  return Q(yield* FunctionConstructSlot.call(ctor, argumentsList, ctor, body));
+}
+
+function* FunctionConstructSlot(this: FunctionObject, argumentsList: Arguments, newTarget: FunctionObject, selectedBody?: ECMAScriptFunctionObject): ValueEvaluator<ObjectValue> {
   const F = this;
 
   // 1. Assert: F is an ECMAScript function object.
@@ -649,10 +657,10 @@ function* FunctionConstructSlot(this: FunctionObject, argumentsList: Arguments, 
   // FUNCTION call uses, over signatures `SignaturesOf` builds from each closure's
   // own annotations. The checker asks `resolveOverloadByTypes` - its type-based
   // sibling - of the same table, so both sides answer one question with one rule.
-  let bodyFunction = F;
+  let bodyFunction = selectedBody ?? F;
   let bodyArguments = argumentsList;
   const ctorOverloads = (F as { OverloadFunctions?: readonly Value[] }).OverloadFunctions;
-  if (surroundingAgent.feature('runtime-types') && ctorOverloads && ctorOverloads.length > 1) {
+  if (!selectedBody && surroundingAgent.feature('runtime-types') && ctorOverloads && ctorOverloads.length > 1) {
     const signatures = Q(yield* SignaturesOf(F as unknown as Value));
     const resolution = Q(yield* resolveOverloadChecked(signatures, argumentsList as readonly Value[], undefined, NamedCallItemsOf(argumentsList)));
     if (resolution.Kind === 'none') {

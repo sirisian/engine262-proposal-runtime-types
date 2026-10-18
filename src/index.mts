@@ -131,3 +131,4 @@ export { InCapturedTypeContext, BindTypeArgumentRecordsInto, specializationDepth
 export { ClassFamilyOf, ClassFamilyIdentityOf, ClassFamilyConstructorOf, ClassDeclarationIdentity } from './runtime-semantics/RuntimeTypesDeclarations.mts';
 
 export { ConversionResultTypeNode } from './abstract-ops/runtime-types.mts';
+export { ConstructSelectedOrdinaryConstructor } from './abstract-ops/function-operations.mts';

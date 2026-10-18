@@ -2,12 +2,13 @@ import { AssignScalarRests, ScalarRestsAccept, ScalarRestMember, ScalarRestOwner
 import { CarriedTypeRecordOf, DefaultValueOf, RuntimeTypeOf } from '../type-system/runtime.mts';
 import { TupleBackingLength, TupleStorageTypeAt, TupleResizePreserves, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { IsSubtype } from '../type-system/relations.mts';
+import { resolveOverload, type OverloadSignature } from '../type-system/overloads.mts';
 import { displayType, anyType, type TypeRecord } from '../type-system/records.mts';
 import { ObjectValue, ReferenceValue, Value, type Descriptor } from '../value.mts';
 import { Q, EnsureCompletion, type ThrowCompletion } from '../completion.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { RequireType, ConvertValue, ScalarRestConversionApplicable, LookupClassOperator } from './runtime-types.mts';
-import { SameValue, Throw, isDecimalObject, isRationalObject, isFloat128Object, OwnMemberDeclarationOf, OrdinaryNominalPrototype, IsValueTypeClass, Construct, Call, IsCallable, IsConstructor, AcquireNominalPrototype, OrdinarySourceConversions, OrdinaryInboundConversions } from '#self';
+import { SameValue, Throw, isDecimalObject, isRationalObject, isFloat128Object, OrdinaryNominalPrototype, IsValueTypeClass, ConstructSelectedOrdinaryConstructor, Call, IsCallable, IsConstructor, AcquireNominalPrototype, OrdinarySourceConversions, OrdinaryInboundConversions, OrdinaryConstructors } from '#self';
 
 type Convert = (value: Value, type: TypeRecord) => ValueEvaluator;
 export type ScalarRestItem = { value?: Value, convert?: boolean };
@@ -18,21 +19,28 @@ type Planned = { candidate: Candidate } | { failure: ThrowCompletion } | { unsup
 /** Pure declaration-context parameter admission. Unknown effectful checks are
  * distinguished from a proved inapplicable parameter: they cannot justify
  * falling through to a lower-precedence conversion form. */
-function* ordinaryParameterAdmission(value: Value, fn: Value, declared?: TypeRecord): PlainEvaluator<Admission> {
+function* ordinaryParameterAdmission(value: Value, fn: Value, declared?: TypeRecord, allowOptional = false): PlainEvaluator<Admission> {
   const formals = (fn as { FormalParameters?: readonly {
     type: string, Initializer?: unknown, TypeAnnotation?: unknown, Ref?: boolean, Optional?: boolean,
   }[] }).FormalParameters;
   if (formals?.length !== 1) return undefined;
   if (formals[0]!.Ref || formals[0]!.type === 'BindingRestElement') return undefined;
-  if (formals[0]!.type !== 'SingleNameBinding' || formals[0]!.Initializer || formals[0]!.Optional) return { unsupported: true };
+  if (formals[0]!.type !== 'SingleNameBinding'
+      || (!allowOptional && (formals[0]!.Initializer || formals[0]!.Optional))) return { unsupported: true };
   const parameter = declared?.Kind === 'function' && declared.Signatures.length === 1
     ? declared.Signatures[0]!.Parameters[0] : undefined;
   if (parameter?.Ref || parameter?.Rest) return undefined;
-  if (parameter?.Optional || (formals[0]!.TypeAnnotation && !parameter)) return { unsupported: true };
+  if ((!allowOptional && parameter?.Optional) || (formals[0]!.TypeAnnotation && !parameter)) return { unsupported: true };
   const target = parameter?.Type ?? anyType;
   if (target.Kind !== 'any') {
     if (target.Kind !== 'primitive' && target.Kind !== 'nominal') return { unsupported: true };
     if (target.Kind === 'nominal' && IsValueTypeClass(target)) return { unsupported: true };
+    // A supplied undefined selects ordinary optional/default binding. This
+    // proof does not evaluate a default; its declaration-time validation and
+    // selected parameter binding retain their ordinary rules.
+    if (allowOptional && value === Value.undefined && (parameter?.Optional || formals[0]!.Initializer || formals[0]!.Optional)) {
+      return { parameter: target };
+    }
     if (!ScalarRestMember(value, target)) {
       if (!pureScalarConversion(value, target, RequireType)) {
         return target.Kind === 'primitive' && !ScalarRestConversionApplicable(value, target, RequireType)
@@ -65,18 +73,30 @@ export function* PlanOrdinaryNominalConversion(value: Value, type: TypeRecord): 
   let failure: ThrowCompletion | undefined;
   const ctor = type.Constructor;
   if (ctor && IsConstructor(ctor)) {
-    // Overloaded constructors need a separate applicability proof; never infer
-    // precedence from only the first body's signature.
-    if ((ctor as { OverloadFunctions?: readonly Value[] }).OverloadFunctions?.length) return { unsupported: true };
-    const declared = OwnMemberDeclarationOf(ctor, 'constructor', false, 'ClassMethod')?.type;
-    const admission = Q(yield* ordinaryParameterAdmission(value, ctor, declared));
-    if (admission && 'unsupported' in admission) return admission;
-    if (admission && 'parameter' in admission) {
+    const constructors = OrdinaryConstructors(ctor);
+    if (!constructors) return { unsupported: true };
+    const applicable: OverloadSignature[] = [];
+    for (const entry of constructors) {
+      const admission = Q(yield* ordinaryParameterAdmission(value, entry.Function, entry.Signature, true));
+      if (admission && 'unsupported' in admission) return admission;
+      if (admission && 'failure' in admission) failure ??= admission.failure;
+      if (admission && 'parameter' in admission) {
+        const parameters = entry.Signature?.Kind === 'function' ? entry.Signature.Signatures[0]?.Parameters : undefined;
+        applicable.push({ Function: entry.Function, Untyped: parameters === undefined,
+          Parameters: parameters ?? [{ Name: '', Type: admission.parameter, Optional: false, Rest: false }] });
+      }
+    }
+    // Use the ordinary call ranking after pure admission has removed failed
+    // candidates. Arity-only selection, first-declaration selection and a
+    // separate subtype-only constructor ranking would disagree with new C(v).
+    const selected = resolveOverload(applicable, [value]);
+    if (selected.Kind === 'ambiguous') return { candidate: { error: Throw.TypeError('$1', Value('ambiguous converting constructor for the selected target')) } };
+    if (selected.Kind === 'resolved') {
+      const body = selected.Signature.Function;
       return { candidate: nominalOperation(type, function* (): ValueEvaluator {
-        return Q(yield* Construct(ctor, [value]));
+        return Q(yield* ConstructSelectedOrdinaryConstructor(ctor, [value], body));
       }) };
     }
-    if (admission && 'failure' in admission) failure = admission.failure;
   }
   const source = OrdinarySourceConversions(value, type).filter((entry) => IsCallable(entry.Function));
   if (source.length > 1) return { candidate: { error: Throw.TypeError('$1', Value('ambiguous source conversion for the selected target')) } };

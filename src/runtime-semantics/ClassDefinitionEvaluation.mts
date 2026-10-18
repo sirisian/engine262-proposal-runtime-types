@@ -62,7 +62,7 @@ import { TakeEvaluatedMethodKey, BeginPartialMemberAddition } from './MethodDefi
 import {
   surroundingAgent,
   OrdinaryFunctionCreate,
-  RegisterClassOperator, AddClassOperator, BeginPartialOperatorAddition, RegisterOrdinaryConversion,
+  RegisterClassOperator, AddClassOperator, BeginPartialOperatorAddition, RegisterOrdinaryConversion, RegisterOrdinaryConstructors,
   DeclarativeEnvironmentRecord,
   PrivateEnvironmentRecord,
 
@@ -936,6 +936,21 @@ export function* ClassDefinitionEvaluation(ClassTail: ParseNode.ClassTail, class
     const constructorType = ctorNode === undefined
       ? undefined
       : Q(yield* MemberFunctionTypeRecord(ctorNode));
+    // Retain every converting constructor in this declaration's environment.
+    // Do not read only the first reflection signature or resolve annotations
+    // later in the caller's scope while testing conversion applicability.
+    const constructorNodes = ClassBody ? ConstructorMethods(ClassBody) : [];
+    const constructorFunctions = (F as { OverloadFunctions?: readonly Value[] }).OverloadFunctions ?? [F as Value];
+    const constructorDeclarations: { Function: Value, Signature?: TypeRecord }[] = [];
+    for (const [index, node] of constructorNodes.entries()) {
+      const parameters = node.UniqueFormalParameters;
+      let signature = index === 0 ? constructorType : undefined;
+      if (index !== 0 && parameters?.length === 1 && parameters[0].type === 'SingleNameBinding') {
+        signature = Q(yield* MemberFunctionTypeRecord(node));
+      }
+      constructorDeclarations.push({ Function: constructorFunctions[index], Signature: signature });
+    }
+    RegisterOrdinaryConstructors(F, constructorDeclarations);
     RecordMemberDeclaration(F, 'constructor', {
       parameters,
       type: constructorType,
