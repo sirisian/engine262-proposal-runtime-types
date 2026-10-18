@@ -24,6 +24,12 @@ export function isNumericLiteralOperand(node: ParseNode): boolean {
       n = (n as { Expression: ParseNode }).Expression;
       continue;
     }
+    if (n.type === 'CommaOperator') {
+      // Only the result producer adopts. Evaluation has already performed all
+      // earlier operands, including their effects and abrupt completions.
+      n = n.ExpressionList.at(-1)!;
+      continue;
+    }
     if (n.type === 'UnaryExpression' && ((n as { operator?: string }).operator === '-' || (n as { operator?: string }).operator === '+')) {
       n = (n as { UnaryExpression: ParseNode }).UnaryExpression;
       continue;

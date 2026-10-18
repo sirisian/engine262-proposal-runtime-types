@@ -2860,7 +2860,13 @@ function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObser
   // this an interface-annotated binding failed where the equivalent object type
   // succeeded, which is a distinction neither the design nor the specification
   // draws.
-  const resolvedShape = t.Kind === 'nominal' && t.Structure
+  // A class's Structure supports type relations, not structural conversion.
+  // Reading its fields here can invoke unrelated source getters or mutate the
+  // source before its declared conversion is selected. As in IsOfType, class
+  // identity goes through nominal admission; interfaces retain this shape path.
+  const isClassType = t.Kind === 'nominal'
+    && (t.Declaration.type === 'ClassDeclaration' || t.Declaration.type === 'ClassExpression');
+  const resolvedShape = t.Kind === 'nominal' && t.Structure && !isClassType
     ? SubstituteTypeArguments(t.Structure, t.Declaration, t.Arguments) : t;
   const objectShape = resolvedShape.Kind === 'object' ? resolvedShape : null;
   if (objectShape !== null && value instanceof ObjectValue && Q(IsArray(value)) === Value.false) {

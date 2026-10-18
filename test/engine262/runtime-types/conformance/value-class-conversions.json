@@ -1,0 +1,1021 @@
+{
+  "cases": [
+    {
+      "name": "source conversion to value class returns a copy",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{x:uint8=1;}let saved:any=new P();class S{operator P(){log+=\"s\";return saved;}}const raw:any=new S();const result:P=raw;result.x=9;log+\"/\"+String(saved.x)+\"/\"+String(result.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/1/9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value class at explicit cast",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{x:uint8=1;}let saved:any=new P();class S{operator P(){log+=\"s\";return saved;}}const raw:any=new S();const result=raw:=P;log+\"/\"+String(result.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value class at argument",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{x:uint8=1;}let saved:any=new P();class S{operator P(){log+=\"s\";return saved;}}const raw:any=new S();function f(p:P){return p;}const result=f(raw);log+\"/\"+String(result.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value class at return",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{x:uint8=1;}let saved:any=new P();class S{operator P(){log+=\"s\";return saved;}}const raw:any=new S();function f():P{return raw;}const result=f();log+\"/\"+String(result.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value class at field",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{x:uint8=1;}let saved:any=new P();class S{operator P(){log+=\"s\";return saved;}}const raw:any=new S();class H{p:P=raw;}const result=new H().p;log+\"/\"+String(result.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value class at array element",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{x:uint8=1;}let saved:any=new P();class S{operator P(){log+=\"s\";return saved;}}const raw:any=new S();const items:[1].<P>=[raw];const result=items[0];log+\"/\"+String(result.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value class at tuple element",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{x:uint8=1;}let saved:any=new P();class S{operator P(){log+=\"s\";return saved;}}const raw:any=new S();const items:[P,string]=[raw,\"ok\"];const result=items[0];log+\"/\"+String(result.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "calling a class constructor does not perform a conversion",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{x:uint8=1;}let saved:any=new P();class S{operator P(){log+=\"s\";return saved;}}const raw:any=new S();const callable:any=(type P);let error=\"\";try{callable(raw);}catch(e){error=e.name;}error+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary identity class fields do not intercept source conversion",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{x:string=\"ok\";}class S{operator P(){log+=\"s\";return new P();}}const raw:any=new S();const p:P=raw;log+\"/\"+p.x;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source getters are not read as target fields",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{x:uint8=1;}class S{get x(){log+=\"g\";throw new Error(\"getter\");}operator P(){log+=\"s\";return new P();}}const raw:any=new S();const p:P=raw;log+\"/\"+String(p.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same shaped nonmember remains unchanged after refusal",
+      "steps": [
+        {
+          "source": "class P{x:uint8=1;}const raw:any={x:7};let error=\"\";try{const p:P=raw;}catch(e){error=e.name;}error+\"/\"+String(raw.x is number)+\"/\"+String(raw.x is uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "refusal does not invoke arbitrary getters",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{x:uint8=1;}const raw:any={get x(){log+=\"g\";return 7;}};try{const p:P=raw;}catch(e){log+=\"/\"+e.name;}log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "applicable constructor precedes source operator",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{x:uint8=1;constructor(v:any){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(0);}}const raw:any=new S();const p:P=raw;log+\"/\"+String(p.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "c/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inapplicable constructor leaves source available",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{x:uint8=1;constructor(v:boolean){log+=\"c\";}}class S{operator P(){log+=\"s\";return new P(true);}}const raw:any=new S();const p:P=raw;log+\"/\"+String(p.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "sc/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "existing member is copied before considering constructor",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{x:uint8=1;constructor(v:any){log+=\"c\";}operator P(){log+=\"s\";return this;}}const raw:any=new P(0);const p:P=raw;p.x=9;log+\"/\"+String(raw.x)+\"/\"+String(p.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "c/1/9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected constructor failure does not try source",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{x:uint8=1;constructor(v:any){log+=\"c\";throw new Error(\"body\");}}class S{operator P(){log+=\"s\";return new P(0);}}const raw:any=new S();try{const p:P=raw;}catch(e){log+=\"/\"+e.message;}log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "c/body"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source precedes inbound declaration",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{x:uint8=1;operator P(v:any){log+=\"i\";return new P();}}class S{operator P(){log+=\"s\";return new P();}}const raw:any=new S();const p:P=raw;log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inbound specificity is preserved for value class",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{x:uint8=1;operator P(v:boolean){log+=\"b\";return new P();}operator P(v:any){log+=\"a\";return new P();}}const raw:any=true;const p:P=raw;log+\"/\"+String(p.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed source result does not retry inbound",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{x:uint8=1;operator P(v:any){log+=\"i\";return new P();}}class S{operator P(){log+=\"s\";const bad:any={x:1};return bad;}}const raw:any=new S();try{const p:P=raw;}catch(e){log+=\"/\"+e.name;}log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failure preserves destination and prior effects",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{x:uint8=1;}class S{operator P(){log+=\"s\";throw new Error(\"body\");}}let p:P=new P();p.x=3;const raw:any=new S();try{p=raw;}catch(e){log+=\"/\"+e.message;}log+\"/\"+String(p.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/body/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "same spelled unrelated target does not select source",
+      "steps": [
+        {
+          "source": "let log=\"\";const Wrong=(()=>{class P{x:uint8=2;}return class S{operator P(){log+=\"s\";return new P();}};})();class P{x:uint8=1;}const raw:any=new Wrong();try{const p:P=raw;}catch(e){log+=\"/\"+e.name;}log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inherited exact source declaration remains available",
+      "steps": [
+        {
+          "source": "let log=\"\";class P{x:uint8=1;}class Base{operator P(){log+=\"s\";return new P();}}class S extends Base{}const raw:any=new S();const p:P=raw;log+\"/\"+String(p.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested value class fields remain independent",
+      "steps": [
+        {
+          "source": "class Inner{x:uint8=1;}class P{inner:Inner=new Inner();}const saved:any=new P();class S{operator P(){return saved;}}const raw:any=new S();const p:P=raw;p.inner.x=9;String(saved.inner.x)+\"/\"+String(p.inner.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "private value class fields survive the result copy",
+      "steps": [
+        {
+          "source": "class P{#x:uint8=1;get x(){return this.#x;}set x(v:uint8){this.#x=v;}}const saved:any=new P();class S{operator P(){return saved;}}const raw:any=new S();const p:P=raw;p.x=9;String(saved.x)+\"/\"+String(p.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic value class destination skips shape conversion",
+      "steps": [
+        {
+          "source": "let calls=0;class P<T:type>{x:T;}class S{operator P.<uint8>(){calls++;return new P.<uint8>();}}const raw:any=new S();const p:P.<uint8>=raw;String(p.x)+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "0/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "structural object target still converts its fields",
+      "steps": [
+        {
+          "source": "const raw:any={x:7};const p:{x:uint8}=raw;String(p.x is uint8)+\"/\"+String(raw===p);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "interface target still converts its fields",
+      "steps": [
+        {
+          "source": "interface I{x:uint8;}const raw:any={x:7};const p:I=raw;String(p.x is uint8)+\"/\"+String(raw===p);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class expression target skips shape conversion",
+      "steps": [
+        {
+          "source": "const P=class {x:uint8=1;};class S{operator P(){return new P();}}const raw:any=new S();const p:P=raw;String(p.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked constructor parameter stays checked in explicit cast",
+      "steps": [
+        {
+          "source": "class P{x:uint8=1;constructor(v:uint8){this.x=v;}}const raw:any=257;let error=\"\";try{const p=raw:=P;}catch(e){error=e.name;}error;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "primitive membership query is permitted as a value",
+      "steps": [
+        {
+          "source": "const n:uint8=7;String(n is uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "primitive settled positive guard is rejected",
+      "steps": [
+        {
+          "source": "const n:uint8=7;if(n is uint8){\"body\";}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_IMPOSSIBLE_TEST",
+              "rule": "rt-impossible-test",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "primitive settled negated guard is rejected",
+      "steps": [
+        {
+          "source": "const n:uint8=7;if(!(n is uint8)){\"body\";}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_IMPOSSIBLE_TEST",
+              "rule": "rt-impossible-test",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "primitive any observation remains dynamic",
+      "steps": [
+        {
+          "source": "const n:uint8=7;const dynamic:any=n;let result=\"\";if(dynamic is uint8)result=\"ok\";result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class membership query is permitted as a value",
+      "steps": [
+        {
+          "source": "class C{}const n:C=new C();String(n instanceof C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class settled positive guard is rejected",
+      "steps": [
+        {
+          "source": "class C{}const n:C=new C();if(n instanceof C){\"body\";}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_IMPOSSIBLE_TEST",
+              "rule": "rt-impossible-test",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "class settled negated guard is rejected",
+      "steps": [
+        {
+          "source": "class C{}const n:C=new C();if(!(n instanceof C)){\"body\";}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_IMPOSSIBLE_TEST",
+              "rule": "rt-impossible-test",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "class any observation remains dynamic",
+      "steps": [
+        {
+          "source": "class C{}const n:C=new C();const dynamic:any=n;let result=\"\";if(dynamic instanceof C)result=\"ok\";result;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "guarded logical operand in discarded conditional",
+      "steps": [
+        {
+          "source": "class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();((v instanceof A)&&v.x===1)?\"yes\":\"no\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "yes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "guarded logical operand in inferred binding",
+      "steps": [
+        {
+          "source": "class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();const result=(v instanceof A)&&v.x===1;String(result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "guarded logical operand in typed binding",
+      "steps": [
+        {
+          "source": "class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();const result:boolean=(v instanceof A)&&v.x===1;String(result);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "guarded logical operand in call argument",
+      "steps": [
+        {
+          "source": "class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();String((v instanceof A)&&v.x===1);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "guarded logical operand in logical OR",
+      "steps": [
+        {
+          "source": "class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();(!(v instanceof A)||v.x===1)?\"yes\":\"no\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "yes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "guarded logical operand in type guard",
+      "steps": [
+        {
+          "source": "class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();((v is A)&&v.x===1)?\"yes\":\"no\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "yes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "guarded logical operand in null guard",
+      "steps": [
+        {
+          "source": "class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();((v!==null)&&v.x===1)?\"yes\":\"no\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "yes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "guarded logical operand in typed return",
+      "steps": [
+        {
+          "source": "class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();function f(value:A|null):boolean{return (value instanceof A)&&value.x===1;}String(f(v));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong AND predecessor",
+      "steps": [
+        {
+          "source": "class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();(!(v instanceof A)&&v.x===1)?\"yes\":\"no\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_PROPERTY_RECEIVER",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong OR predecessor",
+      "steps": [
+        {
+          "source": "class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();((v instanceof A)||v.x===1)?\"yes\":\"no\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_PROPERTY_RECEIVER",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "facts do not leak beyond join",
+      "steps": [
+        {
+          "source": "class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();const result=(v instanceof A)&&v.x===1;String(v.x);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_UNDECLARED_MEMBER",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "right-hand assignment invalidates narrowing",
+      "steps": [
+        {
+          "source": "class A{x:uint8=1;}function readV():A|null{return new A();}let v:A|null=readV();((v instanceof A)&&((v=null),v.x===1))?\"yes\":\"no\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_UNDECLARED_MEMBER",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "comma result: right",
+      "steps": [
+        {
+          "source": "let effects=0;let n:uint8=2;const result=n > (effects++,1);String(result)+\"/\"+effects;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "comma result: left",
+      "steps": [
+        {
+          "source": "let effects=0;let n:uint8=2;const result=(effects++,1) < n;String(result)+\"/\"+effects;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "comma result: nested",
+      "steps": [
+        {
+          "source": "let effects=0;let n:uint8=2;const result=n > (effects++, (effects++,1));String(result)+\"/\"+effects;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "comma result: constant arithmetic",
+      "steps": [
+        {
+          "source": "let effects=0;let n:uint8=2;const result=n > (effects++, 1 + 0);String(result)+\"/\"+effects;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "comma result: stored right",
+      "steps": [
+        {
+          "source": "let effects=0;let n:uint8=2;let x:number=1;n > (effects++,x);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_NUMERIC_OPERATOR",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "comma result: stored left",
+      "steps": [
+        {
+          "source": "let effects=0;let n:uint8=2;let x:number=1;(effects++,x) < n;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_NUMERIC_OPERATOR",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "comma result: typed const",
+      "steps": [
+        {
+          "source": "let effects=0;let n:uint8=2;const x:number=1;n > (effects++,x);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_NUMERIC_OPERATOR",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "comma result: mixed widths",
+      "steps": [
+        {
+          "source": "let effects=0;let n:uint8=2;let x:uint16=1;n > (effects++,x);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_NUMERIC_OPERATOR",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "comma result: invalid earlier expression",
+      "steps": [
+        {
+          "source": "let effects=0;let n:uint8=2;let x:number=1;n > (n + x,1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_NUMERIC_OPERATOR",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "comma result: metadata write",
+      "steps": [
+        {
+          "source": "type NBn = { bounds?: RangeBounds.<any> };\nmeta NBn { default = {};\n  subtype(sub, sup) { return sup.bounds === undefined || (sub.bounds !== undefined && sup.bounds.contains(sub.bounds)); }\n  validate(v, c) { return c.bounds === undefined || c.bounds.contains(Number(v)); }\n  narrow(cur, op, val) {\n    const b = cur.bounds === undefined ? .. : cur.bounds;\n    if (op === \">=\") return { bounds: b.intersect(val..) };\n    if (op === \">\") return { bounds: b.intersect(val<..) };\n    if (op === \"<=\") return { bounds: b.intersect(..=val) };\n    if (op === \"<\") return { bounds: b.intersect(..<val) };\n    return cur;\n  } } function f(o:{v:float64.<{bounds:..}>},y:float64.<{bounds:..}>){if(o.v >= (o.v=y,0)){if(o.v < 0){}}} \"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "comma result: metadata no write",
+      "steps": [
+        {
+          "source": "type NBn = { bounds?: RangeBounds.<any> };\nmeta NBn { default = {};\n  subtype(sub, sup) { return sup.bounds === undefined || (sub.bounds !== undefined && sup.bounds.contains(sub.bounds)); }\n  validate(v, c) { return c.bounds === undefined || c.bounds.contains(Number(v)); }\n  narrow(cur, op, val) {\n    const b = cur.bounds === undefined ? .. : cur.bounds;\n    if (op === \">=\") return { bounds: b.intersect(val..) };\n    if (op === \">\") return { bounds: b.intersect(val<..) };\n    if (op === \"<=\") return { bounds: b.intersect(..=val) };\n    if (op === \"<\") return { bounds: b.intersect(..<val) };\n    return cur;\n  } } function f(o:{v:float64.<{bounds:..}>},y:float64.<{bounds:..}>){if(o.v >= 0){if(o.v < 0){}}} \"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_IMPOSSIBLE_TEST",
+              "phase": "pre-evaluation",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "comma out of range",
+      "steps": [
+        {
+          "source": "let effects=0;const n:uint8=2;n > (effects++,300);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_NUMERIC_RANGE",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "comma equality out of range",
+      "steps": [
+        {
+          "source": "let effects=0;const n:uint8=2;const result=n === (effects++,300);String(result)+\"/\"+effects;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic comma literal",
+      "steps": [
+        {
+          "source": "let effects=0;const n:any=2:=uint8;const result=n > (effects++,1);String(result)+\"/\"+effects;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic comma stored number",
+      "steps": [
+        {
+          "source": "let effects=0;const n:any=2:=uint8;let x:number=1;let result=\"\";try{n > (effects++,x);}catch(e){result=e.name;}result+\"/\"+effects;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "comma throwing earlier operand",
+      "steps": [
+        {
+          "source": "let effects=0;const n:uint8=2;function fail():number{effects++;throw new Error(\"stop\");}let result=\"\";try{n > (fail(),1);}catch(e){result=e.message;}result+\"/\"+effects;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "stop/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "comma named literal",
+      "steps": [
+        {
+          "source": "let effects=0;const n:uint8=2;const ONE=1;const result=n > (effects++,ONE);String(result)+\"/\"+effects;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic arithmetic comma literal",
+      "steps": [
+        {
+          "source": "let effects=0;const n:any=2:=uint8;const result=n + (effects++,1);String(result)+\"/\"+effects+\"/\"+String(result is uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3/1/true"
+          }
+        }
+      ]
+    }
+  ]
+}

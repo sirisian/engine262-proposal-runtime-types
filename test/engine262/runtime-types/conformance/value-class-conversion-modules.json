@@ -1,0 +1,159 @@
+{
+  "cases": [
+    {
+      "name": "retained imported nominal guard is intentionally rejected",
+      "modules": {
+        "dep": "export let log=\"\";export class C{operator C(v:boolean){log+=\"b\";return new C();}operator C(v:any){log+=\"a\";return new C();}}",
+        "main": "import {C,log} from \"dep\";const raw:any=true;const c:C=raw;await 0;if(log!==\"b\"||!(c instanceof C))throw new Error(\"wrong conversion\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "retained primitive guard is intentionally rejected",
+      "modules": {
+        "dep": "export class S{operator uint8(){const x:any=7;return x;}}",
+        "main": "import {S} from \"dep\";const raw:any=new S();const n:uint8=raw;await 0;if(!(n is uint8))throw new Error(\"wrong result\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "Module primitive positive settled guard",
+      "modules": {
+        "main": "const n:uint8=7;if(n is uint8){throw new Error(\"unreachable\");}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "Module primitive membership value query",
+      "modules": {
+        "main": "const n:uint8=7;const answer=String(n is uint8);if(answer!==\"true\")throw new Error(\"bad query\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "Module primitive dynamic any guard",
+      "modules": {
+        "main": "const n:uint8=7;const dynamic:any=n;if(!(dynamic is uint8))throw new Error(\"bad membership\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "Module class positive settled guard",
+      "modules": {
+        "main": "class C{}const n:C=new C();if(n instanceof C){throw new Error(\"unreachable\");}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "Module class membership value query",
+      "modules": {
+        "main": "class C{}const n:C=new C();const answer=String(n instanceof C);if(answer!==\"true\")throw new Error(\"bad query\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "Module class dynamic any guard",
+      "modules": {
+        "main": "class C{}const n:C=new C();const dynamic:any=n;if(!(dynamic instanceof C))throw new Error(\"bad membership\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported nominal membership value query",
+      "modules": {
+        "dep": "export class C{}",
+        "main": "import {C} from \"dep\";const n:C=new C();const answer=String(n instanceof C);if(answer!==\"true\")throw new Error(\"bad query\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported value class conversion selection and copying",
+      "modules": {
+        "dep": "export class P{x:uint8=1;}export const saved:any=new P();export class S{operator P(){return saved;}}",
+        "main": "import {P,S,saved} from \"dep\";const raw:any=new S();const p:P=raw;p.x=9;const answer=String(saved.x)+\"/\"+String(p.x);if(answer!==\"1/9\")throw new Error(answer);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "feature-disabled settled ordinary guard remains allowed",
+      "modules": {
+        "main": "class C{}const n=new C();if(!(n instanceof C))throw new Error(\"bad\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "runtimeTypes": false
+    }
+  ]
+}

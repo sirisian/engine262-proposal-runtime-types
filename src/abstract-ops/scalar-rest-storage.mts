@@ -58,7 +58,10 @@ function nominalOperation(type: TypeRecord & { Kind: 'nominal' }, execute: () =>
 }
 
 export function* PlanOrdinaryNominalConversion(value: Value, type: TypeRecord): PlainEvaluator<Planned> {
-  if (type.Kind !== 'nominal' || !OrdinaryNominalPrototype(type) || IsValueTypeClass(type) || value instanceof ReferenceValue) return { unsupported: true };
+  // Non-rest value-class targets use the same selection proof. Their selected
+  // operators already enforce return copying; scalar-rest domains still exclude
+  // these targets, and value-class parameters retain their separate proof gate.
+  if (type.Kind !== 'nominal' || !OrdinaryNominalPrototype(type) || value instanceof ReferenceValue) return { unsupported: true };
   let failure: ThrowCompletion | undefined;
   const ctor = type.Constructor;
   if (ctor && IsConstructor(ctor)) {

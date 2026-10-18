@@ -15325,6 +15325,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return;
     }
     switch (node.type) {
+      case 'LogicalANDExpression':
+      case 'LogicalORExpression': {
+        const left = node.type === 'LogicalANDExpression' ? node.LogicalANDExpression : node.LogicalORExpression;
+        const right = node.type === 'LogicalANDExpression' ? node.BitwiseORExpression : node.LogicalANDExpression;
+        validateDiscardedExpression(left);
+        const visitRight = () => validateDiscardedExpression(right);
+        const skipRight = () => undefined;
+        // A discarded result still evaluates its right operand only under the
+        // left outcome that reaches it. Do not descend through both unguarded.
+        if (node.type === 'LogicalANDExpression') conditionalArmTypes(left, visitRight, skipRight);
+        else conditionalArmTypes(left, skipRight, visitRight);
+        return;
+      }
       // A DISCARDED TERNARY guards its arms exactly as an `if` guards two
       // statements, and this walk is a separate descent from `walkGuarded`, so
       // without this case the arms were validated with no narrowing in scope.
@@ -15583,6 +15596,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  // A comma expression forwards context only to its result producer. This
+  // answers literal-adaptation eligibility, not whether evaluating the whole
+  // operand is constant or effect-free; earlier operands keep their effects.
+  const contextualResultOperand = (expr: ParseNode): ParseNode => {
+    let result = expr;
+    for (;;) {
+      if (result.type === 'ParenthesizedExpression') result = result.Expression;
+      else if (result.type === 'CommaOperator') result = result.ExpressionList.at(-1)!;
+      else return result;
+    }
+  };
+  const numericResultCanAdapt = (expr: ParseNode): boolean => isNumericConstantExpression(contextualResultOperand(expr));
+
   /**
    * The types of a conditional expression's two arms, each typed UNDER THE TEST
    * THAT GUARDS IT - the true arm with the test's narrowing in scope, the false
@@ -15621,6 +15647,25 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       flowLive = live;
       flowExits = exits;
     }
+  };
+
+  // Result inference and contextual typing need the same predecessor facts as
+  // the ordinary flow walk. The right operand of &&/|| is not typed in the
+  // unrefined entry state merely because its result is consumed as a value.
+  const guardedLogicalResultType = (node: ParseNode, typeOf: (part: ParseNode) => Known, contextual: Known = null): Known => {
+    if (node.type !== 'LogicalANDExpression' && node.type !== 'LogicalORExpression') {
+      return logicalResultType(node, typeOf, contextual);
+    }
+    const isAnd = node.type === 'LogicalANDExpression';
+    const left = isAnd ? node.LogicalANDExpression : node.LogicalORExpression;
+    const right = isAnd ? node.BitwiseORExpression : node.LogicalANDExpression;
+    return logicalResultType(node, (part) => {
+      if (part !== right) return typeOf(part);
+      const admitted = () => typeOf(part);
+      const skipped = () => null;
+      return isAnd ? conditionalArmTypes(left, admitted, skipped)[0]
+        : conditionalArmTypes(left, skipped, admitted)[1];
+    }, contextual);
   };
 
   /**
@@ -15970,7 +16015,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // type.
     if (node.type === 'LogicalANDExpression' || node.type === 'LogicalORExpression'
         || node.type === 'CoalesceExpression') {
-      return logicalResultType(node, (part) => staticTypeIn(part, contextual), contextual);
+      return guardedLogicalResultType(node, (part) => staticTypeIn(part, contextual), contextual);
     }
     if (node.type === 'ConditionalExpression') {
       // As for the short-circuit operators: the contextual type applies to the
@@ -20416,7 +20461,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // #sec-narrowing: a narrowed literal record does not make a mutable
         // annotated binding a written literal or an immutable literal name.
         const namesLiteral = (index: number): boolean => {
-          const operand = unparenthesized(operandNodes[index]);
+          const operand = contextualResultOperand(operandNodes[index]);
           return operandTypes[index]?.Kind === 'void'
             || !!singleValueOperandType(operand, operandTypes[1 - index])
             || (operand.type === 'UnaryExpression' && operand.operator === 'void' && literalExpressionType(operand.UnaryExpression) !== null);
@@ -20452,7 +20497,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if ((strictOperator === '<' || strictOperator === '>'
             || strictOperator === '<=' || strictOperator === '>=')
             && operandTypes.length === 2 && operandTypes[0] && operandTypes[1]
-            && !operandNodes.some(isNumericConstantExpression)) {
+            && !operandNodes.some(numericResultCanAdapt)) {
           // Through `shared` and a literal's base, and KEEPING a brand: the
           // comparison below is `SameType`, and a brand is part of the identity
           // it compares, exactly as at an arithmetic operator.
@@ -20513,7 +20558,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'LogicalANDExpression':
       case 'LogicalORExpression':
       case 'CoalesceExpression':
-        return logicalResultType(node, staticType);
+        return guardedLogicalResultType(node, staticType);
       // ARITHMETIC. A literal operand is routed through `staticTypeIn` so that
       // it takes the other operand's type EXACTLY, `let s: string = a + 1` is
       // refused rather than making `s` the string "2", and the Early Error the
@@ -34391,10 +34436,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const operandTypes = operandNodes.map((x) => staticType(x));
     const pairs: [ParseNode, Known][] = [[operandNodes[1], operandTypes[0]], [operandNodes[0], operandTypes[1]]];
     for (const [candidate, otherType] of pairs) {
+      // The final producer of a comma expression receives the same operand
+      // context as if it appeared here directly. Earlier operands still run
+      // normally; this is not a constant-folding or narrowing-path proof.
+      const result = contextualResultOperand(candidate);
+      if (['<', '<=', '>', '>='].includes(comparison ?? '')
+          && result !== unparenthesized(candidate) && otherType && isNumericConstantExpression(result)) {
+        const raw = erasedKeepingBrand(otherType);
+        const base = raw?.Kind === 'parameterized' ? raw.Base : raw;
+        if (base?.Kind === 'primitive' && isNumericOperandName(base.Name)) {
+          staticTypeIn(result, base);
+          continue;
+        }
+      }
       // A named numeric constant too: at this position it produces the value its
       // initializer would produce written here, which typing it here arranges.
-      const lit = literalOperand(candidate)
-        ?? (candidate.type === 'IdentifierReference' && isNumericConstantExpression(candidate) ? candidate : null);
+      const lit = literalOperand(result)
+        ?? (result.type === 'IdentifierReference' && isNumericConstantExpression(result) ? result : null);
       if (!lit || !otherType) continue;
       const base = otherType.Kind === 'parameterized' ? (otherType as { Base?: TypeRecord }).Base : otherType;
       const name = base?.Kind === 'primitive' ? (base as { Name?: string }).Name : undefined;
@@ -34526,8 +34584,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!a || !b) return;
     const sides: [ParseNode, ParseNode][] = [[b, a], [a, b]];
     for (const [candidate, other] of sides) {
-      const lit = literalOperand(candidate);
-      if (!lit || literalOperand(other)) continue;
+      const lit = literalOperand(contextualResultOperand(candidate));
+      if (!lit || literalOperand(contextualResultOperand(other))) continue;
       const raw = erasedKeepingBrand(staticType(other));
       const t = raw ? erasedKeepingBrand(UnderlyingOf(raw)) : raw;
       const base = t?.Kind === 'parameterized' ? t.Base : t;
