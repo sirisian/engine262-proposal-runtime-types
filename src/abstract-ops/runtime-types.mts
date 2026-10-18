@@ -43,7 +43,7 @@ import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime
 import { describeParameters, minimumArity, resolveOverloadChecked, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature, operatorTableKey } from '../type-system/overloads.mts';
 import {
   PlanOrdinaryNominalConversion, OrdinaryRestsOf, ScalarRestsAccept, ScalarRestShape, ScalarRestValues, type ScalarRestStorage, type ScalarRestPattern, type ScalarRestType, ConvertScalarRestItems,
-  wellKnownSymbols,
+  wellKnownSymbols, InstantiateReturnDependency, RetainCheckedResult,
   SetArrayAdmission, OrdinaryGetOwnProperty, ValidateAndApplyPropertyDescriptor, IsDataDescriptor, Assert, type OrdinaryObject,
   Call, R, Throw, WithoutMetadata, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate, GetValue, Evaluate,
   IsComposite, CompositeFromShape } from '#self';
@@ -2038,7 +2038,7 @@ function* ConvertValueUnbacked(value: Value, t: TypeRecord): ValueEvaluator {
 }
 
 /** Enforces a binding's TypeAnnotation, if any, at initialization. */
-export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null | undefined, value: Value): ValueEvaluator {
+export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null | undefined, value: Value, completion?: object): ValueEvaluator {
   if (!annotation) {
     return value;
   }
@@ -2051,7 +2051,11 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
     // Unstamped arrays take the retained-admission path, including value copies.
     const elided = Q(yield* TypeNodeToTypeRecord(annotation.Type));
     value = Q(yield* MaterializeGenericCallable(value, elided));
-    if (!StructuralStorageEstablished(value, elided)) return Q(yield* RequireType(value, elided));
+    if (!StructuralStorageEstablished(value, elided)) {
+      const result = Q(yield* RequireType(value, elided));
+      RetainCheckedResult(completion, elided);
+      return result;
+    }
     // A VALUE TYPE CLASS instance is copied on the elided path too.
     //
     // #sec-elision-stability requires the copy even when checking is elided:
@@ -2073,6 +2077,7 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
       value = CopyValueClassInstance(value);
     }
     Q(AcquireNominalPrototype(value, elided));
+    RetainCheckedResult(completion, elided);
     return value;
   }
   // #sec-contextual-types: the binding boundary applies the CHECKED conversion
@@ -2083,7 +2088,9 @@ export function* EnforceAnnotation(annotation: ParseNode.TypeAnnotation | null |
   // Error caught by the checker before this runs.
   const record = Q(yield* TypeNodeToTypeRecord(annotation.Type));
   // All annotation boundaries retain RequireType's storage-admission rules.
-  return Q(yield* RequireType(value, record));
+  const result = Q(yield* RequireType(value, record));
+  RetainCheckedResult(completion, record);
+  return result;
 }
 
 /**
@@ -5679,7 +5686,7 @@ export function* VerifyContracts(fn: object, result: Value, args: readonly Value
   }
   return Value.undefined;
 }
-export function* EnforceReturnType(fn: AnnotatedFunction, value: Value): ValueEvaluator {
+export function* EnforceReturnType(fn: AnnotatedFunction, value: Value, completion?: object): ValueEvaluator {
   // Primitive dispatch admits the raw result at the resolved base type while
   // its selected capture frame is active. It then composes result metadata.
   // Re-resolving this full annotation here would re-enter a metadata cast.
@@ -5713,11 +5720,14 @@ export function* EnforceReturnType(fn: AnnotatedFunction, value: Value): ValueEv
     // the published type is a claim nothing verifies: the checker hands it to
     // every caller and no boundary ever tests that the value leaving the
     // function is of it.
-    const published = publishedReturnTypeOfFunction(fn, currentTypeParameterFrame());
+    const symbolic = publishedReturnTypeOfFunction(fn, currentTypeParameterFrame());
+    const published = symbolic && InstantiateReturnDependency(symbolic, completion);
     if (published && published.Kind !== 'void') {
       // `void` is vacuous here for the reason #sec-void-type gives for a
       // declared one: it constrains the consumer, not the value leaving.
-      return Q(yield* RequireType(value, published));
+      const result = Q(yield* RequireType(value, published));
+      RetainCheckedResult(completion, published);
+      return result;
     }
     return value;
   }
@@ -5734,7 +5744,7 @@ export function* EnforceReturnType(fn: AnnotatedFunction, value: Value): ValueEv
   if (annotationRecord.Kind === 'void') {
     return value;
   }
-  return Q(yield* EnforceAnnotation(annotation, value));
+  return Q(yield* EnforceAnnotation(annotation, value, completion));
 }
 
 /**

@@ -76,7 +76,7 @@ import {
 } from './all.mts';
 import { NamedCallItemsOf, SelectedNamedArguments } from './named-call.mts';
 import {
-  GetActiveScriptOrModule,
+  GetActiveScriptOrModule, TransferResultDependency,
   Realm,
   EnvironmentRecord,
   FunctionEnvironmentRecord,
@@ -543,7 +543,7 @@ function* FunctionCallSlot(this: FunctionObject, thisArgument: Value, argumentsL
   surroundingAgent.executionContextStack.pop(calleeContext);
   // 9. If result.[[Type]] is return, return NormalCompletion(result.[[Value]]).
   if (result.Type === 'return') {
-    return NormalCompletion(result.Value);
+    return TransferResultDependency(result, NormalCompletion(result.Value));
   }
   Q(result);
   // 11. Return NormalCompletion(undefined).

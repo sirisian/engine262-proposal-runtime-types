@@ -240,7 +240,9 @@ export function* Call(F: Value, V: Value, argumentsList: Arguments = []): ValueE
   if (items && !(F as { OverloadFunctions?: readonly Value[] }).OverloadFunctions?.length) {
     argumentsList = Q(yield* BindCallArgumentItems(items, F));
   }
-  return EnsureCompletion(Q(yield* F.Call(V, argumentsList)));
+  // Keep the call's internal completion: its admitted result dependency belongs
+  // to this invocation and must survive direct forwarding by the caller.
+  return EnsureCompletion(yield* F.Call(V, argumentsList));
 }
 
 /** https://tc39.es/ecma262/#sec-construct */

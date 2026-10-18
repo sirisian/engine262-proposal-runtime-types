@@ -1,0 +1,42 @@
+{
+  "cases": [
+    {
+      "name": "Module body-local factory result",
+      "modules": {
+        "main": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function use(){const local=make(\"c\");return local(\"x\");}if(use().tag!==\"c\"||log!==\"c\")throw \"bad result\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "Module imported branch results retain activation identities",
+      "modules": {
+        "dep": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");export {a,b};",
+        "main": "import {a,b} from \"dep\";function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}if(choose(true).tag!==\"a\"||choose(false).tag!==\"b\")throw \"bad result\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "Module finally replacement retains selected dependency",
+      "modules": {
+        "main": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function use(){try{return a(\"x\");}finally{return b(\"x\");}}if(use().tag!==\"b\"||log!==\"ab\")throw \"bad result\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

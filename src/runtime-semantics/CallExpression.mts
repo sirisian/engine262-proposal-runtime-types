@@ -1221,11 +1221,11 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
   if (explicitFrame !== undefined) {
     pushTypeParameterFrame(explicitFrame);
     try {
-      return Q(yield* EvaluateCall(func, ref, args, tailCall, CallExpression));
+      return yield* EvaluateCall(func, ref, args, tailCall, CallExpression);
     } finally {
       popTypeParameterFrame();
       setPendingCheckerBindings(false);
     }
   }
-  return Q(yield* EvaluateCall(func, ref, args, tailCall, CallExpression));
+  return yield* EvaluateCall(func, ref, args, tailCall, CallExpression);
 }

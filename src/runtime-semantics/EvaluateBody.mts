@@ -16,7 +16,7 @@ import {
   FunctionDeclarationInstantiation,
   NamedEvaluation,
 } from './all.mts';
-import { surroundingAgent } from '#self';
+import { surroundingAgent, ForwardResultDependency, TransferResultDependency } from '#self';
 import { pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import { returnTypeRecordOf, SetGeneratorProtocolType } from '../abstract-ops/runtime-types.mts';
 import type { TypeRecord } from '../type-system/records.mts';
@@ -112,7 +112,7 @@ export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.
         popContextualType();
       }
       if (result.Type === 'return') {
-        const enforced = Q(yield* EnforceReturnType(functionObject, result.Value as Value));
+        const enforced = Q(yield* EnforceReturnType(functionObject, result.Value as Value, result));
         // The VERIFIED half. #sec-checked-contracts:
         // "at every concrete evaluation of the builder, once [it] has a result,
         // each clause is evaluated with `return` bound to it, and a clause that
@@ -123,7 +123,7 @@ export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.
         if (contract.Type === 'throw') {
           return contract;
         }
-        return new Completion({ Type: 'return', Value: enforced, Target: undefined });
+        return TransferResultDependency(result, new Completion({ Type: 'return', Value: enforced, Target: undefined }));
       }
       if (result.Type === 'normal' && ConversionResultTypeNode(functionObject)) {
         const value = Q(yield* EnforceReturnType(functionObject, Value.undefined));
@@ -144,11 +144,13 @@ export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.
 // ExpressionBody : AssignmentExpression
 export function* Evaluate_ExpressionBody({ AssignmentExpression }: ParseNode.ExpressionBody): StatementEvaluator {
   // 1. Let exprRef be the result of evaluating AssignmentExpression.
-  const exprRef = Q(yield* Evaluate(AssignmentExpression));
+  const expressionResult = EnsureCompletion(yield* Evaluate(AssignmentExpression));
+  if (expressionResult.Type !== 'normal') return expressionResult;
+  const exprRef = expressionResult.Value;
   // 2. Let exprValue be ? GetValue(exprRef).
   const exprValue = Q(yield* GetValue(exprRef));
   // 3. Return Completion { [[Type]]: return, [[Value]]: exprValue, [[Target]]: empty }.
-  return new Completion({ Type: 'return', Value: exprValue, Target: undefined });
+  return ForwardResultDependency(expressionResult, new Completion({ Type: 'return', Value: exprValue, Target: undefined }));
 }
 
 /** https://tc39.es/ecma262/#sec-arrow-function-definitions-runtime-semantics-evaluatebody */
@@ -188,11 +190,8 @@ export function* EvaluateBody_ConciseBody({ ExpressionBody }: ParseNode.ConciseB
       // cannot select an overload, because the overload has already run, which
       // is what the binding boundary looked like before it was fixed.
       const declaredReturn = EnsureCompletion(yield* returnTypeRecordOf(functionObject));
-      // Tagged with the BODY, which no expression is, so only a `return`
-      // (Evaluate_ReturnStatement re-pushes it for its operand) and the
-      // concise body's expression read it as their own position.
-      // A concise body's EXPRESSION is the position (its value is what the
-      // function returns), so the push is tagged with it.
+      // A concise body's expression supplies its result, so tag its context
+      // with that expression rather than the enclosing body.
       pushContextualType(declaredReturn.Type === 'normal' ? (declaredReturn.Value as TypeRecord | null) : null, ((ExpressionBody as { AssignmentExpression?: object }).AssignmentExpression ?? ExpressionBody) as object);
       let result;
       try {
@@ -201,7 +200,8 @@ export function* EvaluateBody_ConciseBody({ ExpressionBody }: ParseNode.ConciseB
         popContextualType();
       }
       if (result.Type === 'return') {
-        return new Completion({ Type: 'return', Value: Q(yield* EnforceReturnType(functionObject, result.Value)), Target: undefined });
+        const enforced = Q(yield* EnforceReturnType(functionObject, result.Value, result));
+        return TransferResultDependency(result, new Completion({ Type: 'return', Value: enforced, Target: undefined }));
       }
       return result;
     } finally {

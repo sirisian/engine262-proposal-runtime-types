@@ -1,0 +1,368 @@
+{
+  "cases": [
+    {
+      "name": "body-local callee created by a factory call",
+      "steps": [
+        {
+          "source": "let log=\"\";function make<T:type>(){class P{x:string=\"\";constructor(v:boolean){log+=\"b\";}constructor(v:T){log+=\"t\";}}return (v:any)=>{const p:P=v;return p;};}const convert=make.<string>();function use(){const local=make.<string>();return local(\"yes\");}use();log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "t"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct activation branches true",
+      "steps": [
+        {
+          "source": "function make(tag:string){class P{tag:string=tag;constructor(v:string){}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function use(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}use(true).tag;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "distinct activation branches false",
+      "steps": [
+        {
+          "source": "function make(tag:string){class P{tag:string=tag;constructor(v:string){}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function use(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}use(false).tag;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "alternating branches never cache the last activation",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}choose(true).tag+choose(false).tag+choose(true).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "aba/aba"
+          }
+        }
+      ]
+    },
+    {
+      "name": "body-local factory executes once in its block",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function use(tag:string){{const local=make(tag);const alias=local;return (alias(\"x\"));}}use(\"c\").tag+use(\"d\").tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "cd/cd"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested block and concise forwarding preserve selected dependency",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function middle(flag:boolean){return choose(flag);}const outer=(flag:boolean)=>middle(flag);outer(true).tag+outer(false).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab/ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "normal finally keeps the original return contribution",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function use(){try{return a(\"x\");}finally{b(\"x\");}}use().tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a/ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "returning finally replaces the original dependency",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function use(){try{return a(\"x\");}finally{return b(\"x\");}}use().tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "throwing finally cancels return admission",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function use(){try{return a(\"x\");}finally{throw \"stop\";}}let caught=\"\";try{use();}catch(e){caught=String(e);}caught+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "stop/a"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested arguments cannot replace the result dependency",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function use(flag:boolean){if(flag)return a((b(\"x\"),\"x\"));return b(\"x\");}use(true).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a/ba"
+          }
+        }
+      ]
+    },
+    {
+      "name": "recursive calls carry independent result completions",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function use(flag:boolean,n:number){if(n>0)return use(flag,n-1);if(flag)return a(\"x\");return b(\"x\");}use(true,3).tag+use(false,2).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab/ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reentry at an argument preserves the outer contribution",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function use(flag:boolean,n:number){if(flag)return a(n>0?use(false,0).tag:\"x\");return b(\"x\");}use(true,1).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "a/ba"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed callee admission does not leave reusable evidence",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function use(flag:boolean){const bad:any=12;try{if(flag)return a(bad);return a(\"x\");}catch(e){return b(\"x\");}}use(true).tag+use(false).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ba/ba"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a local callee remains in TDZ before its initializer",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function use(flag:boolean){if(flag)return local(\"x\");const local=make(\"c\");return local(\"x\");}let caught=\"\";try{use(true);}catch(e){caught=String(e instanceof ReferenceError);}caught+use(false).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "truec/c"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection performs no invocation and remains stable after calls",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}Reflect.typeOf(choose);const before=log;choose(true);Reflect.typeOf(choose);choose(false);Reflect.typeOf(choose);before+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "/ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "body-local factory is not executed during reflection",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function use(){log+=\"u\";const local=make(\"c\");return local(\"x\");}Reflect.typeOf(use);const before=log;use();before+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "/uc"
+          }
+        }
+      ]
+    },
+    {
+      "name": "caller class shadow cannot replace selected activation",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");class P{tag:string=\"wrong\";}function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}choose(false).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a foreign activation is rejected by the callee before forwarding",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function use(v:any){const local=a;return local(v);}const raw:any=b(\"x\");let caught=\"\";try{use(raw);}catch(e){caught=String(e instanceof TypeError);}caught+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mutable callee inference keeps its existing erased publication",
+      "steps": [
+        {
+          "source": "class P{}let read:()=>P=()=>new P();function use(){return read();}const bad:any=()=>({});read=bad;let caught=\"\";try{use();}catch(e){caught=String(e instanceof TypeError);}caught;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "a written return remains authoritative",
+      "steps": [
+        {
+          "source": "class P{}let read:()=>P=()=>new P();function use():P{return read();}const bad:any=()=>({});read=bad;let caught=\"\";try{use();}catch(e){caught=String(e instanceof TypeError);}caught;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit any return keeps its erased contract",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean):any{return choose(flag);}use(false).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary primitives keep existing call and return behavior",
+      "steps": [
+        {
+          "source": "function f(x:number){return x+1;}function g(){return f(2);}String(g());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "member calls retain the selected callable dependency",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");const table={a,b};function use(flag:boolean){if(flag)return table.a(\"x\");return table.b(\"x\");}use(true).tag+use(false).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab/ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic forwarding restores its own and captured binders",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use<T:type>(flag:boolean){return choose(flag);}use.<boolean>(true).tag+use.<number>(false).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab/ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection does not publish the last executed contribution",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}const before=Reflect.getReflection(Reflect.typeOf(choose)).signatures[0].return.type;choose(true);choose(false);const after=Reflect.getReflection(Reflect.typeOf(choose)).signatures[0].return.type;String(before===after)+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/ab"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written callee result retains its actual admitted target",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any):P=>{const p:P=v;return p;};}const a=make(\"a\");const b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}choose(true).tag+choose(false).tag+\"/\"+log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ab/ab"
+          }
+        }
+      ]
+    }
+  ]
+}
