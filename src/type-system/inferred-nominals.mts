@@ -5,7 +5,6 @@ import { ResolveBindingDeclaration } from './compile-time-evaluability.mts';
 import type { TypeRecord } from './records.mts';
 import { SameArgumentList } from './relations.mts';
 import { InstantiateCheckedBindings } from './checked-bindings.mts';
-import { LookupClassType, isTypeObject } from '#self';
 
 // Read only ordinary, initialized value bindings. In particular, this operation
 // never dereferences a reference, follows an import, or asks an object environment
@@ -132,25 +131,15 @@ export function CloseInferredNominal(type: TypeRecord, value: unknown,
       }
       continue;
     }
-    if (type.Declaration.TypeParameters?.TypeParameterList.length) {
-      // The family belongs to the declaration's lexical activation. This pure
-      // completion neither reads a mutable class name nor evaluates a class
-      // specialization. Existing admission handles any required evaluation.
-      const closed = InstantiateCheckedBindings(new Map([['result', type]]), fn.Environment).get('result')!;
-      if (closed.Kind !== 'nominal' || !(closed.Constructor instanceof ObjectValue)
-        || !admitConstructor(closed.Constructor)) return type;
-      if (declarationIdentity && declarationIdentity !== closed.DeclarationIdentity) return type;
-      declarationIdentity = closed.DeclarationIdentity;
-      if (arguments_ && !SameArgumentList(arguments_, closed.Arguments, [])) return type;
-      arguments_ = closed.Arguments;
-      continue;
-    }
-    const name: string | undefined = (type.Declaration as ParseNode.ClassDeclaration).BindingIdentifier?.name;
-    const ctor: Value | undefined = name ? bindingValue(fn.Environment, name) : undefined;
-    const bound: Value | undefined = ctor instanceof ObjectValue ? LookupClassType(ctor) : undefined;
-    if (!(ctor instanceof ObjectValue) || !bound || !isTypeObject(bound) || bound.TypeRecord.Kind !== 'nominal'
-      || bound.TypeRecord.Declaration !== type.Declaration || bound.TypeRecord.Arguments.length
-      || !admitConstructor(ctor)) return type;
+    // Complete every source class from its lexical activation, including
+    // nongeneric arguments. The mutable class value cannot choose its type.
+    const closed = InstantiateCheckedBindings(new Map([['result', type]]), fn.Environment).get('result')!;
+    if (closed.Kind !== 'nominal' || !(closed.Constructor instanceof ObjectValue)
+      || !admitConstructor(closed.Constructor)) return type;
+    if (declarationIdentity && declarationIdentity !== closed.DeclarationIdentity) return type;
+    declarationIdentity = closed.DeclarationIdentity;
+    if (arguments_ && !SameArgumentList(arguments_, closed.Arguments, [])) return type;
+    arguments_ = closed.Arguments;
   }
   return constructor ? { ...type, Constructor: constructor, DeclarationIdentity: declarationIdentity, Arguments: arguments_ ?? type.Arguments } : type;
 }

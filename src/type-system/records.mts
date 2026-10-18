@@ -660,7 +660,7 @@ export type TypeRecord =
   | {
     readonly Kind: 'nominal',
     readonly Declaration: ParseNode,
-    // An interface binding or an internal generic-alias declaration context.
+    // An evaluated source class, interface binding, or generic-alias context.
     // Opaque identity; expanded transparent aliases do not carry this field.
     readonly DeclarationIdentity?: object,
     readonly Arguments: readonly (TypeRecord | number)[],

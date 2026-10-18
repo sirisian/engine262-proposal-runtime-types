@@ -1864,11 +1864,17 @@ const specializationIds = new WeakMap<object, number>();
 let nextSpecializationId = 0;
 function specializationKeyOf(record: TypeRecord): string {
   const interned = GetTypeObject(record) as unknown as object;
-  let id = specializationIds.get(interned);
+  // A nongeneric forward class has a Type Object before its constructor is
+  // stamped. Completing it changes that representative, not argument identity.
+  const identity = record.Kind === 'nominal' && record.Arguments.length === 0
+    && (record.Declaration.type === 'ClassDeclaration' || record.Declaration.type === 'ClassExpression')
+    && !record.Declaration.TypeParameters?.TypeParameterList.length && record.DeclarationIdentity
+    ? record.DeclarationIdentity : interned;
+  let id = specializationIds.get(identity);
   if (id === undefined) {
     id = nextSpecializationId;
     nextSpecializationId += 1;
-    specializationIds.set(interned, id);
+    specializationIds.set(identity, id);
   }
   return String(id);
 }
@@ -2210,7 +2216,7 @@ export function* ResolveImplementedInterfaces(node: ParseNode.ClassDeclaration |
     frame.set(node.BindingIdentifier.name, {
       ...(published?.Kind === 'nominal' ? published : {}),
       Kind: 'nominal', Declaration: node, Constructor: ctor,
-      DeclarationIdentity: node.TypeParameters?.TypeParameterList.length ? ClassFamilyIdentityOf(ctor) : undefined,
+      DeclarationIdentity: ClassFamilyIdentityOf(ctor),
       Arguments: (node.TypeParameters?.TypeParameterList ?? []).map((p) => frame.get(p.BindingIdentifier.name)!),
     });
   }

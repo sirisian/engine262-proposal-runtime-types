@@ -1,0 +1,662 @@
+{
+  "cases": [
+    {
+      "name": "nongeneric nested nominal argument distinguishes activations",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(n:uint8){class C{}return(v:any)=>{const p:P.<C>=v;return p;};}const a=make(1),b=make(2);const h={p:a(\"x\")};function mutate(o:any){o.p=b(\"y\");}mutate(h);try{const p=h.p;\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiving binding C different activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(n:uint8){class C{}return(v:any)=>{const p:P.<C>=v;return p;};}const a=make(1),b=make(2);const h={p:a(\"x\")};function mutate(o:any){o.p=b(\"y\");}mutate(h);try{const p=h.p;\"ok\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiving binding C same activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(n:uint8){class C{}return(v:any)=>{const p:P.<C>=v;return p;};}const a=make(1),b=make(2);const h={p:a(\"x\")};function mutate(o:any){o.p=a(\"y\");}mutate(h);try{const p=h.p;\"ok\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiving binding [].<C> different activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(n:uint8){class C{}return(v:any)=>{const p:P.<[].<C>>=v;return p;};}const a=make(1),b=make(2);const h={p:a(\"x\")};function mutate(o:any){o.p=b(\"y\");}mutate(h);try{const p=h.p;\"ok\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiving binding [].<C> same activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(n:uint8){class C{}return(v:any)=>{const p:P.<[].<C>>=v;return p;};}const a=make(1),b=make(2);const h={p:a(\"x\")};function mutate(o:any){o.p=a(\"y\");}mutate(h);try{const p=h.p;\"ok\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiving binding [C] different activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(n:uint8){class C{}return(v:any)=>{const p:P.<[C]>=v;return p;};}const a=make(1),b=make(2);const h={p:a(\"x\")};function mutate(o:any){o.p=b(\"y\");}mutate(h);try{const p=h.p;\"ok\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiving binding [C] same activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(n:uint8){class C{}return(v:any)=>{const p:P.<[C]>=v;return p;};}const a=make(1),b=make(2);const h={p:a(\"x\")};function mutate(o:any){o.p=a(\"y\");}mutate(h);try{const p=h.p;\"ok\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiving binding {c:C} different activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(n:uint8){class C{}return(v:any)=>{const p:P.<{c:C}>=v;return p;};}const a=make(1),b=make(2);const h={p:a(\"x\")};function mutate(o:any){o.p=b(\"y\");}mutate(h);try{const p=h.p;\"ok\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiving binding {c:C} same activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(n:uint8){class C{}return(v:any)=>{const p:P.<{c:C}>=v;return p;};}const a=make(1),b=make(2);const h={p:a(\"x\")};function mutate(o:any){o.p=a(\"y\");}mutate(h);try{const p=h.p;\"ok\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiving binding C|null different activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(n:uint8){class C{}return(v:any)=>{const p:P.<C|null>=v;return p;};}const a=make(1),b=make(2);const h={p:a(\"x\")};function mutate(o:any){o.p=b(\"y\");}mutate(h);try{const p=h.p;\"ok\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiving binding C|null same activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(n:uint8){class C{}return(v:any)=>{const p:P.<C|null>=v;return p;};}const a=make(1),b=make(2);const h={p:a(\"x\")};function mutate(o:any){o.p=a(\"y\");}mutate(h);try{const p=h.p;\"ok\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiving binding P.<C> different activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(n:uint8){class C{}return(v:any)=>{const p:P.<P.<C>>=v;return p;};}const a=make(1),b=make(2);const h={p:a(\"x\")};function mutate(o:any){o.p=b(\"y\");}mutate(h);try{const p=h.p;\"ok\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "receiving binding P.<C> same activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(n:uint8){class C{}return(v:any)=>{const p:P.<P.<C>>=v;return p;};}const a=make(1),b=make(2);const h={p:a(\"x\")};function mutate(o:any){o.p=a(\"y\");}mutate(h);try{const p=h.p;\"ok\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nominal reflection class C{}return type C;",
+      "steps": [
+        {
+          "source": "function make(){class C{}return type C;}const A=make(),B=make();String(Reflect.isAssignable(A,B))+\"/\"+String(Reflect.isAssignable(B,A))+\"/\"+String(A===B);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/false/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "application reflection class C{}return type C;",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){class C{}return type C;}const A=make(),B=make();String((type P.<A>)===(type P.<B>))+\"/\"+String((type P.<A>)===(type P.<A>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nominal reflection return class C{};",
+      "steps": [
+        {
+          "source": "function make(){return class C{};}const A=make(),B=make();String(Reflect.isAssignable(A,B))+\"/\"+String(Reflect.isAssignable(B,A))+\"/\"+String(A===B);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/false/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "application reflection return class C{};",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){return class C{};}const A=make(),B=make();String((type P.<A>)===(type P.<B>))+\"/\"+String((type P.<A>)===(type P.<A>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nominal reflection return class {};",
+      "steps": [
+        {
+          "source": "function make(){return class {};}const A=make(),B=make();String(Reflect.isAssignable(A,B))+\"/\"+String(Reflect.isAssignable(B,A))+\"/\"+String(A===B);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/false/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "application reflection return class {};",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){return class {};}const A=make(),B=make();String((type P.<A>)===(type P.<B>))+\"/\"+String((type P.<A>)===(type P.<A>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nominal reflection const C=class {};return C;",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};return C;}const A=make(),B=make();String(Reflect.isAssignable(A,B))+\"/\"+String(Reflect.isAssignable(B,A))+\"/\"+String(A===B);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/false/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "application reflection const C=class {};return C;",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){const C=class {};return C;}const A=make(),B=make();String((type P.<A>)===(type P.<B>))+\"/\"+String((type P.<A>)===(type P.<A>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nominal reflection const C=class D{};return C;",
+      "steps": [
+        {
+          "source": "function make(){const C=class D{};return C;}const A=make(),B=make();String(Reflect.isAssignable(A,B))+\"/\"+String(Reflect.isAssignable(B,A))+\"/\"+String(A===B);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/false/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "application reflection const C=class D{};return C;",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){const C=class D{};return C;}const A=make(),B=make();String((type P.<A>)===(type P.<B>))+\"/\"+String((type P.<A>)===(type P.<A>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward alias keeps activation identity",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){type Before=C;class C{}return {before:Before,after:type C};}const a=make(),b=make();String(Reflect.isAssignable(a.before,a.after))+\"/\"+String(Reflect.isAssignable(a.before,b.after))+\"/\"+String((type P.<a.before>)===(type P.<b.before>));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local class alias argument",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){class C{}type A=C;return type P.<A>;}const a=make(),b=make();String(a===b);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward argument agrees after declaration",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){type Before=P.<C>;class C{}return {before:Before,after:type P.<C>};}const a=make(),b=make();String(a.before===a.after)+\"/\"+String(a.before===b.before);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "self field keeps own nominal argument",
+      "steps": [
+        {
+          "source": "function make(){reference class C{next:C|null=null;}return type C;}const A=make(),B=make();String(Reflect.isAssignable(A,B))+\"/\"+String(new A().next===null);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "specialization effects run once per evaluated argument",
+      "steps": [
+        {
+          "source": "let count=0;class P<T:type>{static{count++;}}function make(){class C{}return type C;}const A=make(),B=make();const p=P.<A>,q=P.<B>,again=P.<A>;String(count)+\"/\"+String(p===again)+\"/\"+String(p===q);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested argument specialization reuse",
+      "steps": [
+        {
+          "source": "class P<T:type>{}function make(){class C{}return type C;}const A=make(),B=make();const p=P.<P.<A>>,q=P.<P.<B>>,again=P.<P.<A>>;String(p===again)+\"/\"+String(p===q);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class type stays declared after ordinary reassignment",
+      "steps": [
+        {
+          "source": "function make(){class C{}const old=type C;C=class D{};return String((type C)===old);}make();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "separate sources stay distinct",
+      "steps": [
+        {
+          "source": "class A{}class B{}String(Reflect.isAssignable(type A,type B));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inheritance remains valid",
+      "steps": [
+        {
+          "source": "function make(){class A{}class B extends A{}return {a:type A,b:type B};}const x=make(),y=make();String(Reflect.isAssignable(x.b,x.a))+\"/\"+String(Reflect.isAssignable(x.b,y.a));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward argument specialization effects reuse",
+      "steps": [
+        {
+          "source": "let count=0;class P<T:type>{static{count++;}}function make(){type Before=C;const first=P.<Before>;class C{}const second=P.<C>;return String(first===second);}make()+\"/\"+String(count);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "old forward alias does not acquire latest constructor",
+      "steps": [
+        {
+          "source": "class P<T:type>{}function make(){type Before=C;class C{}return {before:Before,after:type C};}const a=make(),b=make();const x=P.<a.before>,y=P.<a.after>,z=P.<b.before>;String(x===y)+\"/\"+String(x===z);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "recursive factory does not borrow inner activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(n:uint8){class C{}if(n)make(0);return(v:any)=>{const p:P.<C>=v;return p;};}const a=make(1),b=make(1);const h={p:a(\"x\")};function write(o:any){o.p=b(\"x\");}write(h);try{const p=h.p;\"ok\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic callable argument retains class identity",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){class C{}return function f<T:type>(v:any){const p:P.<C>=v;return p;};}const a=make(),b=make();const h={p:a.<uint8>(\"x\")};function write(o:any){o.p=b.<uint8>(\"x\");}write(h);try{const p=h.p;\"ok\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased receiving boundary stays erased",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){class C{}return(v:any)=>{const p:P.<C>=v;return p;};}const a=make(),b=make();const h:any={p:a(\"x\")};h.p=b(\"x\");const p:any=h.p;\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrapped argument Map.<C,string> different activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){class C{}return(v:any)=>{const p:P.<Map.<C,string>>=v;return p;};}const a=make(),b=make();const h={p:a(\"x\")};function write(o:any){o.p=b(\"x\");}write(h);try{const p=h.p;\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrapped argument Map.<C,string> same activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){class C{}return(v:any)=>{const p:P.<Map.<C,string>>=v;return p;};}const a=make(),b=make();const h={p:a(\"x\")};function write(o:any){o.p=a(\"x\");}write(h);try{const p=h.p;\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrapped argument (x:C)=>void different activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){class C{}return(v:any)=>{const p:P.<(x:C)=>void>=v;return p;};}const a=make(),b=make();const h={p:a(\"x\")};function write(o:any){o.p=b(\"x\");}write(h);try{const p=h.p;\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrapped argument (x:C)=>void same activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){class C{}return(v:any)=>{const p:P.<(x:C)=>void>=v;return p;};}const a=make(),b=make();const h={p:a(\"x\")};function write(o:any){o.p=a(\"x\");}write(h);try{const p=h.p;\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrapped argument ()=>C different activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){class C{}return(v:any)=>{const p:P.<()=>C>=v;return p;};}const a=make(),b=make();const h={p:a(\"x\")};function write(o:any){o.p=b(\"x\");}write(h);try{const p=h.p;\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrapped argument ()=>C same activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){class C{}return(v:any)=>{const p:P.<()=>C>=v;return p;};}const a=make(),b=make();const h={p:a(\"x\")};function write(o:any){o.p=a(\"x\");}write(h);try{const p=h.p;\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrapped argument {[key:string]:C} different activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){class C{}return(v:any)=>{const p:P.<{[key:string]:C}>=v;return p;};}const a=make(),b=make();const h={p:a(\"x\")};function write(o:any){o.p=b(\"x\");}write(h);try{const p=h.p;\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrapped argument {[key:string]:C} same activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){class C{}return(v:any)=>{const p:P.<{[key:string]:C}>=v;return p;};}const a=make(),b=make();const h={p:a(\"x\")};function write(o:any){o.p=a(\"x\");}write(h);try{const p=h.p;\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrapped argument {c:[C]} different activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){class C{}return(v:any)=>{const p:P.<{c:[C]}>=v;return p;};}const a=make(),b=make();const h={p:a(\"x\")};function write(o:any){o.p=b(\"x\");}write(h);try{const p=h.p;\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrapped argument {c:[C]} same activation",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){class C{}return(v:any)=>{const p:P.<{c:[C]}>=v;return p;};}const a=make(),b=make();const h={p:a(\"x\")};function write(o:any){o.p=a(\"x\");}write(h);try{const p=h.p;\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "accepted"
+          }
+        }
+      ]
+    }
+  ]
+}

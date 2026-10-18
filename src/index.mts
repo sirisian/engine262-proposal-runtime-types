@@ -139,3 +139,5 @@ export { LexicalClassFamily, SpecializedClassConstructor } from './runtime-seman
 export * from './type-system/symbol-key-dependencies.mts';
 
 export { NormalizeInferredClassArguments } from './type-system/inferred-binding.mts';
+
+export { CompleteCreatedFunctionResult } from './type-system/runtime.mts';

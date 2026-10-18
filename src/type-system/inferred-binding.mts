@@ -7,7 +7,7 @@ import { IsOfType, BindTypeArgumentRecords, currentTypeParameterFrame } from './
 import { InferredConstTypeOf } from './check.mts';
 import { substituteParametersNamed } from './unify.mts';
 import { makePrimitive, type TypeRecord } from './records.mts';
-import { InstantiateReturnDependency, ForwardResultDependency, RetainCheckedResult, CheckedPropertyKeyOf, InstantiateCheckedBindings, surroundingAgent } from '#self';
+import { InstantiateReturnDependency, ForwardResultDependency, RetainCheckedResult, CheckedPropertyKeyOf, InstantiateCheckedBindings, CompleteCreatedFunctionResult, surroundingAgent } from '#self';
 
 /** Reify the checker's compact numeric arguments before runtime admission. */
 export function* NormalizeInferredClassArguments(target: TypeRecord): PlainEvaluator<TypeRecord> {
@@ -36,6 +36,7 @@ export function* EnforceInferredBinding(node: object, value: Value, initializer?
   // used by the initializer. Keep the initialization boundary.
   let writtenInitializer = initializer;
   while (writtenInitializer?.type === 'ParenthesizedExpression') writtenInitializer = writtenInitializer.Expression;
+  target = CompleteCreatedFunctionResult(target, value, writtenInitializer ?? undefined);
   if (target.Kind === 'object' && writtenInitializer?.type === 'ObjectLiteral') {
     // The declaration on a fresh accessor checks its result when called.
     // Inferring the object's type must not call that accessor now.

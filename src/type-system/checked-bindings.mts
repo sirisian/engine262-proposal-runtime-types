@@ -32,9 +32,7 @@ export function InstantiateCheckedBindings(bindings: ReadonlyMap<string, TypeRec
         const runtime = isTypeObject(object) && object.TypeRecord;
         if (!runtime || runtime.Kind !== 'nominal' || runtime.Declaration !== copy.Declaration) break;
         copy.Constructor = constructor;
-        if (copy.Declaration.TypeParameters?.TypeParameterList.length) {
-          copy.DeclarationIdentity = ClassFamilyIdentityOf(family);
-        }
+        copy.DeclarationIdentity = ClassFamilyIdentityOf(family);
         // Heritage belongs to the evaluated family, including captured bases.
         // Subtyping substitutes this application's arguments in that base.
         copy.Base = runtime.Base && walk(runtime.Base, ClassTypeEnvironmentOf(family) ?? context);

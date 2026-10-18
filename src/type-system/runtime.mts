@@ -349,6 +349,23 @@ export function publishedReturnTypeOfFunction(value: unknown, application?: Read
   return published && CloseInferredNominal(published, value, instantiatePublishedReturn);
 }
 
+/** A newly created callable can close its own inferred result declaration.
+ * The syntax check excludes an arbitrary replacement supplied by an initializer.
+ * Only retained lexical dependencies are read; no body or property is evaluated.
+ */
+export function CompleteCreatedFunctionResult(type: TypeRecord, value: Value, syntax?: ParseNode): TypeRecord {
+  if (type.Kind !== 'function' || type.Signatures.length !== 1
+    || (syntax?.type !== 'ArrowFunction' && syntax?.type !== 'FunctionExpression')) return type;
+  const fn = value as { ECMAScriptCode?: { parent?: object } | null };
+  if (fn.ECMAScriptCode?.parent !== syntax) return type;
+  const signature = type.Signatures[0];
+  const result = signature.Return && CloseInferredNominal(signature.Return, value, instantiatePublishedReturn);
+  const inferred = signature.InferredReturn && CloseInferredNominal(signature.InferredReturn, value, instantiatePublishedReturn);
+  if (result === signature.Return && inferred === signature.InferredReturn) return type;
+  return { ...type, Signatures: [{ ...signature, Return: result,
+    ...(inferred ? { InferredReturn: inferred } : {}) }] };
+}
+
 function instantiatePublishedReturn(value: unknown, application?: ReadonlyMap<string, TypeRecord>): TypeRecord | undefined {
   const fn = value as { ECMAScriptCode?: { parent?: object } | null, TypeParameterFrame?: ReadonlyMap<string, TypeRecord> };
   const declaration = fn.ECMAScriptCode?.parent as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } } | undefined;
@@ -5936,7 +5953,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
           // directly from here would drop them, and a `Box.<uint32>` would
           // intern as a bare `Box`.
           declared = GetTypeObject({ Kind: 'nominal', Declaration: declaration, Arguments: [],
-            DeclarationIdentity: declaration.TypeParameters?.TypeParameterList.length && ref.Base instanceof EnvironmentRecord
+            DeclarationIdentity: ref.Base instanceof EnvironmentRecord
               ? ClassDeclarationIdentity(ref.Base, name) : undefined });
         }
       }

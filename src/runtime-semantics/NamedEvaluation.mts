@@ -86,7 +86,7 @@ function* NamedEvaluation_ClassExpression(ClassExpression: ParseNode.ClassExpres
       Declaration: ClassExpression,
       Arguments: [],
       Constructor: value,
-      DeclarationIdentity: ClassExpression.TypeParameters?.TypeParameterList.length ? ClassFamilyIdentityOf(value) : undefined,
+      DeclarationIdentity: ClassFamilyIdentityOf(value),
       // As at ClassDeclaration: the relation
       // reads these two and this record carried neither.
       Implements: Q(yield* ResolveImplementedInterfaces(ClassExpression, value)),

@@ -31,9 +31,11 @@ export function InstantiateReturnDependency(type: TypeRecord, completion?: objec
   const dependency = completion && forwarded.get(completion);
   const seen = new Map<TypeRecord, Map<TypeRecord | undefined, TypeRecord>>();
   const signatureSeen = new Map<TypeRecord, Map<TypeRecord | undefined, TypeRecord>>();
-  const complete = (target: TypeRecord, evidence: TypeRecord | undefined, signature = false): TypeRecord => {
-    if (target.Kind !== 'object' && target.Kind !== 'function' && !sourceNominal(target)) return target;
-    const memo = signature ? signatureSeen : seen;
+  const argumentSeen = new Map<TypeRecord, Map<TypeRecord | undefined, TypeRecord>>();
+  const argumentSignatureSeen = new Map<TypeRecord, Map<TypeRecord | undefined, TypeRecord>>();
+  const complete = (target: TypeRecord, evidence: TypeRecord | undefined, signature = false, argument = false): TypeRecord => {
+    if (!argument && target.Kind !== 'object' && target.Kind !== 'function' && !sourceNominal(target)) return target;
+    const memo = argument ? (signature ? argumentSignatureSeen : argumentSeen) : (signature ? signatureSeen : seen);
     let alternatives = memo.get(target);
     if (!alternatives) memo.set(target, alternatives = new Map());
     const prior = alternatives.get(evidence);
@@ -60,7 +62,7 @@ export function InstantiateReturnDependency(type: TypeRecord, completion?: objec
       // Equal source syntax alone never replaces an already completed argument.
       const arguments_ = copy.Arguments.map((argument, i) => {
         const supplied = evidence.Arguments[i];
-        if (typeof argument !== 'number') return complete(argument, typeof supplied === 'number' ? undefined : supplied, signature);
+        if (typeof argument !== 'number') return complete(argument, typeof supplied === 'number' ? undefined : supplied, signature, true);
         // A compact checking-time number denotes this exact argument, not an
         // untyped substitute for a value parameter's admitted numeric domain.
         // Reify it only from the same declaration position's checked binding.
@@ -84,6 +86,51 @@ export function InstantiateReturnDependency(type: TypeRecord, completion?: objec
       copy.DeclarationIdentity = evidence.DeclarationIdentity;
       return copy;
     }
+    // These are type-argument descriptions, not evidence about array contents
+    // or arbitrary result values. Preserve the target's shape and require the
+    // enclosing nominal's exact argument comparison after completing leaves.
+    if (argument) {
+      if (copy.Kind === 'nominal' && evidence?.Kind === 'nominal'
+        && copy.Declaration === evidence.Declaration && copy.LibraryName === evidence.LibraryName
+        && copy.DeclarationIdentity === evidence.DeclarationIdentity) {
+        copy.Arguments = copy.Arguments.map((entry, i) => {
+          const supplied = evidence.Arguments[i];
+          return typeof entry === 'number' ? entry : complete(entry,
+            typeof supplied === 'number' ? undefined : supplied, signature, true);
+        });
+        return copy;
+      }
+      if (copy.Kind === 'array' && evidence?.Kind === 'array') {
+        copy.Element = complete(copy.Element, evidence.Element, signature, true);
+        if (typeof copy.Extent === 'object') copy.Extent = complete(copy.Extent,
+          typeof evidence.Extent === 'object' ? evidence.Extent : undefined, signature, true);
+        return copy;
+      }
+      if (copy.Kind === 'tuple' && evidence?.Kind === 'tuple' && copy.Elements.length === evidence.Elements.length) {
+        copy.Elements = copy.Elements.map((entry, i) => ({ ...entry,
+          Type: complete(entry.Type, evidence.Elements[i].Type, signature, true) }));
+        return copy;
+      }
+      if ((copy.Kind === 'union' || copy.Kind === 'intersection') && evidence?.Kind === copy.Kind) {
+        copy.Members = copy.Members.map((member) => {
+          // Set order is immaterial. Ambiguous matches cannot choose an
+          // activation; the surrounding exact comparison will reject it.
+          const matches = evidence.Members.map((supplied) => ({ supplied,
+            completed: complete(member, supplied, signature, true) }))
+            .filter(({ supplied, completed }) => SameArgumentList([completed], [supplied], []));
+          return matches.length === 1 ? matches[0].completed : member;
+        });
+        return copy;
+      }
+      if ((copy.Kind === 'reference' || copy.Kind === 'shared') && evidence?.Kind === copy.Kind) {
+        copy.Target = complete(copy.Target, evidence.Target, signature, true);
+        return copy;
+      }
+      if (copy.Kind === 'parameterized' && evidence?.Kind === 'parameterized') {
+        copy.Base = complete(copy.Base, evidence.Base, signature, true);
+        return copy;
+      }
+    }
     if (target.Kind === 'function' && copy.Kind === 'function') {
       // A single retained callable contract has one corresponding result
       // position. Its own generic binders remain declarations, not arguments
@@ -91,16 +138,24 @@ export function InstantiateReturnDependency(type: TypeRecord, completion?: objec
       if (target.Signatures.length !== 1 || evidence?.Kind !== 'function' || evidence.Signatures.length !== 1) return target;
       const to = target.Signatures[0], from = evidence.Signatures[0];
       const parameters = to.TypeParameters ?? [], supplied = from.TypeParameters ?? [];
+      const completedParameters = argument ? to.Parameters.map((parameter, i) => ({ ...parameter,
+        Type: complete(parameter.Type, from.Parameters[i]?.Type, signature, true) })) : to.Parameters;
       if (parameters.length !== supplied.length || parameters.some((parameter, i) => parameter.Declaration !== supplied[i].Declaration)
         || to.Parameters.some((parameter, i) => parameter.Optional !== from.Parameters[i]?.Optional || parameter.Rest !== from.Parameters[i]?.Rest || parameter.Ref !== from.Parameters[i]?.Ref)
-        || !SameArgumentList(to.Parameters.map((parameter) => parameter.Type), from.Parameters.map((parameter) => parameter.Type), [])) return target;
-      copy.Signatures = [{ ...to,
-        Return: to.Return ? complete(to.Return, from.Return ?? undefined, true) : to.Return,
-        InferredReturn: to.InferredReturn ? complete(to.InferredReturn, from.InferredReturn ?? undefined, true) : to.InferredReturn,
+        || !SameArgumentList(completedParameters.map((parameter) => parameter.Type), from.Parameters.map((parameter) => parameter.Type), [])) return target;
+      copy.Signatures = [{ ...to, Parameters: completedParameters,
+        Return: to.Return ? complete(to.Return, from.Return ?? undefined, true, argument) : to.Return,
+        InferredReturn: to.InferredReturn ? complete(to.InferredReturn, from.InferredReturn ?? undefined, true, argument) : to.InferredReturn,
+        ...(argument && to.ThisType ? { ThisType: complete(to.ThisType, from.ThisType ?? undefined, signature, true) } : {}),
+        ...(argument && to.Narrows ? { Narrows: to.Narrows.map((narrow, i) => ({ ...narrow,
+          Type: complete(narrow.Type, from.Narrows?.[i]?.Type, signature, true) })) } : {}),
       }];
       return copy;
     }
-    if (target.Kind !== 'object' || copy.Kind !== 'object') return target;
+    if (target.Kind !== 'object' || copy.Kind !== 'object') {
+      alternatives.set(evidence, target);
+      return target;
+    }
     const contributed = evidence?.Kind === 'object' ? evidence.Properties : [];
     const properties = new Map(contributed.map((property) => [property.key, property]));
     const keys = new Map(contributed.filter((property) => property.keyDependency)
@@ -119,8 +174,19 @@ export function InstantiateReturnDependency(type: TypeRecord, completion?: objec
           key = actual;
         }
       }
-      return { ...property, key, keyDependency, type: complete(property.type, properties.get(key)?.type, signature) };
+      const supplied = properties.get(key);
+      return { ...property, key, keyDependency, type: complete(property.type, supplied?.type, signature, argument),
+        ...(argument && property.writeType ? { writeType: complete(property.writeType, supplied?.writeType, signature, true) } : {}) };
     });
+    if (argument && evidence?.Kind === 'object') {
+      copy.IndexSignatures = copy.IndexSignatures.map((index) => {
+        const matches = evidence.IndexSignatures.map((supplied) => ({ supplied,
+          key: complete(index.Key, supplied.Key, signature, true) }))
+          .filter(({ supplied, key }) => SameArgumentList([key], [supplied.Key], []));
+        if (matches.length !== 1) return index;
+        return { ...index, Key: matches[0].key, Value: complete(index.Value, matches[0].supplied.Value, signature, true) };
+      });
+    }
     return copy;
   };
   return complete(type, dependency);

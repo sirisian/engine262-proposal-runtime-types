@@ -464,20 +464,17 @@ const internTables = new WeakMap<object, TypeObject[]>();
  * class DENOTES is its class type, and what a class IS is a function.
  * `Reflect.typeOf` and `typeof` ask the second.
  */
-/**
- * Declaration -> the stamped constructor, for records that name a class without
- * carrying it.
- *
- * A nominal record built by the CHECKER - an inferred return type, say - names
- * its declaration and has no [[Constructor]], while the one built where the
- * class was declared has both. Both denote the same type and must reach the same
- * object, or `Reflect.typeOf(make).signatures[0].return.type === type K` is
- * *false* for a factory returning a `K`.
+/** Completed nongeneric constructors, keyed by their evaluated identity.
+ * A source declaration alone cannot choose among its lexical activations.
+ * Forward records carry the same binding identity as their later constructor.
  */
 const stampedClasses = new WeakMap<object, ObjectValue>();
 
 export function RegisterStampedClass(declaration: object, constructor: ObjectValue): void {
-  stampedClasses.set(declaration, constructor);
+  const record = (constructor as TypeObject).TypeRecord;
+  if (record.Kind === 'nominal' && record.Declaration === declaration && record.DeclarationIdentity) {
+    stampedClasses.set(record.DeclarationIdentity, constructor);
+  }
 }
 
 // A meet belongs to the META TYPE whose `meet` hook computed it, and so to the
@@ -583,19 +580,19 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
     const nominal = canonical as unknown as {
       Arguments?: readonly unknown[],
       Constructor?: ObjectValue,
+      DeclarationIdentity?: object,
       Declaration?: { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null },
     };
     const parameters = nominal.Declaration?.TypeParameters?.TypeParameterList?.length ?? 0;
     if ((nominal.Arguments?.length ?? 0) === 0
       && parameters === 0
       && nominal.Declaration !== undefined) {
-      // The record's own [[Constructor]] where it has one, and the stamped
-      // constructor for the declaration otherwise - a checker-built record names
-      // the declaration and carries no constructor.
+      // Prefer the record's constructor; a forward record may find only the
+      // completed constructor of its own identity, never the latest syntax use.
       const own = nominal.Constructor;
       const stamped = (own !== undefined && (own as unknown as { TypeRecord?: unknown }).TypeRecord !== undefined)
         ? own
-        : stampedClasses.get(nominal.Declaration as unknown as object);
+        : nominal.DeclarationIdentity && stampedClasses.get(nominal.DeclarationIdentity);
       if (stamped !== undefined) {
         completeNominalRecord((stamped as TypeObject).TypeRecord, canonical);
         X(InstallTypeLayoutProperties(stamped, (stamped as TypeObject).TypeRecord));
@@ -619,7 +616,7 @@ export function GetTypeObject(t: TypeRecord, realm?: { readonly Intrinsics: { re
       // declaration (which #sec-compile-time-evaluability requires, since type
       // evaluation "reads declarations rather than run-time bindings"), and
       // that record carries no [[Constructor]] because the class has none yet.
-      // Identity is by [[Declaration]], so the class's own completion asks for
+      // Identity includes the lexical binding, so its own completion asks for
       // the SAME type and gets that earlier record back - stripping the class
       // of its constructor, and with it of its layout and its membership test.
       //
