@@ -14,6 +14,7 @@ import {
   NamedEvaluation,
   BindingInitialization,
 } from './all.mts';
+import { EnsureCompletion, EvaluateResultValue, RetainBindingResult } from '#self';
 import {
   GetV,
   GetValue,
@@ -46,18 +47,22 @@ export function* KeyedBindingInitialization(node: ParseNode.BindingElement | Par
     // 2. Let lhs be ? ResolveBinding(bindingId, environment).
     const lhs = Q(yield* ResolveBinding(bindingId, environment, node.BindingIdentifier.strict));
     // 3. Let v be ? GetV(value, propertyName).
-    let v = Q(yield* GetV(value, propertyName));
+    let valueResult = EnsureCompletion(yield* GetV(value, propertyName));
+    if (valueResult.Type !== 'normal') return valueResult;
+    let v = valueResult.Value;
     const usedDefault = !!node.Initializer && v === Value.undefined;
     if (node.Initializer && v === Value.undefined) {
       // a. If IsAnonymousFunctionDefinition(Initializer) is true, then
       if (IsAnonymousFunctionDefinition(node.Initializer)) {
         // i. Set v to the result of performing NamedEvaluation for Initializer with argument bindingId.
-        v = (yield* NamedEvaluation(node.Initializer as FunctionDeclaration, bindingId)) as Value;
+        valueResult = EnsureCompletion(yield* NamedEvaluation(node.Initializer as FunctionDeclaration, bindingId));
+        if (valueResult.Type !== 'normal') return valueResult;
+        v = valueResult.Value;
       } else { // b. Else,
         // i. Let defaultValue be the result of evaluating Initializer.
-        const defaultValue = Q(yield* Evaluate(node.Initializer));
-        // ii. Set v to ? GetValue(defaultValue).
-        v = Q(yield* GetValue(defaultValue));
+        valueResult = EnsureCompletion(yield* EvaluateResultValue(node.Initializer));
+        if (valueResult.Type !== 'normal') return valueResult;
+        v = valueResult.Value;
       }
     }
     // proposal-runtime-types #sec-typed-destructuring: a `ref` member borrows
@@ -111,9 +116,9 @@ export function* KeyedBindingInitialization(node: ParseNode.BindingElement | Par
     // failure the marker exists to prevent.
     const absentAndOptional = node.Optional === true && v === Value.undefined;
     if (node.TypeAnnotation && !absentAndOptional) {
-      v = Q(yield* EnforceAnnotation(node.TypeAnnotation, v));
+      v = Q(yield* EnforceAnnotation(node.TypeAnnotation, v, valueResult));
     }
-    const inferred = Q(yield* EnforceInferredBinding(node, v, usedDefault ? node.Initializer : undefined));
+    const inferred = Q(yield* EnforceInferredBinding(node, v, usedDefault ? node.Initializer : undefined, valueResult));
     v = inferred.value;
     // 5. If environment is undefined, return ? PutValue(lhs, v).
     if (environment === Value.undefined) {
@@ -131,6 +136,7 @@ export function* KeyedBindingInitialization(node: ParseNode.BindingElement | Par
     // 6. Return InitializeReferencedBinding(lhs, v).
     const initialized = Q(yield* InitializeReferencedBinding(lhs, CopyValueClassInstance(v)));
     if (inferred.type) recordDeclaredType(lhs, inferred.type);
+    if (node.TypeAnnotation || inferred.type) RetainBindingResult(lhs, valueResult);
     return initialized;
   }
 }

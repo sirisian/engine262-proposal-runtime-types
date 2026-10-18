@@ -1,0 +1,460 @@
+{
+  "cases": [
+    {
+      "name": "array destructuring true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const [result]=[choose(flag)];return result;}use(true).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "a:a",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "array destructuring false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const [result]=[choose(flag)];return result;}use(false).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "b:b",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "object destructuring true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const {result}={result:choose(flag)};return result;}use(true).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "a:a",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "object destructuring false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const {result}={result:choose(flag)};return result;}use(false).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "b:b",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "array direct read true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){return [choose(flag)][0];}use(true).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "a:a",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "array direct read false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){return [choose(flag)][0];}use(false).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "b:b",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "object direct read true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){return ({result:choose(flag)}).result;}use(true).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "a:a",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "object direct read false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){return ({result:choose(flag)}).result;}use(false).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "b:b",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "array spread true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const [result]=[...[choose(flag)]];return result;}use(true).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "a:a",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "array spread false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const [result]=[...[choose(flag)]];return result;}use(false).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "b:b",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "object spread true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const {result}={...{result:choose(flag)}};return result;}use(true).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "a:a",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "object spread false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const {result}={...{result:choose(flag)}};return result;}use(false).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "b:b",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "array default true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const [result=choose(flag)]=[];return result;}use(true).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "a:a",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "array default false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const [result=choose(flag)]=[];return result;}use(false).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "b:b",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "object default true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const {result=choose(flag)}={};return result;}use(true).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "a:a",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "object default false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const {result=choose(flag)}={};return result;}use(false).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "b:b",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested array pattern true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const [[result]]=[[choose(flag)]];return result;}use(true).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "a:a",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested array pattern false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const [[result]]=[[choose(flag)]];return result;}use(false).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "b:b",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested object pattern true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const {child:{result}}={child:{result:choose(flag)}};return result;}use(true).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "a:a",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested object pattern false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const {child:{result}}={child:{result:choose(flag)}};return result;}use(false).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "b:b",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "duplicate property true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const {result}={result:choose(!flag),result:choose(flag)};return result;}use(true).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "a:ba",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "duplicate property false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const {result}={result:choose(!flag),result:choose(flag)};return result;}use(false).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "b:ab",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected getter true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const {result}={get result(){log+=\"g\";return choose(flag);}};return result;}use(true).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "a:ga",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected getter false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const {result}={get result(){log+=\"g\";return choose(flag);}};return result;}use(false).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "b:gb",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "shorthand true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const result=choose(flag);const {result:copy}={result};return copy;}use(true).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "a:a",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "shorthand false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const result=choose(flag);const {result:copy}={result};return copy;}use(false).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "b:b",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured extraction true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const [result]=[choose(flag)];return (()=>result)();}use(true).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "a:a",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured extraction false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){const [result]=[choose(flag)];return (()=>result)();}use(false).tag+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "b:b",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "nonnullable optional call true",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){return choose?.(flag);}use(true).tag;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_IMPOSSIBLE_TEST",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nonnullable optional call false",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(flag:boolean){return choose?.(flag);}use(false).tag;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_IMPOSSIBLE_TEST",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "array separate contributions",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(){const [result, later]=[choose(true), choose(false)];return result.tag+later.tag;}use()+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "ab:ab",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "object separate contributions",
+      "steps": [
+        {
+          "source": "let log=\"\";function make(tag:string){class P{tag:string=tag;constructor(v:string){log+=tag;}}return(v:any)=>{const p:P=v;return p;};}const a=make(\"a\"),b=make(\"b\");function choose(flag:boolean){if(flag)return a(\"x\");return b(\"x\");}function use(){const {result,later}={result:choose(true),later:choose(false)};return result.tag+later.tag;}use()+\":\"+log;",
+          "expected": {
+            "completion": "normal",
+            "value": "ab:ab",
+            "bodyEntered": true,
+            "scriptBodies": 1
+          }
+        }
+      ]
+    }
+  ]
+}

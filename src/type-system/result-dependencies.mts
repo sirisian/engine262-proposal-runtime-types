@@ -1,9 +1,9 @@
 import type { TypeRecord } from './records.mts';
 import { ObjectValue, ReferenceRecord, JSStringValue, EnvironmentRecord, RefBindingHolder,
-  EnsureCompletion, Evaluate, GetValue, type NormalCompletion, type Value,
+  EnsureCompletion, Evaluate, GetValue, IsDataDescriptor, type PropertyKeyValue, type NormalCompletion, type Value,
   type ValueEvaluator, type ParseNode } from '#self';
 
-// These keys are internal completions or immutable bindings, never returned values,
+// These keys are internal completions, immutable bindings or data descriptors, never returned values,
 // function values or shared syntax. A forwarded dependency is only a candidate
 // until the receiving function's own result admission succeeds.
 const accepted = new WeakMap<object, TypeRecord>();
@@ -33,7 +33,16 @@ export function RetainCheckedResult(completion: object | undefined, type: TypeRe
 export function TransferResultDependency<T extends object>(from: object, to: T): T {
   const type = accepted.get(from);
   if (type) accepted.set(to, type);
+  else accepted.delete(to);
   return to;
+}
+
+/** A fresh data property's committed descriptor owns its initializer's evidence.
+ * Replacing or deleting that descriptor cannot leave evidence on the new slot.
+ * Call only after an ordinary literal/copy/iterator-result creation succeeds. */
+export function RetainPropertyResult(object: ObjectValue, key: PropertyKeyValue, completion: object): void {
+  const descriptor = object.properties.get(key);
+  if (descriptor && IsDataDescriptor(descriptor)) TransferResultDependency(completion, descriptor);
 }
 
 /** A returned call contributes evidence, not an exemption from admission. */

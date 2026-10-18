@@ -25,6 +25,7 @@ import { AssignRuntimeArguments, DeclaredReferenceLocationType } from '../abstra
 import type { TypeRecord } from '../type-system/records.mts';
 import { recordDeclaredType } from './LexicalDeclaration.mts';
 import { NamedEvaluation, BindingInitialization } from './all.mts';
+import { EvaluateResultValue, RetainBindingResult } from '#self';
 import {
   Assert,
   GetValue,
@@ -194,23 +195,32 @@ function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.Single
   // 2. Let lhs be ? ResolveBinding(bindingId, environment).
   const lhs = Q(yield* ResolveBinding(bindingId, environment, BindingIdentifier.strict));
   let v: Value = Value.undefined;
+  let valueResult: object = NormalCompletion(v);
   // 3. If iteratorRecord.[[Done]] is false, then
   if (iteratorRecord.Done === Value.false) {
     // a. Let next be ? IteratorStepValue(iteratorRecord).
-    const next = Q(yield* IteratorStepValue(iteratorRecord));
+    const nextResult = EnsureCompletion(yield* IteratorStepValue(iteratorRecord));
+    if (nextResult.Type !== 'normal') return nextResult;
+    const next = nextResult.Value;
     // d. If next is not DONE,
     if (next !== 'done') {
       v = next;
+      valueResult = nextResult;
     }
   }
   const usedDefault = !!Initializer && v === Value.undefined;
   // 5. If Initializer is present and v is undefined, then
   if (Initializer && v === Value.undefined) {
     if (IsAnonymousFunctionDefinition(Initializer)) {
-      v = Q(yield* NamedEvaluation(Initializer as FunctionDeclaration, bindingId));
+      const named = EnsureCompletion(yield* NamedEvaluation(Initializer as FunctionDeclaration, bindingId));
+      if (named.Type !== 'normal') return named;
+      v = named.Value;
+      valueResult = named;
     } else {
-      const defaultValue = Q(yield* Evaluate(Initializer));
-      v = Q(yield* GetValue(defaultValue));
+      const defaultResult = EnsureCompletion(yield* EvaluateResultValue(Initializer));
+      if (defaultResult.Type !== 'normal') return defaultResult;
+      v = defaultResult.Value;
+      valueResult = defaultResult;
     }
   }
   // proposal-runtime-types (references extension): a `ref` parameter binds an
@@ -307,9 +317,9 @@ function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.Single
   // `function g<T extends []>(v: T)` for every argument, because `T` is unbound
   // at this point. The pattern element is the case with no other boundary.
   if (node.TypeAnnotation && !annotatedRef && isPatternElement(node)) {
-    v = Q(yield* EnforceAnnotation(node.TypeAnnotation, v));
+    v = Q(yield* EnforceAnnotation(node.TypeAnnotation, v, valueResult));
   }
-  const inferred = Q(yield* EnforceInferredBinding(node, X(v), usedDefault ? Initializer : undefined));
+  const inferred = Q(yield* EnforceInferredBinding(node, X(v), usedDefault ? Initializer : undefined, valueResult));
   v = inferred.value;
   // 6. If environment is undefined, return ? PutValue(lhs, v).
   if (environment === Value.undefined) {
@@ -322,6 +332,7 @@ function* IteratorBindingInitialization_SingleNameBinding(node: ParseNode.Single
   // 7. Return InitializeReferencedBinding(lhs, v).
   const initialized = Q(yield* InitializeReferencedBinding(lhs, CopyValueClassInstance(X(v))));
   if (inferred.type) recordDeclaredType(lhs, inferred.type);
+  if (node.TypeAnnotation || inferred.type) RetainBindingResult(lhs, valueResult);
   return initialized;
 }
 

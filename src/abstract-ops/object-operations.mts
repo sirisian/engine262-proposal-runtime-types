@@ -22,6 +22,7 @@ import { __ts_cast__, isArray } from '../utils/language.mts';
 import { isBoundFunctionObject } from '../intrinsics/FunctionPrototype.mts';
 import type { PlainEvaluator, ValueEvaluator } from '../evaluator.mts';
 import { NamedCallItemsOf } from './named-call.mts';
+import { RetainPropertyResult } from '#self';
 import {
   surroundingAgent,
 } from '#self';
@@ -88,7 +89,7 @@ export function MakeBasicObject<const T extends string>(internalSlotsList: reado
 export function* Get(O: ObjectValue, P: PropertyKeyValue): ValueEvaluator {
   Assert(O instanceof ObjectValue);
   Assert(IsPropertyKey(P));
-  return Q(yield* O.Get(P, O));
+  return yield* O.Get(P, O);
 }
 
 /** https://tc39.es/ecma262/#sec-getv */
@@ -105,7 +106,7 @@ export function* GetV(V: Value, P: PropertyKeyValue): ValueEvaluator {
     }
   }
   const O = Q(ToObject(V));
-  return Q(yield* O.Get(P, V));
+  return yield* O.Get(P, V);
 }
 
 /** https://tc39.es/ecma262/#sec-set-o-p-v-throw */
@@ -538,8 +539,10 @@ export function* CopyDataProperties(target: ObjectValue, source: Value, excluded
     if (excluded === false) {
       const desc = Q(yield* from.GetOwnProperty(nextKey));
       if (!(desc instanceof UndefinedValue) && desc.Enumerable === Value.true) {
-        const propValue = Q(yield* Get(from, nextKey));
-        X(CreateDataProperty(target, nextKey, propValue));
+        const propResult = EnsureCompletion(yield* Get(from, nextKey));
+        if (propResult.Type !== 'normal') return propResult;
+        X(CreateDataProperty(target, nextKey, propResult.Value));
+        RetainPropertyResult(target, nextKey, propResult);
       }
     }
   }

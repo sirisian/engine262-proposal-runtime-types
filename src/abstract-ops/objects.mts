@@ -35,7 +35,7 @@ import {
   type Intrinsics,
 } from './all.mts';
 import {
-  RefreshNominalRestDependencies, PlanNominalPrototypeChange, CommitNominalPrototypeChange, ScalarRestDefinitionAllowed, CheckArrayDefinition, CreateBuiltinFunction, surroundingAgent, RequireType, LookupTypeDefault, Throw } from '#self';
+  NormalCompletion, TransferResultDependency, RefreshNominalRestDependencies, PlanNominalPrototypeChange, CommitNominalPrototypeChange, ScalarRestDefinitionAllowed, CheckArrayDefinition, CreateBuiltinFunction, surroundingAgent, RequireType, LookupTypeDefault, Throw } from '#self';
 
 export interface OrdinaryObject extends ObjectValue {
   Prototype: ObjectValue | NullValue;
@@ -131,7 +131,7 @@ export function OrdinaryGetOwnProperty(O: ObjectValue, P: PropertyKeyValue) {
   D.Enumerable = x.Enumerable;
   D.Configurable = x.Configurable;
 
-  return Descriptor(D);
+  return TransferResultDependency(x, Descriptor(D));
 }
 
 // 9.1.6.1 OrdinaryDefineOwnProperty
@@ -229,7 +229,19 @@ export function IsCompatiblePropertyDescriptor(Extensible: BooleanValue, Desc: D
 
 // 9.1.6.3 ValidateAndApplyPropertyDescriptor
 export function ValidateAndApplyPropertyDescriptor(O: ObjectValue | UndefinedValue, P: PropertyKeyValue | UndefinedValue, extensible: BooleanValue, Desc: Descriptor, current: UndefinedValue | Descriptor) {
+  const previous = O instanceof ObjectValue ? O.properties.get(P as PropertyKeyValue) : undefined;
   const result = ValidateAndApplyPropertyDescriptorUnobserved(O, P, extensible, Desc, current);
+  // Attribute-only changes preserve the stored contribution. An explicit value
+  // write or accessor replacement supplies no old evidence, even for SameValue.
+  if (result === Value.true && O instanceof ObjectValue) {
+    const committed = O.properties.get(P as PropertyKeyValue);
+    if (previous && committed && previous !== committed && Desc.Value === undefined
+        && IsDataDescriptor(previous) && IsDataDescriptor(committed)) {
+      TransferResultDependency(previous, committed);
+    } else if (committed && Desc.Value !== undefined) {
+      TransferResultDependency(Desc, committed);
+    }
+  }
   if (result === Value.true && O instanceof ObjectValue) RefreshNominalRestDependencies(O, P as PropertyKeyValue);
   return result;
 }
@@ -381,17 +393,17 @@ export function* OrdinaryGet(O: ObjectValue, P: PropertyKeyValue, Receiver: Valu
     if (parent instanceof NullValue) {
       return Value.undefined;
     }
-    return Q(yield* parent.Get(P, Receiver));
+    return yield* parent.Get(P, Receiver);
   }
   if (IsDataDescriptor(desc)) {
-    return desc.Value;
+    return TransferResultDependency(desc, NormalCompletion(desc.Value));
   }
   Assert(IsAccessorDescriptor(desc));
   const getter = desc.Getter;
   if (getter instanceof UndefinedValue) {
     return Value.undefined;
   }
-  return Q(yield* Call(getter, Receiver));
+  return yield* Call(getter, Receiver);
 }
 
 // 9.1.9.1 OrdinarySet

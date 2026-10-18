@@ -26,6 +26,7 @@ import { GetTypeObject } from '../type-system/intern.mts';
 import { NamedEvaluation, MethodDefinitionEvaluation, Evaluate_PropertyName } from './all.mts';
 import { ApplyDecorators, ApplySubTargetDecorators } from './ClassDefinitionEvaluation.mts';
 import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
+import { EnsureCompletion, EvaluateResultValue, GetResultValue, RetainPropertyResult, RetainCheckedResult } from '#self';
 import {
   surroundingAgent,
   Assert,
@@ -327,6 +328,7 @@ function* PropertyDefinitionEvaluation_PropertyDefinitionInner(PropertyDefinitio
     isProtoSetter = false;
   }
   let propValue;
+  let propResult: object | undefined;
   // 5. If IsAnonymousFunctionDefinition(AssignmentExpression) is true and isProtoSetter is false, then
   if (IsAnonymousFunctionDefinition(AssignmentExpression) && !isProtoSetter) {
     // a. Let propValue be NamedEvaluation of AssignmentExpression with argument propKey.
@@ -346,15 +348,19 @@ function* PropertyDefinitionEvaluation_PropertyDefinitionInner(PropertyDefinitio
       const literal = definition.parent?.parent ?? (definition as { parent?: object }).parent;
       pushContextualType(propertyContextualType(objectLiteralContext(PropertyDefinition as object, literal), propKey), AssignmentExpression as object);
       try {
-        exprValueRef = Q(yield* Evaluate(AssignmentExpression));
+        exprValueRef = EnsureCompletion(yield* Evaluate(AssignmentExpression));
       } finally {
         popContextualType();
       }
     } else {
-      exprValueRef = Q(yield* Evaluate(AssignmentExpression));
+      exprValueRef = EnsureCompletion(yield* Evaluate(AssignmentExpression));
     }
     // b. Let propValue be ? GetValue(exprValueRef).
-    propValue = Q(yield* GetValue(exprValueRef));
+    if (exprValueRef.Type !== 'normal') return exprValueRef;
+    const readResult = EnsureCompletion(yield* GetResultValue(exprValueRef));
+    if (readResult.Type !== 'normal') return readResult;
+    propResult = readResult;
+    propValue = readResult.Value;
   }
   // 7. If isProtoSetter is true, then
   if (isProtoSetter) {
@@ -382,19 +388,26 @@ function* PropertyDefinitionEvaluation_PropertyDefinitionInner(PropertyDefinitio
     // becomes a value of the declared type, and one that cannot be represented
     // exactly is an error rather than a silent wrap.
     const converted = Q(yield* CheckedConvertValue(X(propValue), record));
-    return Q(yield* DefinePropertyOrThrow(object, propKey as PropertyKeyValue, Descriptor({
+    const defined = Q(yield* DefinePropertyOrThrow(object, propKey as PropertyKeyValue, Descriptor({
       Type: typeObject,
       Value: converted,
       Writable: Value.true,
       Enumerable: Value.true,
       Configurable: Value.true,
     }) as Descriptor));
+    if (propResult) {
+      RetainCheckedResult(propResult, record);
+      RetainPropertyResult(object, propKey as PropertyKeyValue, propResult);
+    }
+    return defined;
   }
   // 8. Assert: enumerable is true.
   Assert(enumerable === Value.true);
   // 9. Assert: object is an ordinary, extensible object with no non-configurable properties.
   // 10. Return ! CreateDataPropertyOrThrow(object, propKey, propValue).
-  return X(CreateDataPropertyOrThrow(object, propKey as PropertyKeyValue, X(propValue)));
+  const created = X(CreateDataPropertyOrThrow(object, propKey as PropertyKeyValue, X(propValue)));
+  if (propResult) RetainPropertyResult(object, propKey as PropertyKeyValue, propResult);
+  return created;
 }
 
 // PropertyDefinition : IdentifierReference
@@ -402,12 +415,14 @@ function* PropertyDefinitionEvaluation_PropertyDefinition_IdentifierReference(Id
   // 1. Let propName be StringValue of IdentifierReference.
   const propName = StringValue(IdentifierReference);
   // 2. Let exprValue be the result of evaluating IdentifierReference.
-  const exprValue = Q(yield* Evaluate(IdentifierReference));
-  // 3. Let propValue be ? GetValue(exprValue).
-  const propValue = Q(yield* GetValue(exprValue));
+  const propResult = EnsureCompletion(yield* EvaluateResultValue(IdentifierReference));
+  if (propResult.Type !== 'normal') return propResult;
+  const propValue = propResult.Value;
   // 4. Assert: enumerable is true.
   Assert(enumerable === Value.true);
   // 5. Assert: object is an ordinary, extensible object with no non-configurable properties.
   // 6. Return ! CreateDataPropertyOrThrow(object, propName, propValue).
-  return X(CreateDataPropertyOrThrow(object, propName, propValue));
+  const created = X(CreateDataPropertyOrThrow(object, propName, propValue));
+  RetainPropertyResult(object, propName, propResult);
+  return created;
 }

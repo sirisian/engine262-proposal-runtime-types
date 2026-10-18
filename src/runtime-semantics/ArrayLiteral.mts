@@ -9,6 +9,7 @@ import {
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
+import { EnsureCompletion, EvaluateResultValue, RetainPropertyResult } from '#self';
 import {
   Set,
   ArrayCreate,
@@ -87,13 +88,17 @@ function* ArrayAccumulation_SpreadElement({ AssignmentExpression }: ParseNode.Sp
   // 4. Repeat,
   while (true) {
     // a. Let next be ? IteratorStep(iteratorRecord).
-    const next = Q(yield* IteratorStepValue(iteratorRecord));
+    const nextResult = EnsureCompletion(yield* IteratorStepValue(iteratorRecord));
+    if (nextResult.Type !== 'normal') return nextResult;
+    const next = nextResult.Value;
     // b. If next is done, return nextIndex.
     if (next === 'done') {
       return nextIndex;
     }
     // d. Perform ! CreateDataPropertyOrThrow(array, ! ToString(𝔽(nextIndex)), next).
-    X(CreateDataPropertyOrThrow(array, X(ToString(F(nextIndex))), next));
+    const key = X(ToString(F(nextIndex)));
+    X(CreateDataPropertyOrThrow(array, key, next));
+    RetainPropertyResult(array, key, nextResult);
     // e. Set nextIndex to nextIndex + 1.
     nextIndex += 1;
   }
@@ -102,11 +107,12 @@ function* ArrayAccumulation_SpreadElement({ AssignmentExpression }: ParseNode.Sp
 
 function* ArrayAccumulation_AssignmentExpression(AssignmentExpression: ParseNode.AssignmentExpressionOrHigher, array: ObjectValue, nextIndex: number): PlainEvaluator<number> {
   // 2. Let initResult be the result of evaluating AssignmentExpression.
-  const initResult = Q(yield* Evaluate(AssignmentExpression));
-  // 3. Let initValue be ? GetValue(initResult).
-  const initValue = Q(yield* GetValue(initResult));
+  const initResult = EnsureCompletion(yield* EvaluateResultValue(AssignmentExpression));
+  if (initResult.Type !== 'normal') return initResult;
   // 4. Let created be ! CreateDataPropertyOrThrow(array, ! ToString(𝔽(nextIndex)), initValue).
-  X(CreateDataPropertyOrThrow(array, X(ToString(F(nextIndex))), initValue));
+  const key = X(ToString(F(nextIndex)));
+  X(CreateDataPropertyOrThrow(array, key, initResult.Value));
+  RetainPropertyResult(array, key, initResult);
   // 5. Return nextIndex + 1.
   return nextIndex + 1;
 }

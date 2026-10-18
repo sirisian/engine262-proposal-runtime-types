@@ -1,6 +1,7 @@
 import { TupleBackingLength, TupleStorageTypeAt, TupleResizePreserves, TupleLengthRange, type TupleStorageShape } from '../type-system/tuple-storage.mts';
 import { DefaultValueOf } from '../type-system/runtime.mts';
 import type { ThrowCompletion } from '../completion.mts';
+import { EnsureCompletion, RetainPropertyResult } from '#self';
 import {
   surroundingAgent, Descriptor, ObjectValue, JSStringValue, Value, wellKnownSymbols, type ObjectInternalMethods,
   NumberValue, UndefinedValue, type PropertyKeyValue,
@@ -861,6 +862,7 @@ export function CreateArrayIterator(array: ObjectValue, kind: 'key+value' | 'key
     while (true) {
       let len;
       let result;
+      let resultDependency: object | undefined;
       // i. If array has a [[TypedArrayName]] internal slot, then
       if (isTypedArrayObject(array)) {
         const taRecord = MakeTypedArrayWithBufferWitnessRecord(array, 'seq-cst');
@@ -887,18 +889,24 @@ export function CreateArrayIterator(array: ObjectValue, kind: 'key+value' | 'key
         // 1. Let elementKey be ! ToString(indexNumber).
         const elementKey = X(ToString(indexNumber));
         // 2. Let elementValue be ? Get(array, elementKey).
-        const elementValue = Q(yield* Get(array, elementKey));
+        const elementResult = EnsureCompletion(yield* Get(array, elementKey));
+        if (elementResult.Type !== 'normal') return elementResult;
+        const elementValue = elementResult.Value;
         // 3. If kind is value, perform ? Yield(elementValue).
         if (kind === 'value') {
           result = elementValue;
+          resultDependency = elementResult;
         } else { // 4. Else,
           // a. Assert: kind is key+value.
           Assert(kind === 'key+value');
           // b. Perform ? Yield(! CreateArrayFromList(« 𝔽(index), elementValue »)).
           result = CreateArrayFromList([indexNumber, elementValue]);
+          RetainPropertyResult(result, Value('1'), elementResult);
         }
       }
-      Q(yield* GeneratorYield(CreateIteratorResultObject(result, Value.false)));
+      const iteration = CreateIteratorResultObject(result, Value.false);
+      if (resultDependency) RetainPropertyResult(iteration, Value('value'), resultDependency);
+      Q(yield* GeneratorYield(iteration));
       // vi. Set index to index + 1.
       index += 1;
     }

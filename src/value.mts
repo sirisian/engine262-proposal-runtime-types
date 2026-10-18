@@ -6,7 +6,7 @@ import { SoAStorageOf, SoAGather, SoAScatter, SoAElementBackingOf, ReadSoAField,
 import { ArrayViewBackingOf, ArrayViewLength, ReadArrayViewElement, WriteArrayViewElement, ArraySpanBackingOf, ArraySpanLength, ReadArraySpanElement, WriteArraySpanElement, SpanLikeLengthOf } from './abstract-ops/array-view.mts';
 import type { TypeRecord } from './type-system/records.mts';
 import {
-  Q, X, type ValueEvaluator, type PlainCompletion,
+  Q, X, EnsureCompletion, type ValueEvaluator, type PlainCompletion,
 } from './completion.mts';
 import { OutOfRange, callable } from './utils/language.mts';
 import { PropertyKeyMap } from './utils/container.mts';
@@ -1128,7 +1128,9 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
   }
 
   * Get(P: PropertyKeyValue, Receiver: Value): ObjectSlotReturn['Get'] {
-    const result = Q(yield* OrdinaryGet(this as unknown as OrdinaryObject, P, Receiver));
+    const completion = EnsureCompletion(yield* OrdinaryGet(this as unknown as OrdinaryObject, P, Receiver));
+    if (completion.Type !== 'normal') return completion;
+    const result = completion.Value;
     // proposal-runtime-types (spec sec-array-defaults-and-stores): "`length` is
     // the index type (`uint64`) for a typed array or tuple.
     // The STORED length stays a plain Number, because the array exotic object's
@@ -1264,7 +1266,7 @@ export class ObjectValue extends Value implements ObjectInternalMethods<ObjectVa
         }
       }
     }
-    return result;
+    return completion;
   }
 
   * Set(P: PropertyKeyValue, V: Value, Receiver: Value): ObjectSlotReturn['Set'] {

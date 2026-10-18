@@ -231,7 +231,7 @@ export function* GetValue(V: ReferenceRecord | Value): PlainEvaluator<Value> {
       V.ReferencedName = Q(yield* ToPropertyKey(V.ReferencedName as Value));
     }
     // c. Return ? baseObj.[[Get]](V.[[ReferencedName]], GetThisValue(V)).
-    return Q(yield* baseObj.Get(V.ReferencedName, GetThisValue(V)));
+    return yield* baseObj.Get(V.ReferencedName, GetThisValue(V));
   } else { // 5. Else,
     // a. Let base be V.[[Base]].
     const base = V.Base;
