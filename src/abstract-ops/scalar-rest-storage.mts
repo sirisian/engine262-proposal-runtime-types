@@ -13,7 +13,7 @@ type Convert = (value: Value, type: TypeRecord) => ValueEvaluator;
 export type ScalarRestItem = { value?: Value, convert?: boolean };
 type Candidate = { value?: Value, execute?: () => ValueEvaluator, error?: ThrowCompletion };
 type Admission = { parameter: TypeRecord } | { failure: ThrowCompletion } | { unsupported: true } | undefined;
-type Planned = { candidate: Candidate } | { failure: ThrowCompletion } | undefined;
+type Planned = { candidate: Candidate } | { failure: ThrowCompletion } | { unsupported: true } | undefined;
 
 /** Pure declaration-context parameter admission. Unknown effectful checks are
  * distinguished from a proved inapplicable parameter: they cannot justify
@@ -51,23 +51,23 @@ function* ordinaryParameterAdmission(value: Value, fn: Value, declared?: TypeRec
 function nominalOperation(type: TypeRecord & { Kind: 'nominal' }, execute: () => ValueEvaluator): Candidate {
   return { execute: function* () {
     const result = Q(yield* execute());
-    if (!ScalarRestMember(result, type)) return Throw.TypeError('a conversion returned a value outside its selected rest');
+    if (!ScalarRestMember(result, type)) return Throw.TypeError('$1', Value('a conversion returned a value outside its selected target'));
     Q(AcquireNominalPrototype(result, type));
     return result;
   } };
 }
 
-function* nominalConversionCandidate(value: Value, type: TypeRecord): PlainEvaluator<Planned> {
-  if (type.Kind !== 'nominal' || !OrdinaryNominalPrototype(type) || value instanceof ReferenceValue) return undefined;
+export function* PlanOrdinaryNominalConversion(value: Value, type: TypeRecord): PlainEvaluator<Planned> {
+  if (type.Kind !== 'nominal' || !OrdinaryNominalPrototype(type) || IsValueTypeClass(type) || value instanceof ReferenceValue) return { unsupported: true };
   let failure: ThrowCompletion | undefined;
   const ctor = type.Constructor;
   if (ctor && IsConstructor(ctor)) {
     // Overloaded constructors need a separate applicability proof; never infer
     // precedence from only the first body's signature.
-    if ((ctor as { OverloadFunctions?: readonly Value[] }).OverloadFunctions?.length) return undefined;
+    if ((ctor as { OverloadFunctions?: readonly Value[] }).OverloadFunctions?.length) return { unsupported: true };
     const declared = OwnMemberDeclarationOf(ctor, 'constructor', false, 'ClassMethod')?.type;
     const admission = Q(yield* ordinaryParameterAdmission(value, ctor, declared));
-    if (admission && 'unsupported' in admission) return undefined;
+    if (admission && 'unsupported' in admission) return admission;
     if (admission && 'parameter' in admission) {
       return { candidate: nominalOperation(type, function* (): ValueEvaluator {
         return Q(yield* Construct(ctor, [value]));
@@ -76,7 +76,7 @@ function* nominalConversionCandidate(value: Value, type: TypeRecord): PlainEvalu
     if (admission && 'failure' in admission) failure = admission.failure;
   }
   const source = OrdinarySourceConversions(value, type).filter((entry) => IsCallable(entry.Function));
-  if (source.length > 1) return { candidate: { error: Throw.TypeError('ambiguous source conversion for an ordered rest') } };
+  if (source.length > 1) return { candidate: { error: Throw.TypeError('$1', Value('ambiguous source conversion for the selected target')) } };
   if (source.length === 1) {
     const fn = source[0]!.Function;
     return { candidate: nominalOperation(type, function* (): ValueEvaluator {
@@ -87,12 +87,12 @@ function* nominalConversionCandidate(value: Value, type: TypeRecord): PlainEvalu
   for (const entry of OrdinaryInboundConversions(type)) {
     if (!IsCallable(entry.Function)) continue;
     const admission = Q(yield* ordinaryParameterAdmission(value, entry.Function, entry.Signature));
-    if (admission && 'unsupported' in admission) return undefined;
+    if (admission && 'unsupported' in admission) return admission;
     if (admission && 'parameter' in admission) inbound.push({ fn: entry.Function, parameter: admission.parameter });
     if (admission && 'failure' in admission) failure ??= admission.failure;
   }
   const best = inbound.filter((a) => !inbound.some((b) => IsSubtype(b.parameter, a.parameter, []) && !IsSubtype(a.parameter, b.parameter, [])));
-  if (best.length > 1) return { candidate: { error: Throw.TypeError('ambiguous inbound conversion for an ordered rest') } };
+  if (best.length > 1) return { candidate: { error: Throw.TypeError('$1', Value('ambiguous inbound conversion for the selected target')) } };
   if (best.length === 1) {
     const fn = best[0]!.fn;
     return { candidate: nominalOperation(type, function* (): ValueEvaluator {
@@ -145,9 +145,9 @@ export function* ConvertScalarRestItems(patterns: readonly ScalarRestPattern[], 
       } else if (ScalarRestMember(item.value, type)) retain(type, item.value);
       else if (item.convert) {
         if (type.Kind === 'nominal') {
-          const candidate = Q(yield* nominalConversionCandidate(item.value, type));
+          const candidate = Q(yield* PlanOrdinaryNominalConversion(item.value, type));
           if (candidate && 'failure' in candidate) failure ??= candidate.failure;
-          else if (candidate && accepts(candidates.length, type)) row.set(type, candidate.candidate);
+          else if (candidate && 'candidate' in candidate && accepts(candidates.length, type)) row.set(type, candidate.candidate);
         } else if (pureScalarConversion(item.value, type, convert)) {
           const result = EnsureCompletion(yield* convert(item.value, type));
           if (result.Type === 'normal' && ScalarRestMember(result.Value, type)) retain(type, result.Value);

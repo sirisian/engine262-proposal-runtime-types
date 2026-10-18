@@ -1,0 +1,461 @@
+{
+  "cases": [
+    {
+      "name": "incomparable inbound choices fail without running a body",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{operator C(v:number){log+=\"n\";return new C();} operator C(v:string){log+=\"s\";return new C();}}const x:any=3;try{const c:C=x;log+=\"/\"+String(c instanceof C);}catch(e){log+=\"/\"+e.name;}log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source does not beat constructor",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{constructor(v:any){log+=\"c\";}}class S{operator C(){log+=\"s\";return new C(0);}}const raw:any=new S();const c:C=raw;log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "c"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inapplicable constructor permits inbound",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{constructor(v:boolean){log+=\"c\";}operator C(v:number){log+=\"i\";return new C(true);}}const raw:any=1;try{const c:C=raw;}catch(e){log+=\"/\"+e.name;}log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ic"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong constructor result",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{constructor(v:any){log+=\"c\";return {};}}const raw:any=1;try{const c:C=raw;log+=\"/\"+String(c instanceof C);}catch(e){log+=\"/\"+e.name;}log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "c/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong source result",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{}class S{operator C(){log+=\"s\";const result:any={};return result;}}const raw:any=new S();try{const c:C=raw;log+=\"/\"+String(c instanceof C);}catch(e){log+=\"/\"+e.name;}log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source same name wrong identity",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{}const Outer=C;class S{operator C(){log+=\"s\";return new C();}}{class C{}const raw:any=new S();try{const c:C=raw;log+=\"/\"+String(c instanceof C);}catch(e){log+=\"/\"+e.name;}}log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "most specific inbound wins before broad last declaration",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{operator C(v:boolean){log+=\"b\";return new C();}operator C(v:any){log+=\"a\";return new C();}}const raw:any=true;const c:C=raw;log+\"/\"+String(c instanceof C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "most specific inbound wins after broad declaration",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{operator C(v:any){log+=\"a\";return new C();}operator C(v:boolean){log+=\"b\";return new C();}}const raw:any=true;const c:C=raw;log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "untyped inbound loses to specific declaration",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{operator C(v:boolean){log+=\"b\";return new C();}operator C(v){log+=\"a\";return new C();}}const raw:any=true;const c:C=raw;log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "already member bypasses self source conversion",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{operator C(){log+=\"s\";return this;}}const raw:any=new C();const c:C=raw;log+\"/\"+String(c===raw);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source precedes inbound",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{operator C(v:any){log+=\"i\";return new C();}}class S{operator C(){log+=\"s\";return new C();}}const raw:any=new S();const c:C=raw;log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected constructor failure does not retry source",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{constructor(v:any){log+=\"c\";throw new Error(\"selected\");}}class S{operator C(){log+=\"s\";return new C(0);}}const raw:any=new S();try{const c:C=raw;}catch(e){log+=\"/\"+e.message;}log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "c/selected"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected source failure does not retry inbound",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{operator C(v:any){log+=\"i\";return new C();}}class S{operator C(){log+=\"s\";throw new Error(\"selected\");}}const raw:any=new S();try{const c:C=raw;}catch(e){log+=\"/\"+e.message;}log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/selected"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected inbound failure does not retry broad alternative",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{operator C(v:boolean){log+=\"b\";throw new Error(\"selected\");}operator C(v:any){log+=\"a\";return new C();}}const raw:any=true;try{const c:C=raw;}catch(e){log+=\"/\"+e.message;}log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/selected"
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid source result does not retry inbound",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{operator C(v:any){log+=\"i\";return new C();}}class S{operator C(){log+=\"s\";const x:any={};return x;}}const raw:any=new S();try{const c:C=raw;}catch(e){log+=\"/\"+e.name;}log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inbound parameter numeric conversion remains checked",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{operator C(v:uint8){log+=String(v is uint8);return new C();}}const raw:any=7;const c:C=raw;log+\"/\"+String(c instanceof C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit target keeps inbound parameter range check",
+      "steps": [
+        {
+          "source": "let calls=0;class C{operator C(v:uint8){calls++;return new C();}}const raw:any=257;let e=\"\";try{const c=raw:=C;}catch(err){e=err.name;}e+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "pure rejected parameter does not preempt viable alternative",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{operator C(v:string){log+=\"s\";return new C();}operator C(v:uint8){log+=\"n\";return new C();}}const raw:any=257;const c:C=raw;log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inbound aliases retain declaration scope",
+      "steps": [
+        {
+          "source": "let log=\"\";type P=uint8;class C{operator C(v:P){log+=String(v is uint8);return new C();}}function go(){type P=boolean;const raw:any=7;const c:C=raw;return String(c instanceof C);}const answer=go();log+\"/\"+answer;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inherited source target set is preserved",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{}class D{}class Base{operator C(){log+=\"b\";return new C();}}class Child extends Base{operator D(){log+=\"d\";return new D();}}const raw:any=new Child();const c:C=raw;log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nearest exact source target shadows inherited target",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{}class Base{operator C(){log+=\"b\";return new C();}}class Child extends Base{operator C(){log+=\"c\";return new C();}}const raw:any=new Child();const c:C=raw;log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "c"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected result keeps exact prototype obligation",
+      "steps": [
+        {
+          "source": "class C{operator C(v:any){return new C();}}const raw:any=1;const c:C=raw;String(Reflect.setPrototypeOf(c,null));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected parameter retains obligation after body throw",
+      "steps": [
+        {
+          "source": "class P{}class C{operator C(v:P){throw new Error(\"body\");}}const raw:any=new P();let e=\"\";try{const c:C=raw;}catch(err){e=err.name;}e+\"/\"+String(Reflect.setPrototypeOf(raw,null));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "Error/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unselected inbound parameter acquires no obligation",
+      "steps": [
+        {
+          "source": "class P{}class C{operator C(v:P){throw new Error(\"unused\");}}class S extends P{operator C(){return new C();}}const raw:any=new S();const c:C=raw;String(Reflect.setPrototypeOf(raw,null))+\"/\"+String(c instanceof C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed conversion leaves prior assignment intact",
+      "steps": [
+        {
+          "source": "class C{operator C(v:boolean){throw new Error(\"selected\");}operator C(v:any){return new C();}}let held:C=new C();const original=held;const raw:any=true;let e=\"\";try{held=raw;}catch(err){e=err.message;}e+\"/\"+String(held===original);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "selected/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "specificity at argument boundary",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{operator C(v:boolean){log+=\"b\";return new C();}operator C(v:any){log+=\"a\";return new C();}}const raw:any=true;function f(v:C){return v;}const c=f(raw);log+\"/\"+String(c instanceof C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "specificity at return boundary",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{operator C(v:boolean){log+=\"b\";return new C();}operator C(v:any){log+=\"a\";return new C();}}const raw:any=true;function f():C{return raw;}const c=f();log+\"/\"+String(c instanceof C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "specificity at explicit boundary",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{operator C(v:boolean){log+=\"b\";return new C();}operator C(v:any){log+=\"a\";return new C();}}const raw:any=true;const c=raw:=C;log+\"/\"+String(c instanceof C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "specificity at field boundary",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{operator C(v:boolean){log+=\"b\";return new C();}operator C(v:any){log+=\"a\";return new C();}}const raw:any=true;class H{value:C=raw;}const c=new H().value;log+\"/\"+String(c instanceof C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "specificity at array element boundary",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{operator C(v:boolean){log+=\"b\";return new C();}operator C(v:any){log+=\"a\";return new C();}}const raw:any=true;const a:[1].<C>=[new C()];a[0]=raw;const c=a[0];log+\"/\"+String(c instanceof C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "specificity at tuple element boundary",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{operator C(v:boolean){log+=\"b\";return new C();}operator C(v:any){log+=\"a\";return new C();}}const raw:any=true;const a:[C,string]=[new C(),\"s\"];a[0]=raw;const c=a[0];log+\"/\"+String(c instanceof C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "separate Scripts preserve inbound alternatives",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{operator C(v:boolean){log+=\"b\";return new C();}operator C(v:any){log+=\"a\";return new C();}}const raw:any=true;\"ready\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ready"
+          }
+        },
+        {
+          "source": "const c:C=raw;log+\"/\"+String(c instanceof C);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "b/true"
+          }
+        }
+      ]
+    }
+  ]
+}

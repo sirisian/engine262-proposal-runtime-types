@@ -42,7 +42,7 @@ import { TakeBodyContext } from '../type-system/runtime.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { describeParameters, minimumArity, resolveOverloadChecked, resolveOverloadByTypes, type OverloadParameter, type OverloadSignature, operatorTableKey } from '../type-system/overloads.mts';
 import {
-  OrdinaryRestsOf, ScalarRestsAccept, ScalarRestShape, ScalarRestValues, type ScalarRestStorage, type ScalarRestPattern, type ScalarRestType, ConvertScalarRestItems,
+  PlanOrdinaryNominalConversion, OrdinaryRestsOf, ScalarRestsAccept, ScalarRestShape, ScalarRestValues, type ScalarRestStorage, type ScalarRestPattern, type ScalarRestType, ConvertScalarRestItems,
   wellKnownSymbols,
   SetArrayAdmission, OrdinaryGetOwnProperty, ValidateAndApplyPropertyDescriptor, IsDataDescriptor, Assert, type OrdinaryObject,
   Call, R, Throw, WithoutMetadata, ToNumber, ToString, ToBoolean, CreateBuiltinFunction, ExecutionContext, surroundingAgent, Get, HasProperty, Set as SetProperty, IsArray, ArrayCreate, CreateDataPropertyOrThrow, OrdinaryObjectCreate, RegExpCreate, GetValue, Evaluate,
@@ -685,6 +685,16 @@ function* requireMembership(value: Value, t: TypeRecord, storage?: StructuralSto
         && value instanceof ObjectValue) {
       return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
     }
+    // Share the ordinary nominal planner with rest boundaries. Applicability
+    // is resolved before invoking user code; unknown evidence retains the
+    // existing general path rather than being mistaken for inapplicability.
+    const planned = Q(yield* PlanOrdinaryNominalConversion(value, t));
+    if (planned && 'failure' in planned) return planned.failure;
+    if (planned && 'candidate' in planned) {
+      if (planned.candidate.error) return planned.candidate.error;
+      return Q(yield* planned.candidate.execute!());
+    }
+    if (planned === undefined) return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(t)));
     // sec-user-defined-conversions form 1: "A constructor taking one parameter
     // of type S ... A converting constructor, so `let t: MyType = 1;` is legal
     // when MyType's constructor takes a float32."
@@ -2237,19 +2247,12 @@ export function* CheckedConvertValue(value: Value, t: TypeRecord, sequenceObserv
 
 function* CheckedConvertValueUnbacked(value: Value, t: TypeRecord, sequenceObservation?: SequenceObservation): ValueEvaluator {
   value = Q(yield* MaterializeGenericCallable(value, t));
-  // sec-user-defined-conversions form 2, tried FIRST because the paths below
-  // fork by target kind: a primitive target reaches its own switch and refuses
-  // an object there, never arriving at the membership fallback where the
-  // converting constructor sits. Hoisting the lookup covers every target kind at
-  // one site.
-  //
-  // Precise despite being first: the table is consulted for `convert <target>`
-  // on the SOURCE value's own class, so it can only fire where that class
-  // declared exactly this conversion, and a value that already fits never gets
-  // here because the caller checks membership before converting.
-  const declared = Q(yield* ConvertThroughDeclaredOperator(value, t));
-  if (declared !== undefined) {
-    return declared;
+  // Nominal conversion selection follows membership and considers the
+  // target's constructor before the source and inbound declarations. Other
+  // target families retain their existing conversion path.
+  if (t.Kind !== 'nominal') {
+    const declared = Q(yield* ConvertThroughDeclaredOperator(value, t));
+    if (declared !== undefined) return declared;
   }
   // #sec-the-boundary-check: a numeric value at a numeric type through the boundary converts by its
   // conversion row, as #sec-requiretype specifies, refused where the conversion
