@@ -6198,7 +6198,7 @@ export function* MakeOverloadedFunction(name: JSStringValue, functions: readonly
     // value resolution and its owner's inferred binding
     // (#sec-callable-overload-contracts).
     if (caseMember !== undefined) {
-      return Q(yield* DispatchCaseGroup(overloaded, args, context.thisValue, name.stringValue(), TakeBodyContext() ?? undefined));
+      return yield* DispatchCaseGroup(overloaded, args, context.thisValue, name.stringValue(), TakeBodyContext() ?? undefined);
     }
     // #sec-overloading-on-return-type: the contextual type filters what ranking
     // left tied. It is read here rather than passed down from the binding,
@@ -6219,7 +6219,9 @@ export function* MakeOverloadedFunction(name: JSStringValue, functions: readonly
     }
     const selectedArgs = resolution.Groups
       ? SelectedNamedArguments(resolution.Signature.Function, resolution.Signature.Parameters, args, resolution.Groups) : args;
-    return EnsureCompletion(Q(yield* Call(resolution.Signature.Function, context.thisValue, selectedArgs as Value[])));
+    // The selected invocation owns its checked result dependency. Unwrapping
+    // and recreating its completion would lose that context at the dispatcher.
+    return yield* Call(resolution.Signature.Function, context.thisValue, selectedArgs as Value[]);
   };
   const overloaded = CreateBuiltinFunction(behaviour as never, length, name, []);
   // The signatures are readable from the dispatcher, because a DECORATION binds

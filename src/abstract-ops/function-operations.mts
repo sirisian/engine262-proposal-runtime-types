@@ -76,7 +76,7 @@ import {
 } from './all.mts';
 import { NamedCallItemsOf, SelectedNamedArguments } from './named-call.mts';
 import {
-  GetActiveScriptOrModule, TransferResultDependency,
+  GetActiveScriptOrModule, TransferResultDependency, SelectionOfValue,
   Realm,
   EnvironmentRecord,
   FunctionEnvironmentRecord,
@@ -1042,11 +1042,14 @@ function* BuiltinCallOrConstruct(F: BuiltinFunctionObject, thisArgument: Value |
     }
 
     surroundingAgent.executionContextStack.pop(calleeContext);
-    const value = Q(result);
-    if (isNew && !(result instanceof ThrowCompletion)) {
-      Assert(result instanceof ObjectValue);
-    }
-    return NormalCompletion(value || Value.undefined);
+    const completion = EnsureCompletion(result || Value.undefined);
+    if (completion.Type !== 'normal') return completion;
+    if (isNew) Assert(completion.Value instanceof ObjectValue);
+    const returned = NormalCompletion(completion.Value || Value.undefined);
+    // Dispatch/specialization wrappers forward the selected invocation's
+    // checked result. The built-in call frame is not another value boundary.
+    return forwardsArguments || SelectionOfValue(F) !== undefined
+      ? TransferResultDependency(completion, returned) : returned;
   }
 }
 

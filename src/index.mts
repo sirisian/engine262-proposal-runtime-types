@@ -143,3 +143,5 @@ export { NormalizeInferredClassArguments } from './type-system/inferred-binding.
 export { CompleteCreatedFunctionResult } from './type-system/runtime.mts';
 
 export { RetainClassExpressionBinding } from './runtime-semantics/RuntimeTypesDeclarations.mts';
+
+export { SelectionOfValue } from './abstract-ops/callable-selection.mts';

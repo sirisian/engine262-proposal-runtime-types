@@ -1,0 +1,746 @@
+{
+  "cases": [
+    {
+      "name": "class C{} written make result bindings",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:string):C{return new C();}function f(v:number):C{return new C();}return f;}const a=make();const x=a(\"x\"),y=a(1);String(Reflect.typeOf(x)===Reflect.typeOf(y));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class C{} written wrap result bindings",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:string):C{return new C();}function f(v:number):C{return new C();}return f;}function wrap(){return make();}const a=wrap();const x=a(\"x\"),y=a(1);String(Reflect.typeOf(x)===Reflect.typeOf(y));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class C{} written wrong activation",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:string):C{return new C();}function f(v:number):C{return new C();}return f;}const a=make(),b=make();const h={f:a};function change(o:any){o.f=b;}change(h);try{const f=h.f;\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class C{} written same activation",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:string):C{return new C();}function f(v:number):C{return new C();}return f;}const a=make();const h={f:a};function change(o:any){o.f=a;}change(h);const f=h.f;const x=f(\"x\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class C{} written reflection",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:string):C{return new C();}function f(v:number):C{return new C();}return f;}let calls=0;const a=make(),b=make();const sa=Reflect.getReflection(Reflect.typeOf(a)).signatures,sb=Reflect.getReflection(Reflect.typeOf(b)).signatures;String(sa.length)+\"/\"+String(sa[0].return.type===Reflect.typeOf(a(\"x\")))+\"/\"+String(sa[0].return.type===sb[0].return.type);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class C{} written reversed make result bindings",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:number):C{return new C();}function f(v:string):C{return new C();}return f;}const a=make();const x=a(\"x\"),y=a(1);String(Reflect.typeOf(x)===Reflect.typeOf(y));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class C{} written reversed wrap result bindings",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:number):C{return new C();}function f(v:string):C{return new C();}return f;}function wrap(){return make();}const a=wrap();const x=a(\"x\"),y=a(1);String(Reflect.typeOf(x)===Reflect.typeOf(y));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class C{} written reversed wrong activation",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:number):C{return new C();}function f(v:string):C{return new C();}return f;}const a=make(),b=make();const h={f:a};function change(o:any){o.f=b;}change(h);try{const f=h.f;\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class C{} written reversed same activation",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:number):C{return new C();}function f(v:string):C{return new C();}return f;}const a=make();const h={f:a};function change(o:any){o.f=a;}change(h);const f=h.f;const x=f(\"x\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class C{} written reversed reflection",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:number):C{return new C();}function f(v:string):C{return new C();}return f;}let calls=0;const a=make(),b=make();const sa=Reflect.getReflection(Reflect.typeOf(a)).signatures,sb=Reflect.getReflection(Reflect.typeOf(b)).signatures;String(sa.length)+\"/\"+String(sa[0].return.type===Reflect.typeOf(a(\"x\")))+\"/\"+String(sa[0].return.type===sb[0].return.type);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class C{} inferred make result bindings",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:string){return new C();}function f(v:number){return new C();}return f;}const a=make();const x=a(\"x\"),y=a(1);String(Reflect.typeOf(x)===Reflect.typeOf(y));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class C{} inferred wrap result bindings",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:string){return new C();}function f(v:number){return new C();}return f;}function wrap(){return make();}const a=wrap();const x=a(\"x\"),y=a(1);String(Reflect.typeOf(x)===Reflect.typeOf(y));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class C{} inferred wrong activation",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:string){return new C();}function f(v:number){return new C();}return f;}const a=make(),b=make();const h={f:a};function change(o:any){o.f=b;}change(h);try{const f=h.f;\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class C{} inferred same activation",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:string){return new C();}function f(v:number){return new C();}return f;}const a=make();const h={f:a};function change(o:any){o.f=a;}change(h);const f=h.f;const x=f(\"x\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class C{} inferred reflection",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:string){return new C();}function f(v:number){return new C();}return f;}let calls=0;const a=make(),b=make();const sa=Reflect.getReflection(Reflect.typeOf(a)).signatures,sb=Reflect.getReflection(Reflect.typeOf(b)).signatures;String(sa.length)+\"/\"+String(sa[0].return.type===Reflect.typeOf(a(\"x\")))+\"/\"+String(sa[0].return.type===sb[0].return.type);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class C{} inferred reversed make result bindings",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:number){return new C();}function f(v:string){return new C();}return f;}const a=make();const x=a(\"x\"),y=a(1);String(Reflect.typeOf(x)===Reflect.typeOf(y));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class C{} inferred reversed wrap result bindings",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:number){return new C();}function f(v:string){return new C();}return f;}function wrap(){return make();}const a=wrap();const x=a(\"x\"),y=a(1);String(Reflect.typeOf(x)===Reflect.typeOf(y));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class C{} inferred reversed wrong activation",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:number){return new C();}function f(v:string){return new C();}return f;}const a=make(),b=make();const h={f:a};function change(o:any){o.f=b;}change(h);try{const f=h.f;\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class C{} inferred reversed same activation",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:number){return new C();}function f(v:string){return new C();}return f;}const a=make();const h={f:a};function change(o:any){o.f=a;}change(h);const f=h.f;const x=f(\"x\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "class C{} inferred reversed reflection",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:number){return new C();}function f(v:string){return new C();}return f;}let calls=0;const a=make(),b=make();const sa=Reflect.getReflection(Reflect.typeOf(a)).signatures,sb=Reflect.getReflection(Reflect.typeOf(b)).signatures;String(sa.length)+\"/\"+String(sa[0].return.type===Reflect.typeOf(a(\"x\")))+\"/\"+String(sa[0].return.type===sb[0].return.type);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const C=class {}; written make result bindings",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f(v:string):C{return new C();}function f(v:number):C{return new C();}return f;}const a=make();const x=a(\"x\"),y=a(1);String(Reflect.typeOf(x)===Reflect.typeOf(y));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const C=class {}; written wrap result bindings",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f(v:string):C{return new C();}function f(v:number):C{return new C();}return f;}function wrap(){return make();}const a=wrap();const x=a(\"x\"),y=a(1);String(Reflect.typeOf(x)===Reflect.typeOf(y));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const C=class {}; written wrong activation",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f(v:string):C{return new C();}function f(v:number):C{return new C();}return f;}const a=make(),b=make();const h={f:a};function change(o:any){o.f=b;}change(h);try{const f=h.f;\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const C=class {}; written same activation",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f(v:string):C{return new C();}function f(v:number):C{return new C();}return f;}const a=make();const h={f:a};function change(o:any){o.f=a;}change(h);const f=h.f;const x=f(\"x\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const C=class {}; written reflection",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f(v:string):C{return new C();}function f(v:number):C{return new C();}return f;}let calls=0;const a=make(),b=make();const sa=Reflect.getReflection(Reflect.typeOf(a)).signatures,sb=Reflect.getReflection(Reflect.typeOf(b)).signatures;String(sa.length)+\"/\"+String(sa[0].return.type===Reflect.typeOf(a(\"x\")))+\"/\"+String(sa[0].return.type===sb[0].return.type);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const C=class {}; written reversed make result bindings",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f(v:number):C{return new C();}function f(v:string):C{return new C();}return f;}const a=make();const x=a(\"x\"),y=a(1);String(Reflect.typeOf(x)===Reflect.typeOf(y));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const C=class {}; written reversed wrap result bindings",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f(v:number):C{return new C();}function f(v:string):C{return new C();}return f;}function wrap(){return make();}const a=wrap();const x=a(\"x\"),y=a(1);String(Reflect.typeOf(x)===Reflect.typeOf(y));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const C=class {}; written reversed wrong activation",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f(v:number):C{return new C();}function f(v:string):C{return new C();}return f;}const a=make(),b=make();const h={f:a};function change(o:any){o.f=b;}change(h);try{const f=h.f;\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const C=class {}; written reversed same activation",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f(v:number):C{return new C();}function f(v:string):C{return new C();}return f;}const a=make();const h={f:a};function change(o:any){o.f=a;}change(h);const f=h.f;const x=f(\"x\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const C=class {}; written reversed reflection",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f(v:number):C{return new C();}function f(v:string):C{return new C();}return f;}let calls=0;const a=make(),b=make();const sa=Reflect.getReflection(Reflect.typeOf(a)).signatures,sb=Reflect.getReflection(Reflect.typeOf(b)).signatures;String(sa.length)+\"/\"+String(sa[0].return.type===Reflect.typeOf(a(\"x\")))+\"/\"+String(sa[0].return.type===sb[0].return.type);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const C=class {}; inferred make result bindings",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f(v:string){return new C();}function f(v:number){return new C();}return f;}const a=make();const x=a(\"x\"),y=a(1);String(Reflect.typeOf(x)===Reflect.typeOf(y));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const C=class {}; inferred wrap result bindings",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f(v:string){return new C();}function f(v:number){return new C();}return f;}function wrap(){return make();}const a=wrap();const x=a(\"x\"),y=a(1);String(Reflect.typeOf(x)===Reflect.typeOf(y));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const C=class {}; inferred wrong activation",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f(v:string){return new C();}function f(v:number){return new C();}return f;}const a=make(),b=make();const h={f:a};function change(o:any){o.f=b;}change(h);try{const f=h.f;\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const C=class {}; inferred same activation",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f(v:string){return new C();}function f(v:number){return new C();}return f;}const a=make();const h={f:a};function change(o:any){o.f=a;}change(h);const f=h.f;const x=f(\"x\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const C=class {}; inferred reflection",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f(v:string){return new C();}function f(v:number){return new C();}return f;}let calls=0;const a=make(),b=make();const sa=Reflect.getReflection(Reflect.typeOf(a)).signatures,sb=Reflect.getReflection(Reflect.typeOf(b)).signatures;String(sa.length)+\"/\"+String(sa[0].return.type===Reflect.typeOf(a(\"x\")))+\"/\"+String(sa[0].return.type===sb[0].return.type);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const C=class {}; inferred reversed make result bindings",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f(v:number){return new C();}function f(v:string){return new C();}return f;}const a=make();const x=a(\"x\"),y=a(1);String(Reflect.typeOf(x)===Reflect.typeOf(y));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const C=class {}; inferred reversed wrap result bindings",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f(v:number){return new C();}function f(v:string){return new C();}return f;}function wrap(){return make();}const a=wrap();const x=a(\"x\"),y=a(1);String(Reflect.typeOf(x)===Reflect.typeOf(y));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const C=class {}; inferred reversed wrong activation",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f(v:number){return new C();}function f(v:string){return new C();}return f;}const a=make(),b=make();const h={f:a};function change(o:any){o.f=b;}change(h);try{const f=h.f;\"accepted\";}catch(e){e.name;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const C=class {}; inferred reversed same activation",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f(v:number){return new C();}function f(v:string){return new C();}return f;}const a=make();const h={f:a};function change(o:any){o.f=a;}change(h);const f=h.f;const x=f(\"x\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "const C=class {}; inferred reversed reflection",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f(v:number){return new C();}function f(v:string){return new C();}return f;}let calls=0;const a=make(),b=make();const sa=Reflect.getReflection(Reflect.typeOf(a)).signatures,sb=Reflect.getReflection(Reflect.typeOf(b)).signatures;String(sa.length)+\"/\"+String(sa[0].return.type===Reflect.typeOf(a(\"x\")))+\"/\"+String(sa[0].return.type===sb[0].return.type);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2/true/false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected f(1)",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const x=f(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected f(\"x\")",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const x=f(\"x\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected f.<uint8>(1)",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const x=f.<uint8>(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected f.<string>(\"x\")",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();const x=f.<string>(\"x\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic argument direct",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){class C{}function f(v:string){const p:P.<C>=v;return p;}function f(v:number){const p:P.<C>=\"x\";return p;}return f;}const a=make();const x=a(\"x\"),y=a(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic argument forwarded",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){class C{}function f(v:string){const p:P.<C>=v;return p;}function f(v:number){const p:P.<C>=\"x\";return p;}return f;}function wrap(){return make();}const a=wrap();const x=a(\"x\"),y=a(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "recursive factory retains selected inner activation",
+      "steps": [
+        {
+          "source": "function make(n:number){class C{}function f(x:string):C{return new C();}function f(x:number):C{return new C();}if(n)return make(n-1);return f;}const a=make(2);const x=a(\"x\"),y=a(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object contribution keeps overload input dependencies",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(v:C):C{return v;}function f(v:string):C{return new C();}return {f,c:new C()};}function wrap(){return make();}const a=wrap();const x=a.f(a.c);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased result stays erased",
+      "steps": [
+        {
+          "source": "function make():any{class C{}function f(x:string):C{return new C();}function f(x:number):C{return new C();}return f;}const a=make();const h={f:a};h.f=(x:any)=>x;const f=h.f;String(f(\"ok\"));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finalizer effects run once",
+      "steps": [
+        {
+          "source": "let calls=0;function make(){class C{}function f(x:string){try{return new C();}finally{calls+=1;}}function f(x:number){try{return new C();}finally{calls+=1;}}return f;}const f=make();const x=f(\"x\"),y=f(1);String(calls);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "abrupt selected body remains abrupt",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f(x:string):C{throw new Error(\"selected\");}function f(x:number):C{return new C();}return f;}const f=make();try{const x=f(\"x\");\"bad\";}catch(e){e.message;}",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "selected"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection does not run members",
+      "steps": [
+        {
+          "source": "let calls=0;function make(){class C{static{calls+=1;}}function f(x:string){calls+=10;return new C();}function f(x:number){calls+=100;return new C();}return f;}const f=make();const s=Reflect.getReflection(Reflect.typeOf(f));String(calls)+\"/\"+String(s.signatures.length);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected case through ordinary mutable storage",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T){return new C();}function f<uint8>(v:uint8){return new C();}return f;}const f=make();let selected=f.<uint8>;const x=selected(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    }
+  ]
+}

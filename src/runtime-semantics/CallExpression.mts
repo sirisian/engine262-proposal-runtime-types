@@ -1121,9 +1121,9 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
         const chosen = choice.fn;
         pushTypeParameterFrame(choice.frame);
         try {
-          return Q(yield* WithSelectedInvocation(chosen, function* callSelected() {
+          return yield* WithSelectedInvocation(chosen, function* callSelected() {
             return yield* EvaluateCall(chosen, ref, args, tailCall, CallExpression, choice.arguments);
-          }));
+          });
         } finally {
           popTypeParameterFrame();
         }

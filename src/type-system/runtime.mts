@@ -2997,11 +2997,11 @@ function deriveSignatureType(value: ObjectValue): TypeRecord {
       } as TypeRecord);
     }
   }
-  const instantiated = publishedReturnTypeOfFunction(F) ?? null;
   const Signatures = declared.map((o) => ({
     Parameters: o.Parameters,
     ...(o.Narrows ? { Narrows: o.Narrows } : {}),
-    Return: constructedType ?? o.ReturnType ?? (declared!.length === 1 ? instantiated : null),
+    // Each overload retains its own declaration and captured result context.
+    Return: constructedType ?? o.ReturnType ?? publishedReturnTypeOfFunction(o.Function) ?? null,
     // A class constructor's signature is not the catch-all: its return is
     // determined (the class) whether or not it wrote a parameter type.
     ...(o.Untyped && constructedType === undefined ? { Untyped: true } : {}),

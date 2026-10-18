@@ -1,4 +1,4 @@
-import { anyType, makePrimitive, mentionsTypeParameter, type TypeRecord, type PropertyTypeRecord } from './records.mts';
+import { anyType, makePrimitive, mentionsTypeParameter, type TypeRecord, type PropertyTypeRecord, type SignatureRecord } from './records.mts';
 import { SameArgumentList } from './relations.mts';
 import { ObjectValue, ReferenceRecord, JSStringValue, EnvironmentRecord, RefBindingHolder,
   EnsureCompletion, Evaluate, GetValue, IsDataDescriptor, type PropertyKeyValue, SymbolValue, NormalCompletion, type Value,
@@ -133,24 +133,36 @@ export function InstantiateReturnDependency(type: TypeRecord, completion?: objec
       }
     }
     if (target.Kind === 'function' && copy.Kind === 'function') {
-      // A single retained callable contract has one corresponding result
-      // position. Its own generic binders remain declarations, not arguments
-      // of the enclosing invocation. Overload correspondence is separate.
-      if (target.Signatures.length !== 1 || evidence?.Kind !== 'function' || evidence.Signatures.length !== 1) return target;
-      const to = target.Signatures[0], from = evidence.Signatures[0];
-      const parameters = to.TypeParameters ?? [], supplied = from.TypeParameters ?? [];
-      const completedParameters = argument ? to.Parameters.map((parameter, i) => ({ ...parameter,
-        Type: complete(parameter.Type, from.Parameters[i]?.Type, signature, true) })) : to.Parameters;
-      if (parameters.length !== supplied.length || parameters.some((parameter, i) => parameter.Declaration !== supplied[i].Declaration)
-        || to.Parameters.some((parameter, i) => parameter.Optional !== from.Parameters[i]?.Optional || parameter.Rest !== from.Parameters[i]?.Rest || parameter.Ref !== from.Parameters[i]?.Ref)
-        || !SameArgumentList(completedParameters.map((parameter) => parameter.Type), from.Parameters.map((parameter) => parameter.Type), [])) return target;
-      copy.Signatures = [{ ...to, Parameters: completedParameters,
-        Return: to.Return ? complete(to.Return, from.Return ?? undefined, true, argument) : to.Return,
-        InferredReturn: to.InferredReturn ? complete(to.InferredReturn, from.InferredReturn ?? undefined, true, argument) : to.InferredReturn,
-        ...(argument && to.ThisType ? { ThisType: complete(to.ThisType, from.ThisType ?? undefined, signature, true) } : {}),
-        ...(argument && to.Narrows ? { Narrows: to.Narrows.map((narrow, i) => ({ ...narrow,
-          Type: complete(narrow.Type, from.Narrows?.[i]?.Type, signature, true) })) } : {}),
-      }];
+      if (evidence?.Kind !== 'function') return target;
+      // Match descriptions, never the candidate callable's observed value.
+      // Inferred results participate even though they are not written returns.
+      const contract = (entry: SignatureRecord): TypeRecord => ({ Kind: 'function',
+        Signatures: [{ ...entry, Return: entry.Return ?? entry.InferredReturn ?? null }] });
+      copy.Signatures = target.Signatures.map((to) => {
+        const matches: SignatureRecord[] = [];
+        for (const from of evidence.Signatures) {
+          const parameters = to.TypeParameters ?? [], supplied = from.TypeParameters ?? [];
+          if (parameters.length !== supplied.length
+            || !!(to as SignatureRecord & { Untyped?: boolean }).Untyped !== !!(from as SignatureRecord & { Untyped?: boolean }).Untyped
+            || parameters.some((parameter, i) => parameter.Declaration !== supplied[i].Declaration)) continue;
+          const candidate: SignatureRecord = { ...to,
+            Parameters: to.Parameters.map((parameter, i) => ({ ...parameter,
+              Type: complete(parameter.Type, from.Parameters[i]?.Type, true, true) })),
+            Return: to.Return ? complete(to.Return, from.Return ?? from.InferredReturn ?? undefined, true, argument) : to.Return,
+            InferredReturn: to.InferredReturn ? complete(to.InferredReturn, from.InferredReturn ?? from.Return ?? undefined, true, argument) : to.InferredReturn,
+            ...(to.ThisType ? { ThisType: complete(to.ThisType, from.ThisType ?? undefined, true, true) } : {}),
+            ...(to.Narrows ? { Narrows: to.Narrows.map((narrow, i) => ({ ...narrow,
+              Type: complete(narrow.Type, from.Narrows?.[i]?.Type, true, true) })) } : {}),
+          };
+          // Exact identity checks modes, defaults, receiver and narrowing
+          // obligations as well as types. Own binders remain declarations.
+          if (SameArgumentList([contract(candidate)], [contract(from)], [])) matches.push(candidate);
+        }
+        // Declaration order cannot select an activation. Multiple candidates
+        // are usable only when they establish the same completed contract.
+        return matches.length && matches.every((match) => SameArgumentList([contract(match)], [contract(matches[0])], []))
+          ? matches[0] : to;
+      });
       return copy;
     }
     if (target.Kind !== 'object' || copy.Kind !== 'object') {

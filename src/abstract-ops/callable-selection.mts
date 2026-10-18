@@ -292,9 +292,9 @@ export function* DispatchCaseGroup(
           const dispatchFrame = Q(yield* TypedFrameOfBindings((result as { Case?: { Declaration?: unknown } }).Case?.Declaration, result.Bindings as never));
           pushTypeParameterFrame(dispatchFrame);
           try {
-            return Q(yield* WithSelectedInvocation(fn, function* callCase() {
+            return yield* WithSelectedInvocation(fn, function* callCase() {
               return yield* Call(fn, thisValue, args as Value[]);
-            }));
+            });
           } finally {
             popTypeParameterFrame();
           }
@@ -306,14 +306,14 @@ export function* DispatchCaseGroup(
     }
     // The owner's body, chosen by this selection: a class operator's owner is
     // otherwise refused beside its cases (the step-1 sibling guard).
-    return Q(yield* WithSelectedInvocation(chosen, function* callOwner() {
+    return yield* WithSelectedInvocation(chosen, function* callOwner() {
       return yield* Call(chosen, thisValue, args as Value[]);
-    }));
+    });
   }
   // An additive or standalone case, chosen by its own value signature.
-  return Q(yield* WithSelectedInvocation(chosen, function* callChosen() {
+  return yield* WithSelectedInvocation(chosen, function* callChosen() {
     return yield* Call(chosen, thisValue, args as Value[]);
-  }));
+  });
 }
 
 /**
@@ -606,9 +606,9 @@ export function StoredCaseValue(fn: Value, frame: Map<string, TypeRecord>, name:
   const behaviour = function* storedCase(args: readonly Value[], context: { thisValue: Value }): ValueEvaluator {
     pushTypeParameterFrame(frame);
     try {
-      return Q(yield* WithSelectedInvocation(fn, function* callStored() {
+      return yield* WithSelectedInvocation(fn, function* callStored() {
         return yield* Call(fn, context.thisValue, args as Value[]);
-      }));
+      });
     } finally {
       popTypeParameterFrame();
     }
@@ -629,7 +629,8 @@ export function* WithSelectedInvocation(fn: Value, body: () => ValueEvaluator): 
   const had = selectedInvocations.has(fn as object);
   selectedInvocations.add(fn as object);
   try {
-    return Q(yield* body());
+    // Preserve the selected invocation's checked result completion.
+    return yield* body();
   } finally {
     if (!had) selectedInvocations.delete(fn as object);
   }
