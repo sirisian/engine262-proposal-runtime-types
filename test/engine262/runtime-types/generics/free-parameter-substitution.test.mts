@@ -8,6 +8,9 @@ import {
 // modules require the engine's Babel transforms, outside Vitest's source loader.
 vi.mock('../../../../src/value.mts', () => import('#self'));
 vi.mock('../../../../src/abstract-ops/spec-types.mts', () => import('#self'));
+// Metadata keys reach the Agent through records.mts. Keep that dependency on
+// the same built engine too, rather than loading its untransformed source graph.
+vi.mock('../../../../src/execution-context/Agent.mts', () => import('#self'));
 
 const parameter = (Name: string, Constraint?: TypeRecord): TypeRecord => ({ Kind: 'parameter', Name, Constraint });
 const binder = (Parameter: TypeRecord, Constraint?: TypeRecord): TypeParameterRecord => ({

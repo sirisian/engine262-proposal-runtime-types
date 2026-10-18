@@ -133,3 +133,5 @@ export { ClassFamilyOf, ClassFamilyIdentityOf, ClassFamilyConstructorOf, ClassDe
 export { ConversionResultTypeNode } from './abstract-ops/runtime-types.mts';
 export { ConstructSelectedOrdinaryConstructor } from './abstract-ops/function-operations.mts';
 export * from './type-system/result-dependencies.mts';
+export { InstantiateCheckedBindings } from './type-system/checked-bindings.mts';
+export { LexicalClassFamily, SpecializedClassConstructor } from './runtime-semantics/RuntimeTypesDeclarations.mts';

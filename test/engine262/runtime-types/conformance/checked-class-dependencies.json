@@ -1,0 +1,446 @@
+{
+  "cases": [
+    {
+      "name": "concrete any view inferred",
+      "steps": [
+        {
+          "source": "class Pair<A: type, B: type> {} function f<T: type extends Pair.<any, string>>(x: T) { return String(T === type Pair.<uint8, string>); } f(new Pair.<uint8, string>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested pattern inferred",
+      "steps": [
+        {
+          "source": "class A<T: type> {} class B<T: type> {} function f<T: type extends A.<B.<_>>>(x: T) { return String(T === type A.<B.<uint8>>); } f(new A.<B.<uint8>>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "concrete any view explicit",
+      "steps": [
+        {
+          "source": "class Pair<A: type, B: type> {} function f<T: type extends Pair.<any, string>>(x: T) { return String(T === type Pair.<uint8, string>); } f.<Pair.<uint8, string>>(new Pair.<uint8, string>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested pattern explicit",
+      "steps": [
+        {
+          "source": "class A<T: type> {} class B<T: type> {} function f<T: type extends A.<B.<_>>>(x: T) { return String(T === type A.<B.<uint8>>); } f.<A.<B.<uint8>>>(new A.<B.<uint8>>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "three nested arguments",
+      "steps": [
+        {
+          "source": "class A<T: type> {} class B<T: type> {} class C<T: type> {} function f<T: type extends A.<B.<C.<_>>>>(x: T) { return \"yes\"; } f(new A.<B.<C.<uint8>>>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "yes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested array argument",
+      "steps": [
+        {
+          "source": "class A<T: type> {} class B<T: type> {} function f<T: type>(x: T) { return String(T === type A.<[].<B.<uint8>>>); } f(new A.<[].<B.<uint8>>>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested tuple argument",
+      "steps": [
+        {
+          "source": "class A<T: type> {} class B<T: type> {} function f<T: type>(x: T) { return String(T === type A.<[B.<uint8>, string]>); } f(new A.<[B.<uint8>, string]>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "any view ancestor",
+      "steps": [
+        {
+          "source": "class Pair<A: type, B: type> {} class Child<T: type> extends Pair.<T, string> {} function f<T: type extends Pair.<any, string>>(x: T) { return \"yes\"; } f(new Child.<uint8>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "yes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nongeneric ancestor any view",
+      "steps": [
+        {
+          "source": "class Pair<A: type, B: type> {} class Child extends Pair.<uint8, string> {} function f<T: type extends Pair.<any, string>>(x: T) { return \"yes\"; } f(new Child());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "yes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "caller local class",
+      "steps": [
+        {
+          "source": "function f<T: type>(x: T): T { return x; } function use() { class A<T: type> {} return String(Reflect.typeOf(f(new A.<uint8>())) === type A.<uint8>); } use();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "repeated captured activations",
+      "steps": [
+        {
+          "source": "function make() { class Pair<A: type, B: type> {}  return () => { function f<T: type extends Pair.<any, string>>(x: T) { return \"yes\"; } return f(new Pair.<uint8, string>()); }; } const a=make(); const b=make(); a()+b()+a();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "yesyesyes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "repeated nested activations",
+      "steps": [
+        {
+          "source": "function make() { class A<T: type> {} class B<T: type> {}  return () => { function f<T: type extends A.<B.<_>>>(x: T) { return \"yes\"; } return f(new A.<B.<uint8>>()); }; } const a=make(); const b=make(); a()+b()+a();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "yesyesyes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shadowed source name",
+      "steps": [
+        {
+          "source": "class Pair<A: type, B: type> {} const value = new Pair.<uint8, string>(); function f<T: type>(x: T): T { return x; } { class Pair<T: type> {} String(Reflect.typeOf(f(value)) === Reflect.typeOf(value)); }",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reassigned declaration binding",
+      "steps": [
+        {
+          "source": "class Pair<A: type, B: type> {} const value = new Pair.<uint8, string>(); Pair = class Other<A: type, B: type> {}; function f<T: type>(x: T): T { return x; } String(Reflect.typeOf(f(value)) === Reflect.typeOf(value));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declaration context beats caller name",
+      "steps": [
+        {
+          "source": "class Pair<A: type, B: type> {} function f<T: type extends Pair.<any, string>>(x: T) {return \"yes\";} {class Pair<A:type,B:type>{} f(new Pair.<uint8,string>());}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static",
+              "errorClass": "StaticTypeError",
+              "checked": true
+            }
+          },
+          "messageIncludes": "\"Pair.<uint.<8>, string>\" is not assignable to \"Pair.<any, string>\""
+        }
+      ]
+    },
+    {
+      "name": "fixed any rejects concrete",
+      "steps": [
+        {
+          "source": "class Pair<A: type, B: type> {} function f<T:type extends Pair.<any,_>>(x:T){return \"wrong\";} f(new Pair.<uint8,string>());",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static",
+              "errorClass": "StaticTypeError",
+              "checked": true
+            }
+          },
+          "messageIncludes": "\"Pair.<uint.<8>, string>\" is not assignable to \"Pair.<any, _>\""
+        }
+      ]
+    },
+    {
+      "name": "fixed any admits exact",
+      "steps": [
+        {
+          "source": "class Pair<A: type, B: type> {} function f<T:type extends Pair.<any,_>>(x:T){return \"yes\";} f(new Pair.<any,string>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "yes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong fixed nested argument",
+      "steps": [
+        {
+          "source": "class A<T: type> {} class B<T: type> {} function f<T:type extends A.<B.<uint8>>>(x:T){return \"wrong\";} f(new A.<B.<string>>());",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static",
+              "errorClass": "StaticTypeError",
+              "checked": true
+            }
+          },
+          "messageIncludes": "\"A.<B.<string>>\" is not assignable to \"A.<B.<uint.<8>>>\""
+        }
+      ]
+    },
+    {
+      "name": "gradual wrong fixed nested argument",
+      "steps": [
+        {
+          "source": "class A<T: type> {} class B<T: type> {} function f<T:type extends A.<B.<uint8>>>(x:T){return \"wrong\";} let value:any=new A.<B.<string>>(); f(value);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "\"A.<B.<string>>\" is not assignable to \"A.<B.<uint.<8>>>\""
+        }
+      ]
+    },
+    {
+      "name": "ordinary object declared shape",
+      "steps": [
+        {
+          "source": "interface Q { a?: uint8; } function f<T:type>(x:T){return \"yes\";} const q:Q={}; f(q);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "yes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "structured member class",
+      "steps": [
+        {
+          "source": "class A<T: type> {} class B<T: type> {} function f<T:type>(x:T):T{return x;} const value:{p:A.<B.<uint8>>}={p:new A.<B.<uint8>>()}; String(Reflect.typeOf(f(value).p) === type A.<B.<uint8>>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "argument effects preserved",
+      "steps": [
+        {
+          "source": "class Pair<A: type, B: type> {} let calls=0; function f<T:type extends Pair.<any,string>>(x:T){return calls;} function make():Pair.<uint8,string>{calls++;return new Pair.<uint8,string>();} String(f(make()));",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "argument abrupt wins",
+      "steps": [
+        {
+          "source": "class Pair<A: type, B: type> {} function f<T:type extends Pair.<any,string>>(x:T){return \"wrong\";} function fail():Pair.<uint8,string>{throw new RangeError(\"argument\");} f(fail());",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "RangeError"
+          },
+          "messageIncludes": "argument"
+        }
+      ]
+    },
+    {
+      "name": "nested metadata identity",
+      "steps": [
+        {
+          "source": "class A<T:type>{} class B<T:type>{} type M=uint8.<{brand:\"M\"}>; function f<T:type extends A.<B.<_>>>(x:T){return String(T === type A.<B.<M>>);} f(new A.<B.<M>>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "foreign family rejection then recovery",
+      "steps": [
+        {
+          "source": "function make(){class A<T:type>{} return {value:new A.<uint8>(), accepts<T:type extends A.<any>>(x:T){return \"yes\";}};} const left=make(); const right=make(); let erased:any=left.value; right.accepts(erased);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "\"A.<uint.<8>>\" is not assignable to \"A.<any>\""
+        },
+        {
+          "source": "erased=right.value; right.accepts(erased);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "yes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "computed class-producing initializer stays non-evaluable",
+      "steps": [
+        {
+          "source": "function make(){class B<T:type>{}return B.<uint8>;} const Left=make(); const Right=make(); class A<T:type>{} function f<T:type extends A.<Left>>(x:T){return \"wrong\";} let erased:any=new A.<Right>(); f(erased);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_COMPILE_TIME_EVALUABILITY",
+              "phase": "static",
+              "errorClass": "StaticTypeError",
+              "checked": true
+            }
+          },
+          "messageIncludes": "a type must be compile-time evaluable, and \"a read of Left, whose initializer holds a use of make, whose body holds a class declaration\" is not"
+        }
+      ]
+    },
+    {
+      "name": "recursive declared shape",
+      "steps": [
+        {
+          "source": "class C<T:type>{} interface Node {value:C.<uint8>;next?:Node;} function f<T:type>(x:T):T{return x;} const n:Node={value:new C.<uint8>()}; String(Reflect.typeOf(f(n).value) === type C.<uint8>);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "abrupt argument then retry",
+      "steps": [
+        {
+          "source": "class Pair<A:type,B:type>{} function f<T:type extends Pair.<any,string>>(x:T){return \"yes\";} function fail():Pair.<uint8,string>{throw new TypeError(\"argument failed\");} f(fail());",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "TypeError"
+          },
+          "messageIncludes": "argument failed"
+        },
+        {
+          "source": "f(new Pair.<uint8,string>());",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "yes"
+          }
+        }
+      ]
+    }
+  ]
+}

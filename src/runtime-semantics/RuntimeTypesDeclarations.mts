@@ -2028,6 +2028,16 @@ const classFamilies = new WeakMap<Value, Value>();
 const classFamilyIdentities = new WeakMap<Value, object>();
 const classFamilyConstructors = new WeakMap<object, Value>();
 const classBindingIdentities = new WeakMap<object, object>();
+const lexicalClassFamilies = new WeakMap<EnvironmentRecord, Map<ParseNode, Value>>();
+
+/** Find this declaration's evaluated family without reading a program binding. */
+export function LexicalClassFamily(declaration: ParseNode, environment: EnvironmentRecord): Value | undefined {
+  for (let scope: EnvironmentRecord | null = environment; scope; scope = scope.OuterEnv) {
+    const family = lexicalClassFamilies.get(scope)?.get(declaration);
+    if (family) return family;
+  }
+  return undefined;
+}
 
 /** A forward type and the class which later initializes its binding agree. */
 export function ClassDeclarationIdentity(environment: EnvironmentRecord, name: string): object | undefined {
@@ -2146,6 +2156,18 @@ export function RegisterClassTypeEnvironment(ctor: Value, environment: Environme
   const identity = family ? ClassFamilyIdentityOf(family) : outerIdentity ?? ctor;
   classFamilyIdentities.set(ctor, identity);
   if (!family) classFamilyConstructors.set(identity, ctor);
+  // A declaration template is instantiated per lexical activation. Keep this
+  // association even if its mutable source binding is subsequently assigned.
+  // Specializations must not replace the family's entry, and class expressions
+  // have no declaration binding whose activation determines one evaluation.
+  if (!family && declaration?.type === 'ClassDeclaration') {
+    for (const scope of [environment, environment.OuterEnv]) {
+      if (!scope) continue;
+      let declarations = lexicalClassFamilies.get(scope);
+      if (!declarations) lexicalClassFamilies.set(scope, declarations = new Map());
+      declarations.set(declaration, ctor);
+    }
+  }
   const inner = name && DeclarativeBindingIdentity(environment, Value(name));
   if (inner) classBindingIdentities.set(inner, identity);
   const progress = family && applicationKey !== undefined && specializationsInProgress.get(family)?.get(applicationKey);

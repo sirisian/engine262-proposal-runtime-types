@@ -34,7 +34,7 @@ import { IsCheckedCode } from '../type-system/checked-code.mts';
 import { MetadataObjectFor, MemberDeclarationOf, AllMemberDeclarationsOf } from './ClassDefinitionEvaluation.mts';
 import { EvaluateCall } from './all.mts';
 import { ArgumentListEvaluationItems, PositionalArgumentListEvaluation } from './ArgumentListEvaluation.mts';
-import { OrdinaryObjectCreate, CreateDataProperty, ArrayCreate } from '#self';
+import { OrdinaryObjectCreate, CreateDataProperty, ArrayCreate, InstantiateCheckedBindings } from '#self';
 import { Throw as ThrowError } from '#self';
 import {
   surroundingAgent,
@@ -1211,7 +1211,7 @@ export function* Evaluate_CallExpression(CallExpression: ParseNode.CallExpressio
   if (explicitFrame === undefined && surroundingAgent.feature('runtime-types')) {
     const stamped = (CallExpression as unknown as { CheckedBindings?: ReadonlyMap<string, TypeRecord> }).CheckedBindings;
     if (stamped && stamped.size > 0) {
-      explicitFrame = new Map(stamped);
+      explicitFrame = InstantiateCheckedBindings(stamped, surroundingAgent.runningExecutionContext.LexicalEnvironment);
       setPendingCheckerBindings(true);
     }
   }
