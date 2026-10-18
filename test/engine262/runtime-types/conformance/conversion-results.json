@@ -1,0 +1,523 @@
+{
+  "cases": [
+    {
+      "name": "conversion result has declared numeric representation",
+      "steps": [
+        {
+          "source": "class S{operator uint8(){return 7;}}const raw:any=new S();const n:uint8=raw;String(n is uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic range failure at operator return",
+      "steps": [
+        {
+          "source": "let calls=0;class S{operator uint8(){calls++;const x:any=257;return x;}}const raw:any=new S();let e=\"\";try{const n:uint8=raw;}catch(err){e=err.name;}e+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit cast selects operator but keeps return checked",
+      "steps": [
+        {
+          "source": "let calls=0;class S{operator uint8(){calls++;const x:any=257;return x;}}const raw:any=new S();let e=\"\";try{const n=raw:=uint8;}catch(err){e=err.name;}e+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fallthrough result is checked",
+      "steps": [
+        {
+          "source": "let calls=0;class S{operator uint8(){calls++;}}const raw:any=new S();let e=\"\";try{const n:uint8=raw;}catch(err){e=err.name;}e+\"/\"+calls;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "SyntaxError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finite recursive conversion result chain",
+      "steps": [
+        {
+          "source": "let calls=0;class S{operator uint8(){calls++;const x:any=calls<3?new S():7;return x;}}const raw:any=new S();const n:uint8=raw;String(n is uint8)+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic declared result captures own parameter",
+      "steps": [
+        {
+          "source": "class S<T:type>{operator T(){const x:any=7;return x;}}const raw:any=new S.<uint8>();const n:uint8=raw;String(n is uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked result at argument",
+      "steps": [
+        {
+          "source": "let calls=0;class S{operator uint8(){calls++;const x:any=7;return x;}}const raw:any=new S();function f(x:uint8){return x;}const n=f(raw);String(n is uint8)+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked result at return",
+      "steps": [
+        {
+          "source": "let calls=0;class S{operator uint8(){calls++;const x:any=7;return x;}}const raw:any=new S();function f():uint8{return raw;}const n=f();String(n is uint8)+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked result at explicit cast",
+      "steps": [
+        {
+          "source": "let calls=0;class S{operator uint8(){calls++;const x:any=7;return x;}}const raw:any=new S();const n=raw:=uint8;String(n is uint8)+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked result at type call",
+      "steps": [
+        {
+          "source": "let calls=0;class S{operator uint8(){calls++;const x:any=7;return x;}}const raw:any=new S();const n=uint8(raw);String(n is uint8)+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked result at field",
+      "steps": [
+        {
+          "source": "let calls=0;class S{operator uint8(){calls++;const x:any=7;return x;}}const raw:any=new S();class H{n:uint8=raw;}const n=new H().n;String(n is uint8)+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked result at array store",
+      "steps": [
+        {
+          "source": "let calls=0;class S{operator uint8(){calls++;const x:any=7;return x;}}const raw:any=new S();const a:[1].<uint8>=[0];a[0]=raw;const n=a[0];String(n is uint8)+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "checked result at tuple store",
+      "steps": [
+        {
+          "source": "let calls=0;class S{operator uint8(){calls++;const x:any=7;return x;}}const raw:any=new S();const a:[uint8,string]=[0,\"s\"];a[0]=raw;const n=a[0];String(n is uint8)+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit any return annotation does not erase target",
+      "steps": [
+        {
+          "source": "class S{operator uint8():any{const x:any=7;return x;}}const raw:any=new S();const n:uint8=raw;String(n is uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong dynamic kind is refused",
+      "steps": [
+        {
+          "source": "let calls=0;class S{operator uint8(){calls++;const x:any=\"7\";return x;}}const raw:any=new S();let e=\"\";try{const n:uint8=raw;}catch(err){e=err.name;}e+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "typed-width mismatch is not implicitly widened",
+      "steps": [
+        {
+          "source": "class S{operator uint16(){const x:any=7:=uint8;return x;}}const raw:any=new S();let e=\"\";try{const n:uint16=raw;}catch(err){e=err.name;}e;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit conversion inside body may discard information",
+      "steps": [
+        {
+          "source": "class S{operator uint8(){const x:any=257;return x:=uint8;}}const raw:any=new S();const n:uint8=raw;String(n)+\"/\"+String(n is uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selected body throw retains original failure",
+      "steps": [
+        {
+          "source": "let calls=0;class S{operator uint8(){calls++;throw new Error(\"body\");}}const raw:any=new S();let e=\"\";try{const n:uint8=raw;}catch(err){e=err.message;}e+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "body/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finally effects precede dynamic result admission",
+      "steps": [
+        {
+          "source": "let log=\"\";class S{operator uint8(){try{const x:any=257;return x;}finally{log+=\"f\";}}}const raw:any=new S();try{const n:uint8=raw;}catch(e){log+=\"/\"+e.name;}log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "f/RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed result preserves destination and user effects",
+      "steps": [
+        {
+          "source": "let calls=0;class S{operator uint8(){calls++;const x:any=257;return x;}}let n:uint8=3;const raw:any=new S();let e=\"\";try{n=raw;}catch(err){e=err.name;}e+\"/\"+String(n)+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "RangeError/3/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "body may catch a failed nested conversion and recover",
+      "steps": [
+        {
+          "source": "let calls=0;class Bad{operator uint8(){const x:any=257;return x;}}class Good{operator uint8(){calls++;const bad:any=new Bad();try{const n:uint8=bad;}catch(e){}return 7;}}const raw:any=new Good();const n:uint8=raw;String(n is uint8)+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "alias target resolves in declaration scope",
+      "steps": [
+        {
+          "source": "type T=uint8;class S{operator T(){const x:any=7;return x;}}function use(){type T=boolean;const raw:any=new S();const n:uint8=raw;return String(n is uint8);}use();",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "enclosing generic capture resolves after escape",
+      "steps": [
+        {
+          "source": "function make<T:type>(){return class S{operator T(){const x:any=7;return x;}};}const S=make.<uint8>();const raw:any=new S();const n:uint8=raw;String(n is uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value parameter target retains extent",
+      "steps": [
+        {
+          "source": "class S<N:uint32>{operator uint.<N>(){const x:any=7;return x;}}const raw:any=new S.<8>();const n:uint8=raw;String(n is uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tuple result converts and protects elements",
+      "steps": [
+        {
+          "source": "class S{operator [uint8,string](){const x:any=[7,\"s\"];return x;}}const raw:any=new S();const n:[uint8,string]=raw;let e=\"\";try{const x:any=n;x[0]=257;}catch(err){e=err.name;}String(n[0] is uint8)+\"/\"+e;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/RangeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "array result converts every element",
+      "steps": [
+        {
+          "source": "class S{operator [].<uint8>(){const x:any=[7,8];return x;}}const raw:any=new S();const n:[].<uint8>=raw;String(n[0] is uint8)+\"/\"+String(n[1] is uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nominal nonmember does not invoke inbound retry",
+      "steps": [
+        {
+          "source": "let log=\"\";class C{operator C(v:any){log+=\"i\";return new C();}}class S{operator C(){log+=\"s\";const x:any={};return x;}}const raw:any=new S();try{const c:C=raw;}catch(e){log+=\"/\"+e.name;}log;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "s/TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "value-class inbound result is copied",
+      "steps": [
+        {
+          "source": "class P{x:uint8=1;operator P(v:boolean){return saved;}}let saved:any=new P();const raw:any=true;const result:P=raw;result.x=9;String(saved.x)+\"/\"+String(result.x);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "1/9"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metadata result is transported at declared return",
+      "steps": [
+        {
+          "source": "type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){return a.r/b.r;}}type A=float64.<{r:2}>;type B=float64.<{r:1}>;class S{operator B(){const x:any=3:=A;return x;}}const raw:any=new S();const n:B=raw;String(n)+\"/\"+String(n is B);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "6/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit metadata target uses declared checked result",
+      "steps": [
+        {
+          "source": "type D={r:number};meta D{default={r:1};subtype(a,b){return true;}conversionFactor(a,b){return a.r/b.r;}}type A=float64.<{r:2}>;type B=float64.<{r:1}>;class S{operator B(){const x:any=3:=A;return x;}}const raw:any=new S();const n=raw:=B;String(n)+\"/\"+String(n is B);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "6/true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicit reference cannot satisfy ordinary value result",
+      "steps": [
+        {
+          "source": "let location:uint8=7;class S{operator uint8(){return ref location;}}const raw:any=new S();const n:uint8=raw;String(n is uint8)+\"/\"+String(location);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "rule": "rt-assignability",
+              "phase": "static",
+              "errorClass": "StaticTypeError"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary named operator behavior is unchanged",
+      "steps": [
+        {
+          "source": "class S{operator +(v:number):number{return v+1;}}String(new S()+2);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "primitive named operator behavior is unchanged",
+      "steps": [
+        {
+          "source": "primitive float64{operator *(v:string):string{return v;}}(1:=float64)*\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "undefined admitting target can fall through",
+      "steps": [
+        {
+          "source": "type Maybe=uint8|undefined;class S{operator Maybe(){}}const raw:any=new S();const n:uint8|undefined=raw;String(n===undefined);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "return expression receives contextual declared target",
+      "steps": [
+        {
+          "source": "function f():uint8{return 7;}function f():string{return \"s\";}class S{operator uint8(){return f();}}const raw:any=new S();const n:uint8=raw;String(n is uint8);",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "separate Scripts retain declared result type",
+      "steps": [
+        {
+          "source": "let calls=0;class S{operator uint8(){calls++;const x:any=7;return x;}}const raw:any=new S();\"ready\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ready"
+          }
+        },
+        {
+          "source": "const n:uint8=raw;String(n is uint8)+\"/\"+calls;",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "true/1"
+          }
+        }
+      ]
+    }
+  ]
+}

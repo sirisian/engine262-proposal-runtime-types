@@ -1415,6 +1415,12 @@ function* ConvertValueUnbacked(value: Value, t: TypeRecord): ValueEvaluator {
   }
   const targetPrimitive = t.Kind === 'parameterized' ? underlyingPrimitiveName(t) : undefined;
   if (t.Kind === 'parameterized' && targetPrimitive !== undefined && isBoundaryNumericTarget(targetPrimitive)) {
+    // A source declaration targets the complete metadata type, before an
+    // intrinsic cast decomposes it into its numeric base and metadata.
+    if (!isBoundaryNumericSource(value)) {
+      const declared = Q(yield* ConvertThroughDeclaredOperator(value, t));
+      if (declared !== undefined) return declared;
+    }
     const atBase = Q(yield* ConvertValue(value, t.Base));
     // Defined judgments run once over the base result; an absent validate hook
     // does not prevent explicit brand construction. No source is stamped.
@@ -1651,6 +1657,10 @@ function* ConvertValueUnbacked(value: Value, t: TypeRecord): ValueEvaluator {
     // proposal-runtime-types (Capability B): even when the value already
     // satisfies the type, a literal string type is carried on the value.
     return carryStringType(value, t);
+  }
+  if (t.Kind !== 'nominal') {
+    const declared = Q(yield* ConvertThroughDeclaredOperator(value, t));
+    if (declared !== undefined) return declared;
   }
   if (t.Kind === 'parameterized') {
     // "The base is not a subtype of the parameterization, so the way down is a
@@ -4898,6 +4908,14 @@ export interface AnnotatedFunction {
   readonly ECMAScriptCode?: unknown;
 }
 
+/** A conversion target is also the operator's result contract. Keep the
+ * original type node so resolution uses the active declaration/capture frame. */
+export function ConversionResultTypeNode(fn: AnnotatedFunction): ParseNode.Type | undefined {
+  const declaration = (fn.ECMAScriptCode as { parent?: ParseNode } | undefined)?.parent;
+  return declaration?.type === 'OperatorDefinition' && !declaration.OperatorName
+    ? declaration.Type ?? undefined : undefined;
+}
+
 function returnAnnotationOf(fn: AnnotatedFunction): ParseNode.TypeAnnotation | null | undefined {
   // The return annotation sits on the declaration, which is the code node's
   // parent (the body is the child that carries no annotation).
@@ -5041,7 +5059,7 @@ export function* EnforceResumableReturn(fn: Value, value: Value, kind: 'async' |
 }
 
 export function functionHasAnnotations(fn: AnnotatedFunction): boolean {
-  if (returnAnnotationOf(fn)) {
+  if (ConversionResultTypeNode(fn) || returnAnnotationOf(fn)) {
     return true;
   }
   // A PUBLISHED inferred return type is a boundary as much as a written one
@@ -5661,6 +5679,26 @@ export function* EnforceReturnType(fn: AnnotatedFunction, value: Value): ValueEv
   // Re-resolving this full annotation here would re-enter a metadata cast.
   if ((fn as { IsPrimitiveOperator?: boolean }).IsPrimitiveOperator === true) {
     return value;
+  }
+  const conversionTarget = ConversionResultTypeNode(fn);
+  if (conversionTarget) {
+    // An explicitly written return annotation remains an additional contract.
+    // In particular, :any cannot erase the declared conversion target.
+    const written = returnAnnotationOf(fn);
+    if (written) {
+      const record = Q(yield* TypeNodeToTypeRecord(written.Type));
+      if (record.Kind !== 'void') {
+        value = Q(yield* EnforceAnnotation(written, value));
+      }
+    }
+    const target = Q(yield* TypeNodeToTypeRecord(conversionTarget));
+    // Nominal conversion plans already require the selected operation itself
+    // to produce a member. Result admission must not retry through a target
+    // constructor or inbound operator after receiving a nonmember.
+    if (target.Kind === 'nominal' && !Q(yield* IsOfType(value, target))) {
+      return Throw.TypeError('$1 is not assignable to $2', value, Value(displayType(target)));
+    }
+    return Q(yield* RequireType(value, target));
   }
   const annotation = returnAnnotationOf(fn);
   if (!annotation) {
@@ -6533,7 +6571,8 @@ export function* returnTypeRecordOf(fn: Value): PlainEvaluator<TypeRecord | null
   const contextual = contextualGeneratorFunctions.get(fn);
   if (contextual) return contextual;
   const annotation = returnAnnotationOf(fn as AnnotatedFunction);
-  if (!annotation) {
+  const typeNode = annotation?.Type ?? ConversionResultTypeNode(fn as AnnotatedFunction);
+  if (!typeNode) {
     // A CONCISE arrow body never produces a `return` completion, so the return
     // boundary of one is not EnforceReturnType but the contextual type pushed
     // around its body - which is read from here. A published inferred type has
@@ -6543,7 +6582,7 @@ export function* returnTypeRecordOf(fn: Value): PlainEvaluator<TypeRecord | null
     const instantiated = publishedReturnTypeOfFunction(fn, currentTypeParameterFrame());
     return instantiated && instantiated.Kind !== 'void' && instantiated.Kind !== 'parameter' ? instantiated : null;
   }
-  const attempted = EnsureCompletion(yield* TypeNodeToTypeRecord(annotation.Type));
+  const attempted = EnsureCompletion(yield* TypeNodeToTypeRecord(typeNode));
   if (attempted.Type !== 'normal') {
     return null;
   }

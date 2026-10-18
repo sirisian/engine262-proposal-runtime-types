@@ -129,3 +129,5 @@ export * from './type-system/ordinary-conversions.mts';
 export { InCapturedTypeContext, BindTypeArgumentRecordsInto, specializationDepthExhausted, type CapturedTypeContext } from './type-system/runtime.mts';
 
 export { ClassFamilyOf, ClassFamilyIdentityOf, ClassFamilyConstructorOf, ClassDeclarationIdentity } from './runtime-semantics/RuntimeTypesDeclarations.mts';
+
+export { ConversionResultTypeNode } from './abstract-ops/runtime-types.mts';

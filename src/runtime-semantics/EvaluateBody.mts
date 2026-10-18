@@ -35,7 +35,7 @@ import {
   type Body,
   functionHasAnnotations,
   EnforceParameterTypes,
-  EnforceReturnType,
+  EnforceReturnType, ConversionResultTypeNode,
   VerifyContracts,
   InferGenericCallBindings,
   functionTypeParameters,
@@ -124,6 +124,10 @@ export function* EvaluateBody_FunctionBody({ FunctionStatementList }: ParseNode.
           return contract;
         }
         return new Completion({ Type: 'return', Value: enforced, Target: undefined });
+      }
+      if (result.Type === 'normal' && ConversionResultTypeNode(functionObject)) {
+        const value = Q(yield* EnforceReturnType(functionObject, Value.undefined));
+        return new Completion({ Type: 'return', Value: value, Target: undefined });
       }
       return result;
     } finally {
