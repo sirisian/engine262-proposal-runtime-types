@@ -24,7 +24,7 @@ export function InstantiateCheckedBindings(bindings: ReadonlyMap<string, TypeRec
     switch (copy.Kind) {
       case 'nominal': {
         copy.Arguments = copy.Arguments.map((argument) => typeof argument === 'number' ? argument : walk(argument, context));
-        if (copy.Declaration.type !== 'ClassDeclaration') break;
+        if (copy.Declaration.type !== 'ClassDeclaration' && copy.Declaration.type !== 'ClassExpression') break;
         const family = LexicalClassFamily(copy.Declaration, context);
         if (!family) break;
         const constructor = SpecializedClassConstructor(copy.Declaration, copy.Arguments, family) ?? family;

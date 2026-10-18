@@ -23,7 +23,8 @@ function propertyIdentity(key: PropertyKeyValue): string | SymbolValue {
 }
 
 function sourceNominal(type: TypeRecord | undefined): type is Extract<TypeRecord, { Kind: 'nominal' }> {
-  return type?.Kind === 'nominal' && type.Declaration.type === 'ClassDeclaration';
+  return type?.Kind === 'nominal'
+    && (type.Declaration.type === 'ClassDeclaration' || type.Declaration.type === 'ClassExpression');
 }
 
 /** Complete matching nominal and Symbol-key dependencies in a private view. */

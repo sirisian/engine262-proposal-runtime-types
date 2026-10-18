@@ -95,7 +95,7 @@ function sourcesOf(body: ParseNode): readonly ForwardingSource[] | undefined {
 export function CloseInferredNominal(type: TypeRecord, value: unknown,
   publication: (fn: unknown) => TypeRecord | undefined): TypeRecord {
   if (type.Kind !== 'nominal' || type.Constructor || type.DeclarationIdentity
-    || type.Declaration.type !== 'ClassDeclaration') return type;
+    || (type.Declaration.type !== 'ClassDeclaration' && type.Declaration.type !== 'ClassExpression')) return type;
   const seen = new Set<unknown>();
   const pending: unknown[] = [value];
   let constructor: ObjectValue | undefined;

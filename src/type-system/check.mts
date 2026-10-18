@@ -12339,7 +12339,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const selected = declarationAt(node.TypeName.IdentifierReference, intrinsicName,
           classNodes.get(intrinsicName) ?? aliasNodes.get(intrinsicName) ?? interfaceNodes.get(intrinsicName) ?? enumNodes.get(intrinsicName));
         const aliasDeclaration = selected?.type === 'TypeAliasDeclaration' ? selected : undefined;
-        const classDeclaration = selected?.type === 'ClassDeclaration' || selected?.type === 'ClassExpression' ? selected : undefined;
+        // An immutable class-expression binding denotes the expression's
+        // declaration in type position, just as its established `new` origin
+        // does. Retain the template; an executing use closes its activation.
+        const expressionOrigin = lexicalBinding?.kind === 'const'
+          ? stableClassOrigin(node.TypeName.IdentifierReference) : undefined;
+        const classDeclaration = selected?.type === 'ClassDeclaration' || selected?.type === 'ClassExpression' ? selected
+          : expressionOrigin && !expressionOrigin.arguments ? expressionOrigin.declaration : undefined;
         const interfaceDeclaration = selected?.type === 'InterfaceDeclaration' ? selected : undefined;
         const enumDeclaration = selected?.type === 'EnumDeclaration' ? selected : undefined;
         const selectedClass = (): Known => classDeclaration ? instanceTypeOf(classDeclaration) : null;

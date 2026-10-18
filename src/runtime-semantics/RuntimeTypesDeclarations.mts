@@ -45,7 +45,6 @@ import { BindTypeParameterTyped, toNumericArgument,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
 import { currentTypeParameterFrame, BindTypeArgumentsInto, MetadataObjectFromType } from '../type-system/runtime.mts';
 import { InferGenericBindings, TakePendingCalleeContext, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
-import type { EnvironmentRecord } from '../execution-context/Environment.mts';
 import { bindLibraryTypeArguments, RememberLibraryApplication } from '../type-system/library-type-arguments.mts';
 import { classTypeParameterFrame } from './CallExpression.mts';
 import { substituteParameterRecords } from '../type-system/relations.mts';
@@ -69,7 +68,7 @@ import { ClassDefinitionEvaluation, PartialClassMergeEvaluation } from './ClassD
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
 import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
-import { Assert, OrdinaryObjectCreate, CreateDataProperty, InCapturedTypeContext, BindTypeArgumentRecordsInto, specializationDepthExhausted, type CapturedTypeContext } from '#self';
+import { EnvironmentRecord, RefBindingHolder, Assert, OrdinaryObjectCreate, CreateDataProperty, InCapturedTypeContext, BindTypeArgumentRecordsInto, specializationDepthExhausted, type CapturedTypeContext } from '#self';
 import { ClaimMetaKey, MetaTypeClaiming, CreateDataPropertyOrThrow, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaShape, NormalizeMetadataRecord, MetadataSatisfiesShape, RegisterMetaHook, RegisterMetaTypeName, RegisterMetaTypeParameterName, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
 
 /**
@@ -2045,6 +2044,27 @@ export function LexicalClassFamily(declaration: ParseNode, environment: Environm
   return undefined;
 }
 
+function registerLexicalClassFamily(declaration: ParseNode, environment: EnvironmentRecord, constructor: Value): void {
+  let declarations = lexicalClassFamilies.get(environment);
+  if (!declarations) lexicalClassFamilies.set(environment, declarations = new Map());
+  declarations.set(declaration, constructor);
+}
+
+/** Publish only a successfully initialized immutable class-expression binding.
+ * This is its own creation dependency, not a type chosen from a tested instance.
+ */
+export function RetainClassExpressionBinding(reference: ReferenceRecord, initializer: ParseNode): void {
+  if (!(reference.Base instanceof EnvironmentRecord) || !(reference.ReferencedName instanceof JSStringValue)) return;
+  let source = initializer;
+  while (source.type === 'ParenthesizedExpression') source = source.Expression;
+  if (source.type !== 'ClassExpression') return;
+  const binding = RefBindingHolder(reference.Base, reference.ReferencedName)?.bindings.get(reference.ReferencedName);
+  if (!binding?.initialized || binding.mutable !== false || binding.indirect || binding.refLocation || !binding.value) return;
+  const object = LookupClassType(binding.value);
+  if (!isTypeObject(object) || object.TypeRecord.Kind !== 'nominal' || object.TypeRecord.Declaration !== source) return;
+  registerLexicalClassFamily(source, reference.Base, ClassFamilyOf(binding.value));
+}
+
 /** A forward type and the class which later initializes its binding agree. */
 export function ClassDeclarationIdentity(environment: EnvironmentRecord, name: string): object | undefined {
   const binding = DeclarativeBindingIdentity(environment, Value(name));
@@ -2164,14 +2184,13 @@ export function RegisterClassTypeEnvironment(ctor: Value, environment: Environme
   if (!family) classFamilyConstructors.set(identity, ctor);
   // A declaration template is instantiated per lexical activation. Keep this
   // association even if its mutable source binding is subsequently assigned.
-  // Specializations must not replace the family's entry, and class expressions
-  // have no declaration binding whose activation determines one evaluation.
-  if (!family && declaration?.type === 'ClassDeclaration') {
-    for (const scope of [environment, environment.OuterEnv]) {
-      if (!scope) continue;
-      let declarations = lexicalClassFamilies.get(scope);
-      if (!declarations) lexicalClassFamilies.set(scope, declarations = new Map());
-      declarations.set(declaration, ctor);
+  // Specializations must not replace the family's entry. An expression owns
+  // its fresh inner class scope; its outer const binding is published only
+  // after successful initialization by RetainClassExpressionBinding.
+  if (!family && declaration) {
+    registerLexicalClassFamily(declaration, environment, ctor);
+    if (declaration.type === 'ClassDeclaration' && environment.OuterEnv) {
+      registerLexicalClassFamily(declaration, environment.OuterEnv, ctor);
     }
   }
   const inner = name && DeclarativeBindingIdentity(environment, Value(name));

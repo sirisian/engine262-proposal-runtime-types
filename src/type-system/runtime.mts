@@ -55,7 +55,7 @@ import {
 } from './budget.mts';
 import { SequenceAssignment } from './sequence-assignment.mts';
 import { libraryTypeParameterNames, typeArgumentNameOf, assignTypeArguments } from './type-argument-order.mts';
-import { MetadataObjectFor, classConstructorOfNode } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
+import { MetadataObjectFor } from '../runtime-semantics/ClassDefinitionEvaluation.mts';
 import { IsReferenceClass, IsSharableValueType, LayoutOf, setLayoutSubstituter } from './layout.mts';
 import { type MetadataRecord, restElementType, UnderlyingOf } from './records.mts';
 import { inferRegExpLiteralType } from './regexp-inference.mts';
@@ -4601,10 +4601,11 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
         }
         let ctor: Value | null = (t.Constructor as Value | undefined)
           ?? (t.DeclarationIdentity && ClassFamilyConstructorOf(t.DeclarationIdentity)) ?? null;
-        // A class expression's node knows the constructor it evaluated to,
-        // named or not (#sec-typed-classes).
+        // An expression template may use only its own lexical activation.
+        // A later evaluation of the same source is never a fallback identity.
         if (!ctor && t.Declaration.type === 'ClassExpression') {
-          ctor = classConstructorOfNode.get(t.Declaration as object) ?? null;
+          ctor = LexicalClassFamily(t.Declaration, surroundingAgent.runningExecutionContext.LexicalEnvironment) ?? null;
+          if (!ctor) return false;
         }
         if (!ctor) {
           // Fall back to a name lookup for records built without a constructor.

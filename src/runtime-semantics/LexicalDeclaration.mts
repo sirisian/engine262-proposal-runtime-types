@@ -32,7 +32,7 @@ import {
   Throw,
   OrdinaryObjectCreate,
   CreateDataProperty,
-  GetResultValue, EvaluateResultValue, RetainBindingResult, RetainSymbolBinding,
+  GetResultValue, EvaluateResultValue, RetainBindingResult, RetainSymbolBinding, RetainClassExpressionBinding,
 } from '#self';
 import { pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import type { TypeRecord } from '../type-system/records.mts';
@@ -182,6 +182,7 @@ function* Evaluate_LexicalBinding_BindingIdentifier(node: ParseNode.LexicalBindi
     // 5. Return InitializeReferencedBinding(lhs, value).
     const initialized = Q(yield* InitializeReferencedBinding(lhs, value));
     RetainSymbolBinding(lhs, node, value);
+    RetainClassExpressionBinding(lhs, Initializer);
     if (TypeAnnotation) {
       recordDeclaredType(lhs, Q(yield* TypeNodeToTypeRecord(TypeAnnotation.Type)));
     } else if (inferred) {
