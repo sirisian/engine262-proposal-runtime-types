@@ -327,12 +327,12 @@ export function takePendingCheckerBindings(): boolean {
 const declarationBindings = new WeakMap<ReadonlyMap<string, TypeRecord>, Map<ParseNode.TypeParameter | ParseNode.CaptureBinding, TypeRecord>>();
 
 export function copyTypeParameterFrame(frame: ReadonlyMap<string, TypeRecord>,
-  excluding: readonly ParseNode.TypeParameter[] = []): Map<string, TypeRecord> {
+  excluding: readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[] = []): Map<string, TypeRecord> {
   const copy = new Map(frame);
   const declarations = declarationBindings.get(frame);
   if (declarations) {
     declarationBindings.set(copy, new Map([...declarations]
-      .filter(([declaration]) => !excluding.includes(declaration as ParseNode.TypeParameter))));
+      .filter(([declaration]) => !excluding.includes(declaration))));
   }
   return copy;
 }
@@ -369,10 +369,11 @@ export function CompleteCreatedFunctionResult(type: TypeRecord, value: Value, sy
 
 function instantiatePublishedReturn(value: unknown, application?: ReadonlyMap<string, TypeRecord>): TypeRecord | undefined {
   const fn = value as { ECMAScriptCode?: { parent?: object } | null, TypeParameterFrame?: ReadonlyMap<string, TypeRecord> };
-  const declaration = fn.ECMAScriptCode?.parent as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } } | undefined;
+  const declaration = fn.ECMAScriptCode?.parent as { TypeParameters?: ParseNode.TypeParameters } | undefined;
   const published = declaration && PublishedReturnTypeOf(declaration);
   if (!published || !mentionsTypeParameter(published)) return published;
-  const own = declaration?.TypeParameters?.TypeParameterList ?? [];
+  // A case's captures belong to this application, just as an owner's parameters do.
+  const own = [...declaration?.TypeParameters?.TypeParameterList ?? [], ...declaration?.TypeParameters?.Captures ?? []];
   const captured = fn.TypeParameterFrame ? copyTypeParameterFrame(fn.TypeParameterFrame, own) : new Map<string, TypeRecord>();
   for (const parameter of own) captured.delete(parameter.BindingIdentifier.name);
   const closed = substituteFreeTypeParameters(published, captured, undefined,
@@ -2934,14 +2935,16 @@ function untypedSignatureOf(value: ObjectValue): TypeRecord {
   return { Kind: 'function', Signatures: [{ Parameters: parameters, Return: null, Untyped: true }] } as unknown as TypeRecord;
 }
 
-function deriveSignatureType(value: ObjectValue): TypeRecord {
+function deriveSignatureType(value: ObjectValue, application?: Map<string, TypeRecord>): TypeRecord {
   // A selected case's value has the case's signature with its
   // captures bound - `(v: uint.<12>) => string`, never exposing `N`.
   const selection = SelectionOfValue(value);
   if (selection?.frame) {
     pushTypeParameterFrame(selection.frame);
     try {
-      return deriveSignatureType(selection.fn as ObjectValue);
+      // Only the registered selection supplies application bindings here. An
+      // unrelated caller's frame must not instantiate an unapplied function.
+      return deriveSignatureType(selection.fn as ObjectValue, selection.frame);
     } finally {
       popTypeParameterFrame();
     }
@@ -2985,7 +2988,7 @@ function deriveSignatureType(value: ObjectValue): TypeRecord {
     const outcome = overloaded
       ? skipDebugger(SignaturesOf(value, ownerContract ? (fn) => !isCase(fn) : undefined))
       : skipDebugger((function* one(): PlainEvaluator<readonly OverloadSignature[]> {
-        return [Q(yield* OverloadSignatureOf(value, hasCode, { computedAsAny: true }))];
+        return [Q(yield* OverloadSignatureOf(value, hasCode, { computedAsAny: true, applicationBindings: application }))];
       }()));
     const completion = EnsureCompletion(outcome as never);
     declared = completion.Type === 'normal' ? (completion.Value as unknown as readonly OverloadSignature[]) : null;
@@ -3015,7 +3018,7 @@ function deriveSignatureType(value: ObjectValue): TypeRecord {
     Parameters: o.Parameters,
     ...(o.Narrows ? { Narrows: o.Narrows } : {}),
     // Each overload retains its own declaration and captured result context.
-    Return: constructedType ?? o.ReturnType ?? publishedReturnTypeOfFunction(o.Function) ?? null,
+    Return: constructedType ?? o.ReturnType ?? publishedReturnTypeOfFunction(o.Function, application) ?? null,
     // A class constructor's signature is not the catch-all: its return is
     // determined (the class) whether or not it wrote a parameter type.
     ...(o.Untyped && constructedType === undefined ? { Untyped: true } : {}),

@@ -5865,7 +5865,7 @@ export function LookupClassType(ctor: object): Value | undefined {
  * the resolved types are read synchronously at each call). The rest/optional/
  * default arity is read from the parameter nodes.
  */
-export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, options: { computedAsAny?: boolean } = {}): PlainEvaluator<OverloadSignature> {
+export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, options: { computedAsAny?: boolean, applicationBindings?: Map<string, TypeRecord> } = {}): PlainEvaluator<OverloadSignature> {
   const formals = ((fn as AnnotatedFunction).FormalParameters as readonly ParseNode[] | undefined) ?? [];
   // A caller that must not run user code (RuntimeTypeOf's
   // signature derivation) reads a formal whose annotation contains a computed
@@ -5959,6 +5959,13 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, optio
     }
     pushTypeParameterFrame(genericFrame);
   }
+  // A registered selection's own bindings shadow its captured outer frame.
+  // The caller supplies these explicitly; an arbitrary ambient frame is not
+  // evidence that this function value has been applied.
+  const applicationFrame = resolveAnnotations ? options.applicationBindings : undefined;
+  if (applicationFrame) {
+    pushTypeParameterFrame(applicationFrame);
+  }
   try {
   if (genericFrame && genericTypeParameters) {
     Q(yield* FillGenericConstraintFrame(genericTypeParameters, genericFrame));
@@ -6041,6 +6048,9 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, optio
       : {}),
   };
   } finally {
+    if (applicationFrame) {
+      popTypeParameterFrame();
+    }
     if (genericFrame) {
       popTypeParameterFrame();
     }

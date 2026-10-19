@@ -1,0 +1,442 @@
+{
+  "cases": [
+    {
+      "name": "case written declaration direct",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T):C{return new C();}function f<uint8>(v:uint8):C{return new C();}return f;}const f=make();const selected=f.<uint8>;const result=selected(1);const again=f.<uint8>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(1)))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "case written expression direct",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f<T:type>(v:T):C{return new C();}function f<uint8>(v:uint8):C{return new C();}return f;}const f=make();const selected=f.<uint8>;const result=selected(1);const again=f.<uint8>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(1)))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "width capture result",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{}function f<T:type>(v:T):any{return v;}function f<uint.<const N>>(v:uint.<N>){return new P.<N>();}return f;}const f=make();const selected=f.<uint.<12>>;const x=selected(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "plain own result argument",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}function f<U:type>(v:U){return new P.<U>();}return f;}const f=make();const a=f.<uint8>,b=f.<string>;const x=a(1),y=b(\"x\");if(Reflect.typeOf(x)===Reflect.typeOf(y))throw new Error(\"argument\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary generic result keeps activation identity",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}function f<U:type>(v:U){return new P.<U>();}return f;}const a=make(),b=make();const f=a.<uint8>,g=b.<uint8>;if(f===g||Reflect.typeOf(f(1))===Reflect.typeOf(g(1)))throw new Error(\"activation\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary generic result reuses selection",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}function f<U:type>(v:U){return new P.<U>();}return f;}const f=make();if(f.<uint8>!==f.<uint8>)throw new Error(\"cache\");if(Reflect.typeOf(f.<uint8>(1))!==Reflect.typeOf(f.<uint8>(2)))throw new Error(\"result\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary generic result composes captured and own parameters",
+      "steps": [
+        {
+          "source": "function make<T:type>(){class P<A:type,B:type>{}function f<U:type>(v:U){return new P.<T,U>();}return f;}const a=make.<uint8>(),b=make.<string>();const x=a.<boolean>(true),y=a.<string>(\"x\"),z=b.<boolean>(false);if(Reflect.typeOf(x)===Reflect.typeOf(y)||Reflect.typeOf(x)===Reflect.typeOf(z))throw new Error(\"parameters\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary generic callable immutable alias",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}function f<U:type>(v:U){return new P.<U>();}const alias=f;return alias;}const f=make();f.<uint8>(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary generic callable conditional return",
+      "steps": [
+        {
+          "source": "function make(flag:boolean){class P<T:type>{}function f<U:type>(v:U){return new P.<U>();}return flag?f:f;}const f=make(true);f.<uint8>(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "lexical generic constructor shadows an outer declaration",
+      "steps": [
+        {
+          "source": "class P<T:type>{outer:boolean=true;}function make(){class P<T:type>{inner:boolean=true;}function f<U:type>(v:U){return new P.<U>();}return f;}const f=make();if(f.<uint8>(1).inner!==true)throw new Error(\"lexical\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "separate factory declarations keep same spelled constructors distinct",
+      "steps": [
+        {
+          "source": "function left(){class P<T:type>{left:boolean=true;}function f<U:type>(v:U){return new P.<U>();}return f;}function right(){class P<T:type>{right:boolean=true;}function f<U:type>(v:U){return new P.<U>();}return f;}const a=left(),b=right();if(!a.<uint8>(1).left||!b.<uint8>(1).right)throw new Error(\"lexical\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary generic result rejects a different activation target",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}function f<U:type>(v:U){return new P.<U>();}return f;}const a=make(),b=make();const h={f:a.<uint8>};function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "width selection uses each captured argument",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{}function f<T:type>(v:T):any{return v;}function f<uint.<const N>>(v:uint.<N>){return new P.<N>();}return f;}const f=make();const a=f.<uint.<12>>,b=f.<uint.<16>>;if(a!==f.<uint.<12>>||a===b)throw new Error(\"cache\");if(Reflect.typeOf(a(1))===Reflect.typeOf(b(1)))throw new Error(\"width\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "width selected signature closes captured result",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{}function f<T:type>(v:T):any{return v;}function f<uint.<const N>>(v:uint.<N>){return new P.<N>();}return f;}const f=make();const a=f.<uint.<12>>,b=f.<uint.<16>>;const ta=Reflect.typeOf(a),tb=Reflect.typeOf(b);if(ta===tb)throw new Error(\"signature\");if(!String(ta).includes(\"12\")||String(ta).includes(\"N\"))throw new Error(\"capture\");a(1);b(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "owner group public signature excludes captures",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{}function f<T:type>(v:T):any{return v;}function f<uint.<const N>>(v:uint.<N>){return new P.<N>();}return f;}const f=make();const t=String(Reflect.typeOf(f));if(t.includes(\"N\")||t.includes(\"&\")||!t.includes(\"any\"))throw new Error(\"public owner\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "width capture shadows an enclosing same named parameter",
+      "steps": [
+        {
+          "source": "function make<N:uint32>(){class P<W:uint32>{}function f<T:type>(v:T):any{return v;}function f<uint.<const N>>(v:uint.<N>){return new P.<N>();}return f;}const f=make.<7>();const a=f.<uint.<12>>,b=f.<uint.<16>>;if(Reflect.typeOf(a(1))===Reflect.typeOf(b(1)))throw new Error(\"shadow\");if(String(Reflect.typeOf(a)).includes(\"7\"))throw new Error(\"outer\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "width selected signature ignores caller generic names",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{}function f<T:type>(v:T):any{return v;}function f<uint.<const N>>(v:uint.<N>){return new P.<N>();}return f;}const f=make();const a=f.<uint.<12>>;function inspect<N:uint32>(){return Reflect.typeOf(a);}if(inspect.<7>()!==inspect.<9>())throw new Error(\"caller\");a(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "width owner fallback remains generic",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{}function f<T:type>(v:T):any{return v;}function f<uint.<const N>>(v:uint.<N>){return new P.<N>();}return f;}const f=make();if(f.<string>(\"x\")!==\"x\")throw new Error(\"fallback\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "width group immutable alias",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{}function f<T:type>(v:T):any{return v;}function f<uint.<const N>>(v:uint.<N>){return new P.<N>();}const alias=f;return alias;}const f=make();f.<uint.<12>>(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "parenthesized width selection",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{}function f<T:type>(v:T):any{return v;}function f<uint.<const N>>(v:uint.<N>){return new P.<N>();}return f;}const f=make();const a=(f.<uint.<12>>);a(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "width result keeps separate activation identities",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{}function f<T:type>(v:T):any{return v;}function f<uint.<const N>>(v:uint.<N>){return new P.<N>();}return f;}const a=make(),b=make();const f=a.<uint.<12>>,g=b.<uint.<12>>;if(Reflect.typeOf(f(1))===Reflect.typeOf(g(1)))throw new Error(\"activation\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "selection and reflection execute no body or default",
+      "steps": [
+        {
+          "source": "let calls=0;function effect():uint8{calls+=1;return 1;}function make(){class P<N:uint32>{}function f<T:type>(v:T):any{return v;}function f<uint.<const N>>(v:uint.<N>,x:uint8=effect()){calls+=1;return new P.<N>();}return f;}const f=make();const a=f.<uint.<12>>;Reflect.typeOf(a);if(calls!==0)throw new Error(\"body\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ordinary overload values retain all contracts",
+      "steps": [
+        {
+          "source": "function make(){function f(v:string):string{return v;}function f(v:uint8):uint8{return v;}return f;}const f=make();if(f(\"x\")!==\"x\"||f(1)!==1)throw new Error(\"overload\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "standalone selected callable remains available",
+      "steps": [
+        {
+          "source": "function make(){function f<uint.<const N>>(v:uint.<N>):string{return \"case\";}return f.<uint.<12>>;}const f=make();if(f(1)!==\"case\")throw new Error(\"standalone\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "additive explicit case remains callable",
+      "steps": [
+        {
+          "source": "function make(){function f<T:type>(v:T):string{return \"owner\";}function f<uint8>(v:string):string{return \"additive\";}if(f.<uint8>(\"x\")!==\"additive\")throw new Error(\"additive\");return f;}const f=make();if(f.<string>(\"x\")!==\"owner\")throw new Error(\"owner\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic library construction remains available",
+      "steps": [
+        {
+          "source": "function make(){function f<U:type>(){return new Map.<string,U>();}return f;}const f=make();const m=f.<uint8>();m.set(\"x\",1);if(m.get(\"x\")!==1)throw new Error(\"library\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "incompatible owner replacement still fails before body",
+      "steps": [
+        {
+          "source": "class P<T:type>{}function f<T:type>(v:T):string{return \"owner\";}function f<uint8>(v:uint8):P.<uint8>{return new P.<uint8>();}",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_SPECIALIZATION_CONTRACT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed selected argument leaves unrelated contexts usable",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{}function f<T:type>(v:T):any{return v;}function f<uint.<const N>>(v:uint.<N>){return new P.<N>();}return f;}const f=make();const a=f.<uint.<12>>;function bad():any{return 5000;}let rejected=false;try{a(bad());}catch(e){if(!(e instanceof RangeError))throw e;rejected=true;}if(!rejected)throw new Error(\"argument\");const b=f.<uint.<16>>;b(5000);a(1);if(f.<string>(\"x\")!==\"x\")throw new Error(\"cleanup\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "type captures instantiate the selected inferred result",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}function f<A:type,B:type>(a:A,b:B):any{return a;}function f<const T,T>(a:T,b:T){return new P.<T>();}return f;}const f=make();const a=f.<uint8,uint8>,b=f.<string,string>;if(Reflect.typeOf(a(1,2))===Reflect.typeOf(b(\"x\",\"y\")))throw new Error(\"capture\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unapplied generic value ignores caller own parameter name",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}function f<U:type>(v:U){return new P.<U>();}return f;}const f=make();function inspect<U:type>(){return Reflect.typeOf(f);}if(inspect.<uint8>()!==inspect.<string>())throw new Error(\"caller\");f.<uint8>(1);f.<string>(\"x\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "factory returns a parenthesized direct case selection",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{}function f<T:type>(v:T):any{return v;}function f<uint.<const N>>(v:uint.<N>){return new P.<N>();}return (f.<uint.<12>>);}const selected=make();selected(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    }
+  ]
+}

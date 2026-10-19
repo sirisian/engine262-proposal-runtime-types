@@ -270,8 +270,11 @@ function* ordinaryCallEvaluateBody(F: ECMAScriptFunctionObject, argumentsList: A
     // the method itself declares would let the class's binding win - and
     // `class C<T> { m<T>() {} }` applied as `C.<uint8>().m.<uint16>()` read the
     // class's `T`. The name a method declares is left to the method.
-    const own = functionTypeParameters(F as never);
-    if (own && own.length > 0) {
+    // A selected case's captures are its own binders as well. Preserve the
+    // selection frame instead of restoring a same-named outer parameter.
+    const declaration = F.ECMAScriptCode?.parent as { TypeParameters?: ParseNode.TypeParameters } | undefined;
+    const own = [...functionTypeParameters(F as never) ?? [], ...declaration?.TypeParameters?.Captures ?? []];
+    if (own.length > 0) {
       const filtered = copyTypeParameterFrame(captured, own);
       for (const p of own) {
         const name = (p as { BindingIdentifier?: { name?: string } }).BindingIdentifier?.name;

@@ -18510,13 +18510,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // the static ones. Only where the program has not bound the name to
         // something else - a local binding wins, as it does for every other
         // name.
-        const bound = lookup(referenced);
+        let bound = lookup(referenced);
         // #sec-callable-value-publication: a function value carries its
         // published result even when the contribution never calls it.
         let use: ParseNode = node;
+        let applied = false;
         while ((use.parent?.type === 'ParenthesizedExpression' || use.parent?.type === 'TypeArgumentsExpression')
-          && use.parent.Expression === use) use = use.parent;
+          && use.parent.Expression === use) {
+          applied ||= use.parent.type === 'TypeArgumentsExpression';
+          use = use.parent;
+        }
         const called = use.parent?.type === 'CallExpression' && use.parent.CallExpression === use;
+        // A bare group value publishes its owner's generic contract. Cases
+        // remain candidates for calls/applications, not additional promises
+        // of the value (and their captures are not bound by reading it).
+        if (!called && !applied && bound?.Kind === 'function') {
+          const kindOf = (signature: SignatureRecord) => (signatureDeclarations.get(signature) as {
+            TypeParameters?: ParseNode.TypeParameters | null,
+          } | undefined)?.TypeParameters?.ListKind;
+          const isCase = (signature: SignatureRecord) => ['specialization', 'mixed'].includes(kindOf(signature) ?? '');
+          if (bound.Signatures.some(isCase) && bound.Signatures.some((signature) => kindOf(signature) === 'parameters')) {
+            bound = { ...bound, Signatures: bound.Signatures.filter((signature) => !isCase(signature)) };
+          }
+        }
         // Direct calls complete their selected signature after overload selection.
         if (!called && bound?.Kind === 'function' && immutablyBound(referenced, node)) {
           for (const signature of bound.Signatures) {
@@ -20150,7 +20166,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // is the canonical spelling, the one #sec-collection-construction
             // describes the run time ADOPTING. A construction that WRITES its
             // arguments has asked for the specialization and needs no adoption.
-            const base = classTypeOf(specName) ?? libraryTypeRecord(specName);
+            // Contribution queries run before the ordinary class walk. Resolve
+            // the constructor's source binding rather than a collected name.
+            const base = lexicalClassType(spec.Expression as ParseNode.IdentifierReference) ?? libraryTypeRecord(specName);
             if (base && base.Kind === 'nominal') {
               // An argument naming an enclosing declaration's parameter - a
               // VALUE parameter's name, `new C.<S>()`, is not a type - is that
