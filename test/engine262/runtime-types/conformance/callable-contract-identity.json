@@ -1,0 +1,543 @@
+{
+  "cases": [
+    {
+      "name": "case written declaration direct",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T):C{return new C();}function f<uint8>(v:uint8):C{return new C();}return f;}const f=make();const selected=f.<uint8>;const result=selected(1);const again=f.<uint8>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(1)))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "case written expression direct",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f<T:type>(v:T):C{return new C();}function f<uint8>(v:uint8):C{return new C();}return f;}const f=make();const selected=f.<uint8>;const result=selected(1);const again=f.<uint8>;if(selected!==again)throw new Error(\"cache\");if(Reflect.typeOf(result)!==Reflect.typeOf(again(1)))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declaration separate activations",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T):C{return new C();}function f<uint8>(v:uint8):C{return new C();}return f;}const a=make(),b=make();const f=a.<uint8>,g=b.<uint8>;if(f===g)throw new Error(\"callable\");if(Reflect.typeOf(f(1))===Reflect.typeOf(g(1)))throw new Error(\"class\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declaration owner fallback",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T):C{return new C();}function f<uint8>(v:uint8):C{return new C();}return f;}const f=make();const selected=f.<string>;selected(\"x\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declaration wrong activation cannot retarget destination",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T):C{return new C();}function f<uint8>(v:uint8):C{return new C();}return f;}const a=make(),b=make();const h={f:a.<uint8>};function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declaration no body evaluation during selection",
+      "steps": [
+        {
+          "source": "function make(){class C{}function f<T:type>(v:T):C{throw new Error(\"body\");}function f<uint8>(v:uint8):C{throw new Error(\"body\");}return f;}const f=make();const selected=f.<uint8>;Reflect.typeOf(selected);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "expression separate activations",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f<T:type>(v:T):C{return new C();}function f<uint8>(v:uint8):C{return new C();}return f;}const a=make(),b=make();const f=a.<uint8>,g=b.<uint8>;if(f===g)throw new Error(\"callable\");if(Reflect.typeOf(f(1))===Reflect.typeOf(g(1)))throw new Error(\"class\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "expression owner fallback",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f<T:type>(v:T):C{return new C();}function f<uint8>(v:uint8):C{return new C();}return f;}const f=make();const selected=f.<string>;selected(\"x\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "expression wrong activation cannot retarget destination",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f<T:type>(v:T):C{return new C();}function f<uint8>(v:uint8):C{return new C();}return f;}const a=make(),b=make();const h={f:a.<uint8>};function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "expression no body evaluation during selection",
+      "steps": [
+        {
+          "source": "function make(){const C=class {};function f<T:type>(v:T):C{throw new Error(\"body\");}function f<uint8>(v:uint8):C{throw new Error(\"body\");}return f;}const f=make();const selected=f.<uint8>;Reflect.typeOf(selected);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written nominal result",
+      "steps": [
+        {
+          "source": "class C{}function f<T:type>(v:T):C{return new C();}function f<uint8>(v:uint8):C{return new C();}const selected=f.<uint8>;selected(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written record result",
+      "steps": [
+        {
+          "source": "class C{}function f<T:type>(v:T):{value:C}{return {value:new C()};}function f<uint8>(v:uint8):{value:C}{return {value:new C()};}const selected=f.<uint8>;selected(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written array result",
+      "steps": [
+        {
+          "source": "class C{}function f<T:type>(v:T):[].<C>{return [new C()];}function f<uint8>(v:uint8):[].<C>{return [new C()];}const selected=f.<uint8>;selected(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written tuple result",
+      "steps": [
+        {
+          "source": "class C{}function f<T:type>(v:T):[C,C]{return [new C(),new C()];}function f<uint8>(v:uint8):[C,C]{return [new C(),new C()];}const selected=f.<uint8>;selected(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written callable result",
+      "steps": [
+        {
+          "source": "class C{}function f<T:type>(v:T):() => C{return () => new C();}function f<uint8>(v:uint8):() => C{return () => new C();}const selected=f.<uint8>;selected(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written union result",
+      "steps": [
+        {
+          "source": "class C{}function f<T:type>(v:T):C | undefined{return new C();}function f<uint8>(v:uint8):C | undefined{return new C();}const selected=f.<uint8>;selected(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic nominal result substitutes owner argument",
+      "steps": [
+        {
+          "source": "class P<T:type>{}function f<T:type>(v:T):P.<T>{return new P.<T>();}function f<uint8>(v:uint8):P.<uint8>{return new P.<uint8>();}const selected=f.<uint8>;const x=selected(1);if(Reflect.typeOf(x)!==Reflect.typeOf(new P.<uint8>()))throw new Error(\"argument\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "derived nominal return remains covariant",
+      "steps": [
+        {
+          "source": "class Base{}class Derived extends Base{}function f<T:type>(v:T):Base{return new Base();}function f<uint8>(v:uint8):Derived{return new Derived();}const selected=f.<uint8>;const x=selected(1);if(Reflect.typeOf(x)!==Reflect.typeOf(new Derived()))throw new Error(\"derived\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unrelated nominal return rejected",
+      "steps": [
+        {
+          "source": "class C{}class D{}function f<T:type>(v:T):C{return new C();}function f<uint8>(v:uint8):D{return new D();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_SPECIALIZATION_CONTRACT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "reversed inheritance rejected",
+      "steps": [
+        {
+          "source": "class Base{}class Derived extends Base{}function f<T:type>(v:T):Derived{return new Derived();}function f<uint8>(v:uint8):Base{return new Base();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_SPECIALIZATION_CONTRACT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "different generic arguments rejected",
+      "steps": [
+        {
+          "source": "class P<T:type>{}function f<T:type>(v:T):P.<T>{return new P.<T>();}function f<uint8>(v:uint8):P.<string>{return new P.<string>();}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_SPECIALIZATION_CONTRACT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nominal parameter cannot hide incompatible replacement",
+      "steps": [
+        {
+          "source": "class C{}function f<T:type>(v:T,c:C):string{return \"owner\";}function f<uint8>(v:uint8,c:C):number{return 1;}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_SPECIALIZATION_CONTRACT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "record parameter cannot hide incompatible replacement",
+      "steps": [
+        {
+          "source": "class C{}function f<T:type>(v:T,c:{value:C}):string{return \"owner\";}function f<uint8>(v:uint8,c:{value:C}):number{return 1;}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_SPECIALIZATION_CONTRACT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "array parameter cannot hide incompatible replacement",
+      "steps": [
+        {
+          "source": "class C{}function f<T:type>(v:T,c:[].<C>):string{return \"owner\";}function f<uint8>(v:uint8,c:[].<C>):number{return 1;}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_SPECIALIZATION_CONTRACT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "callable parameter cannot hide incompatible replacement",
+      "steps": [
+        {
+          "source": "class C{}function f<T:type>(v:T,c:() => C):string{return \"owner\";}function f<uint8>(v:uint8,c:() => C):number{return 1;}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_SPECIALIZATION_CONTRACT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "different nominal parameter is additive",
+      "steps": [
+        {
+          "source": "class C{}class D{}function f<T:type>(v:T,c:C):string{return \"owner\";}function f<uint8>(v:uint8,c:D):number{return 1;}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested generic return binder is not owner argument",
+      "steps": [
+        {
+          "source": "function f<T:type>(v:T):<T:type>(x:T)=>T{return function<T:type>(x:T):T{return x;};}function f<uint8>(v:uint8):<U:type>(x:U)=>U{return function<U:type>(x:U):U{return x;};}const selected=f.<uint8>;const identity=selected(1);if(identity(\"x\")!==\"x\")throw new Error(\"binder\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested generic parameter retains binder",
+      "steps": [
+        {
+          "source": "function f<T:type>(v:T,cb:<T:type>(x:T)=>T):string{return \"owner\";}function f<uint8>(v:uint8,cb:<U:type>(x:U)=>U):number{return 1;}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_SPECIALIZATION_CONTRACT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested generic return captured owner substitutes",
+      "steps": [
+        {
+          "source": "function f<T:type>(v:T):<U:type>(x:U)=>T{throw new Error(\"body\");}function f<uint8>(v:uint8):<U:type>(x:U)=>uint8{throw new Error(\"body\");}\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "nested generic return wrong free argument rejected",
+      "steps": [
+        {
+          "source": "function f<T:type>(v:T):<U:type>(x:U)=>T{throw new Error(\"body\");}function f<uint8>(v:uint8):<U:type>(x:U)=>string{throw new Error(\"body\");}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_SPECIALIZATION_CONTRACT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "written any remains erased",
+      "steps": [
+        {
+          "source": "class C{}function f<T:type>(v:T):any{return v;}function f<uint8>(v:uint8):C{return new C();}const f8=f.<uint8>;f8(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "instance method nominal return",
+      "steps": [
+        {
+          "source": "class C{}class W { f<T:type>(v:T):C{return new C();} f<uint8>(v:uint8):C{return new C();} }new W().f.<uint8>(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static method nominal return",
+      "steps": [
+        {
+          "source": "class C{}class W { static f<T:type>(v:T):C{return new C();} static f<uint8>(v:uint8):C{return new C();} }W.f.<uint8>(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object method nominal return",
+      "steps": [
+        {
+          "source": "class C{}const w={f<T:type>(v:T):C{return new C();}, f<uint8>(v:uint8):C{return new C();}};w.f.<uint8>(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "failed check leaves realm reusable",
+      "steps": [
+        {
+          "source": "class C{}function f<T:type>(v:T,c:C):string{return \"owner\";}function f<uint8>(v:uint8,c:C):number{return 1;}\"ok\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_SPECIALIZATION_CONTRACT",
+              "phase": "static"
+            }
+          }
+        },
+        {
+          "source": "class C{}function f<T:type>(v:T):C{return new C();}function f<uint8>(v:uint8):C{return new C();}f.<uint8>(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    }
+  ]
+}

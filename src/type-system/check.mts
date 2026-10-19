@@ -38242,28 +38242,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ...(domain ? { Domain: domain } : {}),
       };
     });
-    const byName = (t: TypeRecord | null, bindings: ReadonlyMap<string, TypeRecord>): TypeRecord | null => {
-      if (!t) return null;
-      const seen = new Map<object, unknown>();
-      const walk = (v: unknown): unknown => {
-        if (!v || typeof v !== 'object') return v;
-        if (seen.has(v)) return seen.get(v);
-        if (Array.isArray(v)) {
-          const out: unknown[] = [];
-          seen.set(v, out);
-          v.forEach((x) => out.push(walk(x)));
-          return out;
-        }
-        const r = v as { Kind?: string, Name?: string };
-        if (r.Kind === 'parameter' && typeof r.Name === 'string' && bindings.has(r.Name)) return bindings.get(r.Name);
-        if (Object.getPrototypeOf(v) !== Object.prototype) return v;
-        const out: Record<string, unknown> = {};
-        seen.set(v, out);
-        for (const [k, x] of Object.entries(v)) out[k] = walk(x);
-        return out;
-      };
-      return walk(t) as TypeRecord;
-    };
     const parametersOf = (d: Decl) => (d.FormalParameters ?? d.UniqueFormalParameters ?? []) as readonly (ParseNode & {
       TypeAnnotation?: ParseNode.TypeAnnotation | null, Initializer?: unknown, Optional?: boolean, Ref?: boolean,
     })[];
@@ -38313,7 +38291,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (sameList && fixed) {
         sameList = mine.every((p, i) => {
           const a = resolveIn(kase, p.TypeAnnotation?.Type);
-          const b = byName(resolveIn(owner, theirs[i]!.TypeAnnotation?.Type), bindings);
+          // Substitute type positions, preserving nominal declarations and nested binders.
+          const b = substituteFreeTypeParameters(resolveIn(owner, theirs[i]!.TypeAnnotation?.Type), bindings, binders);
           return !a || !b || SameType(a, b);
         });
       }
@@ -38323,7 +38302,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (!sameList) return; // additive: borrows the owner's labels, never substituted through its generic value
       if (fixed && kase.TypeAnnotation && owner.TypeAnnotation) {
         const mineReturn = resolveIn(kase, kase.TypeAnnotation.Type);
-        const theirReturn = byName(resolveIn(owner, owner.TypeAnnotation.Type), bindings);
+        const theirReturn = substituteFreeTypeParameters(resolveIn(owner, owner.TypeAnnotation.Type), bindings, binders);
         if (mineReturn && theirReturn && !IsSubtype(mineReturn, theirReturn, [])) {
           report(`${labelOf(kase)} replaces ${labelOf(owner)}, whose return at this pattern is ${displayType(theirReturn)}, and ${displayType(mineReturn)} is not a subtype of it; return a subtype, or change its parameters to declare an additive overload`);
         }
