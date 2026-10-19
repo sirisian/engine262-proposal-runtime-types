@@ -20019,6 +20019,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // the expression's type - which is what lets `new C().x` be read at the
         // field's declared type.
         const target = patternExpression((node as { MemberExpression?: ParseNode }).MemberExpression);
+        const origin = target ? stableClassOrigin(target) : undefined;
+        // An unapplied immutable constructor alias retains its lexical class
+        // declaration. Application bindings still belong to their source use.
+        const application = target?.type === 'TypeArgumentsExpression' ? target : undefined;
         // A class expression written inline where it is constructed is an
         // established class, and `new` of it has its instance type
         // (#sec-typed-classes).
@@ -20026,15 +20030,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             && !((target as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null }).TypeParameters?.TypeParameterList?.length)) {
           return instanceTypeOf(target);
         }
-        if (target && target.type === 'IdentifierReference') {
+        if (target && target.type === 'IdentifierReference' && !application) {
           const targetName = (target as { name: string }).name;
-          // A class expression bound immutably constructs its own instance type
-          // (#sec-typed-classes); a generic one is left as before.
-          const boundOrigin = classNodes.has(targetName) ? undefined : stableClassOrigin(target);
-          const boundExpression = boundOrigin?.declaration.type === 'ClassExpression' && !boundOrigin.arguments ? boundOrigin.declaration : undefined;
-          const expressionParams = (boundExpression as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } | undefined)?.TypeParameters?.TypeParameterList;
-          const declared = lexicalClassType(target)
-            ?? (boundExpression && !(expressionParams && expressionParams.length > 0) ? instanceTypeOf(boundExpression) : null);
+          const declared = origin && !origin.arguments ? instanceTypeOf(origin.declaration) : lexicalClassType(target);
           if (declared) {
             // A GENERIC class constructed bare yields the specialization its
             // context, arguments and defaults name (constructionArguments); a
@@ -20085,10 +20083,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // empty argument list and `const x: A.<uint16> = new A.<uint8>()` had
         // nothing to disagree with. Comparison needed no change: SameArgumentList
         // already refuses a mismatch, which every library generic relies on.
-        if (target && target.type === 'TypeArgumentsExpression') {
-          const spec = target as unknown as {
-            Expression: ParseNode, TypeArguments: { TypeArgumentList: readonly ParseNode[] },
-          };
+        if (application) {
+          const spec = { Expression: patternExpression(application.Expression)!, TypeArguments: application.TypeArguments };
           // AN ARRAY CONSTRUCTION, `new [4].<uint8>()`. Its callee is a
           // TypeArgumentsExpression too, but over the ARRAY LITERAL that spells
           // the extent - `[4]` - rather than over a name, so the name branch
@@ -20130,7 +20126,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             } as unknown as TypeRecord) as Known;
           }
           if (spec.Expression.type === 'IdentifierReference') {
-            const specName = (spec.Expression as unknown as { name: string }).name;
+            const specName = spec.Expression.name;
+            const binding = ResolveBindingDeclaration(spec.Expression, specName);
             const libraryName = libraryConstructorOrigin(spec.Expression);
             if (libraryName === 'Proxy') return resolvedLibraryArguments(libraryName, spec.TypeArguments.TypeArgumentList as readonly ParseNode.Type[])?.[0] ?? null;
             // `new Proxy.<T>(...)` has Static Type _T_, not `Proxy.<T>`.
@@ -20147,7 +20144,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // construction as `Proxy.<T>` made it assignable to nothing, so a
             // typed proxy could not be passed to a parameter of _T_ or called
             // where _T_ is callable.
-            if (specName === 'Proxy') {
+            if (specName === 'Proxy' && !binding && !origin) {
               const written = spec.TypeArguments.TypeArgumentList;
               const only = written.length === 1 ? resolveType(written[0] as unknown as ParseNode.Type) : null;
               if (only) {
@@ -20168,7 +20165,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // arguments has asked for the specialization and needs no adoption.
             // Contribution queries run before the ordinary class walk. Resolve
             // the constructor's source binding rather than a collected name.
-            const base = lexicalClassType(spec.Expression as ParseNode.IdentifierReference) ?? libraryTypeRecord(specName);
+            const base = origin ? instanceTypeOf(origin.declaration)
+              : lexicalClassType(spec.Expression) ?? (!binding ? libraryTypeRecord(specName) : null);
             if (base && base.Kind === 'nominal') {
               // An argument naming an enclosing declaration's parameter - a
               // VALUE parameter's name, `new C.<S>()`, is not a type - is that
@@ -37049,7 +37047,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const typeArgs = target.type === 'TypeArgumentsExpression' && libraryConstructorOrigin(target) === libraryName && libraryTypeParameters(libraryName)
             ? resolvedLibraryArguments(libraryName, target.TypeArguments.TypeArgumentList) ?? []
             : written.every((a): a is TypeRecord => a !== null) ? written : [];
-          const originKnown = libraryName === 'Promise' || libraryName === 'WeakRef' || libraryName === 'FinalizationRegistry'
+          const originKnown = libraryName === 'Proxy' || libraryName === 'Promise' || libraryName === 'WeakRef' || libraryName === 'FinalizationRegistry'
             ? intrinsicOrigin(target, libraryName) : true;
           const params = originKnown
             ? libraryConstructParameters(libraryName, typeArgs) : null;

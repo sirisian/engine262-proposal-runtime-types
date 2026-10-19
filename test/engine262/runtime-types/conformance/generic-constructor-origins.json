@@ -1,0 +1,538 @@
+{
+  "cases": [
+    {
+      "name": "declaration",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}function f<U:type>(v:U){return new P.<U>();}return f;}const f=make();const a=f.<uint8>(1),b=f.<string>(\"x\");if(Reflect.typeOf(a)===Reflect.typeOf(b))throw new Error(\"arguments\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declaration alias",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}const Alias=P;function f<U:type>(v:U){return new Alias.<U>();}return f;}const f=make();const a=f.<uint8>(1),b=f.<string>(\"x\");if(Reflect.typeOf(a)===Reflect.typeOf(b))throw new Error(\"arguments\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "anonymous expression",
+      "steps": [
+        {
+          "source": "function make(){const P=class<T:type>{};function f<U:type>(v:U){return new P.<U>();}return f;}const f=make();const a=f.<uint8>(1),b=f.<string>(\"x\");if(Reflect.typeOf(a)===Reflect.typeOf(b))throw new Error(\"arguments\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named expression",
+      "steps": [
+        {
+          "source": "function make(){const P=class Q<T:type>{};function f<U:type>(v:U){return new P.<U>();}return f;}const f=make();const a=f.<uint8>(1),b=f.<string>(\"x\");if(Reflect.typeOf(a)===Reflect.typeOf(b))throw new Error(\"arguments\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "expression alias",
+      "steps": [
+        {
+          "source": "function make(){const P=class<T:type>{};const Alias=P;function f<U:type>(v:U){return new Alias.<U>();}return f;}const f=make();const a=f.<uint8>(1),b=f.<string>(\"x\");if(Reflect.typeOf(a)===Reflect.typeOf(b))throw new Error(\"arguments\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "parenthesized alias",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}const Alias=(P);function f<U:type>(v:U){return new (Alias).<U>();}return f;}const f=make();const a=f.<uint8>(1),b=f.<string>(\"x\");if(Reflect.typeOf(a)===Reflect.typeOf(b))throw new Error(\"arguments\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declaration independent target",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}function f<U:type>(v:U){return new P.<U>();}return f;}const a=make(),b=make();const h={f:a.<uint8>};function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declaration alias independent target",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}const Alias=P;function f<U:type>(v:U){return new Alias.<U>();}return f;}const a=make(),b=make();const h={f:a.<uint8>};function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "anonymous expression independent target",
+      "steps": [
+        {
+          "source": "function make(){const P=class<T:type>{};function f<U:type>(v:U){return new P.<U>();}return f;}const a=make(),b=make();const h={f:a.<uint8>};function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named expression independent target",
+      "steps": [
+        {
+          "source": "function make(){const P=class Q<T:type>{};function f<U:type>(v:U){return new P.<U>();}return f;}const a=make(),b=make();const h={f:a.<uint8>};function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "expression alias independent target",
+      "steps": [
+        {
+          "source": "function make(){const P=class<T:type>{};const Alias=P;function f<U:type>(v:U){return new Alias.<U>();}return f;}const a=make(),b=make();const h={f:a.<uint8>};function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "parenthesized alias independent target",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}const Alias=(P);function f<U:type>(v:U){return new (Alias).<U>();}return f;}const a=make(),b=make();const h={f:a.<uint8>};function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "declaration alias static consumer",
+      "steps": [
+        {
+          "source": "class P<T:type>{}const Alias=P;const wrong:string=new Alias.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "declaration alias same activation target",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}const Alias=P;function f<U:type>(v:U){return new Alias.<U>();}return f;}const a=make();const h={f:a.<uint8>};function replace(o:any){o.f=a.<uint8>;}replace(h);const f=h.f;f(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "expression static consumer",
+      "steps": [
+        {
+          "source": "const P=class<T:type>{};const wrong:string=new P.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "expression same activation target",
+      "steps": [
+        {
+          "source": "function make(){const P=class<T:type>{};function f<U:type>(v:U){return new P.<U>();}return f;}const a=make();const h={f:a.<uint8>};function replace(o:any){o.f=a.<uint8>;}replace(h);const f=h.f;f(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "named expression alias static consumer",
+      "steps": [
+        {
+          "source": "const P=class Q<T:type>{};const Alias=P;const wrong:string=new Alias.<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "named expression alias same activation target",
+      "steps": [
+        {
+          "source": "function make(){const P=class Q<T:type>{};const Alias=P;function f<U:type>(v:U){return new Alias.<U>();}return f;}const a=make();const h={f:a.<uint8>};function replace(o:any){o.f=a.<uint8>;}replace(h);const f=h.f;f(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "parenthesized static consumer",
+      "steps": [
+        {
+          "source": "class P<T:type>{}const Alias=(P);const wrong:string=new (Alias).<uint8>();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_ASSIGNABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "parenthesized same activation target",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}const Alias=(P);function f<U:type>(v:U){return new (Alias).<U>();}return f;}const a=make();const h={f:a.<uint8>};function replace(o:any){o.f=a.<uint8>;}replace(h);const f=h.f;f(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bare alias constructor infers argument",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{value:T;constructor(value:T){this.value=value;}}const Alias=P;function f(v:uint8){return new Alias(v);}return f;}const f=make();if(f(1).value!==1)throw new Error(\"value\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bare expression constructor infers argument",
+      "steps": [
+        {
+          "source": "function make(){const P=class<T:type>{value:T;constructor(value:T){this.value=value;}};function f(v:uint8){return new P(v);}return f;}const f=make();if(f(1).value!==1)throw new Error(\"value\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "alias constructor default arguments",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type=uint8>{}const Alias=P;function f(v:uint8){return new Alias();}return f;}const a=make(),b=make();if(Reflect.typeOf(a(1))===Reflect.typeOf(b(1)))throw new Error(\"activation\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor alias preserves captured and own arguments",
+      "steps": [
+        {
+          "source": "function make<T:type>(){const P=class<A:type,B:type>{};const Alias=P;function f<U:type>(v:U){return new Alias.<T,U>();}return f;}const f=make.<uint8>();if(Reflect.typeOf(f.<string>(\"x\"))===Reflect.typeOf(f.<boolean>(true)))throw new Error(\"arguments\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor alias with value argument",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{}const Alias=P;function f<N:uint32>(v:uint8){return new Alias.<N>();}return f;}const f=make();if(Reflect.typeOf(f.<12>(1))===Reflect.typeOf(f.<16>(1)))throw new Error(\"width\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "constructor alias chain preserves identity",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}const A=P;const B=(A);const C=B;function f<U:type>(v:U){return new C.<U>();}return f;}const a=make(),b=make();const h={f:a.<uint8>};function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "construction alias shadows intrinsic Proxy",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}const Proxy=P;function f<U:type>(v:U){return new Proxy.<U>();}return f;}const f=make();f.<uint8>(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "construction alias shadows intrinsic Map",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}const Map=P;function f<U:type>(v:U){return new Map.<U>();}return f;}const f=make();f.<uint8>(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reflection executes no constructor or callable",
+      "steps": [
+        {
+          "source": "let hits=0;function make(){const P=class<T:type>{constructor(){hits+=1;}};const Alias=P;function f<U:type>(v:U){hits+=1;return new Alias.<U>();}return f;}const f=make();const selected=f.<uint8>;Reflect.typeOf(f);Reflect.typeOf(selected);if(hits!==0)throw new Error(\"execution\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "explicitly erased constructor keeps runtime boundary",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}const Alias:any=P;function f<U:type>(v:U){return new Alias.<U>();}return f;}const f=make();f.<uint8>(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "immutable alias of mutable constructor remains dynamic",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}class Q<T:type>{}let source:any=P;source=Q;const Alias=source;function f<U:type>(v:U){return new Alias.<U>();}return f;}const f=make();f.<uint8>(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "forward alias initialization retains temporal dead zone",
+      "steps": [
+        {
+          "source": "class P<T:type>{}function f(v:uint8){return new Alias.<uint8>();}f(1);const Alias=P;",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "ReferenceError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic library construction control",
+      "steps": [
+        {
+          "source": "function f<T:type>(){return new Map.<string,T>();}const x=f.<uint8>();x.set(\"a\",1);if(x.get(\"a\")!==1)throw new Error(\"map\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "expression constructor shadows same named outer class",
+      "steps": [
+        {
+          "source": "class P<T:type>{outer:boolean=true;}function make(){const P=class<T:type>{inner:boolean=true;};function f<U:type>(v:U){return new P.<U>();}return f;}const f=make();if(f.<uint8>(1).inner!==true)throw new Error(\"binding\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inferred alias independent target",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{constructor(v:T){}}const Alias=P;function f(v:uint8){return new Alias(v);}return f;}const a=make(),b=make();const h={f:a};function replace(o:any){o.f=b;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inferred expression independent target",
+      "steps": [
+        {
+          "source": "function make(){const Alias=class<T:type>{constructor(v:T){}};function f(v:uint8){return new Alias(v);}return f;}const a=make(),b=make();const h={f:a};function replace(o:any){o.f=b;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "defaulted alias independent target",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type=uint8>{}const Alias=P;function f(v:uint8){return new Alias();}return f;}const a=make(),b=make();const h={f:a};function replace(o:any){o.f=b;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    }
+  ]
+}
