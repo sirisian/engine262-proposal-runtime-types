@@ -11,7 +11,7 @@ import {
   type ImportEntry,
   type ExportEntry,
 } from './static-semantics/all.mts';
-import { CheckModuleWithImports, ExportedTypesOf, ExportedAliasesOf, ExportedBuilderNodesOf, ExportedClassNodesOf } from './type-system/check.mts';
+import { CheckModuleWithImports, ExportedTypesOf, ExportedAliasesOf, ExportedBuilderNodesOf, ExportedClassNodesOf, ExportedInterfaceNodesOf, CheckedInterfaceTypeOf, type ImportedInterface } from './type-system/check.mts';
 import { InstantiateFunctionObject } from './runtime-semantics/all.mts';
 import { collectOverloadGroups, MakeOverloadedFunction } from './abstract-ops/runtime-types.mts';
 import { skipDebugger } from './evaluator.mts';
@@ -710,6 +710,7 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
     const importedBuilders = new Map<string, ParseNode>();
     const importedClasses = new Map<string, ParseNode>();
     const importedClassModules = new Map<ParseNode, AbstractModuleRecord>();
+    const importedInterfaces = new Map<string, ImportedInterface>();
     // 7. For each ImportEntry Record in in module.[[ImportEntries]], do
     for (const ie of module.ImportEntries) {
       // a. Let importedModule be GetImportedModule(module, in.[[ModuleRequest]]).
@@ -799,7 +800,10 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
             const exportedAliases = ExportedAliasesOf(
               (resolution.Module.HostDefined as { specifier?: string } | undefined)?.specifier,
             );
-            const t = exportedAliases?.get(bindingName) ?? exported?.get(bindingName);
+            const interfaceNode = ExportedInterfaceNodesOf(resolution.Module.ECMAScriptCode)?.get(bindingName);
+            const interfaceType = interfaceNode && CheckedInterfaceTypeOf(interfaceNode);
+            const t = interfaceNode ? interfaceType
+              : exportedAliases?.get(bindingName) ?? exported?.get(bindingName);
             if (t !== undefined) {
               importedTypes.set(ie.LocalName.stringValue(), t);
             }
@@ -809,6 +813,11 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
             if (classNode) {
               importedClasses.set(ie.LocalName.stringValue(), classNode);
               importedClassModules.set(classNode, resolution.Module);
+            }
+            if (interfaceNode && interfaceType) {
+              importedInterfaces.set(ie.LocalName.stringValue(), {
+                declaration: interfaceNode, module: resolution.Module, name: bindingName, type: interfaceType,
+              });
             }
             const builder = ExportedBuilderNodesOf(resolution.Module.ECMAScriptCode)?.get(bindingName);
             if (builder !== undefined) {
@@ -828,7 +837,7 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
     // linking, so every error found here is one that needed an import to see.
     if (surroundingAgent.feature('runtime-types') && importedTypes.size > 0) {
       const typeErrors = CheckModuleWithImports(module.ECMAScriptCode, importedTypes, importedBuilders,
-        (module.HostDefined as { specifier?: string } | undefined)?.specifier, importedClasses, importedClassModules);
+        (module.HostDefined as { specifier?: string } | undefined)?.specifier, importedClasses, importedClassModules, importedInterfaces);
       if (typeErrors.length > 0) {
         return ThrowCompletion(typeErrors[0]);
       }

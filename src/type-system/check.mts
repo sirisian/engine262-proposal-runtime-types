@@ -777,6 +777,8 @@ export interface GenericDefaultCheck {
   readonly bindings: ReadonlyMap<string, TypeRecord>;
   readonly captures?: TypeParameterRecord['Captures'];
   readonly constraint?: boolean;
+  /** Producer of imported interface source; written arguments retain consumer scope. */
+  readonly sourceModule?: AbstractModuleRecord;
 }
 interface ArgumentSource {
   readonly node: ParseNode;
@@ -805,7 +807,7 @@ interface TypeArgumentApplicationCheck {
 // from any particular consumer's completed application or checking state.
 const sourceTypeArgumentApplicationChecks = new WeakMap<ParseNode, { owner: ParseNode, checks: readonly TypeArgumentApplicationCheck[] }>();
 const genericDefaultChecks = new WeakMap<object, readonly GenericDefaultCheck[]>();
-const evaluatedGenericDefaults = new WeakMap<object, WeakMap<object, { inputs: readonly [object, TypeRecord][], constraint: boolean, type: TypeRecord }[]>>();
+const evaluatedGenericDefaults = new WeakMap<object, WeakMap<object, { inputs: readonly [object, TypeRecord][], constraint: boolean, sourceModule?: AbstractModuleRecord, type: TypeRecord }[]>>();
 export function GenericDefaultChecksOf(root: object): readonly GenericDefaultCheck[] {
   return genericDefaultChecks.get(root) ?? [];
 }
@@ -818,6 +820,7 @@ function genericTypeInputs(check: GenericDefaultCheck): readonly [object, TypeRe
 export function EvaluatedGenericType(check: GenericDefaultCheck): TypeRecord | undefined {
   const inputs = genericTypeInputs(check);
   return evaluatedGenericDefaults.get(check.application)?.get(check.node)?.find((result) => result.constraint === !!check.constraint
+    && result.sourceModule === check.sourceModule
     && result.inputs.length === inputs.length && inputs.every(([declaration, type], i) =>
       result.inputs[i][0] === declaration && SameType(type, result.inputs[i][1])))?.type;
 }
@@ -828,7 +831,7 @@ export function SetEvaluatedGenericDefault(check: GenericDefaultCheck, type: Typ
     evaluatedGenericDefaults.set(check.application, defaults);
   }
   const results = defaults.get(check.node) ?? [];
-  results.push({ inputs: genericTypeInputs(check), constraint: !!check.constraint, type });
+  results.push({ inputs: genericTypeInputs(check), constraint: !!check.constraint, sourceModule: check.sourceModule, type });
   defaults.set(check.node, results);
 }
 
@@ -1430,6 +1433,23 @@ export function ExportedAliasesOf(specifier: string | undefined): Map<string, un
  */
 const moduleBuilderNodes = new WeakMap<object, Map<string, ParseNode>>();
 const moduleClassNodes = new WeakMap<object, Map<string, ParseNode>>();
+const moduleInterfaceNodes = new WeakMap<object, Map<string, ParseNode>>();
+const checkedInterfaceTypes = new WeakMap<ParseNode, TypeRecord>();
+
+export function CheckedInterfaceTypeOf(declaration: ParseNode): TypeRecord | undefined {
+  return checkedInterfaceTypes.get(declaration);
+}
+
+export interface ImportedInterface {
+  readonly declaration: ParseNode;
+  readonly module: AbstractModuleRecord;
+  readonly name: string;
+  readonly type: TypeRecord;
+}
+
+export function ExportedInterfaceNodesOf(module: ParseNode.Module): ReadonlyMap<string, ParseNode> | undefined {
+  return moduleInterfaceNodes.get(module);
+}
 
 export function ExportedClassNodesOf(module: ParseNode.Module): ReadonlyMap<string, ParseNode> | undefined {
   return moduleClassNodes.get(module);
@@ -2742,6 +2762,7 @@ export function SetEvaluatedEnum(node: ParseNode.EnumDeclaration, record: TypeRe
 const moduleCheckInputs = new WeakMap<object, {
   imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, classes?: ReadonlyMap<string, ParseNode>,
   classModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>,
+  interfaces?: ReadonlyMap<string, ImportedInterface>,
 }>();
 
 export function DeferredTypeChecksOf(root: object): readonly DeferredTypeCheck[] {
@@ -2762,7 +2783,7 @@ export function RecheckAfterTypeEvaluation(root: ParseNode.Script | ParseNode.Mo
   const constants = PublishedConstantBindings(environment);
   const inputs = moduleCheckInputs.get(root);
   for (const [name, type] of inputs?.imported ?? []) {
-    session.frame.bindings.set(name, type as TypeRecord);
+    session.frame.bindings.set(name, inputs?.interfaces?.has(name) ? makePrimitive('type') : type as TypeRecord);
     session.frame.aliases.set(name, type as TypeRecord);
     session.frame.declaredNames.add(name);
     session.frame.immutableNames.add(name);
@@ -3051,6 +3072,7 @@ export function CheckModule(module: ParseNode.Module, specifier?: string): Objec
   // [[Declaration]] is null for that form.
   const builders = new Map<string, ParseNode>();
   const classes = new Map<string, ParseNode>();
+  const interfaces = new Map<string, ParseNode>();
   for (const item of module.ModuleBody?.ModuleItemList ?? []) {
     const wrapper = item as { type?: string, HoistableDeclaration?: ParseNode, Declaration?: ParseNode };
     const declaration = wrapper.type === 'ExportDeclaration'
@@ -3061,10 +3083,15 @@ export function CheckModule(module: ParseNode.Module, specifier?: string): Objec
       builders.set(named.BindingIdentifier.name, declaration as ParseNode);
     } else if (named?.type === 'ClassDeclaration' && !IsPartialDeclaration(declaration) && typeof named.BindingIdentifier?.name === 'string') {
       classes.set(named.BindingIdentifier.name, declaration as ParseNode);
+    } else if (named?.type === 'InterfaceDeclaration' && !IsPartialDeclaration(declaration)
+        && ((declaration as ParseNode.InterfaceDeclaration).TypeParameters?.ListKind ?? 'parameters') === 'parameters'
+        && typeof named.BindingIdentifier?.name === 'string') {
+      interfaces.set(named.BindingIdentifier.name, declaration as ParseNode);
     }
   }
   moduleBuilderNodes.set(module as unknown as object, builders);
   moduleClassNodes.set(module, classes);
+  moduleInterfaceNodes.set(module, interfaces);
   recordModuleAliases(specifier, module, new Map(session.frame.aliases));
   return errors;
 }
@@ -3089,14 +3116,15 @@ export function CheckModule(module: ParseNode.Module, specifier?: string): Objec
  * bindings are only there on the second pass. `function f() { return c.x; }
  * let s: string = f();` is refused because of that second pass.
  */
-export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, specifier?: string, classes?: ReadonlyMap<string, ParseNode>, classModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>): ObjectValue[] {
-  moduleCheckInputs.set(module, { imported, builders, classes, classModules });
+export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, specifier?: string, classes?: ReadonlyMap<string, ParseNode>, classModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>, interfaces?: ReadonlyMap<string, ImportedInterface>): ObjectValue[] {
+  moduleCheckInputs.set(module, { imported, builders, classes, classModules, interfaces });
   if (imported.size === 0) {
     return [];
   }
   const session = CreateCheckSession();
   for (const [name, t] of imported) {
-    session.frame.bindings.set(name, t as TypeRecord);
+    // A Type Object's value type is distinct from the contract it denotes.
+    session.frame.bindings.set(name, interfaces?.has(name) ? makePrimitive('type') : t as TypeRecord);
     // ALSO as an alias. A type annotation naming an import resolves through
     // `lookupAlias`, which reads `aliases` and not `bindings`, so an imported
     // type seeded only into `bindings` did not resolve - and the alias built
@@ -6699,7 +6727,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * against `I`'s members and a class picks up the members of an interface it
    * implements.
    */
-  const interfaceNodes = new Map<string, ParseNode>();
+  const importedInterfaces = moduleCheckInputs.get(root)?.interfaces;
+  const importedInterfacesByNode = new Map([...importedInterfaces?.values() ?? []].map((entry) => [entry.declaration, entry]));
+  const interfaceNodes = new Map<string, ParseNode>([...importedInterfaces ?? []].map(([name, entry]) => [name, entry.declaration]));
+  const importedInterfaceSourceModules = new Map<ParseNode, AbstractModuleRecord>();
+  for (const entry of importedInterfaces?.values() ?? []) {
+    let source = entry.declaration;
+    while (source.parent) source = source.parent;
+    importedInterfaceSourceModules.set(source, entry.module);
+  }
+  const importedInterfaceSourceModule = (node: ParseNode): AbstractModuleRecord | undefined => {
+    let source = node;
+    while (source.parent) source = source.parent;
+    return importedInterfaceSourceModules.get(source);
+  };
 
   /**
    * EVERY declaration of an interface name, in source order.
@@ -7387,6 +7428,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * members refine the application that selects it and merge into nothing.
    */
   const interfaceTypeOfNode = (node: ParseNode, declared: readonly ParseNode[] | undefined): Known => {
+    const imported = importedInterfacesByNode.get(node);
+    if (imported) {
+      // Keep the producer's checked contract and declaration identity. A foreign
+      // member walk in this checker would resolve names in the consumer's scope.
+      const evaluated = afterTypeEvaluation
+        ? resolvedAlias(imported.module.Environment, imported.name, node) : undefined;
+      return evaluated ?? imported.type;
+    }
     const memo = interfaceTypeMemo.get(node);
     if (memo !== undefined) {
       return memo;
@@ -12145,7 +12194,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const name = node as unknown as ParseNode.TypeName;
       if (name.MemberNames.length) return null;
       const text = name.IdentifierReference.name;
-      const binding = ResolveBindingDeclaration(name.IdentifierReference, text)?.node;
+      const binding = declarationAt(name.IdentifierReference, text, classNodes.get(text) ?? interfaceNodes.get(text))
+        ?? ResolveBindingDeclaration(name.IdentifierReference, text)?.node;
       if (binding?.type === 'ClassDeclaration' || binding?.type === 'ClassExpression'
         || binding?.type === 'InterfaceDeclaration') {
         return binding.type === 'InterfaceDeclaration' ? interfaceTypeOfNode(binding, [binding]) : instanceTypeOf(binding);
@@ -13855,7 +13905,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // A returned or member signature already carries its enclosing arguments
     // in the effective constraint. Re-resolving its source in the caller can
     // lose that capture or replace it with an unrelated same-spelled binding.
-    const constraint = parameter.Constraint ?? (parameter.ConstraintNode ? resolveType(parameter.ConstraintNode) : null);
+    const constraint = parameter.Constraint ?? (parameter.ConstraintNode && !importedInterfaceSourceModule(parameter.Declaration)
+      ? resolveType(parameter.ConstraintNode) : null);
     return constraint && substituteFreeTypeParameters(constraint, bindings);
   };
 
@@ -13874,8 +13925,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // publish that parameter's placeholder as an application result.
           const pending = FreeReferences(tp.DefaultNode).some((reference) => scope.has(reference.name) && !into.has(reference.name));
           const check: GenericDefaultCheck = { application: validation.application, node: tp.DefaultNode,
-            parameters: typeParams, bindings: new Map(into), captures: tp.Captures };
-          const resolved = pending ? null : EvaluatedGenericType(check) ?? tp.Default ?? resolveType(tp.DefaultNode);
+            parameters: typeParams, bindings: new Map(into), captures: tp.Captures, sourceModule: importedInterfaceSourceModule(tp.Declaration) };
+          const resolved = pending ? null : EvaluatedGenericType(check) ?? tp.Default ?? (check.sourceModule ? null : resolveType(tp.DefaultNode));
           const supplied = resolved && substituteFreeTypeParameters(resolved, into, typeParams.map((parameter) => parameter.Declaration));
           if (supplied) into.set(tp.Name, supplied);
           else if (!describingGenericDefaults.size) {
@@ -13894,7 +13945,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         let bound = typeParameterConstraint(tp, into);
         if (tp.ConstraintNode && (!bound || bound.Kind === 'deferred')) {
           const check: GenericDefaultCheck = { application: validation.application, node: tp.ConstraintNode,
-            parameters: typeParams, bindings: new Map(into), captures: tp.Captures, constraint: true };
+            parameters: typeParams, bindings: new Map(into), captures: tp.Captures, constraint: true, sourceModule: importedInterfaceSourceModule(tp.Declaration) };
           const evaluated = EvaluatedGenericType(check);
           if (evaluated) bound = evaluated;
           else if (!describingGenericDefaults.size) genericDefaults.push(check);
@@ -29628,7 +29679,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // references would never be walked, so its computed keys would never be
     // judged.
     for (const n of interfaceNodes.values()) {
-      interfaceTypeOf((n as unknown as { BindingIdentifier?: { name: string } }).BindingIdentifier?.name ?? '');
+      const name = (n as ParseNode.InterfaceDeclaration).BindingIdentifier.name;
+      const type = interfaceTypeOfNode(n, interfaceDeclarations.get(name));
+      if (type && !importedInterfacesByNode.has(n)) checkedInterfaceTypes.set(n, type);
     }
   };
 
@@ -38372,7 +38425,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           report(`${labelOf(group[0]!)}: ${(e as Error).message}`);
           continue;
         }
-        for (const diagnostic of analysis.Diagnostics) report(diagnostic.message);
+        for (const diagnostic of analysis.Diagnostics) {
+          // Parsing precedes graph loading. An imported constructor is unknown
+          // here, not proved absent; the import-aware pass repeats this check.
+          const reference = diagnostic.node;
+          if (diagnostic.kind === 'no-component' && !moduleCheckInputs.has(root)
+              && reference?.type === 'TypeReference'
+              && ResolveBindingDeclaration(reference.TypeName.IdentifierReference,
+                reference.TypeName.IdentifierReference.name)?.kind === 'import') continue;
+          report(diagnostic.message);
+        }
         for (const owner of analysis.Owners) {
           // A bodyless owner is a function's or a method's (rule 2); a class
           // operator's owner, which its class registers only with a body, has one.

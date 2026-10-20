@@ -258,14 +258,11 @@
           "dep",
           "other"
         ],
-        "bodyEntries": [
-          "dep",
-          "other"
-        ],
+        "bodyEntries": [],
         "errorClass": "StaticTypeError",
         "diagnostic": {
           "code": "RT_ASSIGNABILITY",
-          "phase": "pre-evaluation"
+          "phase": "static"
         }
       }
     },
@@ -283,14 +280,11 @@
           "dep",
           "other"
         ],
-        "bodyEntries": [
-          "dep",
-          "other"
-        ],
+        "bodyEntries": [],
         "errorClass": "StaticTypeError",
         "diagnostic": {
           "code": "RT_ASSIGNABILITY",
-          "phase": "pre-evaluation"
+          "phase": "static"
         }
       }
     },
@@ -326,12 +320,10 @@
           "main",
           "dep"
         ],
-        "bodyEntries": [
-          "dep"
-        ],
+        "bodyEntries": [],
         "errorClass": "StaticTypeError",
         "diagnostic": {
-          "phase": "pre-evaluation",
+          "phase": "static",
           "code": "RT_ASSIGNABILITY"
         }
       }

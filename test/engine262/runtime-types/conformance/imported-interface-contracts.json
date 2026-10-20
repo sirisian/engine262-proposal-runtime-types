@@ -1,0 +1,428 @@
+{
+  "cases": [
+    {
+      "name": "bound",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;} export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\"; function choose<T:type>():string{return \"base\";} function choose<const V extends Has.<V>>():string{return \"case\";} if(choose.<E>()!==\"case\")throw new Error(\"selection\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "invalid",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;} export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has} from \"dep\"; class Bad implements Has.<Bad>{get():string{return \"bad\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "good",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;} export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has} from \"dep\"; class Good implements Has.<Good>{get():Good{return this;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namedBad",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;} export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has as H} from \"dep\"; class Bad implements H.<T:Bad>{get():string{return \"bad\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "defaultBad",
+      "modules": {
+        "dep": "export interface Has<T:type=string>{get():T;}",
+        "main": "import {Has} from \"dep\"; class Bad implements Has {get():number{return 1;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "defaultGood",
+      "modules": {
+        "dep": "export interface Has<T:type=string>{get():T;}",
+        "main": "import {Has} from \"dep\"; class Good implements Has {get():string{return \"a\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nonGeneric",
+      "modules": {
+        "dep": "export interface Has{get():string;}",
+        "main": "import {Has} from \"dep\"; class Bad implements Has {get():number{return 1;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "captured",
+      "modules": {
+        "dep": "type Local=string; export interface Has<T:type=Local>{get():T;}",
+        "main": "import {Has} from \"dep\"; type Local=number; class Good implements Has {get():string{return \"a\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed",
+      "modules": {
+        "dep": "function make():type{return string;} export interface Has<T:type=make()>{get():T;}",
+        "main": "import {Has} from \"dep\"; function make():type{return number;} class Good implements Has {get():string{return \"a\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "importedDefault",
+      "modules": {
+        "other": "export type Local=string;",
+        "dep": "import {Local} from \"other\"; export interface Has<T:type=Local>{get():T;}",
+        "main": "import {Has} from \"dep\"; type Local=number; class Good implements Has {get():string{return \"a\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "other",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "importedComputed",
+      "modules": {
+        "other": "export function make():type{return string;}",
+        "dep": "import {make} from \"other\"; export interface Has<T:type=make()>{get():T;}",
+        "main": "import {Has} from \"dep\"; function make():type{return number;} class Good implements Has {get():string{return \"a\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "other",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "constraint",
+      "modules": {
+        "dep": "export interface Has<T:type extends string>{get():T;}",
+        "main": "import {Has} from \"dep\"; class Bad implements Has.<number>{get():number{return 1;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "reexportBad",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;} export class E implements Has.<E>{get():E{return this;}}",
+        "bridge": "export {Has as Renamed} from \"dep\";",
+        "main": "import {Renamed as H} from \"bridge\";class Bad implements H.<Bad>{get():string{return \"bad\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "producerMember",
+      "modules": {
+        "other": "export type Result=string;",
+        "dep": "import {Result} from \"other\";export interface Has<T:type>{get():Result;}",
+        "main": "import {Has} from \"dep\";type Result=number;class Bad implements Has.<string>{get():number{return 1;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "caseBad",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;} interface Has<string>{get():string; extra():number;}",
+        "main": "import {Has} from \"dep\";class Bad implements Has.<string>{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "wrongConstructor",
+      "modules": {
+        "dep": "export type Has=string;",
+        "main": "import {Has} from \"dep\";function choose<T:type>():string{return \"base\";}function choose<const V extends Has.<V>>():string{return \"case\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "renamed bound through re-export",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;} export class E implements Has.<E>{get():E{return this;}}",
+        "bridge": "export {Has as H,E as Item} from \"dep\";",
+        "main": "import {H as Contract,Item as Element} from \"bridge\";function choose<T:type>():string{return \"base\";}function choose<const V extends Contract.<V>>():string{return \"case\";}if(choose.<Element>()!==\"case\")throw new Error(\"selection\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a matching shape without implements does not select the bound",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;} export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has} from \"dep\";class E{get():E{return this;}}function choose<T:type>():string{return \"base\";}function choose<const V extends Has.<V>>():string{return \"case\";}if(choose.<E>()!==\"base\")throw new Error(\"selection\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "Type Object expression application retains value type",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;} export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\";const token:type=Has.<E>;if(!Reflect.isAssignable(E,token))throw new Error(\"identity\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local lexical interface shadows imported constructor",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;} export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has} from \"dep\";function f(){interface Has<T:type>{get():number;}class Good implements Has.<string>{get():number{return 1;}}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "dependent defaults bind earlier arguments",
+      "modules": {
+        "dep": "export interface Has<A:type=string,B:type=A>{get():B;}",
+        "main": "import {Has} from \"dep\";class Good implements Has {get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unknown named parameter",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;} export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has} from \"dep\";class Bad implements Has.<Wrong:string>{get():string{return \"bad\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "missing required argument",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;} export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has} from \"dep\";class Bad implements Has {get():string{return \"bad\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "computed producer default rejects consumer-shaped implementation",
+      "modules": {
+        "other": "export function make():type{return string;}",
+        "dep": "import {make} from \"other\"; export interface Has<T:type=make()>{get():T;}",
+        "main": "import {Has} from \"dep\";function make():type{return number;}class Bad implements Has {get():number{return 1;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "other",
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "computed producer constraint rejects wrong argument",
+      "modules": {
+        "other": "export function bound():type{return string;}",
+        "dep": "import {bound} from \"other\";export interface Has<T:type extends bound()>{get():T;}",
+        "main": "import {Has} from \"dep\";function bound():type{return number;}class Bad implements Has.<number>{get():number{return 1;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "other",
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "throwing required producer default precedes consumer body",
+      "modules": {
+        "dep": "function make():type{throw new Error(\"default\");}export interface Has<T:type=make()>{get():T;}",
+        "main": "import {Has} from \"dep\";class Bad implements Has {get():string{return \"bad\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DEFAULT_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "unused throwing default is not evaluated",
+      "modules": {
+        "dep": "function make():type{throw new Error(\"default\");}export interface Has<T:type=make()>{get():T;}",
+        "main": "import {Has} from \"dep\";class Good implements Has.<string>{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    }
+  ]
+}

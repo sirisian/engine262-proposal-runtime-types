@@ -336,7 +336,7 @@ function isPendingDeclarationRead(error: unknown, items: readonly ParseNode[]): 
 }
 
 /** Evaluate a required generic source with its original lexical declarations. */
-export function* EvaluateGenericSource(check: Pick<GenericDefaultCheck, 'node' | 'parameters' | 'bindings' | 'captures'>, runtimeEnvironment = false): PlainEvaluator<TypeRecord | undefined> {
+export function* EvaluateGenericSource(check: Pick<GenericDefaultCheck, 'node' | 'parameters' | 'bindings' | 'captures' | 'sourceModule'>, runtimeEnvironment = false): PlainEvaluator<TypeRecord | undefined> {
   const inputs = new Map((check.captures ?? []).map((capture) => [capture.Declaration, capture.Type]));
   for (const parameter of check.parameters) {
     const bound = check.bindings.get(parameter.Name);
@@ -374,13 +374,16 @@ export function* EvaluateGenericSource(check: Pick<GenericDefaultCheck, 'node' |
   if (!available(check.node)) return undefined;
   const context = surroundingAgent.runningExecutionContext;
   const outer = context.LexicalEnvironment;
+  const producerEnvironment = check.sourceModule?.Environment;
+  if (check.sourceModule && !producerEnvironment) return undefined;
+  const declarationEnvironment = producerEnvironment ?? outer;
   const functions = new Map<ParseNode, Value>();
   const aliases = new Map<ParseNode, Value>();
   const activeAliases = new Set<ParseNode>();
   // Each helper has its own environment and generic frame: spelling alone
   // cannot merge a helper's captured T with the caller's independent T.
   function* prepare(source: ParseNode): PlainEvaluator<{ scope: DeclarativeEnvironmentRecord, frame: Map<string, TypeRecord> } | undefined> {
-    const scope = new DeclarativeEnvironmentRecord(outer);
+    const scope = new DeclarativeEnvironmentRecord(declarationEnvironment);
     const frame = new Map<string, TypeRecord>();
     const parameters = [...inputs].filter(([parameter]) => {
       const name = parameter.BindingIdentifier.name;
