@@ -709,6 +709,7 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
     const importedTypes = new Map<string, unknown>();
     const importedBuilders = new Map<string, ParseNode>();
     const importedClasses = new Map<string, ParseNode>();
+    const importedClassModules = new Map<ParseNode, AbstractModuleRecord>();
     // 7. For each ImportEntry Record in in module.[[ImportEntries]], do
     for (const ie of module.ImportEntries) {
       // a. Let importedModule be GetImportedModule(module, in.[[ModuleRequest]]).
@@ -807,6 +808,7 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
             const classNode = ExportedClassNodesOf(resolution.Module.ECMAScriptCode)?.get(bindingName);
             if (classNode) {
               importedClasses.set(ie.LocalName.stringValue(), classNode);
+              importedClassModules.set(classNode, resolution.Module);
             }
             const builder = ExportedBuilderNodesOf(resolution.Module.ECMAScriptCode)?.get(bindingName);
             if (builder !== undefined) {
@@ -826,7 +828,7 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
     // linking, so every error found here is one that needed an import to see.
     if (surroundingAgent.feature('runtime-types') && importedTypes.size > 0) {
       const typeErrors = CheckModuleWithImports(module.ECMAScriptCode, importedTypes, importedBuilders,
-        (module.HostDefined as { specifier?: string } | undefined)?.specifier, importedClasses);
+        (module.HostDefined as { specifier?: string } | undefined)?.specifier, importedClasses, importedClassModules);
       if (typeErrors.length > 0) {
         return ThrowCompletion(typeErrors[0]);
       }

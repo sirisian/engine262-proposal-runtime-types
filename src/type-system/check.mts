@@ -6,6 +6,7 @@ import { EnsureCompletion } from '../completion.mts';
 import { skipDebugger } from '../evaluator.mts';
 import { MostSpecificPrimitiveOperator, OperandNamesCapture } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import type { AbstractModuleRecord } from '../modules.mts';
 import { setNodeParent } from '../parse.mts';
 import { surroundingAgent } from '../execution-context/Agent.mts';
 import { type PrimitiveOperatorEntry, ContractFactsOf, NumericArmRank, RegisteredPrimitiveOperators, GoverningMetaTypes, MetadataMismatchDescription } from '../abstract-ops/runtime-types.mts';
@@ -50,6 +51,7 @@ import { isWellKnownNumericConstant } from './numeric-constants.mts';
 import { ForPatternPositions, PatternBindingNames, PatternHasGovernedPosition, PatternScopeOf } from './pattern-scopes.mts';
 import { resolvedAlias } from './resolving-aliases.mts';
 import { PublishedConstantBindings, type StringConstantEvidence } from './published-constants.mts';
+import { InstantiateCheckedBindings } from './checked-bindings.mts';
 import { InferenceResources, type InferenceLimits, type InferenceComponent } from './inference-limits.mts';
 import { FindConstructorGrowth, LiteralConstructorEquation } from './constructor-growth.mts';
 import { ReusableCheckingContext, SnapshotCheckingContext, SameCheckingContext } from './checking-context.mts';
@@ -2737,7 +2739,10 @@ const evaluatedEnums = new WeakMap<object, { record: TypeRecord, members: Readon
 export function SetEvaluatedEnum(node: ParseNode.EnumDeclaration, record: TypeRecord, values: readonly Value[]): void {
   evaluatedEnums.set(node, { record, members: new Map(node.EnumMemberList.map((member, index) => [member.IdentifierName.name, values[index]])) });
 }
-const moduleCheckInputs = new WeakMap<object, { imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, classes?: ReadonlyMap<string, ParseNode> }>();
+const moduleCheckInputs = new WeakMap<object, {
+  imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, classes?: ReadonlyMap<string, ParseNode>,
+  classModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>,
+}>();
 
 export function DeferredTypeChecksOf(root: object): readonly DeferredTypeCheck[] {
   return [...(deferredTypeChecks.get(root)?.values() ?? [])];
@@ -3084,8 +3089,8 @@ export function CheckModule(module: ParseNode.Module, specifier?: string): Objec
  * bindings are only there on the second pass. `function f() { return c.x; }
  * let s: string = f();` is refused because of that second pass.
  */
-export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, specifier?: string, classes?: ReadonlyMap<string, ParseNode>): ObjectValue[] {
-  moduleCheckInputs.set(module, { imported, builders, classes });
+export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, specifier?: string, classes?: ReadonlyMap<string, ParseNode>, classModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>): ObjectValue[] {
+  moduleCheckInputs.set(module, { imported, builders, classes, classModules });
   if (imported.size === 0) {
     return [];
   }
@@ -8067,8 +8072,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // The shell IS the type: whatever a self-reference captured must end up
         // with the built record's fields, not merely equal ones.
         Object.assign(shell, built as unknown as Record<string, unknown>);
-        classTypeMemo.set(n, shell as unknown as Known);
-        return shell as unknown as Known;
+        // An imported declaration belongs to its resolved source module. Once
+        // that module has evaluated, close its class and implements identities
+        // in the producer's environment, as completed annotations already do.
+        // Keep the member walk above: it also supplies constructor signatures.
+        // Do not read the current value of the mutable exported class binding.
+        const environment = afterTypeEvaluation ? moduleCheckInputs.get(root)?.classModules?.get(n)?.Environment : undefined;
+        let instance = shell as unknown as Known;
+        if (environment) {
+          // The shell can occur inside published member descriptions. Retain
+          // its symbolic identity; completion returns a separate local record.
+          instance = InstantiateCheckedBindings(new Map([['class', built]]), environment).get('class')!;
+        }
+        classTypeMemo.set(n, instance);
+        return instance;
       }
       classTypeMemo.set(n, built);
       return built;

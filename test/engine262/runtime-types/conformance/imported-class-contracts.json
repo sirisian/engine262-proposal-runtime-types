@@ -1,0 +1,414 @@
+{
+  "description": "Imported class identities use the resolved producer at pre-body checking; module graphs and sources are unchanged by the observer.",
+  "cases": [
+    {
+      "name": "direct interface admission",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\";const x:Has.<E>=new E();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "renamed imports",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has as Contract,E as Item} from \"dep\";const x:Contract.<Item>=new Item();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "renamed re-exports",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "bridge": "export {Has as Contract,E as Item} from \"dep\";",
+        "main": "import {Contract,Item} from \"bridge\";const x:Contract.<Item>=new Item();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "bridge",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "transitive star re-exports",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "bridge": "export * from \"dep\";",
+        "bridge2": "export * from \"bridge\";",
+        "main": "import {Has,E} from \"bridge2\";const x:Has.<E>=new E();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "bridge2",
+          "bridge",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "bridge2",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported subclass implementation",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}export class D extends E{}",
+        "main": "import {Has,E,D} from \"dep\";const x:Has.<E>=new D();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic imported implementation",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class Box<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}",
+        "main": "import {Has,Box} from \"dep\";const x:Has.<uint8>=new Box.<uint8>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "exported completed alias",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}export type Contract=Has.<E>;",
+        "main": "import {Contract,E} from \"dep\";const x:Contract=new E();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local completed alias",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\";type Contract=Has.<E>;const x:Contract=new E();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function boundary",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\";function accept(x:Has.<E>):boolean{return true;}if(!accept(new E()))throw new Error(\"result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bare class annotation",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {E} from \"dep\";const x:E=new E();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface result assigned to imported class",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\";const x:Has.<E>=new E();const y:E=x.get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "checking does not execute constructor or method",
+      "modules": {
+        "dep": "export let count=0;export interface Has<T:type>{get():T;}export class E implements Has.<E>{constructor(){count+=1;}get():E{count+=10;return this;}}",
+        "main": "import {Has,E,count} from \"dep\";const x:Has.<E>=new E();if(count!==1)throw new Error(\"effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "available declaration in a cycle",
+      "modules": {
+        "dep": "import {marker} from \"main\";export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\";export const marker=1;const x:Has.<E>=new E();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "different interface declaration",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "other": "export interface Has<T:type>{get():T;}",
+        "main": "import {Has,E} from \"dep\";import {Has as Other} from \"other\";const x:Other.<E>=new E();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep",
+          "other"
+        ],
+        "bodyEntries": [
+          "dep",
+          "other"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "different class argument",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "other": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\";import {E as Other} from \"other\";const x:Has.<Other>=new E();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep",
+          "other"
+        ],
+        "bodyEntries": [
+          "dep",
+          "other"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "invalid producer implementation",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():string{return \"bad\";}}",
+        "main": "import {Has,E} from \"dep\";const x:Has.<E>=new E();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "different invariant generic argument",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class Box<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}",
+        "main": "import {Has,Box} from \"dep\";const x:Has.<uint16>=new Box.<uint8>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "pre-evaluation",
+          "code": "RT_ASSIGNABILITY"
+        }
+      }
+    },
+    {
+      "name": "constructor signature remains available",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{constructor(x:uint8){}get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\";const x:Has.<E>=new E(1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "invalid constructor argument still fails",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{constructor(x:uint8){}get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\";const x:Has.<E>=new E(\"bad\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_ASSIGNABILITY"
+        }
+      }
+    },
+    {
+      "name": "async dependency completes before admission",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}await Promise.resolve();",
+        "main": "import {Has,E} from \"dep\";const x:Has.<E>=new E();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "dependency body failure precedes importer",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}throw new Error(\"dep\");",
+        "main": "import {Has,E} from \"dep\";const x:Has.<E>=new E();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "Error"
+      }
+    }
+  ]
+}
