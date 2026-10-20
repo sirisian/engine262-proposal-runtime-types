@@ -1,0 +1,129 @@
+{
+  "cases": [
+    {
+      "name": "recursive self contract is a declared nominal refinement",
+      "source": "interface Has<T:type>{get():T;} class E implements Has.<E>{get():E{return this;}} String(Reflect.isAssignable(E,Has.<E>));",
+      "value": "true"
+    },
+    {
+      "name": "a self contract admits typed assignment",
+      "source": "interface Has<T:type>{get():T;} class E implements Has.<E>{get():E{return this;}} const x:Has.<E>=new E();String(x.get() instanceof E);",
+      "value": "true"
+    },
+    {
+      "name": "a named class expression preserves its recursive refinement",
+      "source": "interface Has<T:type>{get():T;} const C=class E implements Has.<E>{get():E{return this;}};String(Reflect.isAssignable(C,Has.<C>));",
+      "value": "true"
+    },
+    {
+      "name": "a forward alias preserves a recursive refinement",
+      "source": "interface Has<T:type>{get():T;} type Alias=E;class E implements Has.<E>{get():E{return this;}} String(Reflect.isAssignable(Alias,Has.<E>));",
+      "value": "true"
+    },
+    {
+      "name": "an interface alias preserves a recursive refinement",
+      "source": "interface Has<T:type>{get():T;} type Alias<T:type>=Has.<T>;class E implements Alias.<E>{get():E{return this;}}String(Reflect.isAssignable(E,Has.<E>));",
+      "value": "true"
+    },
+    {
+      "name": "a subclass retains its inherited implementation arguments",
+      "source": "interface Has<T:type>{get():T;} class E implements Has.<E>{get():E{return this;}} class D extends E{}String(Reflect.isAssignable(D,Has.<E>))+\"|\"+String(Reflect.isAssignable(D,Has.<D>));",
+      "value": "true|false"
+    },
+    {
+      "name": "a recursive generic class retains concrete application identity",
+      "source": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<E.<T>>{get():E.<T>{return this;}}String(Reflect.isAssignable(type E.<uint8>,Has.<E.<uint8>>))+\"|\"+String(Reflect.isAssignable(type E.<uint8>,Has.<E.<string>>));",
+      "value": "true|false"
+    },
+    {
+      "name": "ordinary generic arguments remain invariant",
+      "source": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{value:T;constructor(v:T){this.value=v;}get():T{return this.value;}}String(Reflect.isAssignable(type E.<uint8>,Has.<uint8>))+\"|\"+String(Reflect.isAssignable(type E.<uint8>,Has.<string>));",
+      "value": "true|false"
+    },
+    {
+      "name": "matching member shape does not establish a declared relationship",
+      "source": "interface Has<T:type>{get():T;} class E{get():E{return this;}}String(Reflect.isAssignable(E,Has.<E>))+\"|\"+String(new E() is Has.<E>);",
+      "value": "false|true"
+    },
+    {
+      "name": "an undeclared shape does not match a dependent callable bound",
+      "source": "interface Has<T:type>{get():T;} class E{get():E{return this;}}function choose<T:type>():string{return \"base\";}function choose<const V extends Has.<V>>():string{return \"case\";}choose.<E>();",
+      "value": "base"
+    },
+    {
+      "name": "independent class and interface activations remain distinct",
+      "source": "function make(){interface I<T:type>{get():T;}class E implements I.<E>{get():E{return this;}}return {E,I:I.<E>};}const a=make(),b=make();String(Reflect.isAssignable(a.E,a.I))+\"|\"+String(Reflect.isAssignable(b.E,b.I))+\"|\"+String(Reflect.isAssignable(a.E,b.I))+\"|\"+String(Reflect.isAssignable(b.E,a.I));",
+      "value": "true|true|false|false"
+    },
+    {
+      "name": "independent interface activations with equal arguments remain distinct",
+      "source": "function make(){interface I<T:type>{get():T;}class E implements I.<uint8>{get():uint8{return 1;}}return {E,I:I.<uint8>};}const a=make(),b=make();String(Reflect.isAssignable(a.E,a.I))+\"|\"+String(Reflect.isAssignable(b.E,b.I))+\"|\"+String(Reflect.isAssignable(a.E,b.I))+\"|\"+String(Reflect.isAssignable(b.E,a.I));",
+      "value": "true|true|false|false"
+    },
+    {
+      "name": "separate classes from one outer interface retain self arguments",
+      "source": "interface Has<T:type>{get():T;} function make(){class E implements Has.<E>{get():E{return this;}}return E;}const A=make(),B=make();String(Reflect.isAssignable(A,Has.<A>))+\"|\"+String(Reflect.isAssignable(B,Has.<B>))+\"|\"+String(Reflect.isAssignable(A,Has.<B>));",
+      "value": "true|true|false"
+    },
+    {
+      "name": "warm reflection never executes constructors or methods",
+      "source": "let count=0;interface Has<T:type>{get():T;} class E implements Has.<E>{constructor(){count+=1;}get():E{count+=10;return this;}}const a=Reflect.isAssignable(E,Has.<E>);const b=Reflect.isAssignable(E,Has.<E>);String(a)+\"|\"+String(b)+\"|\"+String(count);",
+      "value": "true|true|0"
+    },
+    {
+      "name": "conditional class contribution follows the declared self bound",
+      "source": "interface Has<T:type>{get():T;} class E implements Has.<E>{get():E{return this;}} class Box<T:type>{}partial class Box<const V extends Has.<V>>{yes():string{return \"yes\";}}new Box.<E>().yes();",
+      "value": "yes"
+    },
+    {
+      "name": "callable selection follows the declared self bound",
+      "source": "interface Has<T:type>{get():T;} class E implements Has.<E>{get():E{return this;}} function choose<T:type>():string{return \"base\";}function choose<const V extends Has.<V>>():string{return \"case\";}choose.<E>();",
+      "value": "case"
+    },
+    {
+      "name": "a wrong invariant argument does not match a callable bound",
+      "source": "interface Has<T:type>{get():T;} class E implements Has.<E>{get():E{return this;}} class Other{}function choose<T:type>():string{return \"base\";}function choose<const V extends Has.<Other>>():string{return \"case\";}choose.<E>();",
+      "value": "base"
+    },
+    {
+      "name": "a member body still checks its declared result at runtime",
+      "source": "interface Has<T:type>{get():T;} function erased(v:any){return v;}class E implements Has.<E>{get():E{return erased({});}}const x:Has.<E>=new E();let refused=false;try{x.get();}catch(e){refused=e instanceof TypeError;}String(refused);",
+      "value": "true"
+    },
+    {
+      "name": "structural membership still rejects an incompatible field",
+      "source": "class E{get():E{return this;}} interface Stored{value:E;}String(({value:\"bad\"}) is Stored);",
+      "value": "false"
+    },
+    {
+      "name": "an undeclared class is refused at a visible interface assignment",
+      "source": "interface Has<T:type>{get():T;} class E{get():E{return this;}}const x:Has.<E>=new E();",
+      "error": "StaticTypeError"
+    },
+    {
+      "name": "declaration checking still refuses a missing member",
+      "source": "interface Has<T:type>{get():T;} class E implements Has.<E>{}",
+      "error": "StaticTypeError"
+    },
+    {
+      "name": "declaration checking still refuses a wrong result",
+      "source": "interface Has<T:type>{get():T;} class E implements Has.<E>{get():string{return \"bad\";}}",
+      "error": "StaticTypeError"
+    },
+    {
+      "name": "declaration checking still refuses a wrong parameter",
+      "source": "interface I{take(v:string):void;}class E implements I{take(v:uint8):void{}}",
+      "error": "StaticTypeError"
+    },
+    {
+      "name": "declaration checking still refuses writable capability loss",
+      "source": "interface I{x:uint8;}class E implements I{get x():uint8{return 1;}}",
+      "error": "StaticTypeError"
+    },
+    {
+      "name": "a matching conditional interface retains required members",
+      "source": "interface Has<T:type>{get():T;} class E implements Has.<E>{get():E{return this;}} interface Box<T:type>{}partial interface Box<const V extends Has.<V>>{required:string;}const x:Box.<E>={};",
+      "error": "StaticTypeError"
+    }
+  ]
+}

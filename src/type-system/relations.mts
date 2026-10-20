@@ -1535,69 +1535,14 @@ export function IsSubtype(s: TypeRecord, t: TypeRecord, assumptions: readonly As
           });
         }
       }
-      // A CLASS IS A SUBTYPE OF THE CLASS IT EXTENDS. The relation held
-      // nowhere, and the engine disagreed with itself about it: `new Dog() is
-      // Animal` was true and `f(new Dog())` against an `Animal` parameter
-      // passed, while `let a: Animal = new Dog()` was refused - the run time
-      // walks a prototype chain and the checker had nothing to walk. Carried
-      // the way an enum carries its underlying type, for the same reason:
-      // a relation the record does not hold cannot be decided.
-      // An INTERFACE names a shape rather than an identity, so the declaration
-      // comparison above can never admit a class that implements one: the two
-      // declarations are different by construction. Compare structures instead.
-      //
-      // Without this a class satisfied an interface only where nothing checked
-      // - `f(x: I)` passed `new C()` because a class-typed parameter resolved to
-      // ~any~, and `let x: I = new C()` was refused. The two disagreed, which is
-      // how the gap stayed hidden.
-      // Narrowed to a CLASS source. Interface-to-interface stays nominal, or a
-      // reflection context whose members are a superset of another's would
-      // satisfy it - `Reflect.ClassField` passing where `Reflect.Class` is
-      // wanted - and the design distinguishes those by kind, not by shape.
-      // A class EXPRESSION is a class. The
-      // guard named only |ClassDeclaration|, so `const D = class X implements I
-      // {}` satisfied nothing even once its record carried a [[Structure]] -
-      // the same omission, one layer up from the one that left the record
-      // empty. `ClassShapeOf` above already accepts both forms.
-      if (((s.Declaration as { type?: string } | undefined)?.type === 'ClassDeclaration'
-        || (s.Declaration as { type?: string } | undefined)?.type === 'ClassExpression')
-        && s.LibraryName === undefined
-        && (tn.Declaration as { type?: string } | undefined)?.type === 'InterfaceDeclaration'
-        // AN INTERFACE ASKS WHAT A CLASS PROMISED. A class relates to an interface only where
-        // it REFINES it - #sec-issubtype, "a nominal type whose declaration
-        // extends or implements that type's declaration" - and #sec-object-types
-        // is explicit that a class has no structural form to be compared by.
-        //
-        // Comparing structures for ANY class against ANY interface admitted a
-        // class that declared nothing, which made `implements` decorative and an
-        // empty interface universal. The ergonomic objection to requiring it -
-        // that a third-party class could then reach no structural position - is
-        // answered by the object-type rule: an object type asks what a value HAS, and a class
-        // instance reaches every object-typed position without saying anything.
-        && ClassImplements(s, tn.Declaration, tn)) {
-        // [[Structure]] is declared on the
-        // record, so these read fields rather than hoping for them. The casts
-        // were what let a reader believe the relation and its callers agreed.
-        const { Structure: sStructure } = s;
-        const { Structure: tStructure } = tn;
-        if (sStructure && tStructure) {
-          // The interface's structure names ITS OWN parameters and the arguments
-          // are on the target, so they are substituted before the comparison
-          // - the way every other arm that reads an interface structure
-          // already does. Without it `class C implements Box.<uint8>` compared
-          // its `v: uint8` against `v: T` and was refused, so the DECLARED
-          // hierarchy `sec-interfaces-semantics` promises did not carry a parameterised
-          // interface at all.
-          const target = SubstituteTypeArguments(tStructure, tn.Declaration, tn.Arguments);
-          let source = SubstituteTypeArguments(sStructure, s.Declaration, s.Arguments);
-          if (s.InstanceFieldKeys && source.Kind === 'object' && target.Kind === 'object') {
-            const named = target.Properties;
-            source = { ...source, Properties: source.Properties.filter((property) => s.InstanceFieldKeys!.includes(property.key)
-              || named.some((required) => required.key === property.key)) };
-          }
-          return IsSubtype(source, target, next);
-        }
-      }
+      // #sec-issubtype and #sec-interfaces-semantics: the resolved declared
+      // hierarchy proves nominal refinement. Member compatibility is verified
+      // at the declaration/application boundary, not again from a symbolic
+      // member summary here. In particular, a recursive self result can still
+      // be symbolic while the implements arguments carry runtime identities.
+      if ((s.Declaration.type === 'ClassDeclaration' || s.Declaration.type === 'ClassExpression')
+        && s.LibraryName === undefined && tn.Declaration.type === 'InterfaceDeclaration'
+        && ClassImplements(s, tn.Declaration, tn)) return true;
       // [[Base]] is declared on the record
       // now, so this reads a field rather than hoping for one.
       const { Base: base } = s;
