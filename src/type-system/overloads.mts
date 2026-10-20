@@ -113,7 +113,7 @@ export function describeParameters(
     const type = annotation ? typeOf(annotation) : anyType;
     const hasDefault = node.Initializer !== undefined && node.Initializer !== null;
     params.push({
-      Name: name, Type: type, Optional: node.Optional === true || hasDefault, Rest: false, Ref: node.Ref === true,
+      Name: name, Type: type, Optional: node.Optional === true || hasDefault, DeclaredDefault: hasDefault, Rest: false, Ref: node.Ref === true,
     });
   }
   return params;

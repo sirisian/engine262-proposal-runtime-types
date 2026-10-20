@@ -63,7 +63,14 @@ export function InstantiateReturnDependency(type: TypeRecord, completion?: objec
       // Equal source syntax alone never replaces an already completed argument.
       const arguments_ = copy.Arguments.map((argument, i) => {
         const supplied = evidence.Arguments[i];
-        if (typeof argument !== 'number') return complete(argument, typeof supplied === 'number' ? undefined : supplied, signature, true);
+        // An explicit application can retain an unconverted Number literal
+        // where construction uses a compact number. Both describe this exact
+        // value; only a VALUE parameter's checked domain can reify the literal.
+        const literalNumber = typeof argument !== 'number' && parameters[i]?.IsValueParameter
+          && argument.Kind === 'literal' && argument.Value instanceof NumberValue && !isTypedNumber(argument.Value);
+        if (typeof argument !== 'number' && !literalNumber) return complete(argument, typeof supplied === 'number' ? undefined : supplied, signature, true);
+        // eslint-disable-next-line @engine262/mathematical-value -- compare the exact checking-time Number, including negative zero
+        const number = typeof argument === 'number' ? argument : ((argument as Extract<TypeRecord, { Kind: 'literal' }>).Value as NumberValue).numberValue();
         // A compact checking-time number denotes this exact argument, not an
         // untyped substitute for a value parameter's admitted numeric domain.
         // Reify it only from the same declaration position's checked binding.
@@ -72,11 +79,11 @@ export function InstantiateReturnDependency(type: TypeRecord, completion?: objec
         if (isTypedNumber(value)) {
           if (!parameters[i]?.IsValueParameter) return argument;
           const same = typeof value.value === 'bigint'
-            ? Number.isInteger(argument) && BigInt(argument) === value.value : Object.is(argument, value.value);
+            ? Number.isInteger(number) && BigInt(number) === value.value : Object.is(number, value.value);
           return same ? supplied : argument;
         }
         // eslint-disable-next-line @engine262/mathematical-value -- compare the exact stored numeric argument, including negative zero
-        return value instanceof NumberValue && Object.is(argument, value.numberValue()) ? supplied : argument;
+        return value instanceof NumberValue && Object.is(number, value.numberValue()) ? supplied : argument;
       });
       if (!SameArgumentList(arguments_, evidence.Arguments, [])) {
         alternatives.set(evidence, unresolved);
@@ -148,8 +155,10 @@ export function InstantiateReturnDependency(type: TypeRecord, completion?: objec
           const candidate: SignatureRecord = { ...to,
             Parameters: to.Parameters.map((parameter, i) => ({ ...parameter,
               Type: complete(parameter.Type, from.Parameters[i]?.Type, true, true) })),
-            Return: to.Return ? complete(to.Return, from.Return ?? from.InferredReturn ?? undefined, true, argument) : to.Return,
-            InferredReturn: to.InferredReturn ? complete(to.InferredReturn, from.InferredReturn ?? from.Return ?? undefined, true, argument) : to.InferredReturn,
+            // A signature result is a type description, including protocol
+            // arguments; it is not evidence about an arbitrary returned value.
+            Return: to.Return ? complete(to.Return, from.Return ?? from.InferredReturn ?? undefined, true, true) : to.Return,
+            InferredReturn: to.InferredReturn ? complete(to.InferredReturn, from.InferredReturn ?? from.Return ?? undefined, true, true) : to.InferredReturn,
             ...(to.ThisType ? { ThisType: complete(to.ThisType, from.ThisType ?? undefined, true, true) } : {}),
             ...(to.Narrows ? { Narrows: to.Narrows.map((narrow, i) => ({ ...narrow,
               Type: complete(narrow.Type, from.Narrows?.[i]?.Type, true, true) })) } : {}),

@@ -367,7 +367,8 @@ test('an extracted method application binds no receiver', () => {
   expect(evaluated(`class W { tag: string = 'w'; write<T: type>(v: T): string { return 'g'; }
     write<boolean>(v: boolean): string { return this.tag; } }
     const w = new W(); const m = w.write.<boolean>;
-    m.call(w, true) + '|' + String((() => { try { return m(true); } catch (e) { return 'no receiver'; } })());`)).toBe('w|no receiver');
+    function callErased(f: any) { try { return f(true); } catch (e) { return 'no receiver'; } }
+    m.call(w, true) + '|' + String(callErased(m));`)).toBe('w|no receiver');
 });
 
 test('an owner override forwards through super, checked against the owner', () => {

@@ -18,7 +18,7 @@ export function InstantiateCheckedBindings(bindings: ReadonlyMap<string, TypeRec
     if (prior) return prior;
     // A completed nominal has its own captured context. Never rebind it to an
     // activation of the same source declaration visible at this call.
-    if (type.Kind === 'nominal' && (type.DeclarationIdentity || type.Constructor)) return type;
+    if (type.Kind === 'nominal' && !type.LibraryName && (type.DeclarationIdentity || type.Constructor)) return type;
     const copy = { ...type };
     seen.set(type, copy);
     switch (copy.Kind) {

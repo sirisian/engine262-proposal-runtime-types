@@ -7926,9 +7926,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const classObjectTypeMemo = new Map<ParseNode, Known>();
 
-  const classObjectTypeOf = (name: string): Known => {
-    const node = classNodes.get(name);
-    if (!node || shadowedByProgram(name)) return null;
+  const classObjectTypeOf = (reference: ParseNode.IdentifierReference): Known => {
+    // A producer query can reach a local class before the ordinary source walk
+    // registers it. Resolve this read's declaration, not the last visited name.
+    // A different lexical binding still shadows the class, including an erased
+    // parameter; runtime initialization remains governed by the ordinary TDZ.
+    const binding = ResolveBindingDeclaration(reference, reference.name);
+    const node = binding?.kind === 'class' ? stableClassOrigin(reference)?.declaration
+      : !binding || binding.kind === 'import' ? classNodes.get(reference.name) : undefined;
+    if (!node || (!binding && shadowedByProgram(reference.name))) return null;
     if (![...partialDeclarations].some((part) => partialPrimaryOf(part) === node)
       && PublishedPartialContributions(node, true).length === 0) return classObjectTypeOfNode(node);
     const own = classOverOwnParameters(node);
@@ -17636,7 +17642,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             Optional: !!p.Initializer, Ref: (p as { Ref?: boolean }).Ref === true, Rest: (p.type as string) === 'FunctionRestParameter' || (p.type as string) === 'BindingRestElement',
           };
         });
-        selectedCaseSignatures.set(node, { Parameters: parameters, Return: returned as TypeRecord | null } as unknown as SignatureRecord);
+        selectedCaseSignatures.set(node, { Parameters: parameters, Return: returned as TypeRecord | null,
+          ...(kase.parent?.type === 'ClassTail' ? { ThisType: SelfThisTypeRecord } : {}) } as unknown as SignatureRecord);
       } finally {
         if (pushedForParameters) typeParameterScopes.pop();
       }
@@ -18549,7 +18556,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
         }
-        return bound ?? classObjectTypeOf(referenced) ?? valueParameterDomainOf(referenced);
+        return bound ?? classObjectTypeOf(node) ?? valueParameterDomainOf(referenced);
       }
       // `super.x` NAMES A MEMBER OF THE BASE CLASS. It is its own node - not a
       // member access with a `super` receiver - so no arm reached it, and
@@ -21816,6 +21823,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             Name: (prm as ParseNode.SingleNameBinding).BindingIdentifier?.name ?? '',
             Optional: (prm as ParseNode.SingleNameBinding).Optional === true || !!(prm as ParseNode.SingleNameBinding).Initializer
               || (!prm.TypeAnnotation && expected?.Parameters[index]?.Optional === true),
+            DeclaredDefault: !!(prm as ParseNode.SingleNameBinding).Initializer,
             Rest: prm.type === 'BindingRestElement',
             Ref: (prm as { Ref?: boolean }).Ref === true,
           }));
@@ -21872,7 +21880,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 inferred = libraryTypeRecord('Promise', [inferred, anyTypeRecord]);
               }
               signature.InferredReturn = inferred;
-              if (inferred && !mentionsTypeParameter(inferred)) publishedReturnTypes.set(member, inferred);
+              // Own and captured binders remain symbolic until this method's
+              // runtime application supplies them, as for function declarations.
+              if (inferred) publishedReturnTypes.set(member, inferred);
             }
             if (expected) signature.Return = expected.Return;
           }

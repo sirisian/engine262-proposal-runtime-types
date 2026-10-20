@@ -1,0 +1,802 @@
+{
+  "cases": [
+    {
+      "name": "static separate activations",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}class C{static f<U:type>(v:U){return new P.<U>();}}return C.f;}const a=make(),b=make();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static no invocation before admission",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}class C{static f<U:type>(v:U){return new P.<U>();}}return C.f;}const a=make(),b=make();const h={f:a.<uint8>};function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static same activation and selection cache",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}class C{static f<U:type>(v:U){return new P.<U>();}}return C.f;}const a=make(),b=a;const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);const f=h.f;if(a.<uint8>!==a.<uint8>)throw new Error(\"cache\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static distinct own arguments",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}class C{static f<U:type>(v:U){return new P.<U>();}}return C.f;}const a=make();const h={f:a.<uint8>};function replace(o:any){o.f=a.<string>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"argument\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static captured and own arguments",
+      "steps": [
+        {
+          "source": "function make<T:type>(){class P<A:type,B:type>{}class C{static f<U:type>(v:U){return new P.<T,U>();}}return C.f;}const a=make.<uint8>(),b=make.<uint8>();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static own binder shadows captured binder",
+      "steps": [
+        {
+          "source": "function make<U:type>(){class P<T:type>{}class C{static f<U:type>(v:U){return new P.<U>();}}return C.f;}const a=make.<string>(),b=make.<string>();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static value parameter result",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{}class C{static f<N:uint32>(v:uint8){return new P.<N>();}}return C.f;}const a=make(),b=make();const h={f:a.<12>};h.f(1);function replace(o:any){o.f=b.<12>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object separate activations",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}const o={f<U:type>(v:U){return new P.<U>();}};return o.f;}const a=make(),b=make();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object no invocation before admission",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}const o={f<U:type>(v:U){return new P.<U>();}};return o.f;}const a=make(),b=make();const h={f:a.<uint8>};function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object same activation and selection cache",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}const o={f<U:type>(v:U){return new P.<U>();}};return o.f;}const a=make(),b=a;const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);const f=h.f;if(a.<uint8>!==a.<uint8>)throw new Error(\"cache\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object distinct own arguments",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}const o={f<U:type>(v:U){return new P.<U>();}};return o.f;}const a=make();const h={f:a.<uint8>};function replace(o:any){o.f=a.<string>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"argument\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object captured and own arguments",
+      "steps": [
+        {
+          "source": "function make<T:type>(){class P<A:type,B:type>{}const o={f<U:type>(v:U){return new P.<T,U>();}};return o.f;}const a=make.<uint8>(),b=make.<uint8>();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object own binder shadows captured binder",
+      "steps": [
+        {
+          "source": "function make<U:type>(){class P<T:type>{}const o={f<U:type>(v:U){return new P.<U>();}};return o.f;}const a=make.<string>(),b=make.<string>();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object value parameter result",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{}const o={f<N:uint32>(v:uint8){return new P.<N>();}};return o.f;}const a=make(),b=make();const h={f:a.<12>};h.f(1);function replace(o:any){o.f=b.<12>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "instance separate activations",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}class C{f<U:type>(v:U){return new P.<U>();}}const o=new C();return o.f;}const a=make(),b=make();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "instance no invocation before admission",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}class C{f<U:type>(v:U){return new P.<U>();}}const o=new C();return o.f;}const a=make(),b=make();const h={f:a.<uint8>};function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "instance same activation and selection cache",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}class C{f<U:type>(v:U){return new P.<U>();}}const o=new C();return o.f;}const a=make(),b=a;const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);const f=h.f;if(a.<uint8>!==a.<uint8>)throw new Error(\"cache\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "instance distinct own arguments",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}class C{f<U:type>(v:U){return new P.<U>();}}const o=new C();return o.f;}const a=make();const h={f:a.<uint8>};function replace(o:any){o.f=a.<string>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"argument\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "instance captured and own arguments",
+      "steps": [
+        {
+          "source": "function make<T:type>(){class P<A:type,B:type>{}class C{f<U:type>(v:U){return new P.<T,U>();}}const o=new C();return o.f;}const a=make.<uint8>(),b=make.<uint8>();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "instance own binder shadows captured binder",
+      "steps": [
+        {
+          "source": "function make<U:type>(){class P<T:type>{}class C{f<U:type>(v:U){return new P.<U>();}}const o=new C();return o.f;}const a=make.<string>(),b=make.<string>();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "instance value parameter result",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{}class C{f<N:uint32>(v:uint8){return new P.<N>();}}const o=new C();return o.f;}const a=make(),b=make();const h={f:a.<12>};h.f(1);function replace(o:any){o.f=b.<12>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function separate activations",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}function f<U:type>(v:U){return new P.<U>();}return f;}const a=make(),b=make();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function no invocation before admission",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}function f<U:type>(v:U){return new P.<U>();}return f;}const a=make(),b=make();const h={f:a.<uint8>};function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function same activation and selection cache",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}function f<U:type>(v:U){return new P.<U>();}return f;}const a=make(),b=a;const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);const f=h.f;if(a.<uint8>!==a.<uint8>)throw new Error(\"cache\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function distinct own arguments",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}function f<U:type>(v:U){return new P.<U>();}return f;}const a=make();const h={f:a.<uint8>};function replace(o:any){o.f=a.<string>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"argument\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function captured and own arguments",
+      "steps": [
+        {
+          "source": "function make<T:type>(){class P<A:type,B:type>{}function f<U:type>(v:U){return new P.<T,U>();}return f;}const a=make.<uint8>(),b=make.<uint8>();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function own binder shadows captured binder",
+      "steps": [
+        {
+          "source": "function make<U:type>(){class P<T:type>{}function f<U:type>(v:U){return new P.<U>();}return f;}const a=make.<string>(),b=make.<string>();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function value parameter result",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{}function f<N:uint32>(v:uint8){return new P.<N>();}return f;}const a=make(),b=make();const h={f:a.<12>};h.f(1);function replace(o:any){o.f=b.<12>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static unequal value arguments stay invariant",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{}class C{static f<N:uint32>(v:uint8){return new P.<N>();}}return C.f;}const a=make();const h={f:a.<12>};function replace(o:any){o.f=a.<13>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"value argument\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object unequal value arguments stay invariant",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{}const o={f<N:uint32>(v:uint8){return new P.<N>();}};return o.f;}const a=make();const h={f:a.<12>};function replace(o:any){o.f=a.<13>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"value argument\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "instance unequal value arguments stay invariant",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{}class C{f<N:uint32>(v:uint8){return new P.<N>();}}const o=new C();return o.f;}const a=make();const h={f:a.<12>};function replace(o:any){o.f=a.<13>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"value argument\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "function unequal value arguments stay invariant",
+      "steps": [
+        {
+          "source": "function make(){class P<N:uint32>{}function f<N:uint32>(v:uint8){return new P.<N>();}return f;}const a=make();const h={f:a.<12>};function replace(o:any){o.f=a.<13>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"value argument\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static reflection executes no body or default",
+      "steps": [
+        {
+          "source": "let calls=0;function defaultValue():any{calls++;return 1;}function make(){class P<T:type>{}class C{static f<U:type>(v:U=defaultValue()){return (calls++,new P.<U>());}}return C.f;}const a=make();const s=a.<uint8>;Reflect.typeOf(a);Reflect.typeOf(s);if(calls!==0)throw new Error(\"inspection executed code\");const h={f:s};h.f();if(calls!==2)throw new Error(\"invocation\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static known incompatible consumer precedes factory",
+      "steps": [
+        {
+          "source": "function use(){const wrong:string=make();}function make(){class P<T:type>{}class C{static f<U:type>(v:U){return new P.<U>();}}return C.f;}\"unreachable\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "object reflection executes no body or default",
+      "steps": [
+        {
+          "source": "let calls=0;function defaultValue():any{calls++;return 1;}function make(){class P<T:type>{}const o={f<U:type>(v:U=defaultValue()){return (calls++,new P.<U>());}};return o.f;}const a=make();const s=a.<uint8>;Reflect.typeOf(a);Reflect.typeOf(s);if(calls!==0)throw new Error(\"inspection executed code\");const h={f:s};h.f();if(calls!==2)throw new Error(\"invocation\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object known incompatible consumer precedes factory",
+      "steps": [
+        {
+          "source": "function use(){const wrong:string=make();}function make(){class P<T:type>{}const o={f<U:type>(v:U){return new P.<U>();}};return o.f;}\"unreachable\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "instance reflection executes no body or default",
+      "steps": [
+        {
+          "source": "let calls=0;function defaultValue():any{calls++;return 1;}function make(){class P<T:type>{}class C{f<U:type>(v:U=defaultValue()){return (calls++,new P.<U>());}}const o=new C();return o.f;}const a=make();const s=a.<uint8>;Reflect.typeOf(a);Reflect.typeOf(s);if(calls!==0)throw new Error(\"inspection executed code\");const h={f:s};h.f();if(calls!==2)throw new Error(\"invocation\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "instance known incompatible consumer precedes factory",
+      "steps": [
+        {
+          "source": "function use(){const wrong:string=make();}function make(){class P<T:type>{}class C{f<U:type>(v:U){return new P.<U>();}}const o=new C();return o.f;}\"unreachable\";",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_RETURN_CONTRACT",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "static inherited method",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}class C{static f<U:type>(v:U){return new P.<U>();}}class D extends C{}return D.f;}const a=make(),b=make();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static established computed key",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}class C{static f<U:type>(v:U){return new P.<U>();}}return C[\"f\"];}const a=make(),b=make();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static local class shadows outer class",
+      "steps": [
+        {
+          "source": "class C{static f<U:type>(v:U):any{return v;}}function make(){class P<T:type>{}class C{static f<U:type>(v:U){return new P.<U>();}}return C.f;}const a=make(),b=make();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static lexical block class shadows sibling class",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}{class C{static f<U:type>(v:U){return new P.<U>();}}return C.f;}}const a=make(),b=make();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object established computed key",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}const o={f<U:type>(v:U){return new P.<U>();}};return o[\"f\"];}const a=make(),b=make();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object generator symbolic result",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}const o={*f<U:type>(v:U){return new P.<U>();}};return o.f;}const a=make(),b=make();const h={f:a.<uint8>};function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object async symbolic result",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}const o={async f<U:type>(v:U){return new P.<U>();}};return o.f;}const a=make(),b=make();const h={f:a.<uint8>};function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object async generator symbolic result",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}const o={async *f<U:type>(v:U){return new P.<U>();}};return o.f;}const a=make(),b=make();const h={f:a.<uint8>};function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static class runtime TDZ remains",
+      "steps": [
+        {
+          "source": "function make(){return C.f;class C{static f<U:type>(v:U){return v;}}}make();",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "errorClass": "ReferenceError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static free call still requires receiver",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}class C{static f<U:type>(v:U){return new P.<U>();}}return C.f;}const a=make();a.<uint8>(1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_THIS_REQUIRED",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "instance free call still requires receiver",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}class C{f<U:type>(v:U){return new P.<U>();}}const o=new C();return o.f;}const a=make();a.<uint8>(1);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_THIS_REQUIRED",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "static erased parameter shadows class",
+      "steps": [
+        {
+          "source": "class C{static f<U:type>(v:U){return v;}}function read(C:any){return C.f;}const o={f:1};if(read(o)!==1)throw new Error(\"shadow\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "object explicit result erasure remains",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{}const o={f<U:type>(v:U):any{return new P.<U>();}};return o.f;}const a=make(),b=a;const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);const f=h.f;\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static selected case keeps receiver",
+      "steps": [
+        {
+          "source": "class C{static f<T:type>(v:T):string{return \"owner\";}static f<boolean>(v:boolean):string{return \"case\";}}const selected := C.f.<boolean>;const h={f:selected};if(h.f(true)!==\"case\")throw new Error(\"selection\");if(!String(Reflect.typeOf(selected)).includes(\"this: its receiver\"))throw new Error(\"receiver metadata\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "static selected case free call rejected",
+      "steps": [
+        {
+          "source": "class C{static f<T:type>(v:T):string{return \"owner\";}static f<boolean>(v:boolean):string{return \"case\";}}const selected := C.f.<boolean>;selected(true);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_THIS_REQUIRED",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "instance selected case keeps receiver",
+      "steps": [
+        {
+          "source": "class C{f<T:type>(v:T):string{return \"owner\";}f<boolean>(v:boolean):string{return \"case\";}}const owner=new C();const selected := owner.f.<boolean>;const h={f:selected};if(h.f(true)!==\"case\")throw new Error(\"selection\");if(!String(Reflect.typeOf(selected)).includes(\"this: its receiver\"))throw new Error(\"receiver metadata\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "instance selected case free call rejected",
+      "steps": [
+        {
+          "source": "class C{f<T:type>(v:T):string{return \"owner\";}f<boolean>(v:boolean):string{return \"case\";}}const owner=new C();const selected := owner.f.<boolean>;selected(true);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_THIS_REQUIRED",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

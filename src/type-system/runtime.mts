@@ -2935,6 +2935,13 @@ function untypedSignatureOf(value: ObjectValue): TypeRecord {
   return { Kind: 'function', Signatures: [{ Parameters: parameters, Return: null, Untyped: true }] } as unknown as TypeRecord;
 }
 
+/** Class method values keep the receiver marker carried by their static view. */
+export function ClassMethodThisTypeOf(value: ObjectValue): TypeRecord | undefined {
+  const fn = value as { ECMAScriptCode?: { parent?: ParseNode }, IsClassConstructor?: Value };
+  return fn.IsClassConstructor !== Value.true && fn.ECMAScriptCode?.parent?.parent?.type === 'ClassTail'
+    ? SelfThisTypeRecord : undefined;
+}
+
 function deriveSignatureType(value: ObjectValue, application?: Map<string, TypeRecord>): TypeRecord {
   // A selected case's value has the case's signature with its
   // captures bound - `(v: uint.<12>) => string`, never exposing `N`.
@@ -3016,6 +3023,7 @@ function deriveSignatureType(value: ObjectValue, application?: Map<string, TypeR
   }
   const Signatures = declared.map((o) => ({
     Parameters: o.Parameters,
+    ...(ClassMethodThisTypeOf(o.Function as ObjectValue) ? { ThisType: SelfThisTypeRecord } : {}),
     ...(o.Narrows ? { Narrows: o.Narrows } : {}),
     // Each overload retains its own declaration and captured result context.
     Return: constructedType ?? o.ReturnType ?? publishedReturnTypeOfFunction(o.Function, application) ?? null,

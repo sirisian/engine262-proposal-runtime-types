@@ -5,8 +5,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { RequireType } from '../abstract-ops/runtime-types.mts';
 import { IsOfType, BindTypeArgumentRecords, currentTypeParameterFrame } from './runtime.mts';
 import { InferredConstTypeOf } from './check.mts';
-import { substituteParametersNamed } from './unify.mts';
-import { makePrimitive, type TypeRecord } from './records.mts';
+import { makePrimitive, substituteFreeTypeParameters, type TypeRecord } from './records.mts';
 import { InstantiateReturnDependency, ForwardResultDependency, RetainCheckedResult, CheckedPropertyKeyOf, InstantiateCheckedBindings, CompleteCreatedFunctionResult, surroundingAgent } from '#self';
 
 /** Reify the checker's compact numeric arguments before runtime admission. */
@@ -28,7 +27,10 @@ export function* EnforceInferredBinding(node: object, value: Value, initializer?
   const inferred = InferredConstTypeOf(node);
   if (!inferred) return { value };
   const parameters = currentTypeParameterFrame();
-  let target = parameters ? (substituteParametersNamed(inferred, parameters) ?? inferred) : inferred;
+  // This is the enclosing environment, not an application of any generic
+  // callable stored inside the binding. Retain its own binders and substitute
+  // captured inputs in both declared and published result positions.
+  let target = parameters ? (substituteFreeTypeParameters(inferred, parameters) ?? inferred) : inferred;
   target = Q(yield* NormalizeInferredClassArguments(target));
   if (completion) target = InstantiateReturnDependency(target, ForwardResultDependency(completion, completion));
   target = InstantiateCheckedBindings(new Map([['result', target]]), surroundingAgent.runningExecutionContext.LexicalEnvironment).get('result')!;

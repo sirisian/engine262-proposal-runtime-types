@@ -38,7 +38,7 @@ test('a signature resolves under the frame the function captured', () => {
   expect(evaluated('function mk<T: type>(x: T) { return (y: T): T => y; } String(Reflect.typeOf(mk((1 := uint8))));')).toBe('(y: uint.<8>) => uint.<8>');
   expect(evaluated('function mk<T: type>(x: T) { return { f: (y: T): T => y }; } String(Reflect.typeOf(mk((1 := uint8))));')).toBe('{ f: (y: uint.<8>) => uint.<8> }');
   // A generic declaration's method reports over the class's parameters, as its constructor does.
-  expect(evaluated('class Box<T: type> { v: T; m(y: T): T { return y; } constructor(v: T) { this.v = v; } } String(Reflect.typeOf(Box.prototype.m));')).toBe('<T: type>(y: T) => T');
+  expect(evaluated('class Box<T: type> { v: T; m(y: T): T { return y; } constructor(v: T) { this.v = v; } } String(Reflect.typeOf(Box.prototype.m));')).toBe('<T: type>(this: its receiver, y: T) => T');
   expect(evaluated('class Box<T: type> { v: T; constructor(v: T) { this.v = v; } } String(Reflect.typeOf(Box)) + " | " + String(Reflect.typeOf(Box.<uint8>));')).toBe('<T: type>(v: T) => Box.<T> | (v: uint.<8>) => Box.<uint.<8>>');
 });
 

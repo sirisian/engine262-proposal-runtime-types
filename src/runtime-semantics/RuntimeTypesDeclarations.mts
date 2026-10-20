@@ -68,7 +68,7 @@ import { ClassDefinitionEvaluation, PartialClassMergeEvaluation } from './ClassD
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
 import { MetadataObjectFor } from './ClassDefinitionEvaluation.mts';
-import { EnvironmentRecord, RefBindingHolder, Assert, OrdinaryObjectCreate, CreateDataProperty, InCapturedTypeContext, BindTypeArgumentRecordsInto, specializationDepthExhausted, CompleteSpecializationResult, type CapturedTypeContext } from '#self';
+import { EnvironmentRecord, RefBindingHolder, Assert, OrdinaryObjectCreate, CreateDataProperty, InCapturedTypeContext, BindTypeArgumentRecordsInto, specializationDepthExhausted, CompleteSpecializationResult, ClassMethodThisTypeOf, type CapturedTypeContext } from '#self';
 import { ClaimMetaKey, MetaTypeClaiming, CreateDataPropertyOrThrow, OrdinaryFunctionCreate, R, RegisterMetaDefaultSnapshot, RegisterMetaShape, NormalizeMetadataRecord, MetadataSatisfiesShape, RegisterMetaHook, RegisterMetaTypeName, RegisterMetaTypeParameterName, SnapshotMetadataValue, Throw, surroundingAgent } from '#self';
 
 /**
@@ -2787,6 +2787,7 @@ export function* SpecializeGenericFunction(fn: ObjectValue, ref: unknown, node: 
         }
       }
       const generic = { Kind: 'function', Signatures: [{ Parameters: sig.Parameters,
+        ...(ClassMethodThisTypeOf(fn) ? { ThisType: SelfThisTypeRecord } : {}),
         Return: sig.ReturnType ?? publishedReturnTypeOfFunction(fn, frame) ?? null,
         Narrows: sig.Narrows, TypeParameters: sig.TypeParameters }] } as unknown as TypeRecord;
       RegisterSpecializedFunctionType(specialized as unknown as object, substituteParameterRecords(generic, bindings));

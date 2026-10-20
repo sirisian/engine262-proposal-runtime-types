@@ -94,6 +94,13 @@ function sourcesOf(body: ParseNode): readonly ForwardingSource[] | undefined {
 /** Close a source class from its declaring context, never a returned value. */
 export function CloseInferredNominal(type: TypeRecord, value: unknown,
   publication: (fn: unknown) => TypeRecord | undefined): TypeRecord {
+  // A protocol result can retain source classes below its root.
+  // Close those from the declaring callable's environment too; inspecting a
+  // function or generator must not execute it to discover their identities.
+  if (type.Kind === 'nominal' && type.LibraryName) {
+    const environment = (value as { Environment?: EnvironmentRecord }).Environment;
+    return environment ? InstantiateCheckedBindings(new Map([['result', type]]), environment).get('result')! : type;
+  }
   if (type.Kind !== 'nominal' || type.Constructor || type.DeclarationIdentity
     || (type.Declaration.type !== 'ClassDeclaration' && type.Declaration.type !== 'ClassExpression')) return type;
   const seen = new Set<unknown>();
