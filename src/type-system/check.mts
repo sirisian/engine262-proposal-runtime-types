@@ -1293,6 +1293,11 @@ export function PublishedReturnTypeOf(declaration: object): TypeRecord | undefin
  * reads [[Base]] and [[Structure]] from here rather than computing them again.
  */
 const publishedClassTypes = new WeakMap<object, TypeRecord>();
+// Foreign consumers reuse descriptions produced in the declaration's checker.
+// Instance, constructor and static contracts must cross that boundary together.
+type CheckedConstructSignature = { Parameters: ParameterRecord[] };
+const publishedConstructSignatures = new WeakMap<ParseNode, CheckedConstructSignature[]>();
+const publishedClassObjectTypes = new WeakMap<ParseNode, Known>();
 
 export function PublishedClassTypeOf(declaration: object): TypeRecord | undefined {
   return publishedClassTypes.get(declaration);
@@ -6772,16 +6777,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const importedInterfaces = moduleCheckInputs.get(root)?.interfaces;
   const importedInterfacesByNode = new Map([...importedInterfaces?.values() ?? []].map((entry) => [entry.declaration, entry]));
   const interfaceNodes = new Map<string, ParseNode>([...importedInterfaces ?? []].map(([name, entry]) => [name, entry.declaration]));
-  const importedInterfaceSourceModules = new Map<ParseNode, AbstractModuleRecord>();
+  const importedDeclarationSourceModules = new Map<ParseNode, AbstractModuleRecord>();
   for (const entry of importedInterfaces?.values() ?? []) {
     let source = entry.declaration;
     while (source.parent) source = source.parent;
-    importedInterfaceSourceModules.set(source, entry.module);
+    importedDeclarationSourceModules.set(source, entry.module);
   }
-  const importedInterfaceSourceModule = (node: ParseNode): AbstractModuleRecord | undefined => {
+  for (const [declaration, module] of moduleCheckInputs.get(root)?.classModules ?? []) {
+    let source = declaration;
+    while (source.parent) source = source.parent;
+    importedDeclarationSourceModules.set(source, module);
+  }
+  const foreignDeclaration = (node: ParseNode): boolean => {
     let source = node;
     while (source.parent) source = source.parent;
-    return importedInterfaceSourceModules.get(source);
+    return source !== root && (source.type === 'Module' || source.type === 'Script');
+  };
+  const importedDeclarationSourceModule = (node: ParseNode): AbstractModuleRecord | undefined => {
+    let source = node;
+    while (source.parent) source = source.parent;
+    return importedDeclarationSourceModules.get(source);
   };
 
   /**
@@ -7478,6 +7493,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ? resolvedAlias(imported.module.Environment, imported.name, node) : undefined;
       return evaluated ?? imported.type;
     }
+    if (foreignDeclaration(node)) return CheckedInterfaceTypeOf(node) ?? null;
     const memo = interfaceTypeMemo.get(node);
     if (memo !== undefined) {
       return memo;
@@ -7523,13 +7539,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     (inProgress as unknown as { Arguments: readonly TypeRecord[] }).Arguments = defaultArgumentsOf(node);
     const decl = node as unknown as {
       InterfaceMemberList?: readonly ParseNode[] | null,
-      TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null,
+      TypeParameters?: { TypeParameterList?: readonly ParseNode[], Captures?: readonly ParseNode[] } | null,
     };
     // The checker half. The same
     // erasure as the runtime's, in a separate structure: the checker keeps its
     // own `interfaceTypeMemo`, so `T` has to be in scope HERE too or the
     // checking pass compares against `{ x: any }` exactly as membership did.
-    const ifaceParamNames = (decl.TypeParameters?.TypeParameterList ?? [])
+    const ifaceParamNames = [...decl.TypeParameters?.TypeParameterList ?? [], ...decl.TypeParameters?.Captures ?? []]
       .map((tp) => (tp as { BindingIdentifier?: { name?: string } })?.BindingIdentifier?.name)
       .filter((n): n is string => typeof n === 'string');
     if (ifaceParamNames.length > 0) {
@@ -7575,6 +7591,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const callable = callSignaturesOf(memberSources.map(({ member }) => member));
     if (callable !== undefined) {
       (inProgress as unknown as { Structure: Known }).Structure = callable;
+      checkedInterfaceTypes.set(node, inProgress as TypeRecord);
       return inProgress;
     }
     const declaredIn = new Map<string, number>();
@@ -7774,6 +7791,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // because a named member may be written either side of one and the rule is
     // over the whole list.
     checkIndexSignatures(IndexSignatures);
+    // Cases are checked in the producer too. Publish their own descriptions,
+    // including capture parameters, rather than falling back to the primary.
+    checkedInterfaceTypes.set(node, inProgress as TypeRecord);
     return inProgress;
   };
 
@@ -8063,6 +8083,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (memo !== undefined) {
       return memo;
     }
+    if (foreignDeclaration(node)) {
+      const published = publishedClassObjectTypes.get(node) ?? null;
+      const environment = afterTypeEvaluation ? importedDeclarationSourceModule(node)?.Environment : undefined;
+      const result = published && environment
+        ? InstantiateCheckedBindings(new Map([['static', published]]), environment).get('static')! : published;
+      classObjectTypeMemo.set(node, result);
+      return result;
+    }
     classObjectTypeMemo.set(node, null);
     // THE SHARED WALK, filtered for statics, rather than a field loop of its
     // own: overload arms accumulate into a `methods` map keyed by name, and a
@@ -8112,6 +8140,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       : null;
     classObjectTypeMemo.set(node, built);
     inferClassMethods(acc, built);
+    publishedClassObjectTypes.set(node, built);
     return built;
   };
 
@@ -8170,6 +8199,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (memo !== undefined) {
       return memo;
     }
+    if (foreignDeclaration(n)) {
+      const published = PublishedClassTypeOf(n);
+      if (!published) return null;
+      const descriptions = new Map<string, TypeRecord>([['instance', published]]);
+      const constructors = publishedConstructSignatures.get(n);
+      if (constructors) descriptions.set('construct', { Kind: 'function',
+        Signatures: constructors.map((signature) => ({ ...signature, Return: null })) });
+      const environment = afterTypeEvaluation ? importedDeclarationSourceModule(n)?.Environment : undefined;
+      const completed = environment ? InstantiateCheckedBindings(descriptions, environment) : descriptions;
+      const construct = completed.get('construct');
+      if (construct?.Kind === 'function') {
+        constructSignatures.set(n, construct.Signatures.map((signature) => ({ Parameters: [...signature.Parameters] })));
+      }
+      const instance = completed.get('instance')!;
+      classTypeMemo.set(n, instance);
+      return instance;
+    }
     if (classTypesInProgress.has(n)) {
       return (classShells.get(n) ?? null) as Known;
     }
@@ -8182,18 +8228,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // The shell IS the type: whatever a self-reference captured must end up
         // with the built record's fields, not merely equal ones.
         Object.assign(shell, built as unknown as Record<string, unknown>);
-        // An imported declaration belongs to its resolved source module. Once
-        // that module has evaluated, close its class and implements identities
-        // in the producer's environment, as completed annotations already do.
-        // Keep the member walk above: it also supplies constructor signatures.
-        // Do not read the current value of the mutable exported class binding.
-        const environment = afterTypeEvaluation ? moduleCheckInputs.get(root)?.classModules?.get(n)?.Environment : undefined;
-        let instance = shell as unknown as Known;
-        if (environment) {
-          // The shell can occur inside published member descriptions. Retain
-          // its symbolic identity; completion returns a separate local record.
-          instance = InstantiateCheckedBindings(new Map([['class', built]]), environment).get('class')!;
-        }
+        const instance = shell as unknown as Known;
         classTypeMemo.set(n, instance);
         return instance;
       }
@@ -9811,6 +9846,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // second, eager build at evaluation would have to reproduce that and could
     // silently disagree. One build, read twice, cannot.
     publishedClassTypes.set(n as unknown as object, instance as unknown as TypeRecord);
+    publishedConstructSignatures.set(n, constructSignatures.get(n) ?? []);
     return instance;
   };
 
@@ -10217,7 +10253,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /** Construct signatures by class node, for checking `new C(...)`. */
-  const constructSignatures = new Map<ParseNode, { Parameters: ParameterRecord[] }[]>();
+  const constructSignatures = new Map<ParseNode, CheckedConstructSignature[]>();
 
   /**
    * The `protected` access rule, checked IN THE WALK rather than in
@@ -14022,7 +14058,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // A returned or member signature already carries its enclosing arguments
     // in the effective constraint. Re-resolving its source in the caller can
     // lose that capture or replace it with an unrelated same-spelled binding.
-    const constraint = parameter.Constraint ?? (parameter.ConstraintNode && !importedInterfaceSourceModule(parameter.Declaration)
+    const constraint = parameter.Constraint ?? (parameter.ConstraintNode && !importedDeclarationSourceModule(parameter.Declaration)
       ? resolveType(parameter.ConstraintNode) : null);
     return constraint && substituteFreeTypeParameters(constraint, bindings);
   };
@@ -14042,7 +14078,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // publish that parameter's placeholder as an application result.
           const pending = FreeReferences(tp.DefaultNode).some((reference) => scope.has(reference.name) && !into.has(reference.name));
           const check: GenericDefaultCheck = { application: validation.application, node: tp.DefaultNode,
-            parameters: typeParams, bindings: new Map(into), captures: tp.Captures, sourceModule: importedInterfaceSourceModule(tp.Declaration) };
+            parameters: typeParams, bindings: new Map(into), captures: tp.Captures, sourceModule: importedDeclarationSourceModule(tp.Declaration) };
           const resolved = pending ? null : EvaluatedGenericType(check) ?? tp.Default ?? (check.sourceModule ? null : resolveType(tp.DefaultNode));
           const supplied = resolved && substituteFreeTypeParameters(resolved, into, typeParams.map((parameter) => parameter.Declaration));
           if (supplied) into.set(tp.Name, supplied);
@@ -14062,7 +14098,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         let bound = typeParameterConstraint(tp, into);
         if (tp.ConstraintNode && (!bound || bound.Kind === 'deferred')) {
           const check: GenericDefaultCheck = { application: validation.application, node: tp.ConstraintNode,
-            parameters: typeParams, bindings: new Map(into), captures: tp.Captures, constraint: true, sourceModule: importedInterfaceSourceModule(tp.Declaration) };
+            parameters: typeParams, bindings: new Map(into), captures: tp.Captures, constraint: true, sourceModule: importedDeclarationSourceModule(tp.Declaration) };
           const evaluated = EvaluatedGenericType(check);
           if (evaluated) bound = evaluated;
           else if (!describingGenericDefaults.size) genericDefaults.push(check);

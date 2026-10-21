@@ -138,3 +138,34 @@ export function resolvedDeclaration(environment: EnvironmentRecord, declaration:
   }
   return undefined;
 }
+
+/** Locate a foreign declaration's actual source Module Environment through the
+ * linked import graph. This reads import metadata, never binding values, and
+ * does not initialize a module or choose among local declaration activations.
+ */
+export function declarationModuleEnvironment(environment: EnvironmentRecord, declaration: ParseNode): EnvironmentRecord | undefined {
+  let source = declaration;
+  while (source.parent) source = source.parent;
+  if (source.type !== 'Module') return undefined;
+  const seen = new Set<EnvironmentRecord>();
+  const pending: (EnvironmentRecord | null | undefined)[] = [environment];
+  let found: EnvironmentRecord | undefined;
+  while (pending.length) {
+    const at = pending.pop();
+    if (!at || seen.has(at)) continue;
+    seen.add(at);
+    if (!(at instanceof DeclarativeEnvironmentRecord) && !(at instanceof GlobalEnvironmentRecord)) return undefined;
+    const holder = at instanceof GlobalEnvironmentRecord ? at.DeclarativeRecord : at;
+    for (const binding of holder.bindings.values()) {
+      if (!binding.indirect) continue;
+      const [module] = (binding as unknown as { target: [AbstractModuleRecord, JSStringValue] }).target;
+      if ('ECMAScriptCode' in module && module.ECMAScriptCode === source && module.Environment) {
+        if (found && found !== module.Environment) return undefined;
+        found = module.Environment;
+      }
+      pending.push(module.Environment);
+    }
+    pending.push(at.OuterEnv);
+  }
+  return found;
+}

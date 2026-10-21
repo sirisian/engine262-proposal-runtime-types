@@ -1,0 +1,1102 @@
+{
+  "description": "Producer-owned imported class descriptions and captured contexts at inferred admission; source availability and failure-order controls.",
+  "cases": [
+    {
+      "name": "extra-import-control",
+      "modules": {
+        "main": "import {E} from \"dep\";import {Has} from \"provider\";export const marker=1;",
+        "dep": "import {Has} from \"provider\";export class E implements Has.<E>{get():E{return this;}}",
+        "provider": "import {marker} from \"main\";export interface Has<T:type>{get():T;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "missing-import",
+      "modules": {
+        "main": "import {E} from \"dep\";export const marker=1;",
+        "dep": "import {Has} from \"provider\";export class E implements Has.<E>{get():E{return this;}}",
+        "provider": "import {marker} from \"main\";export interface Has<T:type>{get():T;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "acyclic",
+      "modules": {
+        "main": "import {E} from \"dep\";const e:E=new E();",
+        "dep": "import {Has} from \"provider\";export class E implements Has.<E>{get():E{return this;}}",
+        "provider": "export interface Has<T:type>{get():T;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "shadow-interface",
+      "modules": {
+        "main": "import {E} from \"dep\";interface Has<T:type>{wrong():string;}const e:E=new E();",
+        "dep": "import {Has} from \"provider\";export class E implements Has.<E>{get():E{return this;}}",
+        "provider": "export interface Has<T:type>{get():T;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "renamed",
+      "modules": {
+        "main": "import {E as C} from \"dep\";const e:C=new C();",
+        "dep": "import {Has} from \"provider\";export class E implements Has.<E>{get():E{return this;}}",
+        "provider": "export interface Has<T:type>{get():T;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "subclass",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const e:E=new D();",
+        "dep": "import {Has} from \"provider\";export class E implements Has.<E>{get():E{return this;}}",
+        "provider": "export interface Has<T:type>{get():T;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "private-interface",
+      "modules": {
+        "main": "import {E} from \"dep\";const e:E=new E();",
+        "dep": "interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "field-good",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;let result:string=new E().x;",
+        "dep": "type Hidden=string;export class E{x:Hidden=\"ok\";}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "field-bad",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;let result:boolean=new E().x;",
+        "dep": "type Hidden=string;export class E{x:Hidden=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "method-good",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;let result:string=new E().get();",
+        "dep": "type Hidden=string;export class E{get():Hidden{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-bad",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;let result:boolean=new E().get();",
+        "dep": "type Hidden=string;export class E{get():Hidden{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "inferred-method-good",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;let result:string=new E().get();",
+        "dep": "type Hidden=string;export class E{get(){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inferred-method-bad",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;let result:boolean=new E().get();",
+        "dep": "type Hidden=string;export class E{get(){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "static-method-good",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;let result:string=E.get();",
+        "dep": "type Hidden=string;export class E{static get():Hidden{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "static-method-bad",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;let result:boolean=E.get();",
+        "dep": "type Hidden=string;export class E{static get():Hidden{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "static-field-good",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;let result:string=E.x;",
+        "dep": "type Hidden=string;export class E{static x:Hidden=\"ok\";}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "static-field-bad",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;let result:boolean=E.x;",
+        "dep": "type Hidden=string;export class E{static x:Hidden=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "accessor-good",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;let result:string=new E().x;",
+        "dep": "type Hidden=string;export class E{get x():Hidden{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "accessor-bad",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;let result:boolean=new E().x;",
+        "dep": "type Hidden=string;export class E{get x():Hidden{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "constructor-good",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;new E(\"ok\");",
+        "dep": "type Hidden=string;export class E{constructor(x:Hidden){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "derived-constructor-good",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;class D extends E{}new D(\"ok\");",
+        "dep": "type Hidden=string;export class E{constructor(x:Hidden){}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-default-good",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;function check(){let result:string=new E().get();}new E();",
+        "dep": "type Hidden=string;export class E<T:type=Hidden>{get():T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-default-empty-good",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;function check(){let result:string=new E.<>().get();}new E();",
+        "dep": "type Hidden=string;export class E<T:type=Hidden>{get():T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "constructor-bad",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;new E(true);",
+        "dep": "type Hidden=string;export class E{constructor(x:Hidden){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "derived-constructor-bad",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;class D extends E{}new D(true);",
+        "dep": "type Hidden=string;export class E{constructor(x:Hidden){}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-default-bad",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;function check(){let result:boolean=new E().get();}new E();",
+        "dep": "type Hidden=string;export class E<T:type=Hidden>{get():T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-default-empty-bad",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;function check(){let result:boolean=new E.<>().get();}new E();",
+        "dep": "type Hidden=string;export class E<T:type=Hidden>{get():T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-explicit-good",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;const e=new E.<string>();",
+        "dep": "type Hidden=string;export class E<T:type extends Hidden>{}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-explicit-bad",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;const e=new E.<boolean>();",
+        "dep": "type Hidden=string;export class E<T:type extends Hidden>{}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_CONSTRAINT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "private-dependency-interface",
+      "modules": {
+        "main": "import {E} from \"dep\";const e:E=new E();",
+        "dep": "interface Hidden{a:string;}interface Has<T:type>{get():Hidden;}export class E implements Has.<E>{get():Hidden{return {a:\"ok\"};}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-reexport",
+      "modules": {
+        "main": "import {C as X} from \"bridge\";type Has=boolean;const e:X=new X();",
+        "dep": "import {Has} from \"provider\";export class E implements Has.<E>{get():E{return this;}}",
+        "provider": "export interface Has<T:type>{get():T;}",
+        "bridge": "export {E as C} from \"dep\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "star-reexport",
+      "modules": {
+        "main": "import {E as X} from \"bridge\";type Has=boolean;const e:X=new X();",
+        "dep": "import {Has} from \"provider\";export class E implements Has.<E>{get():E{return this;}}",
+        "provider": "export interface Has<T:type>{get():T;}",
+        "bridge": "export * from \"dep\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "renamed-provider",
+      "modules": {
+        "main": "import {E} from \"dep\";new E();",
+        "dep": "import {Has as Contract} from \"provider\";export class E implements Contract.<E>{get():E{return this;}}",
+        "provider": "export interface Has<T:type>{get():T;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-contract",
+      "modules": {
+        "main": "import {E} from \"dep\";new E();",
+        "dep": "import {Has} from \"provider\";type Contract<T:type>=Has.<T>;export class E implements Contract.<E>{get():E{return this;}}",
+        "provider": "export interface Has<T:type>{get():T;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-contract",
+      "modules": {
+        "main": "import {E} from \"dep\";new E.<string>();",
+        "dep": "import {Has} from \"provider\";export class E<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}",
+        "provider": "export interface Has<T:type>{get():T;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "private-instance-argument-good",
+      "modules": {
+        "main": "import {E} from \"dep\";interface Hidden{wrong():string;}new E().set(\"ok\");",
+        "dep": "import {Hidden} from \"provider\";export class E{set(v:Hidden){}static set(v:Hidden){}}",
+        "provider": "export type Hidden=string;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "private-instance-argument-bad",
+      "modules": {
+        "main": "import {E} from \"dep\";interface Hidden{wrong():string;}new E().set(true);",
+        "dep": "import {Hidden} from \"provider\";export class E{set(v:Hidden){}static set(v:Hidden){}}",
+        "provider": "export type Hidden=string;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "private-static-argument-good",
+      "modules": {
+        "main": "import {E} from \"dep\";interface Hidden{wrong():string;}E.set(\"ok\");",
+        "dep": "import {Hidden} from \"provider\";export class E{set(v:Hidden){}static set(v:Hidden){}}",
+        "provider": "export type Hidden=string;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "private-static-argument-bad",
+      "modules": {
+        "main": "import {E} from \"dep\";interface Hidden{wrong():string;}E.set(true);",
+        "dep": "import {Hidden} from \"provider\";export class E{set(v:Hidden){}static set(v:Hidden){}}",
+        "provider": "export type Hidden=string;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "foreign-interface-instance-good",
+      "modules": {
+        "main": "import {E} from \"dep\";interface Hidden{wrong():string;}new E().set(\"ok\");",
+        "dep": "import {Hidden} from \"provider\";export class E{set(v:Hidden){}}",
+        "provider": "export type Hidden=string;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "foreign-interface-instance-bad",
+      "modules": {
+        "main": "import {E} from \"dep\";interface Hidden{wrong():string;}new E().set(true);",
+        "dep": "import {Hidden} from \"provider\";export class E{set(v:Hidden){}}",
+        "provider": "export type Hidden=string;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "foreign-interface-static-good",
+      "modules": {
+        "main": "import {E} from \"dep\";interface Hidden{wrong():string;}E.set(\"ok\");",
+        "dep": "import {Hidden} from \"provider\";export class E{static set(v:Hidden){}}",
+        "provider": "export type Hidden=string;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "foreign-interface-static-bad",
+      "modules": {
+        "main": "import {E} from \"dep\";interface Hidden{wrong():string;}E.set(true);",
+        "dep": "import {Hidden} from \"provider\";export class E{static set(v:Hidden){}}",
+        "provider": "export type Hidden=string;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "foreign-interface-constructor-good",
+      "modules": {
+        "main": "import {E} from \"dep\";interface Hidden{wrong():string;}new E(\"ok\");",
+        "dep": "import {Hidden} from \"provider\";export class E{constructor(v:Hidden){}}",
+        "provider": "export type Hidden=string;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "foreign-interface-constructor-bad",
+      "modules": {
+        "main": "import {E} from \"dep\";interface Hidden{wrong():string;}new E(true);",
+        "dep": "import {Hidden} from \"provider\";export class E{constructor(v:Hidden){}}",
+        "provider": "export type Hidden=string;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "foreign-interface-accessor-good",
+      "modules": {
+        "main": "import {E} from \"dep\";interface Hidden{wrong():string;}new E().x=\"ok\";",
+        "dep": "import {Hidden} from \"provider\";export class E{set x(v:Hidden){}}",
+        "provider": "export type Hidden=string;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "foreign-interface-accessor-bad",
+      "modules": {
+        "main": "import {E} from \"dep\";interface Hidden{wrong():string;}new E().x=true;",
+        "dep": "import {Hidden} from \"provider\";export class E{set x(v:Hidden){}}",
+        "provider": "export type Hidden=string;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "control-required-self-implementation",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export class E implements Has.<E>{get():E{return this;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "control-pure-runtime-cycle",
+      "modules": {
+        "main": "import {x} from \"dep\";export const v=1;",
+        "dep": "import {v} from \"main\";export const x=v;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "control-candidate-effects-do-not-start",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";throw new Error(\"body entered\");export class E implements Has.<E>{get():E{return this;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "control-static-contract-failure-precedes-availability",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export class E implements Has.<string>{get():boolean{return true;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "control-earlier-dependency-effects",
+      "modules": {
+        "main": "import \"seed\";import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "seed": "globalThis.cyclicInterfaceMarker=1;",
+        "dep": "import {Has} from \"main\";export class E implements Has.<E>{get():E{return this;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "seed"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "no-contract-execution",
+      "modules": {
+        "main": "import {E} from \"dep\";const f=E.get;",
+        "dep": "import {Has} from \"provider\";export class E implements Has.<E>{constructor(){throw new Error(\"constructed\");}get():E{throw new Error(\"called\");}static get():string{throw new Error(\"called\");}}",
+        "provider": "export interface Has<T:type>{get():T;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bare-specialization",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;new E.<string>();",
+        "dep": "type Hidden=string;export class E<T:type extends Hidden>{}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inferred-return",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;function make(){return new E.<string>();}make();",
+        "dep": "type Hidden=string;export class E<T:type extends Hidden>{}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inferred-extracted",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;const [e]=[new E.<string>()];",
+        "dep": "type Hidden=string;export class E<T:type extends Hidden>{}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inferred-typed-control",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;let e:E.<string>=new E.<string>();",
+        "dep": "type Hidden=string;export class E<T:type extends Hidden>{}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inferred-failure-recovery",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;const F:any=E;let caught=false;try{F.<boolean>;}catch(e){caught=true;}if(!caught)throw new Error(\"missing failure\");const e=new E.<string>();",
+        "dep": "type Hidden=string;export class E<T:type extends Hidden>{}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "dependent-partial",
+      "modules": {
+        "main": "import {E} from \"dep\";import {Has} from \"provider\";new E.<Has.<string>>();",
+        "dep": "export class E<T:type> implements T{}partial class E{get():string{return \"ok\";}}",
+        "provider": "export interface Has<T:type>{get():T;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "provider",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inferred-interface",
+      "modules": {
+        "main": "import {make} from \"dep\";type Hidden=boolean;const value=make();",
+        "dep": "type Hidden=string;interface I<T:type extends Hidden>{get():T;}export function make():I.<string>{return {get():string{return \"ok\";}};}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "value-domain-shadow",
+      "modules": {
+        "main": "import {E} from \"dep\";type Hidden=boolean;const e=new E.<1>();",
+        "dep": "type Hidden=uint8;export class E<N:Hidden>{}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inferred-generic-renamed",
+      "modules": {
+        "main": "import {E as C} from \"dep\";type Hidden=boolean;const e=new C.<string>();",
+        "dep": "type Hidden=string;export class E<T:type extends Hidden>{}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inferred-private-class-return",
+      "modules": {
+        "main": "import {make} from \"dep\";type Hidden=boolean;const e=make();",
+        "dep": "type Hidden=string;class E<T:type extends Hidden>{}export function make(){return new E.<string>();}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "distinct-nominal-good",
+      "modules": {
+        "main": "import {E} from \"dep\";class A{}new E().set(E.make());",
+        "dep": "import {A} from \"provider\";export class E{set(x:A){}static make():A{return new A();}}",
+        "provider": "export class A{}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "distinct-nominal-bad",
+      "modules": {
+        "main": "import {E} from \"dep\";class A{}new E().set(new A());",
+        "dep": "import {A} from \"provider\";export class E{set(x:A){}static make():A{return new A();}}",
+        "provider": "export class A{}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-case-good",
+      "modules": {
+        "dep": "type Hidden=string;export interface Has<T:type>{get():T;}interface Has<string>{get():string;extra():Hidden;}",
+        "main": "import {Has} from \"dep\";type Hidden=number;class C implements Has.<string>{get():string{return \"ok\";}extra():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-capture-good",
+      "modules": {
+        "dep": "export interface Store<T:type>{get():T;}interface Store<[].<const U>>{get():[].<U>;first():U;}",
+        "main": "import {Store} from \"dep\";type U=boolean;class C implements Store.<[].<string>>{get():[].<string>{return [\"ok\"];}first():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-callable-case-good",
+      "modules": {
+        "dep": "export interface F<T:type>{(x:T):any;}interface F<string>{(x:string):string;}",
+        "main": "import {F} from \"dep\";const f:F.<string>=(x:string):string=>\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-case-bad",
+      "modules": {
+        "dep": "type Hidden=string;export interface Has<T:type>{get():T;}interface Has<string>{get():string;extra():Hidden;}",
+        "main": "import {Has} from \"dep\";type Hidden=number;class C implements Has.<string>{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-capture-bad",
+      "modules": {
+        "dep": "export interface Store<T:type>{get():T;}interface Store<[].<const U>>{get():[].<U>;first():U;}",
+        "main": "import {Store} from \"dep\";type U=boolean;class C implements Store.<[].<string>>{get():[].<string>{return [\"ok\"];}first():boolean{return true;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-callable-case-bad",
+      "modules": {
+        "dep": "export interface F<T:type>{(x:T):any;}interface F<string>{(x:string):string;}",
+        "main": "import {F} from \"dep\";const f:F.<string>=(x:string):boolean=>true;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    }
+  ]
+}

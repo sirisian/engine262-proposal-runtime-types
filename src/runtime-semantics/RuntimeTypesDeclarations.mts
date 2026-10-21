@@ -2231,6 +2231,11 @@ export function RegisterClassTypeEnvironment(ctor: Value, environment: Environme
     TypeParameterFrame: currentTypeParameterFrame(), Realm: context.Realm, ScriptOrModule: context.ScriptOrModule,
   });
 }
+/** The actual class activation owns normalization of inferred arguments too. */
+export function ClassTypeContextOf(ctor: Value): CapturedTypeContext | undefined {
+  return classTypeContexts.get(ctor);
+}
+
 export function ClassTypeEnvironmentOf(ctor: Value): EnvironmentRecord | undefined {
   return classTypeEnvironments.get(ctor) ?? (ctor as { Environment?: EnvironmentRecord }).Environment;
 }

@@ -1,6 +1,6 @@
 import { SameType } from './relations.mts';
 import type { TypeRecord } from './records.mts';
-import { resolvedDeclaration } from './resolving-aliases.mts';
+import { resolvedDeclaration, declarationModuleEnvironment } from './resolving-aliases.mts';
 import {
   type EnvironmentRecord, LexicalClassFamily, ClassFamilyIdentityOf, ClassTypeEnvironmentOf,
   SpecializedClassConstructor, LookupClassType, isTypeObject,
@@ -29,7 +29,11 @@ export function InstantiateCheckedBindings(bindings: ReadonlyMap<string, TypeRec
       case 'nominal': {
         copy.Arguments = copy.Arguments.map((argument) => typeof argument === 'number' ? argument : walk(argument, context));
         if (copy.Declaration.type === 'InterfaceDeclaration') {
-          const published = resolvedDeclaration(context, copy.Declaration);
+          let published = resolvedDeclaration(context, copy.Declaration);
+          if (!published) {
+            const source = declarationModuleEnvironment(context, copy.Declaration);
+            if (source) published = resolvedDeclaration(source, copy.Declaration);
+          }
           if (published?.Kind === 'nominal' && published.DeclarationIdentity) {
             copy.DeclarationIdentity = published.DeclarationIdentity;
           }
@@ -48,7 +52,11 @@ export function InstantiateCheckedBindings(bindings: ReadonlyMap<string, TypeRec
           copy.Implements = application.Implements;
           break;
         }
-        const family = LexicalClassFamily(copy.Declaration, context);
+        let family = LexicalClassFamily(copy.Declaration, context);
+        if (!family) {
+          const source = declarationModuleEnvironment(context, copy.Declaration);
+          if (source) family = LexicalClassFamily(copy.Declaration, source);
+        }
         if (!family) break;
         const constructor = SpecializedClassConstructor(copy.Declaration, copy.Arguments, family) ?? family;
         const object = LookupClassType(constructor);

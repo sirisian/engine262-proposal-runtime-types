@@ -2,8 +2,9 @@ import { Q } from '../completion.mts';
 import type { PlainEvaluator } from '../evaluator.mts';
 import { Value } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
+import { ClassTypeContextOf, InterfaceTypeContextOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { RequireType } from '../abstract-ops/runtime-types.mts';
-import { IsOfType, BindTypeArgumentRecords, currentTypeParameterFrame } from './runtime.mts';
+import { IsOfType, BindTypeArgumentRecords, currentTypeParameterFrame, InCapturedTypeContext } from './runtime.mts';
 import { InferredConstTypeOf } from './check.mts';
 import { makePrimitive, substituteFreeTypeParameters, type TypeRecord } from './records.mts';
 import { InstantiateReturnDependency, ForwardResultDependency, RetainCheckedResult, CheckedPropertyKeyOf, InstantiateCheckedBindings, CompleteCreatedFunctionResult, surroundingAgent } from '#self';
@@ -13,9 +14,18 @@ export function* NormalizeInferredClassArguments(target: TypeRecord): PlainEvalu
   if (target.Kind === 'nominal' && !target.LibraryName) {
     const typeParameters = (target.Declaration as ParseNode.ClassDeclaration | undefined)?.TypeParameters?.TypeParameterList;
     if (typeParameters?.length && target.Arguments.length) {
+      // Reification can need source constraints even when every argument was
+      // inferred. Complete the declared identity before choosing that context;
+      // the initializer's value must not choose its own admission target.
+      target = InstantiateCheckedBindings(new Map([['target', target]]),
+        surroundingAgent.runningExecutionContext.LexicalEnvironment).get('target')!;
+      if (target.Kind !== 'nominal') return target;
+      const captured = target.Declaration.type === 'InterfaceDeclaration' ? InterfaceTypeContextOf(target)
+        : target.Constructor instanceof Value ? ClassTypeContextOf(target.Constructor) : undefined;
       const argumentsAsTypes = target.Arguments.map((arg) => typeof arg === 'number'
         ? { Kind: 'literal', Value: Value(arg), Base: makePrimitive('number') } as TypeRecord : arg);
-      const bound = Q(yield* BindTypeArgumentRecords(typeParameters, argumentsAsTypes, [], 'inferred const'));
+      const bind = () => BindTypeArgumentRecords(typeParameters, argumentsAsTypes, [], 'inferred const');
+      const bound = Q(yield* (captured ? InCapturedTypeContext(captured, bind) : bind()));
       target = { ...target, Arguments: bound };
     }
   }
