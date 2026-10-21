@@ -66,7 +66,7 @@ import {
 } from './iteration-types.mts';
 import {
   anyType, builtinTypeRecord, badKindedArgument, libraryTypeRecord, makePrimitive, voidType, displayType, validateVectorType, namedNumericLiteralRecord, propertyKeyValue, parameter } from './records.mts';
-import { CanonicalizeType, GetTypeObject, isTypeObject, isClassTypeObject } from './intern.mts';
+import { CanonicalizeType, GetTypeObject, isTypeObject, isClassTypeObject, TypeObjectOfDenotation } from './intern.mts';
 import { invalidTupleRest } from './tuple-rests.mts';
 import { GenericClassDeclarationOf, MaterializeSpecialization, ClassTypeEnvironmentOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { TupleStorageShapeOf, TupleSequenceLengthRange, TupleLengthRange, TupleStorageTypeAt, TuplePrefixLength, TupleSuffixLength, TuplePrefixElement, TupleDefaultPlacementError, type TupleStorageShape } from './tuple-storage.mts';
@@ -4216,11 +4216,11 @@ function* IsOfTypeWithStorage(value: Value, t: TypeRecord, storage?: StructuralS
   // that and turned `c is Reflect.ClassField` FALSE for a decorator context,
   // though its guard could not match that name.
   //
-  // Tested with `isTypeObject`, never by the [[TypeRecord]] slot a Type Object
-  // also carries to hold what it DENOTES - the trap `CarriedTypeRecordOf`'s
-  // comment states and calls worth stating twice.
+  // A class constructor also denotes its associated type. This is membership
+  // only: retain the constructor value and its function runtime type. A carried
+  // record on a numeric value is still not a type denotation.
   if (t.Kind === 'nominal' && (t as { LibraryName?: string }).LibraryName === 'Reflect.TypeObject') {
-    return isTypeObject(value);
+    return TypeObjectOfDenotation(value) !== undefined;
   }
   if (t.Kind === 'primitive' && t.Name === 'vector') {
     if (value.type !== 'Vector') {
@@ -5087,7 +5087,7 @@ export function primitiveMembership(value: Value, name: string, args: readonly (
   // among them - the clause's own recursive case, which follows from asking
   // what the value is rather than what it names.
   if (name === 'type') {
-    return isTypeObject(value);
+    return TypeObjectOfDenotation(value) !== undefined;
   }
   // proposal-runtime-types #sec-complex-types: the values of `complex.<T>` are
   // "the ordered pairs of a real part and an imaginary part, each a value of

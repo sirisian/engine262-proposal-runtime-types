@@ -97,8 +97,10 @@ test('`type never` is the Type Object of the never type', () => {
   // the same object the construction gives, because types are interned - which is
   // what a dedicated name would have saved, and does not
   expect(evaluated('String((type never) === Reflect.makeType({ kind: "union", members: [] }));')).toBe('true');
-  // no value is of it
-  expect(evaluated('String((1 is never) === false && ("s" is never) === false);')).toBe('true');
+  // No value is of it. Query membership without an && branch, whose settled
+  // type test is correctly rejected by the narrowing rules.
+  expect(evaluated('String(1 is never);')).toBe('false');
+  expect(evaluated('String("s" is never);')).toBe('false');
 });
 
 test('no `Reflect.never` remains', () => {

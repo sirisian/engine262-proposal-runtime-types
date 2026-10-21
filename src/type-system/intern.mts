@@ -1,7 +1,7 @@
 import type { Arguments } from '../value.mts';
 import { RationalConstructAt } from '../intrinsics/Rational.mts';
 import { CreateComplexValue } from '../intrinsics/Complex.mts';
-import { CheckedConvertValue, GoverningMetaTypes, NormalizeMetadataRecord } from '../abstract-ops/runtime-types.mts';
+import { CheckedConvertValue, GoverningMetaTypes, NormalizeMetadataRecord, LookupClassType } from '../abstract-ops/runtime-types.mts';
 import { VectorValue, ObjectValue, TypedStringValue } from '../value.mts';
 import { JSStringValue } from '../value.mts';
 import { CompositeFromShape } from '../intrinsics/Composite.mts';
@@ -52,6 +52,13 @@ export function isTypeObject(value: unknown): value is TypeObject {
     && (value as { TypeRecord?: unknown }).TypeRecord !== undefined
     && !('DecimalSignificand' in value) && !('RationalNumerator' in value)
     && !('Float128Significand' in value) && !('ComplexReal' in value);
+}
+
+/** Resolve an existing type denotation without property access or user code. */
+export function TypeObjectOfDenotation(value: unknown): TypeObject | undefined {
+  if (isTypeObject(value)) return value;
+  const associated = value instanceof ObjectValue ? LookupClassType(value) : undefined;
+  return isTypeObject(associated) ? associated : undefined;
 }
 
 /** #sec-canonicalizetype */

@@ -1,13 +1,10 @@
 import { test, expect } from 'vitest';
 import { evaluated, expectThrown } from '../harness.mts';
 
-// A class DENOTES its type through its constructor - a class's type object is its constructor - so
-// `Reflect.getReflection(K)` must reflect a class as it does any other type, though `isTypeObject` is
-// `'TypeRecord' in value` and a constructor carries no record. The record cannot simply be attached to the
-// constructor: that would make `typeof K` report "object", where ECMA-262 requires "function". A class is the
-// one denotation whose shape is fixed by another specification, so the association is resolved at the
-// reflection site instead. Every other type object reports typeof "object", which #sec-type-object-opacity
-// requires: "This does not make a Type Object a function to `typeof`".
+// A class denotes its type through its constructor. Reflection accepts either
+// a carried Type Record or the constructor's existing association. Neither
+// representation changes the constructor's ordinary typeof or construction
+// behavior. Specialized constructor inputs are covered in constructor-type-inputs.
 
 test('a class reflects through its constructor', () => {
   expect(evaluated('class K { x: uint8 = 1; } String(Reflect.getReflection(K).kind);')).toBe('primitive');
@@ -15,7 +12,7 @@ test('a class reflects through its constructor', () => {
 });
 
 test('and `typeof` is untouched', () => {
-  // The constraint that rules out attaching the record.
+  // Reflection admission must preserve ordinary constructor behavior.
   expect(evaluated('class K { } typeof K;')).toBe('function');
   expect(evaluated('class Box<T: type> { v: T; } typeof Box;')).toBe('function');
   // While every other type object reports "object", as the spec requires - in a

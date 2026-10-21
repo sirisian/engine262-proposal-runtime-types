@@ -1,0 +1,1114 @@
+{
+  "cases": [
+    {
+      "name": "specialized-constructor-source",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} if (!(Reflect.isAssignable(E.<string>,Has.<string>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "specialized-type-object-source",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} if (!(Reflect.isAssignable(type E.<string>,Has.<string>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "instance-type-object-source",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} if (!(Reflect.isAssignable(Reflect.typeOf(new E.<string>()),Has.<string>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "specialized-constructor-target",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} if (!(Reflect.isAssignable(type E.<string>,E.<string>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "two-specialized-constructors",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} if (!(Reflect.isAssignable(E.<string>,E.<string>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "wrong-arguments-not-assignable",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} if (!(!Reflect.isAssignable(E.<string>,E.<boolean>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "wrong-arguments-type-object-control",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} if (!(!Reflect.isAssignable(type E.<string>,type E.<boolean>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-does-not-become-class",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} if (!(!Reflect.isAssignable(Has.<string>,E.<string>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "incompatible-interface",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} if (!(!Reflect.isAssignable(E.<string>,Has.<boolean>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "specialized-subclass-source",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} class D<T:type> extends E.<T>{}if (!(Reflect.isAssignable(D.<string>,E.<string>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "specialized-subclass-target",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} class D<T:type> extends E.<T>{}if (!(!Reflect.isAssignable(E.<string>,D.<string>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "non-generic-class-control",
+      "modules": {
+        "main": "class A{} class B extends A{}if (!(Reflect.isAssignable(B,A)&&!Reflect.isAssignable(A,B))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unrelated-family",
+      "modules": {
+        "main": "class A<T:type>{}class B<T:type>{}if (!(!Reflect.isAssignable(A.<string>,B.<string>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "constructor-alias",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} const C=E.<string>;if (!(Reflect.isAssignable(C,Has.<string>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "mutable-value-origin",
+      "modules": {
+        "main": "class A<T:type>{}class B<T:type>{}let C=A.<string>;C=B.<string>;if (!(Reflect.isAssignable(C,B.<string>)&&!Reflect.isAssignable(C,A.<string>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-local-family",
+      "modules": {
+        "main": "function make(){return class C<T:type>{};}const A=make();const B=make();if (!(!Reflect.isAssignable(A.<string>,B.<string>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-outer-arguments",
+      "modules": {
+        "main": "function make<T:type>(){return class C<U:type>{};}const A=make.<string>();const B=make.<boolean>();if (!(!Reflect.isAssignable(A.<string>,B.<string>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "value-arguments",
+      "modules": {
+        "main": "class C<N:uint8>{}if (!(Reflect.isAssignable(C.<1>,C.<1>)&&!Reflect.isAssignable(C.<1>,C.<2>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "defaulted-application",
+      "modules": {
+        "main": "class C<T:type=string>{}if (!(Reflect.isAssignable(C.<>,C.<string>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bare-declaration-stays-bare",
+      "modules": {
+        "main": "class C<T:type=string>{}if (!(Reflect.isAssignable(C,Reflect.makeType(C))&&!Reflect.isAssignable(C,C.<string>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "match-constructor-pattern",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} if (!(Reflect.matchType(E.<string>,type E.<string>)!==null)) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "match-constructor-subject",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} if (!(Reflect.matchType(type E.<string>,E.<string>)!==null)) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "match-both-constructors",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} if (!(Reflect.matchType(E.<string>,E.<string>)!==null)) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "match-distinct-arguments",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} if (!(Reflect.matchType(E.<string>,E.<boolean>)===null)) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "match-inheritance-is-not-equality",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} class D<T:type> extends E.<T>{}if (!(Reflect.matchType(E.<string>,D.<string>)===null)) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "slot-binds-instance-type",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} const S=Reflect.inferSlot(\"S\");if (!(Reflect.matchType(S,E.<string>).S===(type E.<string>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "make-constructor-control",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} if (!(Reflect.makeType(E.<string>)===(type E.<string>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "get-reflection-constructor-control",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} if (!(Reflect.makeType(Reflect.getReflection(E.<string>))===(type E.<string>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-node-constructor-control",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} if (!(Reflect.makeType({kind:\"array\",element:E.<string>})===(type [].<E.<string>>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "constructor-keeps-function-typeof",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} if (!(typeof E.<string>===\"function\"&&Reflect.getReflection(Reflect.typeOf(E.<string>)).kind===\"function\"&&Reflect.isAssignable(E.<string>,Has.<string>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "construction-still-works",
+      "modules": {
+        "main": "class C<T:type>{value:T;constructor(value:T){this.value=value;}}const c=new C.<string>(\"ok\");if (!(c.value===\"ok\"&&c instanceof C.<string>&&Reflect.isAssignable(C.<string>,C.<string>))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "no-construction-or-member-reads",
+      "modules": {
+        "main": "let calls=0;class C<T:type>{constructor(){calls++;}static get kind(){calls++;throw new Error(\"getter ran\");}get value():T{calls++;throw new Error(\"getter ran\");}}if (!(Reflect.isAssignable(C.<string>,C.<string>)&&Reflect.matchType(C.<string>,C.<string>)!==null&&calls===0)) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "custom-hasinstance-not-called",
+      "modules": {
+        "main": "let calls=0;class C<T:type>{static [Symbol.hasInstance](x){calls++;return true;}}if (!(Reflect.isAssignable(C.<string>,C.<string>)&&calls===0)) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-evaluation-order",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} let order=\"\";function source(){order+=\"s\";return E.<string>;}function target(){order+=\"t\";return Has.<string>;}if (!(Reflect.isAssignable(source(),target())&&order===\"st\")) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "ordinary-function-assign-source",
+      "modules": {
+        "main": "function f(){}function reject(x){try{Reflect.isAssignable(x,uint8);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(f))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "ordinary-function-assign-target",
+      "modules": {
+        "main": "function f(){}function reject(x){try{Reflect.isAssignable(uint8,x);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(f))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "ordinary-function-match-pattern",
+      "modules": {
+        "main": "function f(){}function reject(x){try{Reflect.matchType(x,uint8);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(f))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "ordinary-function-match-subject",
+      "modules": {
+        "main": "function f(){}function reject(x){try{Reflect.matchType(uint8,x);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(f))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bound-constructor-assign-source",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} function reject(x){try{Reflect.isAssignable(x,uint8);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(E.<string>.bind(null)))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bound-constructor-assign-target",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} function reject(x){try{Reflect.isAssignable(uint8,x);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(E.<string>.bind(null)))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bound-constructor-match-pattern",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} function reject(x){try{Reflect.matchType(x,uint8);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(E.<string>.bind(null)))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bound-constructor-match-subject",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} function reject(x){try{Reflect.matchType(uint8,x);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(E.<string>.bind(null)))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-instance-assign-source",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} function reject(x){try{Reflect.isAssignable(x,uint8);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(new E.<string>()))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-instance-assign-target",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} function reject(x){try{Reflect.isAssignable(uint8,x);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(new E.<string>()))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-instance-match-pattern",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} function reject(x){try{Reflect.matchType(x,uint8);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(new E.<string>()))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-instance-match-subject",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} function reject(x){try{Reflect.matchType(uint8,x);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(new E.<string>()))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "plain-object-assign-source",
+      "modules": {
+        "main": "function reject(x){try{Reflect.isAssignable(x,uint8);return false;}catch(e){return e instanceof TypeError;}}if (!(reject({}))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "plain-object-assign-target",
+      "modules": {
+        "main": "function reject(x){try{Reflect.isAssignable(uint8,x);return false;}catch(e){return e instanceof TypeError;}}if (!(reject({}))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "plain-object-match-pattern",
+      "modules": {
+        "main": "function reject(x){try{Reflect.matchType(x,uint8);return false;}catch(e){return e instanceof TypeError;}}if (!(reject({}))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "plain-object-match-subject",
+      "modules": {
+        "main": "function reject(x){try{Reflect.matchType(uint8,x);return false;}catch(e){return e instanceof TypeError;}}if (!(reject({}))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "number-assign-source",
+      "modules": {
+        "main": "function reject(x){try{Reflect.isAssignable(x,uint8);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(42))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "number-assign-target",
+      "modules": {
+        "main": "function reject(x){try{Reflect.isAssignable(uint8,x);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(42))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "number-match-pattern",
+      "modules": {
+        "main": "function reject(x){try{Reflect.matchType(x,uint8);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(42))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "number-match-subject",
+      "modules": {
+        "main": "function reject(x){try{Reflect.matchType(uint8,x);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(42))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-number-assign-source",
+      "modules": {
+        "main": "const n:uint8=1;function reject(x){try{Reflect.isAssignable(x,uint8);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(n))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-number-assign-target",
+      "modules": {
+        "main": "const n:uint8=1;function reject(x){try{Reflect.isAssignable(uint8,x);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(n))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-number-match-pattern",
+      "modules": {
+        "main": "const n:uint8=1;function reject(x){try{Reflect.matchType(x,uint8);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(n))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-number-match-subject",
+      "modules": {
+        "main": "const n:uint8=1;function reject(x){try{Reflect.matchType(uint8,x);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(n))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "undefined-assign-source",
+      "modules": {
+        "main": "function reject(x){try{Reflect.isAssignable(x,uint8);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(undefined))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "undefined-assign-target",
+      "modules": {
+        "main": "function reject(x){try{Reflect.isAssignable(uint8,x);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(undefined))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "undefined-match-pattern",
+      "modules": {
+        "main": "function reject(x){try{Reflect.matchType(x,uint8);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(undefined))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "undefined-match-subject",
+      "modules": {
+        "main": "function reject(x){try{Reflect.matchType(uint8,x);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(undefined))) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "proxy-constructor-assign-source",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} let hits=0;const P=new Proxy(E.<string>,{get(){hits++;throw new Error(\"trap ran\");}});function reject(x){try{Reflect.isAssignable(x,uint8);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(P)&&hits===0)) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "proxy-constructor-assign-target",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} let hits=0;const P=new Proxy(E.<string>,{get(){hits++;throw new Error(\"trap ran\");}});function reject(x){try{Reflect.isAssignable(uint8,x);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(P)&&hits===0)) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "proxy-constructor-match-pattern",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} let hits=0;const P=new Proxy(E.<string>,{get(){hits++;throw new Error(\"trap ran\");}});function reject(x){try{Reflect.matchType(x,uint8);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(P)&&hits===0)) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "proxy-constructor-match-subject",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;} class E<T:type> implements Has.<T>{get():T{throw new Error(\"method ran\");}} let hits=0;const P=new Proxy(E.<string>,{get(){hits++;throw new Error(\"trap ran\");}});function reject(x){try{Reflect.matchType(uint8,x);return false;}catch(e){return e instanceof TypeError;}}if (!(reject(P)&&hits===0)) throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-specialization",
+      "modules": {
+        "main": "import {C} from \"barrel\";import {Has} from \"provider\";if(!Reflect.isAssignable(C.<string>,Has.<string>))throw new Error(\"wrong\");",
+        "barrel": "export {E as C} from \"dep\";",
+        "dep": "import {Has} from \"provider\";export class E<T:type> implements Has.<T>{get():T{throw new Error(\"ran\");}}",
+        "provider": "export interface Has<T:type>{get():T;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-expression",
+      "modules": {
+        "main": "const C=class<T:type>{};if(!(Reflect.isAssignable(C.<string>,C.<string>)))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "invalid-before-valid-leaves-association",
+      "modules": {
+        "main": "class C<T:type>{}let caught=false;try{Reflect.isAssignable(C.<string>,42);}catch(e){caught=e instanceof TypeError;}if(!(caught&&Reflect.isAssignable(C.<string>,C.<string>)&&Reflect.matchType(C.<string>,C.<string>)!==null))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "invalid-source-still-evaluates-target",
+      "modules": {
+        "main": "let order=\"\";function first(){order+=\"s\";return 42;}function second(){order+=\"t\";return uint8;}let caught=false;try{Reflect.isAssignable(first(),second());}catch(e){caught=e instanceof TypeError;}if(!(caught&&order===\"st\"))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "argument-throw-precedes-admission",
+      "modules": {
+        "main": "let order=\"\";function first(){order+=\"s\";return 42;}function second(){order+=\"t\";throw \"argument\";}let caught=false;try{Reflect.isAssignable(first(),second());}catch(e){caught=e===\"argument\";}if(!(caught&&order===\"st\"))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "any-does-not-admit-non-type",
+      "modules": {
+        "main": "function reject(x){try{Reflect.isAssignable(x,any);return false;}catch(e){return e instanceof TypeError;}}if(!(reject(42)))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "never-does-not-admit-non-type",
+      "modules": {
+        "main": "function reject(x){try{Reflect.isAssignable(never,x);return false;}catch(e){return e instanceof TypeError;}}if(!(reject(42)))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "slot-does-not-admit-non-type",
+      "modules": {
+        "main": "function reject(x){try{Reflect.matchType(Reflect.inferSlot(\"S\"),x);return false;}catch(e){return e instanceof TypeError;}}if(!(reject(42)))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "forged-record-property-is-not-association",
+      "modules": {
+        "main": "class C<T:type>{}const fake={TypeRecord:Reflect.getReflection(C.<string>)};function reject(x){try{Reflect.isAssignable(x,C.<string>);return false;}catch(e){return e instanceof TypeError;}}if(!(reject(fake)))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "subclass-retains-own-association",
+      "modules": {
+        "main": "class C<T:type>{}class D extends C.<string>{}if(!(Reflect.isAssignable(D,C.<string>)&&!Reflect.isAssignable(C.<string>,D)))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "no-default-evaluation-on-declaration",
+      "modules": {
+        "main": "function defaultType():type{throw new Error(\"default ran\");}class C<T:type=defaultType()>{}if(!Reflect.isAssignable(C,Reflect.makeType(C)))throw new Error(\"wrong\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "revoked-proxy-not-transparent",
+      "modules": {
+        "main": "class C<T:type>{}const pair=Proxy.revocable(C.<string>,{});pair.revoke();function reject(x){try{Reflect.isAssignable(x,C.<string>);return false;}catch(e){return e instanceof TypeError;}}if(!(reject(pair.proxy)))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotated-type-wrapper",
+      "modules": {
+        "main": "class C<T:type>{}function f(x:type){return Reflect.isAssignable(x,x);}if(!f(C.<string>))throw new Error(\"wrong\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "annotated-type-binding",
+      "modules": {
+        "main": "class C<T:type>{}const x:type=C.<string>;if(!Reflect.isAssignable(x,x))throw new Error(\"wrong\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "explicit-reflect-type-context",
+      "modules": {
+        "main": "class C<T:type>{}if(Reflect.makeType(Reflect.getReflection.<Reflect.Type>(C.<string>))!==(type C.<string>))throw new Error(\"wrong\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-boundary-preserves-constructor",
+      "modules": {
+        "main": "class C<T:type>{value:T;constructor(value:T){this.value=value;}}const original=C.<string>;const held:type=original;if(!(held===original&&typeof held===\"function\"&&new held(\"ok\").value===\"ok\"))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-return-preserves-constructor",
+      "modules": {
+        "main": "class C<T:type>{value:T;constructor(value:T){this.value=value;}}function identity(x:type):type{return x;}const original=C.<string>;const held=identity(original);if(!(held===original&&Reflect.isAssignable(held,C.<string>)))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typeobject-boundary-preserves-constructor",
+      "modules": {
+        "main": "class C<T:type>{value:T;constructor(value:T){this.value=value;}}const original=C.<string>;function identity(x:Reflect.TypeObject):Reflect.TypeObject{return x;}const held=identity(original);if(!(held===original&&Reflect.isAssignable(held,C.<string>)))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "constructor-type-membership",
+      "modules": {
+        "main": "class C<T:type>{value:T;constructor(value:T){this.value=value;}}if(!((C.<string> is type)&&(C.<string> is Reflect.TypeObject)))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "constructor-typeof-stays-callable",
+      "modules": {
+        "main": "class C<T:type>{value:T;constructor(value:T){this.value=value;}}const held:type=C.<string>;if(!(Reflect.getReflection(Reflect.typeOf(held)).kind===\"function\"))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-declaration-type-boundary",
+      "modules": {
+        "main": "class C<T:type=string>{}const held:type=C;if(!(held===C&&Reflect.isAssignable(held,Reflect.makeType(C))&&!Reflect.isAssignable(held,C.<string>)))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-membership-rejects-ordinary-function",
+      "modules": {
+        "main": "function f(){}function isType(x){return (x is type)||(x is Reflect.TypeObject);}if(!(!isType(f)))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-membership-rejects-instance",
+      "modules": {
+        "main": "class C<T:type>{value:T;constructor(value:T){this.value=value;}}function isType(x){return (x is type)||(x is Reflect.TypeObject);}if(!(!isType(new C.<string>(\"ok\"))))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-membership-rejects-bound",
+      "modules": {
+        "main": "class C<T:type>{value:T;constructor(value:T){this.value=value;}}function isType(x){return (x is type)||(x is Reflect.TypeObject);}if(!(!isType(C.<string>.bind(null))))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-membership-rejects-proxy",
+      "modules": {
+        "main": "class C<T:type>{value:T;constructor(value:T){this.value=value;}}let hits=0;const p=new Proxy(C.<string>,{get(){hits++;throw new Error(\"trap\");}});function isType(x){return (x is type)||(x is Reflect.TypeObject);}if(!(!isType(p)&&hits===0))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-membership-rejects-typed-scalar",
+      "modules": {
+        "main": "const n:uint8=1;function isType(x){return (x is type)||(x is Reflect.TypeObject);}if(!(!isType(n)))throw new Error(\"wrong reflection result\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

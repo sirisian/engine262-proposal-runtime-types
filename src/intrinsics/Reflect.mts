@@ -3,11 +3,11 @@ import { SelectedDeclarationOf } from '../runtime-semantics/RuntimeTypesDeclarat
 import { JSStringValue, ObjectValue, Value, type Arguments } from '../value.mts';
 import { Q } from '../completion.mts';
 import {
-  LookupClassType, IsDecorationContextOpen, DeclareInverse } from '../abstract-ops/runtime-types.mts';
+  IsDecorationContextOpen, DeclareInverse } from '../abstract-ops/runtime-types.mts';
 import type { ClassLayout } from '../type-system/layout.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import type { ValueCompletion } from '../completion.mts';
-import { GetTypeObject, isTypeObject, type TypeObject } from '../type-system/intern.mts';
+import { GetTypeObject, isTypeObject, TypeObjectOfDenotation, type TypeObject } from '../type-system/intern.mts';
 import { matchTypeStructurally, HasSlotInsideApplication } from '../type-system/relations.mts';
 import { CaseGroupMembers, SelectionOfValue } from '../abstract-ops/callable-selection.mts';
 import { SpecializationPatternsOf } from '../type-system/specialization-patterns.mts';
@@ -280,11 +280,12 @@ function* Reflect_inferSlot([name = Value.undefined]: Arguments): ValueEvaluator
  * what an `infer S extends string` says."
  */
 function* Reflect_matchType([pattern = Value.undefined, subject = Value.undefined]: Arguments): ValueEvaluator {
-  if (!isTypeObject(pattern) || !isTypeObject(subject)) {
-    return Throw.TypeError('$1 is not a type', isTypeObject(pattern) ? subject : pattern);
-  }
-  const patternRecord = (pattern as unknown as { TypeRecord: never }).TypeRecord;
-  const subjectRecord = (subject as unknown as { TypeRecord: never }).TypeRecord;
+  const patternType = TypeObjectOfDenotation(pattern);
+  if (patternType === undefined) return Throw.TypeError('$1 is not a type', pattern);
+  const subjectType = TypeObjectOfDenotation(subject);
+  if (subjectType === undefined) return Throw.TypeError('$1 is not a type', subject);
+  const patternRecord = patternType.TypeRecord;
+  const subjectRecord = subjectType.TypeRecord;
   if (HasSlotInsideApplication(patternRecord)) {
     return Throw.TypeError('$1', Value('a slot inside a deferred application cannot be matched, because no operation inverts a builder'));
   }
@@ -481,24 +482,13 @@ function* readFamilyPattern(node: ObjectValue): PlainEvaluator<TypeRecord> {
 }
 
 function* nodeToTypeRecord(node: Value): PlainEvaluator<TypeRecord> {
-  if (isTypeObject(node)) {
-    // A Type Object used where a node is expected contributes its record.
-    return node.TypeRecord;
-  }
+  const type = TypeObjectOfDenotation(node);
+  if (type !== undefined) return type.TypeRecord;
   if (!(node instanceof ObjectValue)) {
     return Throw.TypeError('$1 is not a type node', node);
   }
-  // proposal-runtime-types #sec-parameterized-types: a GENERIC class's constructor stands
-  // for its declaration. A bare generic name in a type position names the
-  // application at its defaults, so the declaration's own Type Object - what a
-  // `generic` node's `base` is, and what `getReflection(A).generic.base`
-  // returns - has no type-position spelling; in expression position the
-  // constructor is that value, and `makeType({ kind: "generic", base: Box,
-  // arguments: [...] })` names it that way.
-  const asClass = LookupClassType(node);
-  if (asClass !== undefined && isTypeObject(asClass)) {
-    return asClass.TypeRecord;
-  }
+  // A generic constructor's association denotes the declaration base; the
+  // lookup above does not apply defaults or form a new specialization.
   const obj = node;
   const kindValue = Q(yield* Get(obj, Value('kind')));
   if (!(kindValue instanceof JSStringValue)) {
@@ -1199,19 +1189,10 @@ function Reflect_getReflection([type = Value.undefined]: Arguments) {
     const declarations = DeclarationReflection(type, surroundingAgent.currentRealmRecord);
     if (declarations) return declarations;
   }
-  // proposal-runtime-types #sec-reflect-getreflection (the Reflect.Type context).
-  //
-  // A class DENOTES its type through its constructor - the design's "a class's
-  // type object is its constructor" - but the constructor cannot carry
-  // [[TypeRecord]] itself: `isTypeObject` would then answer true for it and
-  // `typeof K` would report *"object"*, where ECMA-262 requires *"function"*.
-  // That is the one denotation where the record cannot simply be attached, so
-  // the association is resolved here instead.
-  const resolved = !isTypeObject(type) && type instanceof ObjectValue
-    ? LookupClassType(type as unknown as object)
-    : undefined;
-  const target = resolved !== undefined ? resolved : type;
-  if (!isTypeObject(target)) {
+  // Structural reflection uses the same denotation as the type relations.
+  // Resolving a constructor here does not change its value-level behavior.
+  const target = TypeObjectOfDenotation(type);
+  if (target === undefined) {
     return Throw.TypeError('$1 is not a type', type);
   }
   return recordToNode(target.TypeRecord, surroundingAgent.currentRealmRecord);
@@ -1244,11 +1225,12 @@ function* Reflect_isAssignable([source = Value.undefined, target = Value.undefin
   //
   // The deferral is mirrored rather than reimplemented: the condition below is
   // the checker's own, and the judgment is the one its pass runs.
-  if (!isTypeObject(source) || !isTypeObject(target)) {
-    return Throw.TypeError('$1 is not a type', isTypeObject(source) ? target : source);
-  }
-  const s = source.TypeRecord;
-  const t = target.TypeRecord;
+  const sourceType = TypeObjectOfDenotation(source);
+  if (sourceType === undefined) return Throw.TypeError('$1 is not a type', source);
+  const targetType = TypeObjectOfDenotation(target);
+  if (targetType === undefined) return Throw.TypeError('$1 is not a type', target);
+  const s = sourceType.TypeRecord;
+  const t = targetType.TypeRecord;
   if (IsAssignable(s, t)) {
     return Value.true;
   }
