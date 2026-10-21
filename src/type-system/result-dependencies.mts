@@ -52,8 +52,14 @@ export function InstantiateReturnDependency(type: TypeRecord, completion?: objec
           ? { Kind: 'literal', Value: MakeValue(argument), Base: makePrimitive('number') } : argument);
       }
       const unresolved = copy.Arguments.some((argument, i) => argument !== target.Arguments[i]) ? copy : target;
-      if (target.Constructor || !sourceNominal(evidence)
+      // A known generic family is not yet a completed application: its
+      // arguments can still contain a producer-local declaration dependency.
+      // Retain that family as an authority check before completing arguments.
+      const familyOnly = target.Constructor instanceof ObjectValue && target.Arguments.length > 0
+        && ClassFamilyOf(target.Constructor) === target.Constructor;
+      if ((target.Constructor && !familyOnly) || !sourceNominal(evidence)
         || evidence.Declaration !== target.Declaration || !(evidence.Constructor instanceof ObjectValue)
+        || (familyOnly && ClassFamilyOf(evidence.Constructor) !== target.Constructor)
         || (target.DeclarationIdentity && target.DeclarationIdentity !== evidence.DeclarationIdentity)
         || (!signature && target.Arguments.some((argument) => typeof argument !== 'number' && mentionsTypeParameter(argument)))) {
         alternatives.set(evidence, unresolved);

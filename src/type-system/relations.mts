@@ -1961,6 +1961,7 @@ export function InferSignatureInstantiation(sg: SignatureRecord, tg: SignatureRe
  */
 function IsSignatureSubtypeGeneric(sg: SignatureRecord, tg: SignatureRecord, assumptions: readonly Assumption[], preserveReferences = true): boolean {
   if ((sg as { Untyped?: boolean }).Untyped === true
+      && !sg.Return
       && (!sg.InferredReturn || sg.InferredReturn.Kind === 'any')
       && !(tg.Narrows?.length)
       && (!preserveReferences || ![...sg.Parameters, ...tg.Parameters].some((p) => p.Ref))) {
@@ -2103,7 +2104,11 @@ function IsSignatureSubtypeCore(sgIn: SignatureRecord, tgIn: SignatureRecord, as
     //
     // So the catch-all is for a signature with nothing to judge it BY, which is
     // what step 1 means and what [[Untyped]] alone does not establish.
+    // RuntimeTypeOf places the effective published result in Return for its
+    // reflected signature. It must obey the same rule as InferredReturn on a
+    // declaration signature, including before generic signature comparison.
     if ((sg as { Untyped?: boolean }).Untyped === true
+        && !sg.Return
         && (!sg.InferredReturn || sg.InferredReturn.Kind === 'any')
         && !(tg.Narrows?.length)
         && (!preserveReferences || ![...sg.Parameters, ...tg.Parameters].some((p) => p.Ref))) {

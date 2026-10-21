@@ -41,8 +41,11 @@ export function* EnforceInferredBinding(node: object, value: Value, initializer?
   // callable stored inside the binding. Retain its own binders and substitute
   // captured inputs in both declared and published result positions.
   let target = parameters ? (substituteFreeTypeParameters(inferred, parameters) ?? inferred) : inferred;
-  target = Q(yield* NormalizeInferredClassArguments(target));
+  // Preserve the checked initializer's nested nominal dependency before
+  // normalization completes an outer family from the receiving environment.
+  // Knowing P does not establish the local C in an inferred P<C> result.
   if (completion) target = InstantiateReturnDependency(target, ForwardResultDependency(completion, completion));
+  target = Q(yield* NormalizeInferredClassArguments(target));
   target = InstantiateCheckedBindings(new Map([['result', target]]), surroundingAgent.runningExecutionContext.LexicalEnvironment).get('result')!;
   // Const stabilizes its destination, not a replaceable callee or property
   // used by the initializer. Keep the initialization boundary.

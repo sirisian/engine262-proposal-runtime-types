@@ -741,6 +741,146 @@
           }
         }
       ]
+    },
+    {
+      "name": "local-generic-inferred-return",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function f(){class C{}const p:P.<C>=\"x\";return p;}const p=f();\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "closure-generic-inferred-return",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){class C{}return function(v:string){const p:P.<C>=v;return p;};}let f=make();let p=f(\"x\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "new-instead-of-conversion",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){class C{}function f(v:string){const p:P.<C>=new P.<C>(v);return p;}function f(v:number){const p:P.<C>=new P.<C>(\"x\");return p;}return f;}const a=make();const x=a(\"x\"),y=a(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "erased-destination",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){class C{}function f(v:string){const p:P.<C>=v;return p;}function f(v:number){const p:P.<C>=\"x\";return p;}return f;}const a=make();let x=a(\"x\"),y=a(1);\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local-result-through-wrapper",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function f(){class C{}const p:P.<C>=\"x\";return p;}function relay(){return f();}const p=relay();\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "separate-result-activations",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function f(){class C{}const p:P.<C>=\"x\";return p;}const a=f(),b=f();if(Reflect.typeOf(a)===Reflect.typeOf(b))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "captured-result-activations",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function make(){class C{}return function(){const p:P.<C>=\"x\";return p;};}const a=make(),b=make();const x=a(),y=a(),z=b();if(Reflect.typeOf(x)!==Reflect.typeOf(y)||Reflect.typeOf(x)===Reflect.typeOf(z))throw new Error(\"identity\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "written-target-remains-authoritative",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}function f(){class C{}const p:P.<C>=\"x\";return p;}let v=f();let refused=false;try{const p:P.<string>=v;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"target\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "completed-argument-remains-authoritative",
+      "steps": [
+        {
+          "source": "class P<T:type>{constructor(v:string){}}class A{}class B{}const source:P.<B>=\"x\";let value=source;let refused=false;try{const p:P.<A>=value;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"argument\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "name": "completed-family-remains-authoritative",
+      "steps": [
+        {
+          "source": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get():P.<C>{const p:P.<C>=\"x\";return p;}return get;}const a=make(),b=make();const h={get:a};function replace(o:any){o.get=b;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";",
+          "expected": {
+            "completion": "normal",
+            "bodyEntered": true,
+            "scriptBodies": 1,
+            "value": "ok"
+          }
+        }
+      ]
     }
   ]
 }

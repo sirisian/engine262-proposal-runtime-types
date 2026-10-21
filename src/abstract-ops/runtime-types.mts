@@ -5722,10 +5722,10 @@ export function* EnforceReturnType(fn: AnnotatedFunction, value: Value, completi
     // function is of it.
     let symbolic = publishedReturnTypeOfFunction(fn, currentTypeParameterFrame());
     if (symbolic) {
+      symbolic = InstantiateReturnDependency(symbolic, completion);
       symbolic = Q(yield* NormalizeInferredClassArguments(symbolic));
     }
-    const dependency = symbolic && InstantiateReturnDependency(symbolic, completion);
-    const published = dependency && InstantiateCheckedBindings(new Map([['result', dependency]]),
+    const published = symbolic && InstantiateCheckedBindings(new Map([['result', symbolic]]),
       surroundingAgent.runningExecutionContext.LexicalEnvironment).get('result');
     if (published && published.Kind !== 'void') {
       // `void` is vacuous here for the reason #sec-void-type gives for a
@@ -5990,7 +5990,11 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, optio
     return resolved.values().next().value ?? ({ Kind: 'any' } as TypeRecord);
   });
   // [[Untyped]]: no parameter annotation and no return annotation anywhere.
+  // The return annotation belongs to the declaration, not the function object.
+  // Read its syntax even when annotation resolution is deliberately disabled.
+  const declaration = (fn as { ECMAScriptCode?: { parent?: { TypeAnnotation?: ParseNode.TypeAnnotation } } }).ECMAScriptCode?.parent;
   const untyped = resolved.size === 0
+    && !declaration?.TypeAnnotation
     && !((fn as { TypeAnnotation?: ParseNode.TypeAnnotation | null }).TypeAnnotation);
   // #sec-overloading-on-return-type: the signature carries its return type so
   // the resolver can FILTER on it after ranking. The function's own
@@ -6015,7 +6019,6 @@ export function* OverloadSignatureOf(fn: Value, resolveAnnotations = true, optio
       ReturnType = Q(yield* TypeNodeToTypeRecord(returnAnnotation.Type));
     }
   }
-  const declaration = (fn as { ECMAScriptCode?: { parent?: { TypeAnnotation?: ParseNode.TypeAnnotation } } }).ECMAScriptCode?.parent;
   const predicate = resolveAnnotations ? declaration?.TypeAnnotation : undefined;
   let Narrows: OverloadSignature['Narrows'];
   if (predicate?.NarrowsTarget && !(computedAsAny && containsComputedType(predicate.Type))) {

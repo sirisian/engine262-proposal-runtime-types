@@ -1,0 +1,824 @@
+{
+  "description": "Effective callable results in structural runtime membership, without invocation",
+  "cases": [
+    {
+      "name": "declared-method to string",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get():string{calls++;return \"s\";}};if((value is Has.<string>)!==true)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "declared-method to boolean",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get():string{calls++;return \"s\";}};if((value is Has.<boolean>)!==false)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "declared-method to E",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get():string{calls++;return \"s\";}};if((value is Has.<E>)!==false)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "anchored-method to string",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get(){calls++;const result:string=\"s\";return result;}};if((value is Has.<string>)!==true)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "anchored-method to boolean",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get(){calls++;const result:string=\"s\";return result;}};if((value is Has.<boolean>)!==false)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "anchored-method to E",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get(){calls++;const result:string=\"s\";return result;}};if((value is Has.<E>)!==false)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "published-method to string",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get(){return source();}};if((value is Has.<string>)!==true)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "published-method to boolean",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get(){return source();}};if((value is Has.<boolean>)!==false)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "published-method to E",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get(){return source();}};if((value is Has.<E>)!==false)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "declared-property to string",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get:function():string{calls++;return \"s\";}};if((value is Has.<string>)!==true)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "declared-property to boolean",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get:function():string{calls++;return \"s\";}};if((value is Has.<boolean>)!==false)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "declared-property to E",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get:function():string{calls++;return \"s\";}};if((value is Has.<E>)!==false)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "published-property to string",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get:function(){return source();}};if((value is Has.<string>)!==true)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "published-property to boolean",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get:function(){return source();}};if((value is Has.<boolean>)!==false)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "published-property to E",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get:function(){return source();}};if((value is Has.<E>)!==false)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unpublished-method to string",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get(){calls++;return \"s\";}};if((value is Has.<string>)!==true)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unpublished-method to boolean",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get(){calls++;return \"s\";}};if((value is Has.<boolean>)!==true)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unpublished-method to E",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get(){calls++;return \"s\";}};if((value is Has.<E>)!==true)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct declared to string",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let fn=function():string{calls++;return \"s\";};if((fn is ()=>string)!==true)throw new Error(\"direct\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct declared to boolean",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let fn=function():string{calls++;return \"s\";};if((fn is ()=>boolean)!==false)throw new Error(\"direct\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct published to string",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let fn=function(){return source();};if((fn is ()=>string)!==true)throw new Error(\"direct\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct published to boolean",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let fn=function(){return source();};if((fn is ()=>boolean)!==false)throw new Error(\"direct\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct unknown to string",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let fn=function(){calls++;return \"s\";};if((fn is ()=>string)!==true)throw new Error(\"direct\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct unknown to boolean",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let fn=function(){calls++;return \"s\";};if((fn is ()=>boolean)!==true)throw new Error(\"direct\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct arrow to string",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let fn=()=>source();if((fn is ()=>string)!==true)throw new Error(\"direct\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "direct arrow to boolean",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let fn=()=>source();if((fn is ()=>boolean)!==false)throw new Error(\"direct\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "erased admission to string",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get(){return source();}};let admitted=false;try{const bound:Has.<string>=value;admitted=true;if(bound!==value)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;}if(admitted!==true)throw new Error(\"admission\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "erased admission to boolean",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get(){return source();}};let admitted=false;try{const bound:Has.<boolean>=value;admitted=true;if(bound!==value)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;}if(admitted!==false)throw new Error(\"admission\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "erased admission to E",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get(){return source();}};let admitted=false;try{const bound:Has.<E>=value;admitted=true;if(bound!==value)throw new Error(\"identity\");}catch(e){if(!(e instanceof TypeError))throw e;}if(admitted!==false)throw new Error(\"admission\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter once to string",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let reads=0;let value={get get(){reads++;return function(){return source();};}};if((value is Has.<string>)!==true)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");if(reads!==1)throw new Error(\"reads\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "proxy once to string",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let reads=0;let target={get(){return source();}};let value=new Proxy(target,{get(t,key){reads++;return t[key];}});if((value is Has.<string>)!==true)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");if(reads!==1)throw new Error(\"reads\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested to string",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={inner:{get(){return source();}}};if((value is {inner:Has.<string>})!==true)throw new Error(\"nested\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array to string",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value=[{get(){return source();}}];if((value is [].<Has.<string>>)!==true)throw new Error(\"array\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported publication to string",
+      "modules": {
+        "main": "import {value,calls} from \"dep\";interface Has<T:type>{get():T;}if((value is Has.<string>)!==true)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");",
+        "dep": "export let calls=0;function source():string{calls++;return \"s\";}export let value={get(){return source();}};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured publication to string",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}let calls=0;function make<T:type>(x:T){return {get(){calls++;return x;}};}let value=make.<string>(\"s\");if((value is Has.<string>)!==true)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflection publication to string",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}function fn(){return source();}const T=Reflect.typeOf(fn);if(Reflect.isAssignable(T,type ()=>string)!==true)throw new Error(\"relation\");if(Reflect.getReflection(T).signatures[0].return.type!==string)throw new Error(\"reflection\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter once to boolean",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let reads=0;let value={get get(){reads++;return function(){return source();};}};if((value is Has.<boolean>)!==false)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");if(reads!==1)throw new Error(\"reads\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "proxy once to boolean",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let reads=0;let target={get(){return source();}};let value=new Proxy(target,{get(t,key){reads++;return t[key];}});if((value is Has.<boolean>)!==false)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");if(reads!==1)throw new Error(\"reads\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested to boolean",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={inner:{get(){return source();}}};if((value is {inner:Has.<boolean>})!==false)throw new Error(\"nested\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array to boolean",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value=[{get(){return source();}}];if((value is [].<Has.<boolean>>)!==false)throw new Error(\"array\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported publication to boolean",
+      "modules": {
+        "main": "import {value,calls} from \"dep\";interface Has<T:type>{get():T;}if((value is Has.<boolean>)!==false)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");",
+        "dep": "export let calls=0;function source():string{calls++;return \"s\";}export let value={get(){return source();}};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured publication to boolean",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}let calls=0;function make<T:type>(x:T){return {get(){calls++;return x;}};}let value=make.<string>(\"s\");if((value is Has.<boolean>)!==false)throw new Error(\"membership\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reflection publication to boolean",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}function fn(){return source();}const T=Reflect.typeOf(fn);if(Reflect.isAssignable(T,type ()=>boolean)!==false)throw new Error(\"relation\");if(Reflect.getReflection(T).signatures[0].return.type!==string)throw new Error(\"reflection\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "separate local class identities",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}let calls=0;function make(){class E{}return {E,get():E{calls++;return new E();}};}const a=make(),b=make();const A=a.E,B=b.E;let value=a;if(!(value is Has.<A>))throw new Error(\"own\");if(value is Has.<B>)throw new Error(\"foreign\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inherited member",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}class C{get():string{calls++;return \"s\";}}let value=new C();if(value is Has.<E>)throw new Error(\"nominal\");if(!(value is Has.<string>))throw new Error(\"string\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "arrow does not adopt receiver",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get:()=>source()};if(value is Has.<string>)throw new Error(\"receiver\");if(!(value is {get:()=>string}))throw new Error(\"property\");if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter abrupt completion",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let marker={};let reads=0;let value={get get(){reads++;throw marker;}};let caught=false;try{value is Has.<E>;}catch(e){caught=e===marker;}if(!caught||reads!==1||calls!==0)throw new Error(\"effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "failed check leaves object unchanged",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get(){return source();}};const original=value.get;try{const bad:Has.<E>=value;throw new Error(\"accepted\");}catch(e){if(!(e instanceof TypeError))throw e;}const good:Has.<string>=value;if(good!==value||good.get!==original||calls!==0)throw new Error(\"mutated\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "warm signature remains target independent",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E{}let calls=0;function source():string{calls++;return \"s\";}let value={get(){return source();}};for(let i=0;i<3;i++){if(value is Has.<E>)throw new Error(\"wrong\");if(!(value is Has.<string>))throw new Error(\"right\");}if(calls!==0)throw new Error(\"called\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic target cannot use concrete publication",
+      "modules": {
+        "main": "function source():string{return \"s\";}let fn=function(){return source();};if(fn is <T:type>()=>T)throw new Error(\"generic\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic published source checks result",
+      "modules": {
+        "main": "function make<T:type>(x:T){return x;}let fn=make;if(fn is (x:string)=>boolean)throw new Error(\"wrong\");if(!(fn is (x:string)=>string))throw new Error(\"right\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "static publication still rejects",
+      "modules": {
+        "main": "function source():string{return \"s\";}const value={get(){return source();}};const bad:{get:()=>boolean}=value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "unknown catch-all remains compatible",
+      "modules": {
+        "main": "let fn=function(a,b,c){};if(!(fn is (x:number)=>number))throw new Error(\"catch-all\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "return-only overload is not catch-all",
+      "modules": {
+        "main": "function f():string{return \"a\";}function f(x:number):number{return x;}let erased=f;let rejected=false;try{erased(true);}catch(e){rejected=e instanceof TypeError;}if(!rejected)throw new Error(\"fallback\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

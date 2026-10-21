@@ -381,7 +381,7 @@ test('block decorators fire on entry, every entry', () => {
   // Every block position parses: bare, if, while, do-while, for, for-in, for-of.
   expect(evaluated('function f(c) {} @f { let a = 1; } if (true) @f { let b = 1; } while (false) @f { let c = 1; } '
     + 'do @f { let d = 1; } while (false); for (let i = 0; i < 1; ++i) @f { let e = 1; } '
-    + 'for (const k in {}) @f { let g = 1; } for (const v of []) @f { let h = 1; } "all parse";')).toBe('all parse');
+    + 'for (const k in {}) @f { let g = 1; } for (const v of [1]) @f { let h = 1; } "all parse";')).toBe('all parse');
 });
 
 test('a block reflection carries its BLOCK as tokens', () => {
