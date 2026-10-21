@@ -1,0 +1,480 @@
+{
+  "cases": [
+    {
+      "name": "declaration",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "valid",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}class C implements I.<C>{get():C{return this;}}I.<C>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "valid-alias",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}class C implements I.<C>{get():C{return this;}}type A=I.<C>;if(A!==I.<C>)throw new Error(\"identity\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "invalid-alias",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}type A=I.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "invalid-method",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}class C implements I.<C>{get():string{return \"bad\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "invalid-empty-class",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}class C {}type A=I.<C>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "named",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}class C implements I.<C>{get():C{return this;}}if(I.<T:C>!==I.<C>)throw new Error(\"named\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "spread",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}class C implements I.<C>{get():C{return this;}}if(I.<...[C]>!==I.<C>)throw new Error(\"spread\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "erased-valid",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}class C implements I.<C>{get():C{return this;}}const H:any=I;H.<C>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "erased-invalid",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}const H:any=I;let caught=false;try{H.<string>;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"missing refusal\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-bound",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}class C implements I.<C>{get():C{return this;}}function f<T:type extends I.<T>>(x:T):T{return x;}f.<C>(new C());"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-invalid",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}function f<T:type extends I.<T>>(x:T):T{return x;}f.<string>(\"bad\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "closed-inner-invalid",
+      "modules": {
+        "main": "interface I<T:type extends I.<string>>{get():T;}type A=I.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "mutual",
+      "modules": {
+        "main": "interface I<T:type extends J.<T>>{get():T;}interface J<U:type extends I.<U>>{get():U;}class C implements I.<C>,J.<C>{get():C{return this;}}I.<C>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>=C>{get():T;}class C implements I.<C>{get():C{return this;}}if(I.<>!==I.<C>)throw new Error(\"default\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "forward",
+      "modules": {
+        "main": "interface I<T:type extends I.<U>,U:type>{get():T;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "code": "RT_GENERIC_BINDING_ORDER"
+        }
+      }
+    },
+    {
+      "name": "self-computed",
+      "modules": {
+        "main": "interface I<T:type extends keyof T>{get():T;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "code": "RT_GENERIC_BINDING_ORDER"
+        }
+      }
+    },
+    {
+      "name": "imported",
+      "modules": {
+        "dep": "interface I<T:type extends I.<T>>{get():T;}export {I};",
+        "main": "import {I} from \"dep\";class C implements I.<C>{get():C{return this;}}I.<C>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "repeated-failure",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}class C implements I.<C>{get():C{return this;}}const H:any=I;for(let i=0;i<3;i++){let caught=false;try{H.<string>;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"missing refusal\");if(H.<C>!==I.<C>)throw new Error(\"state\");}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-bound",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}class C implements I.<C>{get():C{return this;}}type A<T:type extends I.<T>>=T;if(A.<C>!==C)throw new Error(\"alias\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "wrong-other-interface",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}interface J<U:type extends J.<U>>{get():U;}class C implements J.<C>{get():C{return this;}}type A=I.<C>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "closed-inner-declaration",
+      "modules": {
+        "main": "interface I<T:type extends I.<string>>{get():T;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "generic-class",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}class C<U:type> implements I.<C.<U>>{get():C.<U>{return this;}}I.<C.<string>>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unused-invalid",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}function unused(x:I.<string>){}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "independent-static",
+      "modules": {
+        "main": "interface I<A:type extends string,T:type extends I.<A,T>>{get():T;}class C implements I.<string,C>{get():C{return this;}}type X=I.<uint8,C>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "mutual-missing",
+      "modules": {
+        "main": "interface I<T:type extends J.<T>>{get():T;}interface J<U:type extends I.<U>>{get():U;}class C implements I.<C>{get():C{return this;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "shadowed",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}{interface I<T:type>{get():T;}type A=I.<string>;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "independent-activations",
+      "modules": {
+        "main": "function make(){interface I<T:type extends I.<T>>{get():T;}class C implements I.<C>{get():C{return this;}}return {I,C};}const a=make();const b=make();const H:any=a.I;H.<a.C>;let caught=false;try{H.<b.C>;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"identity lost\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-alias",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}class C implements I.<C>{get():C{return this;}}type J<T:type>=I.<T>;if(J.<C>!==I.<C>)throw new Error(\"alias\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "self-default-rejected",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>=T>{get():T;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "code": "RT_GENERIC_BINDING_ORDER"
+        }
+      }
+    },
+    {
+      "name": "namespace-import",
+      "modules": {
+        "dep": "interface I<T:type extends I.<T>>{get():T;}class C implements I.<C>{get():C{return this;}}export {I,C};",
+        "main": "import * as ns from \"dep\";if(ns.I.<ns.C>!==ns.I.<ns.C>)throw new Error(\"namespace\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reexport",
+      "modules": {
+        "dep": "interface I<T:type extends I.<T>>{get():T;}class C implements I.<C>{get():C{return this;}}export {I,C};",
+        "bridge": "export {I as J,C as D} from \"dep\";",
+        "main": "import {J,D} from \"bridge\";J.<D>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "two-classes",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}class C implements I.<C>{get():C{return this;}}class D implements I.<D>{get():D{return this;}}if(I.<C>===I.<D>)throw new Error(\"arguments conflated\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "ref-contract",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():ref T;}class C implements I.<C>{get():C{return this;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    },
+    {
+      "name": "wrong-result",
+      "modules": {
+        "main": "interface I<T:type extends I.<T>>{get():T;}class C implements I.<C>{get():C{return this;}}const x:I.<C>={get:():string=>\"bad\"};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "errorClass": "StaticTypeError"
+        }
+      }
+    }
+  ]
+}

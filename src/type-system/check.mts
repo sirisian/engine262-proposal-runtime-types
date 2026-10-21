@@ -7488,10 +7488,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const inProgress = {
       Kind: 'nominal',
       Declaration: node,
-      Arguments: defaultArgumentsOf(node as unknown as ParseNode),
+      Arguments: [],
       Structure: { Kind: 'object', Properties, IndexSignatures },
     } as unknown as Known;
     interfaceTypeMemo.set(node, inProgress);
+    // Defaults enter the parameter scope, whose bounds may name this interface.
+    // Publish the nominal shell before either those bounds or members are read.
+    (inProgress as unknown as { Arguments: readonly TypeRecord[] }).Arguments = defaultArgumentsOf(node);
     const decl = node as unknown as {
       InterfaceMemberList?: readonly ParseNode[] | null,
       TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null,
@@ -7978,6 +7981,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const classExpressionNodes = new Set<ParseNode>();
 
   const classTypesInProgress = new Set<ParseNode>();
+  // A self-bound class shell has not acquired its implements graph yet. Keep
+  // the ordinary comparison until the graph is filled, without assuming it.
+  const pendingRecursiveConstraints: { supplied: TypeRecord, bound: TypeRecord }[] = [];
 
   /**
    * The type of the CLASS OBJECT - what a class name means in VALUE position,
@@ -12183,6 +12189,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // evaluates it. Re-entry supplies no completed type or cycle diagnostic;
   // the requiring application retains its ordinary evaluation obligation.
   const describingGenericDefaults = new Set<ParseNode.Type>();
+  // Source re-entry suspends description only. The nested binder retains its
+  // unresolved obligation; the completed outer description is not an admission.
+  const describingGenericConstraints = new Set<ParseNode.Type>();
   const deferredTypeCheck = (node: ParseNode.Type): DeferredTypeCheck => {
     const aliases = new Map<string, TypeRecord>();
     for (const frame of frames) {
@@ -12193,6 +12202,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   const resolveType = (node: ParseNode.Type): Known => {
+    const isConstraint = node.parent?.type === 'TypeParameter' && node.parent.TypeParameterConstraint === node;
+    if (isConstraint) {
+      if (describingGenericConstraints.has(node)) return null;
+      describingGenericConstraints.add(node);
+      try {
+        return resolveTypeInContext(node);
+      } finally {
+        describingGenericConstraints.delete(node);
+      }
+    }
     const isDefault = node.parent?.type === 'TypeParameter' && node.parent.TypeParameterDefault === node;
     if (!isDefault) return resolveTypeInContext(node);
     if (describingGenericDefaults.has(node)) return null;
@@ -13995,6 +14014,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // `type`-constrained parameter refuses: `f.<4>` for `f<T: type>`.
             if (supplied.Kind === 'literal') report(supplied, bound);
           } else if (tp.Kind === 'value') requireAssignable(supplied, bound);
+          else if (supplied.Kind === 'nominal' && classTypesInProgress.has(supplied.Declaration)) {
+            pendingRecursiveConstraints.push({ supplied, bound });
+          }
           else if (!IsAssignable(supplied, bound)) report(supplied, bound);
         }
         scope.set(tp.Name, supplied);
@@ -38736,5 +38758,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     .filter((check) => [...check.bindings.values()].every((bound) => !mentionsTypeParameter(bound))));
 
   restoreFlow(new Map());
+  for (const { supplied, bound } of pendingRecursiveConstraints) {
+    if (!IsAssignable(supplied, bound)) report(supplied, bound);
+  }
   return errors;
 }

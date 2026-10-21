@@ -43,6 +43,7 @@ import type { ParseNode } from '../parser/ParseNode.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
 import { BuilderEvaluabilityViolation } from './builder-evaluability.mts';
 import { ResolveBindingDeclaration } from './compile-time-evaluability.mts';
+import { FreeReferences } from '../static-semantics/PreprocessorEvaluability.mts';
 import { BeginFragmentEvaluation, EndFragmentEvaluation } from './fragment-library.mts';
 import { ApplyValidateHook, HasMetaHooks, MetaTypeClaiming, CheckedConvertValue, CrossBareValueIntoParameterization, GoverningMetaTypes, LookupClassType, MetaTypeGoverns, MetadataPortion, RegisteredEnumOf } from '../abstract-ops/runtime-types.mts';
 import { CompositeTypeRecordOf } from '../intrinsics/Composite.mts';
@@ -826,6 +827,7 @@ export function* BindTypeArgumentRecordsInto(
   names: readonly (string | undefined)[],
   frame: Map<string, TypeRecord>,
   applied: string,
+  interfaceIdentity?: object,
 ): PlainEvaluator<TypeRecord[]> {
   const context = surroundingAgent.runningExecutionContext;
   const savedEnvironment = context.LexicalEnvironment;
@@ -833,7 +835,7 @@ export function* BindTypeArgumentRecordsInto(
   parameterEnvironment.TypeParameterList = params;
   context.LexicalEnvironment = parameterEnvironment;
   try {
-    return yield* BindTypeArgumentRecordsInParameterEnvironment(params, records, names, frame, applied);
+    return yield* BindTypeArgumentRecordsInParameterEnvironment(params, records, names, frame, applied, interfaceIdentity);
   } finally {
     context.LexicalEnvironment = savedEnvironment;
   }
@@ -845,6 +847,7 @@ function* BindTypeArgumentRecordsInParameterEnvironment(
   names: readonly (string | undefined)[],
   frame: Map<string, TypeRecord>,
   applied: string,
+  interfaceIdentity?: object,
 ): PlainEvaluator<TypeRecord[]> {
   const entries = records.map((record, i) => ({ record, name: names[i] }));
   const elementBounds: (TypeRecord | null)[] = [];
@@ -879,10 +882,26 @@ function* BindTypeArgumentRecordsInParameterEnvironment(
     const run = assigned.runs[j]!;
     const name = q.BindingIdentifier?.name;
     let constraint: TypeRecord | null = null;
+    let selfArgument: TypeRecord | undefined;
+    const selfBound = !q.IsValueParameter && !q.IsVariadic && q.TypeParameterConstraint
+      && FreeReferences(q.TypeParameterConstraint).some((reference) => reference.name === name);
+    if (selfBound) {
+      selfArgument = run[0]?.record;
+      if (!selfArgument && q.TypeParameterDefault) {
+        pushTypeParameterFrame(frame);
+        try {
+          selfArgument = Q(yield* TypeNodeToTypeRecord(q.TypeParameterDefault));
+        } finally {
+          popTypeParameterFrame();
+        }
+      }
+    }
     if (q.TypeParameterConstraint) {
-      pushTypeParameterFrame(frame);
+      const constraintFrame = copyTypeParameterFrame(frame);
+      if (selfArgument && name) bindTypeParameter(constraintFrame, name, selfArgument, q);
+      pushTypeParameterFrame(constraintFrame);
       try {
-        constraint = Q(yield* TypeNodeToTypeRecord(q.TypeParameterConstraint));
+        constraint = Q(yield* ResolveInterfaceArgumentConstraint(q, constraintFrame, selfArgument ?? run[0]?.record, interfaceIdentity));
       } finally {
         popTypeParameterFrame();
       }
@@ -919,7 +938,9 @@ function* BindTypeArgumentRecordsInParameterEnvironment(
         return Throw.TypeError('$1 is not assignable to $2', Value(displayType(record)), Value(displayType(constraint)));
       }
     } else {
-      if (run.length === 0) {
+      if (selfArgument) {
+        record = selfArgument;
+      } else if (run.length === 0) {
         if (!q.TypeParameterDefault) {
           return Throw.TypeError('the type parameter $1 of $2 has no argument and no default', Value(name ?? String(j)), Value(applied));
         }
@@ -954,6 +975,33 @@ function* BindTypeArgumentRecordsInParameterEnvironment(
     bound.push(record);
   }
   return bound;
+}
+
+// These entries describe an unfinished constraint, never a completed admission.
+// Only the same evaluated interface, parameter and preceding/own bindings may
+// close the description cycle. The outer application still checks its argument.
+let interfaceConstraintComputation = {};
+const activeInterfaceConstraints = new WeakMap<object, {
+  parameter: ParseNode.TypeParameter, argument: TypeRecord,
+  bindings: ReadonlyMap<string, TypeRecord>, computation: object,
+}[]>();
+function* ResolveInterfaceArgumentConstraint(parameter: ParseNode.TypeParameter,
+  bindings: ReadonlyMap<string, TypeRecord>, argument?: TypeRecord, identity?: object): PlainEvaluator<TypeRecord | null> {
+  if (!identity || !argument) {
+    return yield* TypeNodeToTypeRecord(parameter.TypeParameterConstraint!);
+  }
+  const active = activeInterfaceConstraints.get(identity) ?? [];
+  if (active.some((entry) => entry.computation === interfaceConstraintComputation && entry.parameter === parameter && SameType(entry.argument, argument) && entry.bindings.size === bindings.size
+    && [...bindings].every(([name, value]) => entry.bindings.has(name) && SameType(value, entry.bindings.get(name)!)))) return null;
+  const entry = { parameter, argument, bindings, computation: interfaceConstraintComputation };
+  active.push(entry);
+  activeInterfaceConstraints.set(identity, active);
+  try {
+    return yield* TypeNodeToTypeRecord(parameter.TypeParameterConstraint!);
+  } finally {
+    active.pop();
+    if (active.length === 0) activeInterfaceConstraints.delete(identity);
+  }
 }
 
 /**
@@ -1238,7 +1286,7 @@ export function* InstantiateGenericInterface(
   Assert(captured !== undefined);
   const apply = function* (): PlainEvaluator<TypeRecord> {
     const bound = Q(yield* BindTypeArgumentRecordsInto(declaration.TypeParameters?.TypeParameterList ?? [],
-      argumentsList, names, new Map(), declaration.BindingIdentifier.name));
+      argumentsList, names, new Map(), declaration.BindingIdentifier.name, record.DeclarationIdentity));
     const bad = badKindedArgument(record, bound);
     if (bad) {
       return bad.kind === 'not-generic'
@@ -5381,6 +5429,9 @@ export function* TypeArgumentAsDeclaration(argNode: ParseNode.Type, expectedArit
 }
 
 export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<TypeRecord> {
+  // An executable type computation cannot be discharged by an enclosing
+  // structural constraint cycle, including one reached through an alias.
+  if (node.type === 'ComputedType') interfaceConstraintComputation = {};
   let type = Q(yield* TypeNodeToTypeRecordUnchecked(node));
   if (type.Kind === 'nominal') {
     let conflict: string | undefined;
@@ -7473,9 +7524,37 @@ import { prepareFamilyPattern, finishFamilyPattern, FamilyPatternError, enterFam
 import { bindIntrinsicArguments, intrinsicParameters, isHigherKindedArgument, isIntrinsicNamespace } from './intrinsic-generics.mts';
 import { rememberDeclaredConstraint } from './records.mts';
 
+const pendingClassInterfaceChecks: { candidate: TypeRecord, checks: TypeRecord[] }[] = [];
+
+/** Complete the class's actual interface graph before judging a self bound. */
+export function* WithClassInterfaceChecks(candidate: TypeRecord,
+  action: () => PlainEvaluator<readonly TypeRecord[]>): PlainEvaluator<readonly TypeRecord[]> {
+  const formation = { candidate, checks: [] as TypeRecord[] };
+  pendingClassInterfaceChecks.push(formation);
+  let result: readonly TypeRecord[];
+  try {
+    result = Q(yield* action());
+  } finally {
+    pendingClassInterfaceChecks.pop();
+  }
+  for (const constraint of formation.checks) {
+    if (!Q(yield* ConstraintAdmits(candidate, constraint))) {
+      return Throw.TypeError('$1 is not assignable to $2', Value(displayType(candidate)), Value(displayType(constraint)));
+    }
+  }
+  return result;
+}
+
 /** Evaluate a default in the binder, never in a pure subtype/inclusion query. */
 export function* ConstraintAdmits(candidate: TypeRecord, constraint: TypeRecord | null): PlainEvaluator<boolean> {
   if (!constraint) return true;
+  if (constraint.Kind === 'nominal' && constraint.Declaration.type === 'InterfaceDeclaration') {
+    const formation = pendingClassInterfaceChecks.findLast((entry) => SameType(entry.candidate, candidate));
+    if (formation) {
+      formation.checks.push(constraint);
+      return true;
+    }
+  }
   if (constraint.Kind !== 'family-pattern') return IsAssignable(candidate, constraint);
   let failure: ThrowCompletion | undefined;
   const admitted = matchesFamilyPattern(candidate, constraint, SameTypeStructural, (record) => {

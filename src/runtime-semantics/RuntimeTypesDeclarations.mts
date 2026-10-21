@@ -43,7 +43,7 @@ import { OriginOfNode, RecordTypeOrigin, RecordDeclaredMemberOrigins } from '../
 import { BindTypeParameterTyped, toNumericArgument,
   GenericAliasDeclarationShape, InstantiateGenericAlias, ApplyGenericInterface, IsOfType, TypeNodeToTypeRecord, spreadElementsOf,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
-import { currentTypeParameterFrame, BindTypeArgumentsInto, MetadataObjectFromType, publishedReturnTypeOfFunction } from '../type-system/runtime.mts';
+import { currentTypeParameterFrame, BindTypeArgumentsInto, MetadataObjectFromType, publishedReturnTypeOfFunction, WithClassInterfaceChecks } from '../type-system/runtime.mts';
 import { InferGenericBindings, TakePendingCalleeContext, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import { bindLibraryTypeArguments, RememberLibraryApplication } from '../type-system/library-type-arguments.mts';
 import { classTypeParameterFrame } from './CallExpression.mts';
@@ -2241,22 +2241,29 @@ export function* ResolveImplementedInterfaces(node: ParseNode.ClassDeclaration |
       ? { Kind: 'literal', Value: Value(argument), Base: builtinTypeRecord('uint32')! }
       : argument ?? { Kind: 'parameter', Name: parameter.BindingIdentifier.name, Declaration: parameter });
   });
+  const interfaces: TypeRecord[] = [];
+  let self: TypeRecord | undefined;
   if (node.BindingIdentifier) {
     const published = PublishedClassTypeOf(node);
-    frame.set(node.BindingIdentifier.name, {
+    self = {
       ...(published?.Kind === 'nominal' ? published : {}),
       Kind: 'nominal', Declaration: node, Constructor: ctor,
       DeclarationIdentity: ClassFamilyIdentityOf(ctor),
       Arguments: (node.TypeParameters?.TypeParameterList ?? []).map((p) => frame.get(p.BindingIdentifier.name)!),
-    });
+      Implements: interfaces,
+      Base: RuntimeClassBaseOf(ctor),
+    };
+    frame.set(node.BindingIdentifier.name, self);
   }
   pushTypeParameterFrame(frame);
   try {
-    const interfaces: TypeRecord[] = [];
-    for (const target of targets) {
-      interfaces.push(Q(yield* TypeNodeToTypeRecord(target)));
-    }
-    return interfaces;
+    const resolve = function* (): PlainEvaluator<readonly TypeRecord[]> {
+      for (const target of targets) {
+        interfaces.push(Q(yield* TypeNodeToTypeRecord(target)));
+      }
+      return interfaces;
+    };
+    return self ? yield* WithClassInterfaceChecks(self, resolve) : yield* resolve();
   } finally {
     popTypeParameterFrame();
     context.LexicalEnvironment = outer;
