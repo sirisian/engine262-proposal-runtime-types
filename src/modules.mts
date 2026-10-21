@@ -11,7 +11,7 @@ import {
   type ImportEntry,
   type ExportEntry,
 } from './static-semantics/all.mts';
-import { CheckModuleWithImports, ExportedTypesOf, ExportedAliasesOf, ExportedBuilderNodesOf, ExportedClassNodesOf, ExportedInterfaceNodesOf, CheckedInterfaceTypeOf, type ImportedInterface } from './type-system/check.mts';
+import { CheckModuleWithImports, ExportedTypesOf, ExportedAliasesOf, ExportedBuilderNodesOf, ExportedClassNodesOf, ExportedInterfaceNodesOf, ExportedTypeAliasNodesOf, CheckedInterfaceTypeOf, type ImportedInterface, type ImportedTypeAlias } from './type-system/check.mts';
 import { InstantiateFunctionObject } from './runtime-semantics/all.mts';
 import { collectOverloadGroups, MakeOverloadedFunction } from './abstract-ops/runtime-types.mts';
 import { skipDebugger } from './evaluator.mts';
@@ -711,6 +711,7 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
     const importedClasses = new Map<string, ParseNode>();
     const importedClassModules = new Map<ParseNode, AbstractModuleRecord>();
     const importedInterfaces = new Map<string, ImportedInterface>();
+    const importedTypeAliases = new Map<string, ImportedTypeAlias>();
     // 7. For each ImportEntry Record in in module.[[ImportEntries]], do
     for (const ie of module.ImportEntries) {
       // a. Let importedModule be GetImportedModule(module, in.[[ModuleRequest]]).
@@ -801,6 +802,10 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
               (resolution.Module.HostDefined as { specifier?: string } | undefined)?.specifier,
             );
             const interfaceNode = ExportedInterfaceNodesOf(resolution.Module.ECMAScriptCode)?.get(bindingName);
+            const aliasNode = ExportedTypeAliasNodesOf(resolution.Module.ECMAScriptCode)?.get(bindingName);
+            if (aliasNode) {
+              importedTypeAliases.set(ie.LocalName.stringValue(), { declaration: aliasNode, module: resolution.Module });
+            }
             const interfaceType = interfaceNode && CheckedInterfaceTypeOf(interfaceNode);
             const t = interfaceNode ? interfaceType
               : exportedAliases?.get(bindingName) ?? exported?.get(bindingName);
@@ -835,9 +840,9 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
     // unchecked however completely both sides were annotated. Nothing is
     // reported twice: a module whose parse-time check failed never reaches
     // linking, so every error found here is one that needed an import to see.
-    if (surroundingAgent.feature('runtime-types') && importedTypes.size > 0) {
+    if (surroundingAgent.feature('runtime-types') && (importedTypes.size > 0 || importedTypeAliases.size > 0)) {
       const typeErrors = CheckModuleWithImports(module.ECMAScriptCode, importedTypes, importedBuilders,
-        (module.HostDefined as { specifier?: string } | undefined)?.specifier, importedClasses, importedClassModules, importedInterfaces);
+        (module.HostDefined as { specifier?: string } | undefined)?.specifier, importedClasses, importedClassModules, importedInterfaces, importedTypeAliases);
       if (typeErrors.length > 0) {
         return ThrowCompletion(typeErrors[0]);
       }

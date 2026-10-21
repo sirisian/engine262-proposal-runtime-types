@@ -1,0 +1,1854 @@
+{
+  "description": "Named imported alias origins, source-bound arguments/defaults, transparent identity and runtime spread binding. Known unresolved source-availability/transitive observations are kept in the audit, not accepted as conformance outcomes.",
+  "cases": [
+    {
+      "name": "static-direct",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "static-unused",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(){I.<uint8>;}",
+        "dep": "function bound():type{return string;}export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "static-unreachable",
+      "modules": {
+        "main": "import {I} from \"dep\";if(false){I.<uint8>;}",
+        "dep": "function bound():type{return string;}export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "static-const",
+      "modules": {
+        "main": "import {I} from \"dep\";const A=I;A.<uint8>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "static-annotated",
+      "modules": {
+        "main": "import {I} from \"dep\";const A:type=I;A.<uint8>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "static-valid",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<string>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "static-annotation",
+      "modules": {
+        "main": "import {I} from \"dep\";let x:I.<uint8>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "static-rename",
+      "modules": {
+        "main": "import {I as Renamed} from \"dep\";Renamed.<uint8>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "static-reexport",
+      "modules": {
+        "main": "import {Other as I} from \"mid\";I.<uint8>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends string> = T;",
+        "mid": "export {I as Other} from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "mid",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "static-star",
+      "modules": {
+        "main": "import {I} from \"mid\";I.<uint8>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends string> = T;",
+        "mid": "export * from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "mid",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "static-shadow",
+      "modules": {
+        "main": "import {I} from \"dep\";{type I<T:type> = T;I.<uint8>;}",
+        "dep": "function bound():type{return string;}export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "static-erased-unused",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(I:any){I.<uint8>;}",
+        "dep": "function bound():type{return string;}export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "static-outer-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";function outer<T:type>(){I.<T>;}outer.<uint8>();",
+        "dep": "function bound():type{return string;}export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "static-outer-good",
+      "modules": {
+        "main": "import {I} from \"dep\";function outer<T:type>(){I.<T>;}outer.<string>();",
+        "dep": "function bound():type{return string;}export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "static-captured-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";function outer<T:type>(){return ()=>I.<T>;}outer.<uint8>();",
+        "dep": "function bound():type{return string;}export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "static-dependency-error",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends string> = T;throw new Error(\"dependency\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "computed-direct",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "computed-unused",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(){I.<uint8>;}",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "computed-unreachable",
+      "modules": {
+        "main": "import {I} from \"dep\";if(false){I.<uint8>;}",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "computed-const",
+      "modules": {
+        "main": "import {I} from \"dep\";const A=I;A.<uint8>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "computed-annotated",
+      "modules": {
+        "main": "import {I} from \"dep\";const A:type=I;A.<uint8>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "computed-valid",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<string>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-annotation",
+      "modules": {
+        "main": "import {I} from \"dep\";let x:I.<uint8>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "computed-rename",
+      "modules": {
+        "main": "import {I as Renamed} from \"dep\";Renamed.<uint8>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "computed-reexport",
+      "modules": {
+        "main": "import {Other as I} from \"mid\";I.<uint8>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;",
+        "mid": "export {I as Other} from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "mid",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "mid"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "computed-star",
+      "modules": {
+        "main": "import {I} from \"mid\";I.<uint8>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;",
+        "mid": "export * from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "mid",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "mid"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "computed-shadow",
+      "modules": {
+        "main": "import {I} from \"dep\";{type I<T:type> = T;I.<uint8>;}",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-erased-unused",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(I:any){I.<uint8>;}",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-outer-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";function outer<T:type>(){I.<T>;}outer.<uint8>();",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "computed-outer-good",
+      "modules": {
+        "main": "import {I} from \"dep\";function outer<T:type>(){I.<T>;}outer.<string>();",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-captured-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";function outer<T:type>(){return ()=>I.<T>;}outer.<uint8>();",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "computed-dependency-error",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;throw new Error(\"dependency\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "Error"
+      }
+    },
+    {
+      "name": "computed-async",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "await 0;function bound():type{return string;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "computed-source-shadow-good",
+      "modules": {
+        "main": "import {I} from \"dep\";function bound():type{return uint8;}I.<string>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-source-shadow-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";function bound():type{return uint8;}I.<uint8>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "default-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<>;",
+        "dep": "function fail():type{throw new Error(\"default\");}export type I<T:type=fail()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DEFAULT_EVALUATION",
+          "rule": "rt-default-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "default-unused",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(){I.<>;}",
+        "dep": "function fail():type{throw new Error(\"default\");}export type I<T:type=fail()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DEFAULT_EVALUATION",
+          "rule": "rt-default-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "default-bypassed",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<string>;",
+        "dep": "function fail():type{throw new Error(\"default\");}export type I<T:type=fail()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-pending-unused",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(){const T=string;I.<T>;}",
+        "dep": "function fail():type{throw new Error(\"default\");}export type I<T:type=fail()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "missing",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<>;",
+        "dep": "export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "rule": "rt-generic-argument",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "extra",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<string,string>;",
+        "dep": "export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "rule": "rt-generic-argument",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "unknown-name",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<Wrong:string>;",
+        "dep": "export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "rule": "rt-generic-argument",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-good",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<T:string>;",
+        "dep": "export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<T:uint8>;",
+        "dep": "export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "literal-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<3>;",
+        "dep": "export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "value-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<300>;",
+        "dep": "export type I<N:uint8> = string;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "value-good",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<3>;",
+        "dep": "export type I<N:uint8> = string;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "structural-identity",
+      "modules": {
+        "main": "import {I} from \"dep\";const A=I.<string>;if(A!==string||A!==I.<string>)throw new Error(\"identity\");",
+        "dep": "export type I<T:type> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "cycle-unused",
+      "modules": {
+        "main": "import {marker} from \"dep\";export type I<T:type extends string> = T;",
+        "dep": "import {I} from \"main\";export const marker=1;function unused(){I.<string>;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "source-import",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "import {bound} from \"leaf\";export type I<T:type extends bound()> = T;",
+        "leaf": "export function bound():type{return string;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep",
+          "leaf"
+        ],
+        "bodyEntries": [
+          "leaf",
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "source-const",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<string>;",
+        "dep": "const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "plain-alias-value-type",
+      "modules": {
+        "main": "import {I} from \"dep\";const t:type=I;const value:I=\"ok\";if(t!==string)throw new Error(\"type\");",
+        "dep": "export type I=string;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "plain-alias-invalid-value",
+      "modules": {
+        "main": "import {I} from \"dep\";const x:string=I;",
+        "dep": "export type I=string;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "where-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<0>;",
+        "dep": "export type I<N:uint32> = uint32 where N > 0;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "where-good",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<3>;",
+        "dep": "export type I<N:uint32> = uint32 where N > 0;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "where-outer-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";function f<N:uint32>(){I.<N>;}f.<0>();",
+        "dep": "export type I<N:uint32> = uint32 where N > 0;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "where-source-good",
+      "modules": {
+        "main": "import {I} from \"dep\";function allowed(n:uint32):boolean{return false;}I.<3>;",
+        "dep": "function allowed(n:uint32):boolean{return n>0;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-bound",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "type Inner<T:type extends string> = T;export type I<T:type> = Inner.<T>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nested-computed-bound",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "function bound():type{return string;}type Inner<T:type extends bound()> = T;export type I<T:type> = Inner.<T>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "two-distinct-origins",
+      "modules": {
+        "main": "import {I as S} from \"dep\";import {I as N} from \"other\";S.<string>;N.<uint8>;",
+        "dep": "export type I<T:type extends string> = T;",
+        "other": "export type I<T:type extends uint8> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep",
+          "other"
+        ],
+        "bodyEntries": [
+          "dep",
+          "other",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-source-context",
+      "modules": {
+        "main": "import {I} from \"dep\";function def():type{return uint8;}if(I.<>!==string)throw new Error(\"default\");",
+        "dep": "function def():type{return string;}export type I<T:type=def()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-selective",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<U:string,T:string>;",
+        "dep": "function fail():type{throw new Error(\"default\");}export type I<T:type=fail(),U:type=T> = U;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "spread-good",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<...[string]>;",
+        "dep": "export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "spread-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<...[uint8]>;",
+        "dep": "export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "variadic-good",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<string,uint8>;",
+        "dep": "export type I<...Ts:[].<type>> = [...Ts];"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "literal-type-good",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<3>;",
+        "dep": "export type I<T:type> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "parameter-argument-context",
+      "modules": {
+        "main": "import {I} from \"dep\";function f<T:type>(){I.<T>;}f.<string>();",
+        "dep": "export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nominal-default-context",
+      "modules": {
+        "main": "import {I,C as Original} from \"dep\";class C{}if(I.<>!==Original)throw new Error(\"nominal\");",
+        "dep": "export class C{}export type I<T:type=C> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reexport-import-local",
+      "modules": {
+        "main": "import {R} from \"mid\";R.<uint8>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;",
+        "mid": "import {I} from \"dep\";export {I as R};"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "mid",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "mid"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "same-module-input-pending",
+      "modules": {
+        "main": "import {I} from \"dep\";const T=string;function unused(){I.<T>;}",
+        "dep": "function fail():type{throw new Error(\"default\");}export type I<T:type=fail()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "dynamic-call-unused",
+      "modules": {
+        "main": "import {I} from \"dep\";function pick():any{return I;}function unused(){pick().<uint8>;}",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "dynamic-call-executed",
+      "modules": {
+        "main": "import {I} from \"dep\";function pick():any{return I;}pick().<uint8>;",
+        "dep": "function bound():type{return string;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "local-spread-identity",
+      "modules": {
+        "main": "type I<T:type extends string> = T;if(I.<...[string]>!==string)throw new Error(\"identity\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-spread-empty",
+      "modules": {
+        "main": "type I<T:type extends string> = T;I.<...[]>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "rule": "rt-generic-argument",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-spread-open-array",
+      "modules": {
+        "main": "type I<T:type extends string> = T;I.<...[].<string>>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-spread-scalar",
+      "modules": {
+        "main": "type I<T:type extends string> = T;I.<...string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "import-spread-identity",
+      "modules": {
+        "main": "import {I} from \"dep\";if(I.<...[string]>!==string)throw new Error(\"identity\");",
+        "dep": "export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-spread-empty",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<...[]>;",
+        "dep": "export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "rule": "rt-generic-argument",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "import-spread-open-array",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<...[].<string>>;",
+        "dep": "export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "import-spread-scalar",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<...string>;",
+        "dep": "export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "dynamic-spread-identity",
+      "modules": {
+        "main": "import {I} from \"dep\";function get():any{return I;}if(get().<...[string]>!==string)throw new Error(\"identity\");",
+        "dep": "export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "dynamic-spread-empty",
+      "modules": {
+        "main": "import {I} from \"dep\";function get():any{return I;}get().<...[]>;",
+        "dep": "export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "dynamic-spread-open-array",
+      "modules": {
+        "main": "import {I} from \"dep\";function get():any{return I;}get().<...[].<string>>;",
+        "dep": "export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "dynamic-spread-scalar",
+      "modules": {
+        "main": "import {I} from \"dep\";function get():any{return I;}get().<...string>;",
+        "dep": "export type I<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "spread-two",
+      "modules": {
+        "main": "import {I} from \"dep\";type Expected=[string,uint8];if(I.<...[string,uint8]>!==Expected)throw new Error(\"spread\");",
+        "dep": "export type I<T:type,U:type> = [T,U];"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "spread-then-named",
+      "modules": {
+        "main": "import {I} from \"dep\";type Expected=[string,uint8];if(I.<...[string],U:uint8>!==Expected)throw new Error(\"spread\");",
+        "dep": "export type I<T:type,U:type> = [T,U];"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "spread-value",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<...[3]>;",
+        "dep": "export type I<N:uint8> = string;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "spread-extent",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<...[2].<string>>;",
+        "dep": "export type I<T:type,U:type> = [T,U];"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-spread-scalar",
+      "modules": {
+        "main": "function f<T:type>(){}f.<...string>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-spread-scalar",
+      "modules": {
+        "main": "class C<T:type>{}C.<...string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "dependent-spread-unused",
+      "modules": {
+        "main": "type I<T:type> = T;function f<T:type>(){I.<...T>;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "dependent-spread-good",
+      "modules": {
+        "main": "type I<T:type> = T;function f<T:type>(){I.<...T>;}f.<[string]>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

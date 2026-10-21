@@ -1459,6 +1459,7 @@ const moduleClassNodes = new WeakMap<object, Map<string, ParseNode>>();
 // a decorator replacement. Absence does not prove the current binding's value.
 const checkedClassOrigins = new WeakMap<ParseNode, boolean>();
 const moduleInterfaceNodes = new WeakMap<object, Map<string, ParseNode>>();
+const moduleTypeAliasNodes = new WeakMap<object, Map<string, ParseNode.TypeAliasDeclaration>>();
 const checkedInterfaceTypes = new WeakMap<ParseNode, TypeRecord>();
 
 export function CheckedInterfaceTypeOf(declaration: ParseNode): TypeRecord | undefined {
@@ -1470,6 +1471,16 @@ export interface ImportedInterface {
   readonly module: AbstractModuleRecord;
   readonly name: string;
   readonly type: TypeRecord;
+}
+
+/** Declaration origin is independent of the alias's expanded type. */
+export interface ImportedTypeAlias {
+  readonly declaration: ParseNode.TypeAliasDeclaration;
+  readonly module: AbstractModuleRecord;
+}
+
+export function ExportedTypeAliasNodesOf(module: ParseNode.Module): ReadonlyMap<string, ParseNode.TypeAliasDeclaration> | undefined {
+  return moduleTypeAliasNodes.get(module);
 }
 
 export function ExportedInterfaceNodesOf(module: ParseNode.Module): ReadonlyMap<string, ParseNode> | undefined {
@@ -2790,6 +2801,7 @@ const moduleCheckInputs = new WeakMap<object, {
   imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, classes?: ReadonlyMap<string, ParseNode>,
   classModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>,
   interfaces?: ReadonlyMap<string, ImportedInterface>,
+  aliases?: ReadonlyMap<string, ImportedTypeAlias>,
 }>();
 
 export function DeferredTypeChecksOf(root: object): readonly DeferredTypeCheck[] {
@@ -2817,6 +2829,11 @@ export function RecheckAfterTypeEvaluation(root: ParseNode.Script | ParseNode.Mo
     session.frame.immutableNames.add(name);
     const symbolKey = constants.get(name)?.symbolKey;
     if (symbolKey) session.frame.constPropertyKeys.set(name, symbolKey);
+  }
+  for (const name of inputs?.aliases?.keys() ?? []) {
+    session.frame.bindings.set(name, makePrimitive('type'));
+    session.frame.declaredNames.add(name);
+    session.frame.immutableNames.add(name);
   }
   const outer = importedBuilderNodes;
   importedBuilderNodes = inputs?.builders;
@@ -3115,6 +3132,7 @@ export function CheckModule(module: ParseNode.Module, specifier?: string): Objec
   const builders = new Map<string, ParseNode>();
   const classes = new Map<string, ParseNode>();
   const interfaces = new Map<string, ParseNode>();
+  const aliases = new Map<string, ParseNode.TypeAliasDeclaration>();
   for (const item of module.ModuleBody?.ModuleItemList ?? []) {
     const wrapper = item as { type?: string, HoistableDeclaration?: ParseNode, Declaration?: ParseNode };
     const declaration = wrapper.type === 'ExportDeclaration'
@@ -3129,11 +3147,15 @@ export function CheckModule(module: ParseNode.Module, specifier?: string): Objec
         && ((declaration as ParseNode.InterfaceDeclaration).TypeParameters?.ListKind ?? 'parameters') === 'parameters'
         && typeof named.BindingIdentifier?.name === 'string') {
       interfaces.set(named.BindingIdentifier.name, declaration as ParseNode);
+    } else if (declaration?.type === 'TypeAliasDeclaration'
+        && (declaration.TypeParameters?.ListKind ?? 'parameters') === 'parameters') {
+      aliases.set(declaration.BindingIdentifier.name, declaration);
     }
   }
   moduleBuilderNodes.set(module as unknown as object, builders);
   moduleClassNodes.set(module, classes);
   moduleInterfaceNodes.set(module, interfaces);
+  moduleTypeAliasNodes.set(module, aliases);
   recordModuleAliases(specifier, module, new Map(session.frame.aliases));
   return errors;
 }
@@ -3158,9 +3180,9 @@ export function CheckModule(module: ParseNode.Module, specifier?: string): Objec
  * bindings are only there on the second pass. `function f() { return c.x; }
  * let s: string = f();` is refused because of that second pass.
  */
-export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, specifier?: string, classes?: ReadonlyMap<string, ParseNode>, classModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>, interfaces?: ReadonlyMap<string, ImportedInterface>): ObjectValue[] {
-  moduleCheckInputs.set(module, { imported, builders, classes, classModules, interfaces });
-  if (imported.size === 0) {
+export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, specifier?: string, classes?: ReadonlyMap<string, ParseNode>, classModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>, interfaces?: ReadonlyMap<string, ImportedInterface>, aliases?: ReadonlyMap<string, ImportedTypeAlias>): ObjectValue[] {
+  moduleCheckInputs.set(module, { imported, builders, classes, classModules, interfaces, aliases });
+  if (imported.size === 0 && !aliases?.size) {
     return [];
   }
   const session = CreateCheckSession();
@@ -3184,6 +3206,11 @@ export function CheckModuleWithImports(module: ParseNode.Module, imported: Reado
     session.frame.immutableNames.add(name);
   }
   const outerBuilders = importedBuilderNodes;
+  for (const name of aliases?.keys() ?? []) {
+    session.frame.bindings.set(name, makePrimitive('type'));
+    session.frame.declaredNames.add(name);
+    session.frame.immutableNames.add(name);
+  }
   importedBuilderNodes = builders;
   try {
     const errors = checkCompletedDeclarations(module.ModuleBody?.ModuleItemList ?? null, module, session);
@@ -6775,10 +6802,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * implements.
    */
   const importedInterfaces = moduleCheckInputs.get(root)?.interfaces;
+  const importedTypeAliases = moduleCheckInputs.get(root)?.aliases;
   const importedInterfacesByNode = new Map([...importedInterfaces?.values() ?? []].map((entry) => [entry.declaration, entry]));
   const interfaceNodes = new Map<string, ParseNode>([...importedInterfaces ?? []].map(([name, entry]) => [name, entry.declaration]));
   const importedDeclarationSourceModules = new Map<ParseNode, AbstractModuleRecord>();
-  for (const entry of importedInterfaces?.values() ?? []) {
+  for (const entry of [...importedInterfaces?.values() ?? [], ...importedTypeAliases?.values() ?? []]) {
     let source = entry.declaration;
     while (source.parent) source = source.parent;
     importedDeclarationSourceModules.set(source, entry.module);
@@ -10919,7 +10947,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const constructor = stableClassOrigin(node);
     if (constructor && !constructor.arguments) return constructor.declaration;
-    const declaration = declarationAt(node, node.name, interfaceNodes.get(node.name) ?? aliasNodes.get(node.name));
+    // Resolve an import by its linked origin, not a same-spelled local registry
+    // entry. Keeping this separate from alias expansion preserves its meaning.
+    const external = binding?.kind === 'import' ? importedTypeAliases?.get(node.name)?.declaration : undefined;
+    const declaration = declarationAt(node, node.name, external ?? interfaceNodes.get(node.name) ?? aliasNodes.get(node.name));
     return declaration?.type === 'InterfaceDeclaration' || declaration?.type === 'TypeAliasDeclaration' ? declaration : undefined;
   };
 
@@ -14198,10 +14229,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           for (let k = 0; k < extent; k += 1) {
             entries.push({ node: null, record: (t as { Element: TypeRecord }).Element, name: undefined });
           }
-        } else if (t.Kind === 'array') {
-          // #sec-type-references: a spread of a DYNAMIC array cannot
-          // say how many parameters it fills - a STATIC refusal, reported here
-          // without the program running it.
+        } else if (t.Kind === 'array' || (t.Kind !== 'any' && t.Kind !== 'deferred' && !mentionsTypeParameter(t))) {
+          // #sec-type-references: an unstated extent or a known non-sequence
+          // cannot supply a spread. A closed scalar is not a pending pack.
           const completion = CreateTypeDiagnostic('rt-assignability', root, diagnosticPhase, '$1 is not assignable to $2', Value(displayType(t)), Value('a tuple or an array of stated extent, as a spread type argument')) as ThrowCompletion;
           errors.push(completion.Value as ObjectValue);
           return pendingAssignment();

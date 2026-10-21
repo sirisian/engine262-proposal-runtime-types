@@ -3201,8 +3201,16 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
       const argRecords: TypeRecord[] = [];
       const argNames: (string | undefined)[] = [];
       for (const argNode of node.TypeArguments.TypeArgumentList) {
-        argNames.push(typeArgumentNameOf(argNode));
-        argRecords.push(Q(yield* TypeNodeToTypeRecord(argNode)));
+        const argument = Q(yield* TypeNodeToTypeRecord(argNode));
+        if ((argNode as { IsSpread?: boolean }).IsSpread) {
+          const elements = spreadElementsOf(argument);
+          if (!elements) return Throw.TypeError('$1', Value('a spread alias type argument must be a tuple or an array of stated extent'));
+          argRecords.push(...elements);
+          argNames.push(...elements.map(() => undefined));
+        } else {
+          argNames.push(typeArgumentNameOf(argNode));
+          argRecords.push(argument);
+        }
       }
       // The alias
       // honoured names in TYPE position and dropped them in expression
