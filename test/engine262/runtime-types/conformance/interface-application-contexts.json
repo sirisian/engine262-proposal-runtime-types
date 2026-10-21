@@ -1,0 +1,549 @@
+{
+  "cases": [
+    {
+      "name": "bare-default",
+      "modules": {
+        "other": "export function make():type{return string;}",
+        "dep": "import {make} from \"other\";export interface Has<T:type=make()>{get():T;}",
+        "main": "import {Has} from \"dep\";function make():type{return number;}type Applied=Has;if(Applied!==Has.<string>)throw new Error(\"default\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "other",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "empty-expression-default",
+      "modules": {
+        "other": "export function make():type{return string;}",
+        "dep": "import {make} from \"other\";export interface Has<T:type=make()>{get():T;}",
+        "main": "import {Has} from \"dep\";function make():type{return number;}if(Has.<>!==Has.<string>)throw new Error(\"default\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "other",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "empty-type-default",
+      "modules": {
+        "other": "export function make():type{return string;}",
+        "dep": "import {make} from \"other\";export interface Has<T:type=make()>{get():T;}",
+        "main": "import {Has} from \"dep\";function make():type{return number;}type Applied=Has.<>;if(Applied!==Has.<string>)throw new Error(\"default\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "other",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "explicit-bypasses-default",
+      "modules": {
+        "other": "export function make():type{throw new Error(\"unused\");}",
+        "dep": "import {make} from \"other\";export interface Has<T:type=make()>{get():T;}",
+        "main": "import {Has} from \"dep\";type Applied=Has.<number>;if(Applied!==Has.<number>)throw new Error(\"explicit\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "other",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-reordering",
+      "modules": {
+        "other": "export function make():type{return string;}",
+        "dep": "export interface Has<A:type,B:type>{a:A;b:B;}",
+        "main": "import {Has} from \"dep\";if(Has.<B:number,A:string>!==Has.<string,number>)throw new Error(\"names\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "dependent-default",
+      "modules": {
+        "other": "export function make():type{return string;}",
+        "dep": "export interface Has<A:type,B:type=A>{a:A;b:B;}",
+        "main": "import {Has} from \"dep\";if(Has.<string>!==Has.<string,string>)throw new Error(\"dependent\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "constraint-source-good",
+      "modules": {
+        "other": "export function make():type{return string;}",
+        "dep": "import {make} from \"other\";export interface Has<T:type extends make()>{get():T;}",
+        "main": "import {Has} from \"dep\";function make():type{return number;}type Applied=Has.<string>;if(Applied!==Has.<string>)throw new Error(\"constraint\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "other",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "renamed",
+      "modules": {
+        "main": "import {Has as H} from \"dep\";function make():type{return number;}type A=H;if(A!==H.<string>)throw new Error(\"rename\");",
+        "dep": "import {make} from \"other\";export interface Has<T:type=make()>{value:T;}",
+        "other": "export function make():type{return string;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "other",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace",
+      "modules": {
+        "main": "import * as ns from \"dep\";function make():type{return number;}type A=ns.Has;if(A!==ns.Has.<string>)throw new Error(\"namespace\");",
+        "dep": "import {make} from \"other\";export interface Has<T:type=make()>{value:T;}",
+        "other": "export function make():type{return string;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "other",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "dynamic-forwarding",
+      "modules": {
+        "main": "import {Has} from \"dep\";const H:any=Has;function make():type{return number;}if(H.<>!==Has.<string>)throw new Error(\"forward\");",
+        "dep": "import {make} from \"other\";export interface Has<T:type=make()>{value:T;}",
+        "other": "export function make():type{return string;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "other",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "caller-generics",
+      "modules": {
+        "main": "import {Has} from \"dep\";function use<T:type>(i:any):type{return i.<>;}if(use.<number>(Has)!==Has.<string>)throw new Error(\"caller\");",
+        "dep": "import {make} from \"other\";export interface Has<T:type=make()>{value:T;}",
+        "other": "export function make():type{return string;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "other",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "independent-nested",
+      "modules": {
+        "main": "function make<T:type>():type{interface I<U:type=T>{value:U;}return I;}const A=make.<string>();const B=make.<number>();if(A.<>!==A.<string>||B.<>!==B.<number>||A.<> === B.<>)throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "helper-shadow",
+      "modules": {
+        "main": "function outer<T:type>():type{function bound():type{return T;}interface I<T:type extends bound()=bound()>{value:T;}return I;}const A=outer.<string>();const B=outer.<number>();if(A.<>!==A.<string>||B.<>!==B.<number>)throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "explicit-consumer",
+      "modules": {
+        "main": "import {Has} from \"dep\";function make():type{return number;}type A=Has.<make()>;if(A!==Has.<number>||Has.<make()>!==A)throw new Error(\"written\");",
+        "dep": "import {make} from \"other\";export interface Has<T:type=make()>{value:T;}",
+        "other": "export function make():type{return string;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "other",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "value-domain",
+      "modules": {
+        "main": "import {Has} from \"dep\";type A=Has;if(A!==Has.<7>||Has.<>!==A)throw new Error(\"value\");",
+        "dep": "export interface Has<N:uint8=7>{}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "spread-expression",
+      "modules": {
+        "main": "interface I<A:type,B:type=A>{a:A;b:B;}if(I.<...[string]>!==I.<string,string>||I.<...[string,number]>!==I.<string,number>)throw new Error(\"spread\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "pack-default",
+      "modules": {
+        "main": "interface I<...T:[].<type>=[string,number]>{value:T;}if(I.<>!==I.<string,number>)throw new Error(\"pack\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "constraint-runtime-wrong",
+      "modules": {
+        "main": "import {Has} from \"dep\";const H:any=Has;H.<number>;",
+        "dep": "import {make} from \"other\";export interface Has<T:type extends make()>{get():T;}",
+        "other": "export function make():type{return string;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "other",
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "default-throw",
+      "modules": {
+        "main": "import {Has} from \"dep\";const H:any=Has;H.<>;",
+        "dep": "import {make} from \"other\";export interface Has<T:type=make()>{value:T;}",
+        "other": "export function make():type{throw new Error(\"required\");}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "other",
+          "dep",
+          "main"
+        ],
+        "errorClass": "Error"
+      }
+    },
+    {
+      "name": "recursive-unused",
+      "modules": {
+        "main": "interface I<T:type=I.<>>{value:T;}I.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "required-finite-recursive",
+      "modules": {
+        "main": "interface I<T:type=I.<string>>{value:T;}if(I.<>!==I.<I.<string>>)throw new Error(\"finite\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-written-caller",
+      "modules": {
+        "main": "import * as ns from \"dep\";function make():type{return number;}type A=ns.Has.<make()>;if(A!==ns.Has.<number>)throw new Error(\"namespace written\");",
+        "dep": "import {make} from \"other\";export interface Has<T:type=make()>{value:T;}",
+        "other": "export function make():type{return string;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "other",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-named",
+      "modules": {
+        "main": "import * as ns from \"dep\";type A=ns.Has.<B:number,A:string>;if(A!==ns.Has.<string,number>)throw new Error(\"namespace names\");",
+        "dep": "export interface Has<A:type,B:type>{a:A;b:B;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "re-export",
+      "modules": {
+        "main": "import {Other} from \"bridge\";function make():type{return number;}type A=Other;if(A!==Other.<string>||Other.<>!==A)throw new Error(\"reexport\");",
+        "dep": "import {make} from \"other\";export interface Has<T:type=make()>{value:T;}",
+        "other": "export function make():type{return string;}",
+        "bridge": "export {Has as Other} from \"dep\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "other",
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "qualified-application-alias",
+      "modules": {
+        "main": "import * as ns from \"dep\";type A=ns.Closed;if(A!==ns.Closed)throw new Error(\"closed\");",
+        "dep": "export interface Has<T:type=number>{value:T;}export type Closed=Has.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "higher-kinded-interface",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}function apply<W<_>:type,T:type>():type{type A=W.<T>;return A;}if(apply.<I,string>()!==I.<string>)throw new Error(\"kinded\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "failed-default-restores-caller",
+      "modules": {
+        "main": "import {Has} from \"dep\";const H:any=Has;function make():type{return number;}let failed=false;try{H.<>;}catch(e){failed=true;}if(!failed||make()!==number||H.<number>!==Has.<number>)throw new Error(\"restore\");",
+        "dep": "import {make} from \"other\";export interface Has<T:type=make()>{value:T;}",
+        "other": "export function make():type{throw new Error(\"required\");}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "other",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "failed-constraint-restores-caller",
+      "modules": {
+        "main": "import {Has} from \"dep\";const H:any=Has;function make():type{return number;}let failed=false;try{H.<number>;}catch(e){failed=true;}if(!failed||make()!==number||H.<string>!==Has.<string>)throw new Error(\"restore\");",
+        "dep": "import {make} from \"other\";export interface Has<T:type extends make()>{value:T;}",
+        "other": "export function make():type{return string;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "other",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "dynamic-unknown-name",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}const H:any=I;H.<Other:string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "dynamic-missing",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}const H:any=I;H.<>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "dynamic-default-refused",
+      "modules": {
+        "main": "function make():type{return number;}interface I<T:type extends string=make()>{value:T;}const H:any=I;H.<>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "dynamic-value-overflow",
+      "modules": {
+        "main": "interface I<N:uint8>{}const H:any=I;H.<300>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "recursive-default-required",
+      "modules": {
+        "main": "interface I<T:type=I.<>>{value:T;}const H:any=I;H.<>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "unused-default-expression",
+      "modules": {
+        "main": "interface I<T:type=fail()>{value:T;}function fail():type{throw new Error(\"unused\");}const H:any=I;if(H.<string>!==I.<string>)throw new Error(\"explicit\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-value-overflow",
+      "modules": {
+        "main": "type Alias<N:uint8>=N;const A:any=Alias;A.<300>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "callable-value-overflow",
+      "modules": {
+        "main": "function f<N:uint8>(){}const F:any=f;F.<300>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "class-value-overflow",
+      "modules": {
+        "main": "class C<N:uint8>{}const F:any=C;F.<300>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "value-pack-overflow",
+      "modules": {
+        "main": "function f<...Ns:[].<uint8>>(){}const F:any=f;F.<1,300>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    }
+  ]
+}

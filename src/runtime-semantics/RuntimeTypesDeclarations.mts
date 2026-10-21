@@ -41,7 +41,7 @@ import { beginResolvingAlias, endResolvingAlias, tieAliasKnot, recordResolvedAli
 import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin, RecordDeclaredMemberOrigins } from '../type-system/provenance.mts';
 import { BindTypeParameterTyped, toNumericArgument,
-  GenericAliasDeclarationShape, InstantiateGenericAlias, IsOfType, TypeNodeToTypeRecord, spreadElementsOf,
+  GenericAliasDeclarationShape, InstantiateGenericAlias, ApplyGenericInterface, IsOfType, TypeNodeToTypeRecord, spreadElementsOf,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
 import { currentTypeParameterFrame, BindTypeArgumentsInto, MetadataObjectFromType, publishedReturnTypeOfFunction } from '../type-system/runtime.mts';
 import { InferGenericBindings, TakePendingCalleeContext, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
@@ -119,6 +119,12 @@ export function IsPendingTypeDeclarationReference(error: unknown): boolean {
 // Records under construction belong to actual bindings in the current agent.
 // They are never successful fallback types and leave no evidence on failure.
 const resolvingInterfaces = new WeakMap<object, Map<object, TypeRecord>>();
+const interfaceTypeContexts = new WeakMap<object, CapturedTypeContext>();
+
+export function InterfaceTypeContextOf(record: TypeRecord): CapturedTypeContext | undefined {
+  return record.Kind === 'nominal' && record.DeclarationIdentity
+    ? interfaceTypeContexts.get(record.DeclarationIdentity) : undefined;
+}
 
 /** Resolve an interface graph in its declaration environment without initializing its binding. */
 export function* ResolveInterfaceDeclaration(node: ParseNode.InterfaceDeclaration, environment: EnvironmentRecord): PlainEvaluator<TypeRecord> {
@@ -137,6 +143,10 @@ export function* ResolveInterfaceDeclaration(node: ParseNode.InterfaceDeclaratio
   const record: TypeRecord = { Kind: 'nominal', Declaration: node, DeclarationIdentity: identity, Arguments: [], Structure: structure };
   active.set(identity, record);
   const context = surroundingAgent.runningExecutionContext;
+  interfaceTypeContexts.set(identity, {
+    Environment: environment, PrivateEnvironment: context.PrivateEnvironment,
+    TypeParameterFrame: currentTypeParameterFrame(), Realm: context.Realm, ScriptOrModule: context.ScriptOrModule,
+  });
   const outer = context.LexicalEnvironment;
   context.LexicalEnvironment = environment;
   try {
@@ -148,6 +158,7 @@ export function* ResolveInterfaceDeclaration(node: ParseNode.InterfaceDeclaratio
     return record;
   } finally {
     context.LexicalEnvironment = outer;
+    if (!completed) interfaceTypeContexts.delete(identity);
     // Reuse completed subgraphs only within this formation, including diamonds.
     if (outermost) active.clear();
     else if (!completed) active.delete(identity);
@@ -2953,6 +2964,16 @@ export function* Evaluate_TypeArgumentsExpression(node: ParseNode.TypeArgumentsE
       const aliasDecl = record.Declaration as ParseNode.TypeAliasDeclaration;
       const instantiated = Q(yield* InstantiateGenericAlias(aliasDecl, argRecords, record, argNames));
       return GetTypeObject(instantiated);
+    }
+    if (record.Kind === 'nominal' && record.Declaration.type === 'InterfaceDeclaration'
+      && record.Declaration.TypeParameters?.TypeParameterList.length) {
+      const bound = Q(yield* ApplyGenericInterface(record, node.TypeArguments.TypeArgumentList));
+      let conflict: string | undefined;
+      const applied = MergePartialStructures(bound, RuntimePartialContributions(record.DeclarationIdentity ?? record.Declaration), (key) => {
+        conflict ??= key;
+      });
+      if (conflict) return Throw.TypeError('$1 is already declared on this interface', Value(conflict));
+      return GetTypeObject(CanonicalizeType(applied));
     }
     // proposal-runtime-types: everything that is NOT a generic alias fell
     // through to the unapplied base, so `Iterable.<uint8>` in expression

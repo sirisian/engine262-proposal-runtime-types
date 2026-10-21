@@ -1,10 +1,11 @@
 import type { ExecutionContext } from '../execution-context/ExecutionContext.mts';
+import { Assert } from '../abstract-ops/notational-conventions.mts';
 import { GenericMapTypeOf } from '../abstract-ops/generic-map.mts';
 import type { PrivateEnvironmentRecord } from '../execution-context/PrivateEnvironment.mts';
 import { EnvironmentRecord, DeclarativeEnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity } from '../execution-context/Environment.mts';
 import { TypeNameEnvironmentFor } from '../execution-context/TypeNames.mts';
 import { isRationalObject, rationalWidthOf } from '../intrinsics/Rational.mts';
-import { FamilyCasesOf, SpecializedClassConstructor, ResolveInterfaceDeclaration } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
+import { FamilyCasesOf, SpecializedClassConstructor, ResolveInterfaceDeclaration, InterfaceTypeContextOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { sourceTextOf } from '../parser/TokensOf.mts';
 import { FirstEvaluabilityViolation } from '../static-semantics/PreprocessorEvaluability.mts';
 import { wrappedParse } from '../parse.mts';
@@ -906,7 +907,7 @@ function* BindTypeArgumentRecordsInParameterEnvironment(
           if (q.IsValueParameter && r.Kind === 'literal' && elementBound) {
             const converted = EnsureCompletion(yield* CheckedConvertValue(r.Value as Value, elementBound as never));
             if (converted.Type !== 'normal') {
-              return converted as never;
+              return Throw.TypeError('$1 is not assignable to $2', Value(displayType(r)), Value(displayType(elementBound)));
             }
             r = { ...r, Value: converted.Value as Value, Base: elementBound } as TypeRecord;
           }
@@ -934,7 +935,7 @@ function* BindTypeArgumentRecordsInParameterEnvironment(
       if (record.Kind === 'literal' && constraint) {
         const converted = EnsureCompletion(yield* CheckedConvertValue(record.Value as Value, constraint as never));
         if (converted.Type !== 'normal') {
-          return converted as never;
+          return Throw.TypeError('$1 is not assignable to $2', Value(displayType(record)), Value(displayType(constraint)));
         }
         // Base moves with the value (see SpecializeGenericClass): a `uint32`
         // 4 over a `number` base failed its own formal's boundary.
@@ -1204,6 +1205,51 @@ export function* GenericAliasDeclarationShape(
   } finally {
     EndTypeEvaluation();
   }
+}
+
+/** Resolve written interface arguments before entering the declaration context. */
+export function* ApplyGenericInterface(record: TypeRecord, argumentsList: readonly ParseNode.Type[]): PlainEvaluator<TypeRecord> {
+  const records: TypeRecord[] = [];
+  const names: (string | undefined)[] = [];
+  for (const argument of argumentsList) {
+    const resolved = Q(yield* TypeNodeToTypeRecord(argument));
+    if ((argument as { IsSpread?: boolean }).IsSpread) {
+      const elements = spreadElementsOf(resolved);
+      if (!elements) return Throw.TypeError('$1', Value('a spread type argument must be a tuple or an array of stated extent'));
+      records.push(...elements);
+      names.push(...elements.map(() => undefined));
+    } else {
+      records.push(resolved);
+      names.push(typeArgumentNameOf(argument));
+    }
+  }
+  return yield* InstantiateGenericInterface(record, records, names);
+}
+
+/** Bind an interface application in the context of its actual declaration binding. */
+export function* InstantiateGenericInterface(
+  record: TypeRecord,
+  argumentsList: readonly TypeRecord[],
+  names: readonly (string | undefined)[],
+): PlainEvaluator<TypeRecord> {
+  Assert(record.Kind === 'nominal' && record.Declaration.type === 'InterfaceDeclaration');
+  const declaration = record.Declaration;
+  const captured = InterfaceTypeContextOf(record);
+  Assert(captured !== undefined);
+  const apply = function* (): PlainEvaluator<TypeRecord> {
+    const bound = Q(yield* BindTypeArgumentRecordsInto(declaration.TypeParameters?.TypeParameterList ?? [],
+      argumentsList, names, new Map(), declaration.BindingIdentifier.name));
+    const bad = badKindedArgument(record, bound);
+    if (bad) {
+      return bad.kind === 'not-generic'
+        ? Throw.TypeError('$1 is not a generic declaration; $2 expects one taking $3 type arguments',
+          Value(displayType(bad.argument)), Value(bad.parameter), Value(String(bad.wanted)))
+        : Throw.TypeError('$1 takes $2 type arguments; $3 expects one taking $4',
+          Value(displayType(bad.argument)), Value(String(bad.supplied)), Value(bad.parameter), Value(String(bad.wanted)));
+    }
+    return { ...record, Arguments: bound };
+  };
+  return yield* InCapturedTypeContext(captured, () => EvaluateWithTypeBudget(declaration.BindingIdentifier.name, apply()));
 }
 
 export function* InstantiateGenericAlias(
@@ -5442,6 +5488,9 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
             ));
           }
           if (boundDecl.Kind === 'nominal') {
+            if (boundDecl.Declaration.type === 'InterfaceDeclaration') {
+              return Q(yield* InstantiateGenericInterface(boundDecl, argRecords, argNames));
+            }
             return { ...boundDecl, Arguments: argRecords };
           }
         }
@@ -5497,6 +5546,13 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
         // member denotes the ENUMERATOR, so only a real Type Object may take
         // this branch.
         if (base instanceof ObjectValue && isTypeObject(base)) {
+          const record = base.TypeRecord;
+          if (record.Kind === 'nominal' && record.Declaration.type === 'InterfaceDeclaration'
+            && record.Declaration.TypeParameters?.TypeParameterList.length
+            && (node.TypeArguments || record.Arguments.length === 0
+              && !isHigherKindedArgument(node, (declName) => declarationNamed(node, declName) ?? undefined))) {
+            return Q(yield* ApplyGenericInterface(record, node.TypeArguments?.TypeArgumentList ?? []));
+          }
           return base.TypeRecord;
         }
         if (base instanceof ObjectValue) {
@@ -6013,6 +6069,11 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
         // #sec-type-references: an alias of a completed application already has
         // its arguments. A bare alias does not apply the family a second time.
         if (!node.TypeArguments && baseRecord.Kind === 'nominal' && baseRecord.Arguments.length > 0) return baseRecord;
+        if (baseRecord.Kind === 'nominal' && baseRecord.Declaration.type === 'InterfaceDeclaration'
+          && baseRecord.Declaration.TypeParameters?.TypeParameterList.length
+          && (node.TypeArguments || !isHigherKindedArgument(node, (declName) => declarationNamed(node, declName) ?? undefined))) {
+          return Q(yield* InstantiateGenericInterface(baseRecord, argRecords, argNames2));
+        }
         // Named type arguments are ordered into PARAMETER order here, at the single
         // attach point, so a class, an interface, and a library nominal honour
         // a name the way a generic alias already does. Ordering runs before the
