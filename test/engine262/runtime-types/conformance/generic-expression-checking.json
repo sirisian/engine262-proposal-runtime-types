@@ -1,0 +1,2295 @@
+{
+  "description": "Established generic expression argument admission at static and pre-evaluation boundaries, with dynamic and availability controls",
+  "cases": [
+    {
+      "name": "interface-direct",
+      "modules": {
+        "main": "interface I<T:type extends string> {}I.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-stored",
+      "modules": {
+        "main": "interface I<T:type extends string> {}const t=I.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-unused",
+      "modules": {
+        "main": "interface I<T:type extends string> {}function f(){return I.<uint8>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-dead",
+      "modules": {
+        "main": "interface I<T:type extends string> {}if(false){I.<uint8>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-parenthesized",
+      "modules": {
+        "main": "interface I<T:type extends string> {}(I).<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-valid",
+      "modules": {
+        "main": "interface I<T:type extends string> {}I.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-annotation",
+      "modules": {
+        "main": "interface I<T:type extends string> {}let x:I.<uint8>|null=null;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-missing",
+      "modules": {
+        "main": "interface I<T:type extends string> {}I.<>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "rule": "rt-generic-argument",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-excess",
+      "modules": {
+        "main": "interface I<T:type extends string> {}I.<string,uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "rule": "rt-generic-argument",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-named",
+      "modules": {
+        "main": "interface I<T:type extends string> {}I.<T:uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-unknown-name",
+      "modules": {
+        "main": "interface I<T:type extends string> {}I.<Bad:string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "rule": "rt-generic-argument",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-direct",
+      "modules": {
+        "main": "class I<T:type extends string> {}I.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-stored",
+      "modules": {
+        "main": "class I<T:type extends string> {}const t=I.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-unused",
+      "modules": {
+        "main": "class I<T:type extends string> {}function f(){return I.<uint8>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-dead",
+      "modules": {
+        "main": "class I<T:type extends string> {}if(false){I.<uint8>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-parenthesized",
+      "modules": {
+        "main": "class I<T:type extends string> {}(I).<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-valid",
+      "modules": {
+        "main": "class I<T:type extends string> {}I.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-annotation",
+      "modules": {
+        "main": "class I<T:type extends string> {}let x:I.<uint8>|null=null;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_CONSTRAINT",
+          "rule": "rt-generic-constraint",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-missing",
+      "modules": {
+        "main": "class I<T:type extends string> {}I.<>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "rule": "rt-generic-argument",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-excess",
+      "modules": {
+        "main": "class I<T:type extends string> {}I.<string,uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "rule": "rt-generic-argument",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-named",
+      "modules": {
+        "main": "class I<T:type extends string> {}I.<T:uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-unknown-name",
+      "modules": {
+        "main": "class I<T:type extends string> {}I.<Bad:string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "rule": "rt-generic-argument",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "type-direct",
+      "modules": {
+        "main": "type I<T:type extends string> = {x:T};I.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "type-stored",
+      "modules": {
+        "main": "type I<T:type extends string> = {x:T};const t=I.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "type-unused",
+      "modules": {
+        "main": "type I<T:type extends string> = {x:T};function f(){return I.<uint8>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "type-dead",
+      "modules": {
+        "main": "type I<T:type extends string> = {x:T};if(false){I.<uint8>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "type-parenthesized",
+      "modules": {
+        "main": "type I<T:type extends string> = {x:T};(I).<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "type-valid",
+      "modules": {
+        "main": "type I<T:type extends string> = {x:T};I.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-annotation",
+      "modules": {
+        "main": "type I<T:type extends string> = {x:T};let x:I.<uint8>|null=null;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "type-missing",
+      "modules": {
+        "main": "type I<T:type extends string> = {x:T};I.<>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "rule": "rt-generic-argument",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "type-excess",
+      "modules": {
+        "main": "type I<T:type extends string> = {x:T};I.<string,uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "rule": "rt-generic-argument",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "type-named",
+      "modules": {
+        "main": "type I<T:type extends string> = {x:T};I.<T:uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "type-unknown-name",
+      "modules": {
+        "main": "type I<T:type extends string> = {x:T};I.<Bad:string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "rule": "rt-generic-argument",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-default",
+      "modules": {
+        "main": "interface I<T:type extends string=uint8>{}I.<>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-value",
+      "modules": {
+        "main": "interface I<N:uint8>{}I.<300>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-computed",
+      "modules": {
+        "main": "interface I<T:type extends string>{} function arg(){return uint8;}I.<arg()>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "interface-outer-bad",
+      "modules": {
+        "main": "interface I<T:type extends string>{} function f<U:type>(){return I.<U>;}f.<uint8>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-outer-good",
+      "modules": {
+        "main": "interface I<T:type extends string>{} function f<U:type>(){return I.<U>;}f.<string>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-outer-unused",
+      "modules": {
+        "main": "interface I<T:type extends string>{} function f<U:type>(){return I.<U>;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-shadowed",
+      "modules": {
+        "main": "interface I<T:type extends string>{}function f(I:any){return I.<uint8>;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-dynamic",
+      "modules": {
+        "main": "interface I<T:type extends string>{}function f(I:any){return I.<uint8>;} f(I);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "interface-throw-first",
+      "modules": {
+        "main": "interface I<T:type extends string>{}throw new Error(\"first\"); I.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-import-direct",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "export interface I<T:type extends string>{}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-import-valid",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<string>;",
+        "dep": "export interface I<T:type extends string>{}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-import-annotation",
+      "modules": {
+        "main": "import {I} from \"dep\";let x:I.<uint8>|null=null;",
+        "dep": "export interface I<T:type extends string>{}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-default",
+      "modules": {
+        "main": "class I<T:type extends string=uint8>{}I.<>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-value",
+      "modules": {
+        "main": "class I<N:uint8>{}I.<300>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-computed",
+      "modules": {
+        "main": "class I<T:type extends string>{} function arg(){return uint8;}I.<arg()>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "class-outer-bad",
+      "modules": {
+        "main": "class I<T:type extends string>{} function f<U:type>(){return I.<U>;}f.<uint8>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-outer-good",
+      "modules": {
+        "main": "class I<T:type extends string>{} function f<U:type>(){return I.<U>;}f.<string>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-outer-unused",
+      "modules": {
+        "main": "class I<T:type extends string>{} function f<U:type>(){return I.<U>;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-shadowed",
+      "modules": {
+        "main": "class I<T:type extends string>{}function f(I:any){return I.<uint8>;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-dynamic",
+      "modules": {
+        "main": "class I<T:type extends string>{}function f(I:any){return I.<uint8>;} f(I);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "class-throw-first",
+      "modules": {
+        "main": "class I<T:type extends string>{}throw new Error(\"first\"); I.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-import-direct",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "export class I<T:type extends string>{}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-import-valid",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<string>;",
+        "dep": "export class I<T:type extends string>{}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-import-annotation",
+      "modules": {
+        "main": "import {I} from \"dep\";let x:I.<uint8>|null=null;",
+        "dep": "export class I<T:type extends string>{}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_CONSTRAINT",
+          "rule": "rt-generic-constraint",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-const-alias",
+      "modules": {
+        "main": "interface I<T:type extends string>{}const A=I; A.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-shadow-sibling",
+      "modules": {
+        "main": "interface I<T:type extends string>{}function f(){interface I<T:type>{} I.<uint8>;}f();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-dynamic-caught",
+      "modules": {
+        "main": "interface I<T:type extends string>{}function f(I:any){return I.<uint8>;}let caught=false;try{f(I);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"admitted\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-sequence-callee",
+      "modules": {
+        "main": "interface I<T:type extends string>{}let calls=0;function get(){calls++;return I;}try{get().<uint8>;}catch(e){if(!(e instanceof TypeError))throw e;}if(calls!==1)throw new Error(\"calls\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-unavailable-local",
+      "modules": {
+        "main": "interface I<T:type extends string>{}function f(){const T=uint8;return I.<T>;} "
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-builder-bypassed",
+      "modules": {
+        "main": "function fail():type{throw new Error(\"default\");}interface I<T:type=fail()>{} I.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-builder-selected",
+      "modules": {
+        "main": "function fail():type{throw new Error(\"default\");}interface I<T:type=fail()>{} I.<>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DEFAULT_EVALUATION",
+          "rule": "rt-default-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "interface-type-kind",
+      "modules": {
+        "main": "interface I<T:type>{} I.<3>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-outer-captured-bad",
+      "modules": {
+        "main": "function outer<T:type>(){interface I<U:type extends T>{}return I.<uint8>;}outer.<string>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-outer-captured-good",
+      "modules": {
+        "main": "function outer<T:type>(){interface I<U:type extends T>{}return I.<uint8>;}outer.<uint8>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-spread-bad",
+      "modules": {
+        "main": "interface I<T:type extends string>{}I.<...[uint8]>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-spread-good",
+      "modules": {
+        "main": "interface I<T:type extends string>{}I.<...[string]>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-spread-empty",
+      "modules": {
+        "main": "interface I<T:type extends string>{}I.<...[]>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "rule": "rt-generic-argument",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-spread-dynamic",
+      "modules": {
+        "main": "interface I<T:type extends string>{}I.<...[].<string>>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-dependency-throws",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "throw new Error(\"dependency\");export interface I<T:type extends string>{}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-import-shadow",
+      "modules": {
+        "main": "import {I} from \"dep\";function f(I:any){return I.<uint8>;}",
+        "dep": "export interface I<T:type extends string>{}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-reexport",
+      "modules": {
+        "main": "import {Renamed} from \"bridge\";Renamed.<uint8>;",
+        "bridge": "export {I as Renamed} from \"dep\";",
+        "dep": "export interface I<T:type extends string>{}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "bridge",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-const-alias",
+      "modules": {
+        "main": "class I<T:type extends string>{}const A=I; A.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-shadow-sibling",
+      "modules": {
+        "main": "class I<T:type extends string>{}function f(){interface I<T:type>{} I.<uint8>;}f();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-dynamic-caught",
+      "modules": {
+        "main": "class I<T:type extends string>{}function f(I:any){return I.<uint8>;}let caught=false;try{f(I);}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught)throw new Error(\"admitted\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-sequence-callee",
+      "modules": {
+        "main": "class I<T:type extends string>{}let calls=0;function get(){calls++;return I;}try{get().<uint8>;}catch(e){if(!(e instanceof TypeError))throw e;}if(calls!==1)throw new Error(\"calls\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-unavailable-local",
+      "modules": {
+        "main": "class I<T:type extends string>{}function f(){const T=uint8;return I.<T>;} "
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-builder-bypassed",
+      "modules": {
+        "main": "function fail():type{throw new Error(\"default\");}class I<T:type=fail()>{} I.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-builder-selected",
+      "modules": {
+        "main": "function fail():type{throw new Error(\"default\");}class I<T:type=fail()>{} I.<>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DEFAULT_EVALUATION",
+          "rule": "rt-default-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "class-type-kind",
+      "modules": {
+        "main": "class I<T:type>{} I.<3>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-outer-captured-bad",
+      "modules": {
+        "main": "function outer<T:type>(){class I<U:type extends T>{}return I.<uint8>;}outer.<string>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-outer-captured-good",
+      "modules": {
+        "main": "function outer<T:type>(){class I<U:type extends T>{}return I.<uint8>;}outer.<uint8>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-spread-bad",
+      "modules": {
+        "main": "class I<T:type extends string>{}I.<...[uint8]>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-spread-good",
+      "modules": {
+        "main": "class I<T:type extends string>{}I.<...[string]>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-spread-empty",
+      "modules": {
+        "main": "class I<T:type extends string>{}I.<...[]>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "rule": "rt-generic-argument",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-spread-dynamic",
+      "modules": {
+        "main": "class I<T:type extends string>{}I.<...[].<string>>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-dependency-throws",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "throw new Error(\"dependency\");export class I<T:type extends string>{}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-import-shadow",
+      "modules": {
+        "main": "import {I} from \"dep\";function f(I:any){return I.<uint8>;}",
+        "dep": "export class I<T:type extends string>{}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-reexport",
+      "modules": {
+        "main": "import {Renamed} from \"bridge\";Renamed.<uint8>;",
+        "bridge": "export {I as Renamed} from \"dep\";",
+        "dep": "export class I<T:type extends string>{}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "bridge",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-mutated",
+      "modules": {
+        "main": "class I<T:type extends string>{}class Other<T:type>{}I=Other;I.<uint8>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-static-order",
+      "modules": {
+        "main": "let n=0;function count(expected:any){if(n!==expected)throw new Error(\"order\");}class I<T:type>{static x=++n;}count(0);const a=I.<string>;count(1);const b=I.<string>;count(1);function same(a:any,b:any){if(a!==b)throw new Error(\"identity\");}same(a,b);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-alias-chain",
+      "modules": {
+        "main": "interface I<T:type extends string>{}const A=I,B=A;B.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-alias-annotation",
+      "modules": {
+        "main": "interface I<T:type extends string>{}const A:type=I;A.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-alias-shadow",
+      "modules": {
+        "main": "interface I<T:type extends string>{}const A=I;function f(){interface I<T:type>{}A.<uint8>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-erased-alias",
+      "modules": {
+        "main": "interface I<T:type extends string>{}const A:any=I;function unused(){return A.<uint8>;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-dependent-bound-bad",
+      "modules": {
+        "main": "interface I<T:type,U:type extends T=T>{}I.<string,uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "interface-dependent-bound-good",
+      "modules": {
+        "main": "interface I<T:type,U:type extends T=T>{}I.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-pending-bypasses-default",
+      "modules": {
+        "main": "function fail():type{throw new Error(\"default\");}interface I<T:type=fail()>{}function f<U:type>(){return I.<U>;}f.<string>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-property-target",
+      "modules": {
+        "main": "interface I<T:type extends string>{}let reads=0;const o={get target(){reads++;return I;}};let caught=false;try{o.target.<uint8>;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||reads!==1)throw new Error(\"property\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface-computed-bound",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "function bound():type{return string;}export interface I<T:type extends bound()>{}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "interface-dependency-failure",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "function bound():type{return string;}throw new Error(\"dependency\");export interface I<T:type extends bound()>{}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "Error"
+      }
+    },
+    {
+      "name": "interface-async-computed-bound",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "await 0;function bound():type{return string;}export interface I<T:type extends bound()>{}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "class-alias-chain",
+      "modules": {
+        "main": "class I<T:type extends string>{}const A=I,B=A;B.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-alias-annotation",
+      "modules": {
+        "main": "class I<T:type extends string>{}const A:type=I;A.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-alias-shadow",
+      "modules": {
+        "main": "class I<T:type extends string>{}const A=I;function f(){interface I<T:type>{}A.<uint8>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-erased-alias",
+      "modules": {
+        "main": "class I<T:type extends string>{}const A:any=I;function unused(){return A.<uint8>;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-dependent-bound-bad",
+      "modules": {
+        "main": "class I<T:type,U:type extends T=T>{}I.<string,uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-dependent-bound-good",
+      "modules": {
+        "main": "class I<T:type,U:type extends T=T>{}I.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-pending-bypasses-default",
+      "modules": {
+        "main": "function fail():type{throw new Error(\"default\");}class I<T:type=fail()>{}function f<U:type>(){return I.<U>;}f.<string>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-property-target",
+      "modules": {
+        "main": "class I<T:type extends string>{}let reads=0;const o={get target(){reads++;return I;}};let caught=false;try{o.target.<uint8>;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||reads!==1)throw new Error(\"property\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-computed-bound",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "function bound():type{return string;}export class I<T:type extends bound()>{}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "class-dependency-failure",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "function bound():type{return string;}throw new Error(\"dependency\");export class I<T:type extends bound()>{}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "Error"
+      }
+    },
+    {
+      "name": "class-async-computed-bound",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "await 0;function bound():type{return string;}export class I<T:type extends bound()>{}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "type-alias-chain",
+      "modules": {
+        "main": "type I<T:type extends string> = T;const A=I,B=A;B.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "type-alias-annotation",
+      "modules": {
+        "main": "type I<T:type extends string> = T;const A:type=I;A.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "type-alias-shadow",
+      "modules": {
+        "main": "type I<T:type extends string> = T;const A=I;function f(){interface I<T:type>{}A.<uint8>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "type-erased-alias",
+      "modules": {
+        "main": "type I<T:type extends string> = T;const A:any=I;function unused(){return A.<uint8>;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-dependent-bound-bad",
+      "modules": {
+        "main": "type I<T:type,U:type extends T=T> = T;I.<string,uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "type-dependent-bound-good",
+      "modules": {
+        "main": "type I<T:type,U:type extends T=T> = T;I.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-pending-bypasses-default",
+      "modules": {
+        "main": "function fail():type{throw new Error(\"default\");}type I<T:type=fail()> = T;function f<U:type>(){return I.<U>;}f.<string>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-unused-unavailable-local",
+      "modules": {
+        "main": "type I<T:type extends string> = T;function f(){const T=uint8;return I.<T>;} "
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-property-target",
+      "modules": {
+        "main": "type I<T:type extends string> = T;let reads=0;const o={get target(){reads++;return I;}};let caught=false;try{o.target.<uint8>;}catch(e){if(!(e instanceof TypeError))throw e;caught=true;}if(!caught||reads!==1)throw new Error(\"property\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-dependency-failure",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "function bound():type{return string;}throw new Error(\"dependency\");export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "Error"
+      }
+    },
+    {
+      "name": "class-expression-bad",
+      "modules": {
+        "main": "const I=class<T:type extends string>{};I.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-expression-good",
+      "modules": {
+        "main": "const I=class<T:type extends string>{};I.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-import-mutated",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "export class I<T:type extends string>{}class Other<T:type>{}I=Other;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    }
+  ]
+}

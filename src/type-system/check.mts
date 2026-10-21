@@ -10903,6 +10903,26 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
+  /** The generic declaration captured by an expression, without applying it. */
+  const genericDeclarationOrigin = (expression: ParseNode, seen = new Set<ParseNode>()):
+    ParseNode.InterfaceDeclaration | ParseNode.TypeAliasDeclaration | ParseNode.ClassDeclaration | ParseNode.ClassExpression | undefined => {
+    const node = patternExpression(expression);
+    if (node?.type !== 'IdentifierReference' || seen.has(node) || seen.size >= 256) return undefined;
+    seen.add(node);
+    const binding = ResolveBindingDeclaration(node, node.name);
+    if (binding?.kind === 'const' && !hasDirectEval && binding.initializer
+      && !(binding.node as { Ref?: boolean }).Ref) {
+      const annotation = (binding.node as { TypeAnnotation?: ParseNode.TypeAnnotation }).TypeAnnotation;
+      const declared = annotation ? resolveType(annotation.Type) : null;
+      if (annotation && !(declared?.Kind === 'primitive' && declared.Name === 'type')) return undefined;
+      return genericDeclarationOrigin(binding.initializer, seen);
+    }
+    const constructor = stableClassOrigin(node);
+    if (constructor && !constructor.arguments) return constructor.declaration;
+    const declaration = declarationAt(node, node.name, interfaceNodes.get(node.name) ?? aliasNodes.get(node.name));
+    return declaration?.type === 'InterfaceDeclaration' || declaration?.type === 'TypeAliasDeclaration' ? declaration : undefined;
+  };
+
   /** Resolve a type-object callee without evaluating a value or a type builder. */
   const typeObjectTarget = (expression: ParseNode | null | undefined, seen = new Set<ParseNode>()): Known => {
     const node = patternExpression(expression ?? undefined);
@@ -18831,20 +18851,49 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const specialization = node as ParseNode.TypeArgumentsExpression;
         const base = callableForm(staticType(specialization.Expression));
         const bare = patternExpression(specialization.Expression);
+        const typeDeclaration = genericDeclarationOrigin(specialization.Expression);
+        if (typeDeclaration?.type === 'InterfaceDeclaration' || typeDeclaration?.type === 'TypeAliasDeclaration') {
+          const params = typeDeclaration.TypeParameters?.TypeParameterList ?? [];
+          if (params.length) {
+            // #sec-type-arguments-and-placement-new-in-expression-position:
+            // the application itself demands argument admission, even when its
+            // value is discarded or its enclosing function is never called.
+            // Use the declaration's binder without evaluating the expression.
+            const parameters = typeParameterRecordsOf(params);
+            const bindings = new Map<string, TypeRecord>();
+            const pending = bindExplicitTypeArguments(parameters, specialization.TypeArguments.TypeArgumentList,
+              bindings, { complete: true, application: specialization });
+            recordTypeArgumentApplication(specialization, parameters, bindings, pending,
+              typeDeclaration.type === 'TypeAliasDeclaration' ? typeDeclaration : undefined);
+            checkSpecializedDeclaration(typeDeclaration, bindings);
+            if (typeDeclaration.type === 'TypeAliasDeclaration') recordWhereCheck(specialization, typeDeclaration, bindings);
+            return base ?? makePrimitive('type');
+          }
+        }
         if (bare?.type === 'IdentifierReference' && bare.name === 'Composite' && !shadowedByProgram('Composite')) {
           const compositeArgs = specialization.TypeArguments.TypeArgumentList.map((a) => resolveType(a as ParseNode.Type));
           if (compositeArgs.every((a) => a !== null)) checkCompositeArgument(compositeArgs as TypeRecord[]);
         }
         const libraryName = libraryConstructorOrigin(specialization.Expression);
         if (libraryName) resolvedLibraryArguments(libraryName, specialization.TypeArguments.TypeArgumentList);
-        const classTarget = bare?.type === 'IdentifierReference' ? lexicalClassType(bare) : null;
+        const origin = stableClassOrigin(specialization.Expression)
+          ?? (typeDeclaration?.type === 'ClassDeclaration' || typeDeclaration?.type === 'ClassExpression'
+            ? { declaration: typeDeclaration } as ClassOrigin : undefined);
+        const classTarget = origin && !origin.arguments ? instanceTypeOf(origin.declaration)
+          : bare?.type === 'IdentifierReference' ? lexicalClassType(bare) : null;
         if (classTarget?.Kind === 'nominal') {
           const declaration = classTarget.Declaration;
           const params = (declaration as { TypeParameters?: { TypeParameterList?: readonly ParseNode.TypeParameter[] } }).TypeParameters?.TypeParameterList;
           if (params?.length) {
             if (classArgumentOrderError(params, specialization.TypeArguments.TypeArgumentList as unknown as readonly ParseNode[], (bare as { name: string }).name)) return base;
             const bindings = new Map<string, TypeRecord>();
-            bindExplicitTypeArguments(typeParameterRecordsOf(params), specialization.TypeArguments.TypeArgumentList, bindings);
+            const parameters = typeParameterRecordsOf(params);
+            const established = origin?.declaration === declaration && !origin.arguments;
+            const pending = bindExplicitTypeArguments(parameters, specialization.TypeArguments.TypeArgumentList, bindings,
+              established ? { complete: true, application: specialization } : undefined);
+            // A mutable or replaceable constructor's source declaration alone
+            // does not establish the value receiving these arguments.
+            if (established) recordTypeArgumentApplication(specialization, parameters, bindings, pending);
             checkSpecializedDeclaration(declaration, bindings);
             if ([...partialDeclarations].some((part) => partialPrimaryOf(part) === declaration)
               || PublishedPartialContributions(declaration, true).length > 0) {
