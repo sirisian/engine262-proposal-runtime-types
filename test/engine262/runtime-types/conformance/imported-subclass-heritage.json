@@ -1,0 +1,838 @@
+{
+  "description": "Imported subclass heritage uses producer-owned constructor origins and preserves nominal contracts, specialization, mutation and module order.",
+  "cases": [
+    {
+      "name": "local subclass inherits imported implementation",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\";class D extends E{}const x:Has.<E>=new D();const y:E=x.get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "subclass is not a different interface argument",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\";class D extends E{}const x:Has.<D>=new D();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "renamed imports retain base identity",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has as Contract,E as Item} from \"dep\";class D extends Item{}const x:Contract.<Item>=new D();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "re-exported base retains origin",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "bridge": "export {Has as Contract,E as Item} from \"dep\";",
+        "main": "import {Contract,Item} from \"bridge\";class D extends Item{}const x:Contract.<Item>=new D();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "bridge",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "star re-exported base retains origin",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "bridge": "export * from \"dep\";",
+        "main": "import {Has,E} from \"bridge\";class D extends E{}const x:Has.<E>=new D();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "bridge",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "parenthesized imported heritage",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\";class D extends (E){}const x:Has.<E>=new D();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "immutable alias retains imported heritage",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\";const Alias=E;const Again=(Alias);class D extends Again{}const x:Has.<E>=new D();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "multiple local subclass levels",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\";class D extends E{}class F extends D{}const x:Has.<E>=new F();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported subclass used as a base",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}class Base implements Has.<Base>{get():Base{return this;}}export class E extends Base{}export {Base};",
+        "main": "import {Has,E,Base} from \"dep\";class D extends E{}const x:Has.<Base>=new D();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "interface from another producer",
+      "modules": {
+        "dep": "import {Has} from \"contract\";export class E implements Has.<E>{get():E{return this;}}",
+        "contract": "export interface Has<T:type>{get():T;}",
+        "main": "import {Has} from \"contract\";import {E} from \"dep\";class D extends E{}const x:Has.<E>=new D();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "contract",
+          "dep"
+        ],
+        "bodyEntries": [
+          "contract",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "foreign interface name does not bind consumer shadow",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\";interface Other<T:type>{get():T;}class D extends E{}const x:Other.<E>=new D();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "same spelled foreign class stays distinct",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "other": "export class E{}",
+        "main": "import {Has,E} from \"dep\";import {E as Other} from \"other\";class D extends E{}const x:Has.<Other>=new D();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep",
+          "other"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local lexical shadow controls heritage",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\";function f(){class E{get():string{return \"local\";}}class D extends E{}if(new D().get()!==\"local\")throw new Error(\"shadow\");}f();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "consumer assignment with producer spelling does not erase origin",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has,E as Item} from \"dep\";let E=0;E=1;class D extends Item{}const x:Has.<Item>=new D();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function parameter shadow stays unknown",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\";function f(E:any){class D extends E{get():string{return \"local\";}}return D;}f(class{});"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic specialization in heritage",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E<T:type=uint8> implements Has.<T>{get():T{throw new Error(\"unused\");}}",
+        "main": "import {Has,E} from \"dep\";class D extends E.<uint8>{}const x:Has.<uint8>=new D();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic invariant argument remains exact",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E<T:type=uint8> implements Has.<T>{get():T{throw new Error(\"unused\");}}",
+        "main": "import {Has,E} from \"dep\";class D extends E.<uint8>{}const x:Has.<uint16>=new D();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "bare generic heritage binds default",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E<T:type=uint8> implements Has.<T>{get():T{throw new Error(\"unused\");}}",
+        "main": "import {Has,E} from \"dep\";class D extends E{}const x:Has.<uint8>=new D();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic immutable specialized alias",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E<T:type=uint8> implements Has.<T>{get():T{throw new Error(\"unused\");}}",
+        "main": "import {Has,E} from \"dep\";const Alias=E.<uint8>;class D extends Alias{}const x:Has.<uint8>=new D();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic derived declaration retains arguments",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E<T:type=uint8> implements Has.<T>{get():T{throw new Error(\"unused\");}}",
+        "main": "import {Has,E} from \"dep\";class D<U:type> extends E.<U>{}const x:Has.<uint8>=new D.<uint8>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named heritage type argument",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E<T:type=uint8> implements Has.<T>{get():T{throw new Error(\"unused\");}}",
+        "main": "import {Has,E} from \"dep\";class D extends E.<T:uint8>{}const x:Has.<uint8>=new D();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "missing heritage argument fails before bodies",
+      "modules": {
+        "dep": "export class E<T:type>{}",
+        "main": "import {E} from \"dep\";class D extends E{}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "inherited method contract is checked",
+      "modules": {
+        "dep": "export class E{get(x:uint8):uint8{return x;}}",
+        "main": "import {E} from \"dep\";class D extends E{f(){this.get(\"bad\");}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "inherited override contract is checked",
+      "modules": {
+        "dep": "export class E{get(x:uint8):uint8{return x;}}",
+        "main": "import {E} from \"dep\";class D extends E{get(x:uint8):string{return \"bad\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INHERITED_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "inherited static contract is checked",
+      "modules": {
+        "dep": "export class E{static get(x:uint8):uint8{return x;}}",
+        "main": "import {E} from \"dep\";class D extends E{f(){D.get(\"bad\");}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "inherited constructor contract is checked",
+      "modules": {
+        "dep": "export class E{constructor(x:uint8){}}",
+        "main": "import {E} from \"dep\";class D extends E{}function f(){new D(\"bad\");}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed inherited field cannot be redeclared",
+      "modules": {
+        "dep": "export class E{x:uint8=0;}",
+        "main": "import {E} from \"dep\";class D extends E{x:uint8=1;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DUPLICATE_MEMBER",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "producer mutation invalidates exact origin",
+      "modules": {
+        "dep": "export class E{get():uint8{return 1;}}E=class{get(){return \"replaced\";}};",
+        "main": "import {E} from \"dep\";class D extends E{get():string{return \"ok\";}}if(new D().get()!==\"ok\")throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured producer mutation prevents static origin",
+      "modules": {
+        "dep": "export class E{get():uint8{return 1;}}export function replace(){E=class{};}",
+        "main": "import {E} from \"dep\";class D extends E{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "producer direct eval prevents static origin",
+      "modules": {
+        "dep": "export class E{get():uint8{return 1;}}eval(\"\");",
+        "main": "import {E} from \"dep\";class D extends E{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "erased consumer alias retains dynamic checking",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\";const Alias:any=E;class D extends Alias{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "mutable consumer alias retains dynamic checking",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\";let Alias=E;class D extends Alias{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "void decorator preserves exact imported origin",
+      "modules": {
+        "dep": "function d(c:any,ctx:any):void{}@d class E{constructor(x:uint8){}}export {E};",
+        "main": "import {E} from \"dep\";class D extends E{}function unused(){new D(\"bad\");}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "replacement decorator preserves bounded override",
+      "modules": {
+        "dep": "function d(c:any,ctx:any){return c;}@d class E{get():uint8{return 1;}}export {E};",
+        "main": "import {E} from \"dep\";class D extends E{get():string{return \"bad\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INHERITED_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "replacement decorator does not establish constructor signature",
+      "modules": {
+        "dep": "function d(c:any,ctx:any){return c;}@d class E{constructor(x:uint8){}}export {E};",
+        "main": "import {E} from \"dep\";class D extends E{}new D(\"bad\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "dependency effects occur once",
+      "modules": {
+        "dep": "export let count=0;export interface Has<T:type>{get():T;}export class E implements Has.<E>{constructor(){count+=1;}get():E{count+=10;return this;}}",
+        "main": "import {Has,E,count} from \"dep\";class D extends E{}const x:Has.<E>=new D();if(count!==1)throw new Error(\"effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "async dependency completes normally",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}await Promise.resolve();",
+        "main": "import {Has,E} from \"dep\";class D extends E{}const x:Has.<E>=new D();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "dependency failure precedes local subclass",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}throw new Error(\"dep\");",
+        "main": "import {Has,E} from \"dep\";class D extends E{}const x:Has.<E>=new D();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "Error"
+      }
+    },
+    {
+      "name": "available import in a cycle",
+      "modules": {
+        "dep": "import {marker} from \"main\";export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}",
+        "main": "import {Has,E} from \"dep\";export const marker=1;class D extends E{}const x:Has.<E>=new D();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "constructor alias retains static member contract",
+      "modules": {
+        "dep": "export class E{static id(x:uint8):uint8{return x;}}",
+        "main": "import {E} from \"dep\";const Alias=E;class D extends Alias{}if(D.id(1)!==uint8(1))throw new Error(\"static\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported constructor value is not an instance",
+      "modules": {
+        "dep": "export class E{}",
+        "main": "import {E} from \"dep\";const Alias=E;if(Alias!==E)throw new Error(\"identity\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "producer private base supplies inherited contracts",
+      "modules": {
+        "dep": "class B{get():uint8{return 1;}}export class E extends B{}",
+        "main": "import {E} from \"dep\";class D extends E{get():string{return \"bad\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INHERITED_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "heritage through a third module retains interface identity",
+      "modules": {
+        "base": "export interface Has<T:type>{get():T;}export class B implements Has.<B>{get():B{return this;}}",
+        "dep": "import {B} from \"base\";export class E extends B{}",
+        "main": "import {E} from \"dep\";import {B,Has} from \"base\";class D extends E{}const x:Has.<B>=new D();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep",
+          "base"
+        ],
+        "bodyEntries": [
+          "base",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "mutated producer does not impose stale static alias contract",
+      "modules": {
+        "dep": "export class E{static x:uint8=1;}E=class{static x=\"changed\";};",
+        "main": "import {E} from \"dep\";const Alias=E;if(Alias.x!==\"changed\")throw new Error(\"value\");class D extends Alias{}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    }
+  ]
+}

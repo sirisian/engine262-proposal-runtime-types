@@ -1433,6 +1433,9 @@ export function ExportedAliasesOf(specifier: string | undefined): Map<string, un
  */
 const moduleBuilderNodes = new WeakMap<object, Map<string, ParseNode>>();
 const moduleClassNodes = new WeakMap<object, Map<string, ParseNode>>();
+// Producer-owned constructor-origin proofs. true is exact; false is bounded by
+// a decorator replacement. Absence does not prove the current binding's value.
+const checkedClassOrigins = new WeakMap<ParseNode, boolean>();
 const moduleInterfaceNodes = new WeakMap<object, Map<string, ParseNode>>();
 const checkedInterfaceTypes = new WeakMap<ParseNode, TypeRecord>();
 
@@ -2783,7 +2786,8 @@ export function RecheckAfterTypeEvaluation(root: ParseNode.Script | ParseNode.Mo
   const constants = PublishedConstantBindings(environment);
   const inputs = moduleCheckInputs.get(root);
   for (const [name, type] of inputs?.imported ?? []) {
-    session.frame.bindings.set(name, inputs?.interfaces?.has(name) ? makePrimitive('type') : type as TypeRecord);
+    if (inputs?.interfaces?.has(name)) session.frame.bindings.set(name, makePrimitive('type'));
+    else if (!inputs?.classes?.has(name)) session.frame.bindings.set(name, type as TypeRecord);
     session.frame.aliases.set(name, type as TypeRecord);
     session.frame.declaredNames.add(name);
     session.frame.immutableNames.add(name);
@@ -3138,7 +3142,10 @@ export function CheckModuleWithImports(module: ParseNode.Module, imported: Reado
   const session = CreateCheckSession();
   for (const [name, t] of imported) {
     // A Type Object's value type is distinct from the contract it denotes.
-    session.frame.bindings.set(name, interfaces?.has(name) ? makePrimitive('type') : t as TypeRecord);
+    // Class imports denote constructor values here, not nominal instances. Let
+    // the class-object query supply their static members, as for local classes.
+    if (interfaces?.has(name)) session.frame.bindings.set(name, makePrimitive('type'));
+    else if (!classes?.has(name)) session.frame.bindings.set(name, t as TypeRecord);
     // ALSO as an alias. A type annotation naming an import resolves through
     // `lookupAlias`, which reads `aliases` and not `bindings`, so an imported
     // type seeded only into `bindings` did not resolve - and the alias built
@@ -7826,8 +7833,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const origin = stableClassOrigin(node.Expression, seen, bounded);
       return origin ? { ...origin, arguments: node.TypeArguments } : undefined;
     }
-    if (node.type !== 'IdentifierReference' || hasDirectEval) return undefined;
+    if (node.type !== 'IdentifierReference') return undefined;
+    let source = node as ParseNode;
+    while (source.parent) source = source.parent;
+    if (source === root && hasDirectEval) return undefined;
     const binding = ResolveBindingDeclaration(node, node.name);
+    const publishedOrigin = (declaration: ParseNode | undefined): ClassOrigin | undefined => {
+      const exact = declaration && checkedClassOrigins.get(declaration);
+      if (exact === undefined || (!exact && !bounded)) return undefined;
+      return { declaration: declaration as ParseNode.ClassDeclaration, ...(!exact ? { bounded: true } : {}) };
+    };
+    // Import bindings are read-only views of live producer bindings. The
+    // producer's proof, not the import's immutability or consumer name table,
+    // establishes the constructor. Resolve foreign heritage in its own module.
+    if (binding?.kind === 'import') return publishedOrigin(moduleCheckInputs.get(source)?.classes?.get(node.name));
+    if (binding?.kind === 'class' && source !== root) return publishedOrigin(binding.node);
     if (binding?.kind === 'const' && binding.initializer && !(binding.node as { TypeAnnotation?: unknown }).TypeAnnotation
         && !(binding.node as { Ref?: boolean }).Ref) {
       return stableClassOrigin(binding.initializer, seen, bounded);
@@ -8008,8 +8028,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // A different lexical binding still shadows the class, including an erased
     // parameter; runtime initialization remains governed by the ordinary TDZ.
     const binding = ResolveBindingDeclaration(reference, reference.name);
-    const node = binding?.kind === 'class' ? stableClassOrigin(reference)?.declaration
-      : !binding || binding.kind === 'import' ? classNodes.get(reference.name) : undefined;
+    const node = binding?.kind === 'class' || binding?.kind === 'import' ? stableClassOrigin(reference)?.declaration
+      : !binding ? classNodes.get(reference.name) : undefined;
     if (!node || (!binding && shadowedByProgram(reference.name))) return null;
     if (![...partialDeclarations].some((part) => partialPrimaryOf(part) === node)
       && PublishedPartialContributions(node, true).length === 0) return classObjectTypeOfNode(node);
@@ -29605,6 +29625,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     }
     for (const n of classNodes.values()) {
+      let source = n;
+      while (source.parent) source = source.parent;
+      if (source === root) {
+        checkedClassOrigins.delete(n);
+        const name = (n as ParseNode.ClassDeclaration).BindingIdentifier?.name;
+        if (name && !hasDirectEval && !assignedNames.has(name) && !assignedGlobalProperties.has(name)) {
+          const origin = stableClassOrigin(n, new Set(), true);
+          if (origin) checkedClassOrigins.set(n, !origin.bounded);
+        }
+      }
       instanceTypeOf(n);
     }
     // Class expressions are forced here too, and AFTER the declarations: an
