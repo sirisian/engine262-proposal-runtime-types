@@ -1,4 +1,5 @@
 import type { TypeRecord } from './records.mts';
+import { resolvedDeclaration } from './resolving-aliases.mts';
 import {
   type EnvironmentRecord, LexicalClassFamily, ClassFamilyIdentityOf, ClassTypeEnvironmentOf,
   SpecializedClassConstructor, LookupClassType, isTypeObject,
@@ -24,6 +25,13 @@ export function InstantiateCheckedBindings(bindings: ReadonlyMap<string, TypeRec
     switch (copy.Kind) {
       case 'nominal': {
         copy.Arguments = copy.Arguments.map((argument) => typeof argument === 'number' ? argument : walk(argument, context));
+        if (copy.Declaration.type === 'InterfaceDeclaration') {
+          const published = resolvedDeclaration(context, copy.Declaration);
+          if (published?.Kind === 'nominal' && published.DeclarationIdentity) {
+            copy.DeclarationIdentity = published.DeclarationIdentity;
+          }
+          break;
+        }
         if (copy.Declaration.type !== 'ClassDeclaration' && copy.Declaration.type !== 'ClassExpression') break;
         const family = LexicalClassFamily(copy.Declaration, context);
         if (!family) break;
@@ -36,7 +44,16 @@ export function InstantiateCheckedBindings(bindings: ReadonlyMap<string, TypeRec
         // Heritage belongs to the evaluated family, including captured bases.
         // Subtyping substitutes this application's arguments in that base.
         copy.Base = runtime.Base && walk(runtime.Base, ClassTypeEnvironmentOf(family) ?? context);
-        copy.Implements = runtime.Implements;
+        // An open family's runtime list deliberately omits dependent targets.
+        // It cannot replace the checked declaration's parameterized contracts
+        // with an empty completed relation. Only a concrete specialization (or
+        // a nongeneric class) supplies the completed runtime list. This step
+        // completes identities; it does not evaluate a specialization.
+        if (constructor !== family || !copy.Declaration.TypeParameters?.TypeParameterList.length) {
+          copy.Implements = runtime.Implements;
+        } else {
+          copy.Implements = copy.Implements?.map((target) => walk(target, ClassTypeEnvironmentOf(family) ?? context));
+        }
         break;
       }
       case 'array':

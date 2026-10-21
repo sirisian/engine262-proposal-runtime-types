@@ -5464,6 +5464,11 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
   // parameters: here, their bindings in the running frames.
   const injected = InjectedClassOf(node);
   if (injected) {
+    // Implements formation supplies this activation's actual self candidate.
+    // Rebuilding it from syntax alone would lose its family identity and its
+    // in-progress interface graph, including recursive specialization bounds.
+    const self = lookupTypeParameter(injected.name);
+    if (self?.Kind === 'nominal' && self.Declaration === injected.classNode) return self;
     const bound = injected.params.map((name) => lookupTypeParameter(name));
     // Built from the declaration, not the class's binding, which is still
     // uninitialized while the class is defined (a field's `next: N`).
@@ -6262,37 +6267,18 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
                 Value(bad.parameter), Value(String(bad.wanted)),
               );
           }
-          // The spread carries
-          // baseRecord's [[Constructor]] - the UNSPECIALIZED one - so a
-          // `Box.<uint8>` annotation described the right type with the wrong
-          // constructor, and membership tested a specialized instance against a
-          // prototype it is never on. Measured: the two chains are disjoint,
-          // `Object.getPrototypeOf(spec.prototype) === Box.prototype` is false,
-          // so no prototype walk reaches it either.
-          //
-          // `SpecializeGenericClass` already builds the correct record - same
-          // Declaration and Arguments, but the SPECIALIZATION's Constructor -
-          // and registers it with `AssociateClassType`. Reusing it here is what
-          // makes the annotation and the value expression describe one type
-          // rather than two.
-          // An annotation only FINDS a specialization; it does not create one.
-          //
-          // Creating one here closes a real order-dependence - `let g: G.<4>;`
-          // alone gives a type whose prototype is the declaration's, so a method
-          // reading `N` fails and `Reflect.typeOf` disagrees with a constructed
-          // instance's - and `MaterializeSpecialization` below does exactly that,
-          // correctly, for every case the fix is for.
-          //
-          // It is not called from here because three tests in `generics` fail
-          // when it is: the higher-kinded cases where the argument is a generic
-          // DECLARATION supplied by the realm prelude rather than by the program.
-          // Materialising binds a specialization against one declaration of
-          // `Identity` while the comparison expects another, and the identity
-          // that flips is a declaration's, not a constructor's. Three
-          // measurements narrowed that and none closed it, so the call is left
-          // out rather than left failing.
-          const specializedCtor = SpecializedClassConstructor(baseRecord.Declaration, argRecords, baseRecord.Constructor as Value | undefined);
+          // A type-position application needs the completed specialization's
+          // contract, not the family's deliberately deferred Implements list.
+          // Reuse the same application and publication path as value syntax.
+          let specializedCtor = SpecializedClassConstructor(baseRecord.Declaration, argRecords, baseRecord.Constructor as Value | undefined);
+          if (specializedCtor === undefined) {
+            specializedCtor = Q(yield* MaterializeSpecialization(baseRecord.Declaration as ParseNode.ClassDeclaration,
+              argRecords, baseRecord.Constructor as Value | undefined));
+          }
           if (specializedCtor !== undefined) {
+            const specialized = LookupClassType(specializedCtor);
+            if (isTypeObject(specialized)) return specialized.TypeRecord;
+            // A recursive application may still be under construction.
             return { ...baseRecord, Arguments: argRecords, Constructor: specializedCtor };
           }
           return { ...baseRecord, Arguments: argRecords };

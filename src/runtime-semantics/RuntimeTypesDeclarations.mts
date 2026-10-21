@@ -1,5 +1,6 @@
 import { ApplyGenericMap, GenericMapTypeOf } from '../abstract-ops/generic-map.mts';
 import { CreateGenericAliasRecord } from '../type-system/generic-alias-context.mts';
+import { LexicalFreeReferences, ResolveBindingDeclaration } from '../type-system/compile-time-evaluability.mts';
 import { InstallTypeLayoutProperties } from '../type-system/layout-properties.mts';
 import { RememberArrayCapacity } from '../type-system/array-capacity-origin.mts';
 import { IsPartialDeclaration, MergePartialStructures, RuntimePartialContributions } from '../type-system/partial-types.mts';
@@ -36,7 +37,7 @@ import { GetValue } from '../abstract-ops/all.mts';
 import { iterationInterfaceRecord } from '../type-system/iteration-types.mts';
 import { CanonicalizeType } from '../type-system/intern.mts';
 import { GetTypeObject, isTypeObject } from '../type-system/intern.mts';
-import { mentionsTypeParameter, type TypeRecord, type SignatureRecord } from '../type-system/records.mts';
+import { InjectedClassOf, mentionsTypeParameter, type TypeRecord, type SignatureRecord } from '../type-system/records.mts';
 import { beginResolvingAlias, endResolvingAlias, tieAliasKnot, recordResolvedAlias } from '../type-system/resolving-aliases.mts';
 import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin, RecordDeclaredMemberOrigins } from '../type-system/provenance.mts';
@@ -815,7 +816,8 @@ export function* Evaluate_RuntimeTypesBindingDeclaration(node: ParseNode.TypeAli
   }
   // Publication follows successful initialization/rebinding. A failed or
   // shape-only preparation must not lend a record to another binding.
-  if (node.type === 'TypeAliasDeclaration' && !node.TypeParameters && isTypeObject(value)) {
+  if ((node.type === 'InterfaceDeclaration' || node.type === 'TypeAliasDeclaration' && !node.TypeParameters)
+    && isTypeObject(value)) {
     recordResolvedAlias(env, name, node, value.TypeRecord);
   }
   // proposal-runtime-types decorators.md: `@f enum Count { @f Zero, ... }`.
@@ -2226,20 +2228,44 @@ export function RuntimeClassBaseOf(ctor: Value): TypeRecord | undefined {
   return isTypeObject(type) ? type.TypeRecord : undefined;
 }
 
+/** An open target cannot read its interface binding until this class is applied. */
+function classInterfaceTargetIsOpen(target: ParseNode.Type,
+  owner: ParseNode.ClassDeclaration | ParseNode.ClassExpression): boolean {
+  if (!owner.TypeParameters?.TypeParameterList.length) return false;
+  return LexicalFreeReferences(target).some((reference) => {
+    const binding = ResolveBindingDeclaration(reference, reference.name);
+    if (binding?.kind === 'type-parameter' && binding.node === owner) return true;
+    // A bare self type in the clause injects the class's own parameters, even
+    // though none of their names appears in the written target.
+    const typeReference = reference.parent?.type === 'TypeName' ? reference.parent.parent : undefined;
+    return InjectedClassOf(typeReference)?.classNode === owner;
+  });
+}
+
 /** Resolve actual interface bindings when publishing a class's runtime contract. */
 export function* ResolveImplementedInterfaces(node: ParseNode.ClassDeclaration | ParseNode.ClassExpression,
-  ctor: Value, args: readonly (TypeRecord | number)[] = []): PlainEvaluator<readonly TypeRecord[] | undefined> {
-  const targets = node.ClassTail.ImplementsClause;
-  if (!targets?.length) return undefined;
+  ctor: Value, args?: readonly (TypeRecord | number)[]): PlainEvaluator<readonly TypeRecord[] | undefined> {
+  if (!node.ClassTail.ImplementsClause?.length) return undefined;
+  const captured = classTypeContexts.get(ctor);
+  // The selected case's captures and outer generic bindings belong to this
+  // constructor, not to the caller that happens to request its contract.
+  return captured
+    ? yield* InCapturedTypeContext(captured, () => resolveImplementedInterfacesInContext(node, ctor, args))
+    : yield* resolveImplementedInterfacesInContext(node, ctor, args);
+}
+
+function* resolveImplementedInterfacesInContext(node: ParseNode.ClassDeclaration | ParseNode.ClassExpression,
+  ctor: Value, args?: readonly (TypeRecord | number)[]): PlainEvaluator<readonly TypeRecord[]> {
+  const targets = node.ClassTail.ImplementsClause!;
   const context = surroundingAgent.runningExecutionContext;
   const outer = context.LexicalEnvironment;
   context.LexicalEnvironment = ClassTypeEnvironmentOf(ctor) ?? outer;
   const frame = new Map<string, TypeRecord>();
   (node.TypeParameters?.TypeParameterList ?? []).forEach((parameter, i) => {
-    const argument = args[i];
+    const argument = args?.[i];
     frame.set(parameter.BindingIdentifier.name, typeof argument === 'number'
       ? { Kind: 'literal', Value: Value(argument), Base: builtinTypeRecord('uint32')! }
-      : argument ?? { Kind: 'parameter', Name: parameter.BindingIdentifier.name, Declaration: parameter });
+      : argument ?? { Kind: 'parameter', Name: parameter.BindingIdentifier.name, Declaration: parameter } as TypeRecord);
   });
   const interfaces: TypeRecord[] = [];
   let self: TypeRecord | undefined;
@@ -2259,6 +2285,10 @@ export function* ResolveImplementedInterfaces(node: ParseNode.ClassDeclaration |
   try {
     const resolve = function* (): PlainEvaluator<readonly TypeRecord[]> {
       for (const target of targets) {
+        // Publishing a family is not an application, even under a same-named
+        // enclosing parameter frame. Closed targets retain their ordinary read;
+        // dependent targets retain source obligations, not completed contracts.
+        if (args === undefined && classInterfaceTargetIsOpen(target, node)) continue;
         interfaces.push(Q(yield* TypeNodeToTypeRecord(target)));
       }
       return interfaces;

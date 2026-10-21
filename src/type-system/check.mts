@@ -12386,15 +12386,23 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         open = true;
         return;
       }
+      // A bare self type injects its class's own still-unbound parameters.
+      if (n.type === 'TypeReference' && InjectedClassOf(n)) open = true;
       const name = n.type === 'TypeReference' ? n.TypeName.IdentifierReference.name
         : n.type === 'IdentifierReference' ? n.name : undefined;
       const reference = n.type === 'TypeReference' ? n.TypeName.IdentifierReference
         : n.type === 'IdentifierReference' ? n : undefined;
       // Signature and alias prepasses may precede the function's value frame.
       // A runtime parameter still makes an annotation dependent in that pass.
+      let internalBinding = false;
       if (name && reference) {
         const declaration = ResolveBindingDeclaration(reference, name);
-        if (declaration?.kind === 'parameter' || declaration?.kind === 'type-parameter') open = true;
+        // A generic callable within the target binds its own parameters. They
+        // do not make that entire target depend on a same-spelled outer input.
+        for (let owner = declaration?.node; owner; owner = owner.parent) {
+          if (owner === node) { internalBinding = true; break; }
+        }
+        if (!internalBinding && (declaration?.kind === 'parameter' || declaration?.kind === 'type-parameter')) open = true;
         // A local alias can hide an enclosing generic input. Follow its own
         // source identity rather than treating the alias name as a closed type.
         if (declaration?.node.type === 'TypeAliasDeclaration' && !declaration.node.TypeParameters) {
@@ -12403,7 +12411,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       // External aliases remain closed pre-evaluation obligations; their
       // presence in the constant frame must not classify them as open values.
-      if (name && (assignedGlobalProperties.has(name) || typeParameterInScope(name) || enclosingParameters.has(name) || (frames.some((frame) => frame.declaredNames.has(name)
+      if (name && !internalBinding && (assignedGlobalProperties.has(name) || typeParameterInScope(name) || enclosingParameters.has(name) || (frames.some((frame) => frame.declaredNames.has(name)
           && (frame !== outerConstants || !resolvedAlias(checkingEnvironment, name)))
           && !frames.some((frame) => frame.constLiteralValues.has(name) || frame.aliases.has(name))
           && !functionNodes.has(name) && !classNodes.has(name) && !interfaceNodes.has(name) && !aliasNodes.has(name)))) {

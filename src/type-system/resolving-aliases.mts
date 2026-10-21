@@ -81,6 +81,12 @@ export function recordResolvedAlias(environment: EnvironmentRecord, name: JSStri
  * object environment is not statically traversable by this lookup.
  */
 export function resolvedAlias(environment: EnvironmentRecord | null | undefined, name: string, declaration?: ParseNode): TypeRecord | undefined {
+  const published = resolvedPublication(environment, name, declaration);
+  return published?.declaration.type === 'TypeAliasDeclaration' ? published.record : undefined;
+}
+
+function resolvedPublication(environment: EnvironmentRecord | null | undefined, name: string, declaration?: ParseNode):
+  { declaration: ParseNode, record: TypeRecord } | undefined {
   let at = environment;
   let key = Value(name);
   let imported = false;
@@ -99,12 +105,36 @@ export function resolvedAlias(environment: EnvironmentRecord | null | undefined,
         continue;
       }
       const published = resolvedByBinding.get(binding);
-      return published && (!declaration || published.declaration === declaration) ? published.record : undefined;
+      return published && (!declaration || published.declaration === declaration) ? published : undefined;
     }
     // An import target is a direct binding in its Module Environment, not a
     // fresh lexical search through the target module's outer environments.
     if (imported) return undefined;
     at = at.OuterEnv;
+  }
+  return undefined;
+}
+
+/** Find an already published dependency by source identity, including renamed
+ * imports. No binding value is read. Ambiguous activations remain unresolved.
+ */
+export function resolvedDeclaration(environment: EnvironmentRecord, declaration: ParseNode): TypeRecord | undefined {
+  const names = new Set<string>();
+  let found: TypeRecord | undefined;
+  for (let at: EnvironmentRecord | null = environment; at; at = at.OuterEnv) {
+    if (!(at instanceof DeclarativeEnvironmentRecord) && !(at instanceof GlobalEnvironmentRecord)) return undefined;
+    const holder = at instanceof GlobalEnvironmentRecord ? at.DeclarativeRecord : at;
+    for (const key of holder.bindings.keys()) {
+      const name = key.stringValue();
+      if (names.has(name)) continue;
+      names.add(name);
+      const record = resolvedPublication(at, name, declaration)?.record;
+      if (!record) continue;
+      if (found && found !== record) return undefined;
+      found = record;
+    }
+    // The nearest activation containing this declaration owns the dependency.
+    if (found) return found;
   }
   return undefined;
 }

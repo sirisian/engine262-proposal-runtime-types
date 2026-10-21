@@ -1,0 +1,639 @@
+{
+  "description": "Dependent implements targets wait for application; closed targets, source identity and specialization obligations remain intact.",
+  "cases": [
+    {
+      "name": "unused-open",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export class E<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "specialize-after-producer",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}const C=E.<string>;if(!Reflect.isAssignable(Reflect.typeOf(new C()),Has.<string>)||Reflect.isAssignable(Reflect.typeOf(new C()),Has.<boolean>))throw new Error(\"contract\");",
+        "dep": "import {Has} from \"main\";export class E<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "self-open",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export class E<T:type> implements Has.<E>{get():E{return this;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-argument",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export class E<T:type> implements Has.<[T]>{get():[T]{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-argument",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export class E<T:type> implements Has.<T:T>{get():T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "closed-target",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export class E<T:type> implements Has.<string>{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "mixed-targets",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";interface Local<T:type>{get():T;}export class E<T:type> implements Local.<T>,Has.<string>{get():never{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "unused-default",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export class E<T:type=string> implements Has.<T>{get():T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-class-expression",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export const E=class Inner<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "anonymous-named-evaluation",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export const E=class<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "invalid-static-member",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export class E<T:type> implements Has.<T>{}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "outer-bound-target",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}function make<T:type>():any{class E<U:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}return E;}const E=make.<string>();const C=E.<boolean>;if(!Reflect.isAssignable(Reflect.typeOf(new C()),Has.<string>))throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "outer-same-name-not-own",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}function make<T:type>():any{class E<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}return E;}const E=make.<string>();const C=E.<boolean>;if(!Reflect.isAssignable(Reflect.typeOf(new C()),Has.<boolean>)||Reflect.isAssignable(Reflect.typeOf(new C()),Has.<string>))throw new Error(\"shadow\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bound-constraint",
+      "modules": {
+        "main": "interface Has<T:type extends string>{get():T;}class E<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}const C=E.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unbound-constraint-unused",
+      "modules": {
+        "main": "interface Has<T:type extends string>{get():T;}class E<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-case",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}class E<boolean> implements Has.<string>{get():string{return \"ok\";}}const C=E.<boolean>;if(!Reflect.isAssignable(Reflect.typeOf(new C()),Has.<string>)||Reflect.isAssignable(Reflect.typeOf(new C()),Has.<boolean>))throw new Error(\"case\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_SPECIALIZATION_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "premature-dynamic-application",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export class E<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}const F:any=E;F.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "valid-generic-case",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}class E<boolean> implements Has.<boolean>{get():boolean{return true;}}const C=E.<boolean>;if(!Reflect.isAssignable(Reflect.typeOf(new C()),Has.<boolean>)||!new C().get())throw new Error(\"case\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-generic-case",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}class E<const X:type extends [].<any>> implements Has.<X>{get():X{throw new Error(\"unused\");}}const C=E.<[].<string>>;if(!Reflect.isAssignable(Reflect.typeOf(new C()),Has.<[].<string>>))throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "renamed-import",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has as I} from \"main\";export class E<T:type> implements I.<T>{get():T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "renamed-export",
+      "modules": {
+        "main": "import {E} from \"dep\";interface I<T:type>{get():T;}export {I as Contract};",
+        "dep": "import {Contract as Has} from \"main\";export class E<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-reexport",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "bridge": "export {Has as I} from \"main\";",
+        "dep": "import {I as Has} from \"bridge\";export class E<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "bridge",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "star-reexport",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "bridge": "export * from \"main\";",
+        "dep": "import {Has} from \"bridge\";export class E<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "bridge",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-interface",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import * as M from \"main\";export class E<T:type> implements M.Has.<T>{get():T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "async-generic-dependency",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";await 0;export class E<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "value-parameter",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<N:uint32>{get():[N].<string>;}",
+        "dep": "import {Has} from \"main\";export class E<N:uint32> implements Has.<N>{get():[N].<string>{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "self-specialization",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}const C=E.<string>;if(!Reflect.isAssignable(Reflect.typeOf(new C()),Has.<C>))throw new Error(\"self\");",
+        "dep": "import {Has} from \"main\";export class E<T:type> implements Has.<E>{get():E{return this;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-specialization",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}const x=new E();if(!Reflect.isAssignable(Reflect.typeOf(x),Has.<string>))throw new Error(\"default\");",
+        "dep": "import {Has} from \"main\";export class E<T:type=string> implements Has.<T>{get():T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "two-specializations",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}const a=new E.<string>();const b=new E.<boolean>();if(!Reflect.isAssignable(Reflect.typeOf(a),Has.<string>)||Reflect.isAssignable(Reflect.typeOf(a),Has.<boolean>)||!Reflect.isAssignable(Reflect.typeOf(b),Has.<boolean>))throw new Error(\"arguments\");",
+        "dep": "import {Has} from \"main\";export class E<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "closed-target-before-open",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";interface Local<T:type>{get():T;}export class E<T:type> implements Has.<string>,Local.<T>{get():never{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "nested-declaration-does-not-bind-own-T",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";function make<T:type>():any{class Inner<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}return Inner;}export const E=make.<string>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "closed-generic-member-does-not-read-owner-T",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export class E<T:type> implements Has.<(<T:type>(x:T)=>T)>{get():<T:type>(x:T)=>T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "dynamic-invalid-constraint",
+      "modules": {
+        "main": "interface Has<T:type extends string>{get():T;}class E<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}const F:any=E;F.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "unused-incompatible-default",
+      "modules": {
+        "main": "interface Has<T:type extends string>{get():T;}class E<T:type=uint8> implements Has.<T>{get():T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "declaration-does-not-execute-static-body",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}if(globalThis.genericBodyCount!==undefined)throw new Error(\"early body\");const x=new E.<string>();if(globalThis.genericBodyCount!==1)throw new Error(\"missing body\");",
+        "dep": "import {Has} from \"main\";export class E<T:type> implements Has.<T>{static{globalThis.genericBodyCount=(globalThis.genericBodyCount||0)+1;}get():T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "distinct-self-families",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}function make():any{class E<T:type> implements Has.<E>{get():E{return this;}}return E;}const A:any=make(),B:any=make();const ta=Reflect.typeOf(new A.<string>()),tb=Reflect.typeOf(new B.<string>());if(!Reflect.isAssignable(ta,Has.<ta>)||Reflect.isAssignable(ta,Has.<tb>)||!Reflect.isAssignable(tb,Has.<tb>))throw new Error(\"family identity\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "distinct-captured-interfaces",
+      "modules": {
+        "main": "function make():any{interface I<T:type>{get():T;}class E<T:type> implements I.<T>{get():T{throw new Error(\"unused\");}}return {E,I};}const a:any=make(),b:any=make();const A:any=a.E,B:any=b.E;const ta=Reflect.typeOf(new A.<string>()),tb=Reflect.typeOf(new B.<string>());if(!Reflect.isAssignable(ta,a.I.<string>)||Reflect.isAssignable(ta,b.I.<string>)||!Reflect.isAssignable(tb,b.I.<string>))throw new Error(\"interface identity\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "parameter-target-established-interface",
+      "modules": {
+        "main": "interface I{get():string;}class E<T:type> implements T{get():string{return \"ok\";}}const C:any=E.<I>;if(!Reflect.isAssignable(Reflect.typeOf(new C()),I))throw new Error(\"contract\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "value-parameter-specialization",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<N:uint32>{get():[N].<string>;}const x=new E.<2>();if(!Reflect.isAssignable(Reflect.typeOf(x),Has.<2>))throw new Error(\"value argument\");",
+        "dep": "import {Has} from \"main\";export class E<N:uint32> implements Has.<N>{get():[N].<string>{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "recursive-self-bound-specialization",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type extends Has.<T>>{get():T;}const x=new E.<string>();const t=Reflect.typeOf(x);if(!Reflect.isAssignable(t,Has.<t>))throw new Error(\"bound\");",
+        "dep": "import {Has} from \"main\";export class E<T:type> implements Has.<E>{get():E{return this;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-first-cycle",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}if(!Reflect.isAssignable(type E.<string>,Has.<string>)||Reflect.isAssignable(type E.<string>,Has.<boolean>))throw new Error(\"type\");",
+        "dep": "import {Has} from \"main\";export class E<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-and-value-share-specialization",
+      "modules": {
+        "main": "function count():any{return globalThis.bodyCount;}interface Has<T:type>{get():T;}class E<T:type> implements Has.<T>{static{globalThis.bodyCount=(globalThis.bodyCount||0)+1;}get():T{throw new Error(\"unused\");}}if(count()!==undefined)throw new Error(\"early body\");const t=type E.<string>;if(count()!==1)throw new Error(\"missing body\");const C=E.<string>;const a=new C();if(t!==Reflect.typeOf(a)||t!==(type E.<string>)||count()!==1||!Reflect.isAssignable(t,Has.<string>))throw new Error(\"reuse\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-selected-capture",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}class E<const X:type extends [].<any>> implements Has.<X>{get():X{throw new Error(\"unused\");}}const t=type E.<[].<string>>;if(!Reflect.isAssignable(t,Has.<[].<string>>) || t!==Reflect.typeOf(new E.<[].<string>>()))throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "type-annotation-before-construction",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}type Alias=E.<string>;const t=type E.<string>;if(!Reflect.isAssignable(Alias,Has.<string>)||Alias!==t)throw new Error(\"alias\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "consumer-shadow-does-not-rebind-interface",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}export class E<T:type> implements Has.<T>{get():T{throw new Error(\"unused\");}}",
+        "main": "import {E,Has as Wanted} from \"dep\";interface Has<T:type>{get():T;}class D extends E.<string>{}const x:Wanted.<string>=new D();if(Reflect.isAssignable(Reflect.typeOf(x),Has.<string>))throw new Error(\"identity\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "renamed-producer-interface-with-consumer-binding",
+      "modules": {
+        "provider": "export interface Has<T:type>{get():T;}",
+        "dep": "import {Has as I} from \"provider\";export class E<T:type> implements I.<T>{get():T{throw new Error(\"unused\");}}",
+        "main": "import {E} from \"dep\";import {Has as I} from \"provider\";class D extends E.<string>{}const x:I.<string>=new D();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "main"
+        ]
+      }
+    }
+  ]
+}
