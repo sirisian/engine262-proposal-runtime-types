@@ -40,7 +40,7 @@ import { OriginalLibraryFunction, ProvenLibraryOperations } from './library-oper
 import { bindLibraryTypeArguments, libraryTypeParameters } from './library-type-arguments.mts';
 import { ProvenStaticLibraryOperations } from './static-library-origin.mts';
 import { ProvenArrayCapacityMembers } from './array-capacity-origin.mts';
-import { IsPartialDeclaration, MergePartialStructures, PartialBindings, PublishedPartialContributions, type PartialStructureContribution } from './partial-types.mts';
+import { IsPartialDeclaration, MergePartialStructures, PartialBindings, PublishedPartialContributions, PublishModulePartialContributions, type ModulePartialContribution, type PartialStructureContribution } from './partial-types.mts';
 import { VectorMaskMethodSignature } from './vector-signatures.mts';
 import { ProvenResumedDelegations } from './generator-intrinsics.mts';
 import { CompletionPaths, CompletionValues } from './completion-values.mts';
@@ -2930,7 +2930,21 @@ interface CheckingSyntaxIdentities {
  * holds every top-level declaration of _statementList_, which is what a
  * module's importer reads.
  */
+const pendingModulePartials = new WeakMap<ParseNode, ModulePartialContribution[]>();
+
 function checkCompletedDeclarations(statementList: readonly ParseNode[] | null, root: ParseNode, session: CheckSession, afterTypeEvaluation = false): ObjectValue[] {
+  let publications: readonly ModulePartialContribution[] = [];
+  try {
+    const errors = checkCompletedDeclarationPasses(statementList, root, session, afterTypeEvaluation);
+    if (errors.length === 0) publications = pendingModulePartials.get(root) ?? [];
+    return errors;
+  } finally {
+    if (root.type === 'Module') PublishModulePartialContributions(root, publications);
+    pendingModulePartials.delete(root);
+  }
+}
+
+function checkCompletedDeclarationPasses(statementList: readonly ParseNode[] | null, root: ParseNode, session: CheckSession, afterTypeEvaluation = false): ObjectValue[] {
   const host = surroundingAgent.currentRealmRecord?.HostDefined as { returnInferenceBudget?: InferenceLimits } | undefined;
   const inferenceResources = new InferenceResources(host?.returnInferenceBudget);
   const finish = (errors: ObjectValue[]): ObjectValue[] => {
@@ -3156,6 +3170,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   referenceStoreTargets?: ReadonlyMap<ParseNode, readonly TypeRecord[]>, collectedReferenceStores?: Map<ParseNode, TypeRecord[]>,
   referenceSyntax: CheckingSyntaxIdentities = { nodes: new WeakMap(), alternatives: new WeakMap(), symbolKeys: new WeakMap() },
   bindingContracts?: BindingContractPass, inferenceResources = new InferenceResources()): ObjectValue[] {
+  const modulePartials: ModulePartialContribution[] = [];
+  if (root.type === 'Module') pendingModulePartials.set(root, modulePartials);
   const unresolvedTypes = new Map<object, DeferredTypeCheck>();
   const deferredConstants = new Map<ParseNode, Value>();
   deferredTypeChecks.set(root, unresolvedTypes);
@@ -29534,18 +29550,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         else if (!n.TypeParameters) withPartialStructure(interfaceTypeOfNode(n, [n]));
       }
     }
-    if (root.type === 'Module' && moduleCheckInputs.has(root)) {
+    if (root.type === 'Module') {
       for (const part of list.filter(IsPartialDeclaration)) {
         const primary = partialPrimaryOf(part);
         if (!primary) continue;
-        let parent = part.parent;
-        while (parent && parent !== root && parent.type !== 'Block' && parent.type !== 'FunctionBody') parent = parent.parent;
-        if (parent !== root) continue;
+        const parent = part.parent?.type === 'ExportDeclaration' ? part.parent.parent : part.parent;
+        if (parent?.type !== 'ModuleBody' || parent.parent !== root) continue;
         for (const staticMembers of part.type === 'ClassDeclaration' ? [false, true] : [false]) {
-          const contributions = PublishedPartialContributions(primary, staticMembers);
-          const contribution = partialContribution(part, staticMembers);
-          const prior = contributions.findIndex((entry) => entry.Declaration === part);
-          if (prior === -1) contributions.push(contribution); else contributions[prior] = contribution;
+          // A producer with no imports still exports its partial contract.
+          // Keep each pass private until the complete source check succeeds.
+          const entry = { Primary: primary, Static: staticMembers, Contribution: partialContribution(part, staticMembers) };
+          const prior = modulePartials.findIndex((item) => item.Contribution.Declaration === part && item.Static === staticMembers);
+          if (prior === -1) modulePartials.push(entry); else modulePartials[prior] = entry;
         }
       }
     }

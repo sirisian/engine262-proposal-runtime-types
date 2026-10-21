@@ -17,6 +17,15 @@ export async function observeModuleGraph(
   entry = 'main',
   options: { runtimeTypes?: boolean; timeoutMs?: number } = {},
 ): Promise<ModuleObservation> {
+  return (await observeModuleSequence(sources, [entry], options))[0];
+}
+
+/** Evaluate successive graphs in one realm, retaining the host's module cache. */
+export async function observeModuleSequence(
+  sources: Readonly<Record<string, string>>,
+  entries: readonly string[],
+  options: { runtimeTypes?: boolean; timeoutMs?: number } = {},
+): Promise<ModuleObservation[]> {
   const agent = new Agent({ features: options.runtimeTypes === false ? [] : ['runtime-types'] });
   setSurroundingAgent(agent);
   const realm = new ManagedRealm();
@@ -50,7 +59,7 @@ export async function observeModuleGraph(
       ? nativeErrors.find((name) => error.Prototype === realm.Intrinsics[`%${name}.prototype%`]) : undefined;
     return { status, loaded: [...loaded], bodyEntries: [...bodyEntries], errorClass, diagnostic: TypeDiagnosticOf(error) };
   };
-  try {
+  const evaluateEntry = async (entry: string): Promise<ModuleObservation> => {
     const compiled = compile(entry);
     if (compiled.Type === 'throw') return outcome('rejected', compiled.Value);
     let callbacks = 0;
@@ -75,6 +84,15 @@ export async function observeModuleGraph(
     });
     if (callbacks !== 1) throw new Error('Module completion callback ran more than once');
     return result;
+  };
+  try {
+    const results: ModuleObservation[] = [];
+    for (const entry of entries) {
+      loaded.length = 0;
+      bodyEntries.length = 0;
+      results.push(await evaluateEntry(entry));
+    }
+    return results;
   } finally {
     delete agent.hostDefinedOptions.onNodeEvaluation;
   }

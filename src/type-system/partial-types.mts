@@ -19,6 +19,12 @@ export interface PartialStructureContribution {
   readonly Operator?: (key: string) => TypeRecord | null;
 }
 
+export interface ModulePartialContribution {
+  readonly Primary: object;
+  readonly Static: boolean;
+  readonly Contribution: PartialStructureContribution;
+}
+
 export function PartialBindings(type: TypeRecord, part: PartialStructureContribution): Map<string, TypeRecord> | null {
   if (type.Kind !== 'nominal') return null;
   const parameters = (type.Declaration as { TypeParameters?: ParseNode.TypeParameters | null }).TypeParameters?.TypeParameterList ?? [];
@@ -102,6 +108,24 @@ export function RuntimePartialContributions(declaration: object): PartialStructu
 }
 
 const publishedContributions = new WeakMap<object, Map<object, { instance: PartialStructureContribution[], static: PartialStructureContribution[] }>>();
+const modulePublications = new WeakMap<object, WeakMap<object, readonly ModulePartialContribution[]>>();
+
+/** Publish only the completed module check, replacing this source's prior pass. */
+export function PublishModulePartialContributions(module: object, entries: readonly ModulePartialContribution[]): void {
+  let publications = modulePublications.get(surroundingAgent);
+  if (!publications) {
+    publications = new WeakMap();
+    modulePublications.set(surroundingAgent, publications);
+  }
+  for (const prior of publications.get(module) ?? []) {
+    const parts = PublishedPartialContributions(prior.Primary, prior.Static);
+    const index = parts.findIndex((part) => part.Declaration === prior.Contribution.Declaration);
+    if (index >= 0) parts.splice(index, 1);
+  }
+  for (const entry of entries) PublishedPartialContributions(entry.Primary, entry.Static).push(entry.Contribution);
+  publications.set(module, [...entries]);
+}
+
 export function PublishedPartialContributions(declaration: object, staticMembers = false): PartialStructureContribution[] {
   let registry = publishedContributions.get(surroundingAgent);
   if (!registry) {

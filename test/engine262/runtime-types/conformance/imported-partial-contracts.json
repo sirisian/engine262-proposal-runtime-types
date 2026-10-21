@@ -1,0 +1,416 @@
+{
+  "cases": [
+    {
+      "name": "captured missing",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}partial interface Has<const T:type>{other():string;}",
+        "main": "import {Has} from \"dep\";class Bad implements Has.<Bad>{get():Bad{return this;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "unlisted missing",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}partial interface Has{other():T;}",
+        "main": "import {Has} from \"dep\";class Bad implements Has.<string>{get():string{return \"x\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "fixed missing",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}partial interface Has<string>{other():string;}",
+        "main": "import {Has} from \"dep\";class Bad implements Has.<string>{get():string{return \"x\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "fixed nonmatch",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}partial interface Has<number>{other():number;}",
+        "main": "import {Has} from \"dep\";class Good implements Has.<string>{get():string{return \"x\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured good",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}partial interface Has<const U:type>{other():U;}",
+        "main": "import {Has} from \"dep\";class Good implements Has.<string>{get():string{return \"x\";}other():string{return \"y\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "member source",
+      "modules": {
+        "dep": "type Result=string;export interface Has<T:type>{get():T;}partial interface Has<const U:type>{other():Result;}",
+        "main": "import {Has} from \"dep\";type Result=number;class Bad implements Has.<number>{get():number{return 1;}other():number{return 2;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "same module class partial",
+      "modules": {
+        "dep": "export class Box<T:type>{}partial class Box<string>{other():string{return \"x\";}}",
+        "main": "import {Box} from \"dep\";const x:string=new Box.<string>().other();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "renamed re-export retains required member",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}partial interface Has<const U:type>{other():U;}",
+        "bridge": "export {Has as Contract} from \"dep\";",
+        "main": "import {Contract as Has} from \"bridge\";class Bad implements Has.<string>{get():string{return \"x\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "renamed re-export retains capture type",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}partial interface Has<const U:type>{other():U;}",
+        "bridge": "export {Has as Contract} from \"dep\";",
+        "main": "import {Contract as Has} from \"bridge\";class Good implements Has.<string>{get():string{return \"x\";}other():string{return \"y\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "producer with unused import has the same contract",
+      "modules": {
+        "marker": "export const marker=1;",
+        "dep": "import {marker} from \"marker\";export interface Has<T:type>{get():T;}partial interface Has<const U:type>{other():U;}",
+        "main": "import {Has} from \"dep\";class Bad implements Has.<string>{get():string{return \"x\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "a local interface shadows the imported family",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}partial interface Has<const U:type>{other():U;}",
+        "main": "import {Has} from \"dep\";function f(){interface Has<T:type>{get():T;}class Good implements Has.<string>{get():string{return \"x\";}}}f();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "different same-named family receives no contribution",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}partial interface Has<const U:type>{other():U;}",
+        "other": "export interface Has<T:type>{get():T;}",
+        "main": "import {Has as Imported} from \"dep\";import {Has} from \"other\";class Bad implements Has.<string>{get():string{return \"x\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "other",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an unloaded extension contributes nothing",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}",
+        "extension": "import {Has} from \"dep\";partial interface Has<const U:type>{other():U;}",
+        "main": "import {Has} from \"dep\";class Bad implements Has.<string>{get():string{return \"x\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a loaded extension contributes to declaration checking",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}",
+        "extension": "import {Has} from \"dep\";partial interface Has<const U:type>{other():U;}",
+        "main": "import {Has} from \"dep\";import \"extension\";class Bad implements Has.<string>{get():string{return \"x\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "contributions in a nested function are not module exports",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}function extend(){partial interface Has<const U:type>{other():U;}}",
+        "main": "import {Has} from \"dep\";class Bad implements Has.<string>{get():string{return \"x\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "a matching partial requires the captured result type",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}partial interface Has<const U:type>{other():U;}",
+        "main": "import {Has} from \"dep\";class Bad implements Has.<number>{get():number{return 1;}other():string{return \"x\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "primary arguments remain available without a partial list",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}partial interface Has{other():T;}",
+        "main": "import {Has} from \"dep\";class Good implements Has.<string>{get():string{return \"x\";}other():string{return \"y\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bound match contributes its member",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}partial interface Has<const U extends string>{other():U;}",
+        "main": "import {Has} from \"dep\";class Bad implements Has.<string>{get():string{return \"x\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "bound nonmatch contributes no member",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}partial interface Has<const U extends string>{other():U;}",
+        "main": "import {Has} from \"dep\";class Good implements Has.<number>{get():number{return 1;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "each matching partial contributes",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}partial interface Has<const U:type>{other():U;}partial interface Has<string>{extra():number;}",
+        "main": "import {Has} from \"dep\";class Good implements Has.<string>{get():string{return \"x\";}other():string{return \"y\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "a class can satisfy all matching contributions",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}partial interface Has<const U:type>{other():U;}partial interface Has<string>{extra():number;}",
+        "main": "import {Has} from \"dep\";class Good implements Has.<string>{get():string{return \"x\";}other():string{return \"y\";}extra():number{return 1;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "matching contributions cannot replace a member",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}partial interface Has<const U:type>{other():U;}partial interface Has<string>{other():string;}",
+        "main": "import {Has} from \"dep\";class Good implements Has.<string>{get():string{return \"x\";}other():string{return \"y\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DUPLICATE_MEMBER",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "static checking of an imported added class method retains its result",
+      "modules": {
+        "dep": "export class Box<T:type>{}partial class Box<string>{other():string{return \"x\";}}",
+        "main": "import {Box} from \"dep\";const wrong:number=new Box.<string>().other();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "rechecking must not duplicate the same interface contribution",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}partial interface Has<const U:type>{other():U;}",
+        "main": "import {Has} from \"dep\";class Good implements Has.<string>{get():string{return \"x\";}other():string{return \"y\";}}type Built=[string];const item:Has.<string>=new Good();const result:string=item.other();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "non-generic partial required member crosses import",
+      "modules": {
+        "dep": "export interface I{get():string;}partial interface I{other():number;}",
+        "main": "import {I} from \"dep\";class Bad implements I{get():string{return \"x\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "non-generic complete contract is not merged twice",
+      "modules": {
+        "dep": "export interface I{get():string;}partial interface I{other():number;}",
+        "main": "import {I} from \"dep\";class Good implements I{get():string{return \"x\";}other():number{return 1;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "an unexecuted static-block contribution does not become a module contract",
+      "modules": {
+        "dep": "export interface Has<T:type>{get():T;}class C{static{throw new Error(\"stop\");partial interface Has<_>{other():string;}}}",
+        "main": "import {Has} from \"dep\";class Bad implements Has.<string>{get():string{return \"x\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "Error"
+      }
+    }
+  ]
+}
