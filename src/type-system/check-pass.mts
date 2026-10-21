@@ -1044,6 +1044,17 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
         completed.add(key);
         continue;
       }
+      if (obligation.requiredInterface) {
+        const { module, name } = obligation.requiredInterface;
+        // A local class argument can postpone application formation, but cannot
+        // make an imported interface's required binding read disappear. Resolve
+        // the original producer binding; never initialize it from its shape.
+        const imported = module.Environment
+          ? EnsureCompletion(yield* module.Environment.GetBindingValue(Value(name), Value.true))
+          : EnsureCompletion(Throw.ReferenceError('$1 is not defined', Value(name)));
+        if (imported.Type !== 'normal') return CreateTypeDiagnostic('rt-type-evaluation', obligation.node, 'pre-evaluation',
+          'a required imported interface is unavailable: $1', Value(inspect(imported.Value)));
+      }
       const prepared = EnsureCompletion(yield* prepareDeferredTypeEnvironment(obligation));
       if (prepared.Type !== 'normal') {
         return CreateTypeDiagnostic('rt-type-evaluation', obligation.node, 'pre-evaluation', 'a closed type annotation could not be evaluated to a type: $1', Value(inspect(prepared.Value)));

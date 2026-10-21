@@ -1,0 +1,506 @@
+{
+  "description": "Required imported interface availability at the ordinary module pre-body boundary; deferred and runtime controls remain distinct.",
+  "cases": [
+    {
+      "name": "required-self-implementation",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export class E implements Has.<E>{get():E{return this;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "bare-interface",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface I{get():string;}",
+        "dep": "import {I} from \"main\";export class E implements I{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "closed-primitive-implementation",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export class E implements Has.<string>{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "unused-generic-return",
+      "modules": {
+        "main": "import {f} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export function f<T:type>():Has.<T>{throw new Error(\"unused\");}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unused-generic-default",
+      "modules": {
+        "main": "import {f} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export function f<T:type=Has.<string>>(){return 1;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unused-alias-default",
+      "modules": {
+        "main": "import {Alias} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export type Alias<T:type=Has.<string>>=T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unused-generic-constraint",
+      "modules": {
+        "main": "import {f} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export function f<T:type extends Has.<string>>(){return 1;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unused-import",
+      "modules": {
+        "main": "import {x} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export const x=1;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "runtime-expression-read",
+      "modules": {
+        "main": "import {x} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export const x=Has;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "pure-runtime-cycle",
+      "modules": {
+        "main": "import {x} from \"dep\";export const v=1;",
+        "dep": "import {v} from \"main\";export const x=v;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "available-self-implementation",
+      "modules": {
+        "main": "import {E} from \"dep\";export const marker=1;",
+        "dep": "import {marker} from \"main\";export interface Has<T:type>{get():T;}export class E implements Has.<E>{get():E{return this;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "acyclic-self-implementation",
+      "modules": {
+        "main": "import {Has} from \"dep\";class E implements Has.<E>{get():E{return this;}}",
+        "dep": "export interface Has<T:type>{get():T;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "acyclic-recursive-bound",
+      "modules": {
+        "main": "import {Has} from \"dep\";class E implements Has.<E>{get():E{return this;}}",
+        "dep": "export interface Has<T:type extends Has.<T>>{get():T;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-unused-closed",
+      "modules": {
+        "main": "import {f} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export function f(){class E implements Has.<string>{get():string{return \"ok\";}}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "alias-implementation",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";type A=Has.<string>;export class E implements A{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "renamed-import",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has as Contract} from \"main\";export class E implements Contract.<E>{get():E{return this;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "renamed-export",
+      "modules": {
+        "main": "import {E} from \"dep\";interface Internal<T:type>{get():T;}export {Internal as Contract};",
+        "dep": "import {Contract} from \"main\";export class E implements Contract.<E>{get():E{return this;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "named-reexport",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Contract} from \"bridge\";export class E implements Contract.<E>{get():E{return this;}}",
+        "bridge": "export {Has as Contract} from \"main\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "bridge"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "star-reexport",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has as Contract} from \"bridge\";export class E implements Contract.<E>{get():E{return this;}}",
+        "bridge": "export * from \"main\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "bridge"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "unused-closed-generic-class",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export class E<T:type> implements Has.<string>{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "closed-function-signature",
+      "modules": {
+        "main": "import {f} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export function f():Has.<string>{throw new Error(\"unused\");}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "closed-nested-annotation",
+      "modules": {
+        "main": "import {f} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export function f(x:[Has.<string>]){}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "local-argument-not-yet-published",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";class A{}export class E implements Has.<A>{get():A{return new A();}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "earlier-dependency-effects",
+      "modules": {
+        "main": "import \"seed\";import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "seed": "globalThis.cyclicInterfaceMarker=1;",
+        "dep": "import {Has} from \"main\";export class E implements Has.<E>{get():E{return this;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "seed"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "async-dependency-completes-first",
+      "modules": {
+        "main": "import \"seed\";import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "seed": "await 0;globalThis.cyclicInterfaceMarker=1;",
+        "dep": "import {Has} from \"main\";export class E implements Has.<E>{get():E{return this;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "seed"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "async-candidate-before-own-await",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";await 0;export class E implements Has.<E>{get():E{return this;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "candidate-effects-do-not-start",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";throw new Error(\"body entered\");export class E implements Has.<E>{get():E{return this;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "constructor-not-run-to-form-contract",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export class E implements Has.<E>{constructor(){throw new Error(\"constructed\");}get():E{return this;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "available-third-module-in-cycle",
+      "modules": {
+        "main": "import {E} from \"dep\";import {Has} from \"provider\";export const marker=1;",
+        "dep": "import {Has} from \"provider\";export class E implements Has.<E>{get():E{return this;}}",
+        "provider": "import {marker} from \"main\";export interface Has<T:type>{get():T;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "provider",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-interface-shadows-import",
+      "modules": {
+        "main": "import {f} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export function f(){interface Has{get():string;}class E implements Has{get():string{return \"ok\";}}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "runtime-exception-in-earlier-dependency",
+      "modules": {
+        "main": "import \"seed\";import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "seed": "throw new Error(\"dependency\");",
+        "dep": "import {Has} from \"main\";export class E implements Has.<E>{get():E{return this;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "seed"
+        ],
+        "errorClass": "Error"
+      }
+    },
+    {
+      "name": "static-contract-failure-precedes-availability",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
+        "dep": "import {Has} from \"main\";export class E implements Has.<string>{get():boolean{return true;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    }
+  ]
+}

@@ -2720,6 +2720,8 @@ export function AdoptedReceiverTypeOf(node: object): TypeRecord | undefined {
 const deferredGuardChecks = new WeakSet<object>();
 export interface DeferredTypeCheck {
   node: ParseNode.Type;
+  /** A required imported interface head is read before deferring local arguments. */
+  requiredInterface?: ImportedInterface;
   /** Closed value inputs retain their producing declaration, not the consumer's spelling. */
   constants: ReadonlyMap<ParseNode, Value>;
   aliases: ReadonlyMap<string, TypeRecord>;
@@ -12331,7 +12333,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // publish, their recheck discovers this admission obligation too.
     const metadataAdmission = governingMetadata && governingMetadata.unclaimed.length === 0
       && (node.type === 'ParameterizedType' || (node.type === 'TypeReference' && !!node.TypeArguments));
-    if (result && node.type !== 'ComputedType' && !metadataAdmission) {
+    // A symbolic imported interface contract does not establish that its
+    // evaluated declaration is available at the module's required boundary.
+    // Closed references retain an ordinary pre-evaluation obligation; generic
+    // defaults and unbound inputs keep the deferral rules below.
+    const importedInterface = node.type === 'TypeReference'
+      ? importedInterfaces?.get(node.TypeName.IdentifierReference.name) : undefined;
+    let importedInterfaceAdmission = node.type === 'TypeReference' && result?.Kind === 'nominal'
+      && importedInterface?.declaration === result.Declaration
+      && ResolveBindingDeclaration(node.TypeName.IdentifierReference, node.TypeName.IdentifierReference.name)?.kind === 'import';
+    if (importedInterfaceAdmission) {
+      let source: ParseNode = node;
+      while (source.parent) source = source.parent;
+      importedInterfaceAdmission = source === root;
+    }
+    if (result && node.type !== 'ComputedType' && !metadataAdmission && !importedInterfaceAdmission) {
       unresolvedTypes.delete(node);
       return result;
     }
@@ -12339,10 +12355,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // failure, in contrast, is an obligation, never evidence for `any`.
     const enclosingParameters = new Set<string>();
     let defaultSource = false;
+    let constraintSource = false;
     for (let child: ParseNode = node, parent: ParseNode | undefined = node.parent; parent; child = parent, parent = parent.parent) {
       // A generic default is computed only by an application that needs it,
       // including when the computation is nested in an array or tuple type.
       if (parent.type === 'TypeParameter' && parent.TypeParameterDefault === child) defaultSource = true;
+      if (parent.type === 'TypeParameter' && parent.TypeParameterConstraint === child) constraintSource = true;
       // Through typeParameterNamesOf, which also reads a primitive block's
       // captures of metadata.
       (typeParameterNamesOf(parent) ?? []).forEach((name) => enclosingParameters.add(name));
@@ -12398,9 +12416,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
     };
     examine(node);
+    // Constraints are descriptions until an application requires their binder.
+    // The application's GenericDefaultCheck retains the imported environment.
+    if (importedInterfaceAdmission && constraintSource) return result;
     if (open) unresolvedTypes.delete(node);
     if (!open && !defaultSource && ['TypeReference', 'ComputedType', 'ArrayType', 'KeyOfType', 'IndexedAccessType', 'ParameterizedType'].includes(node.type)) {
-      unresolvedTypes.set(node, deferredTypeCheck(node));
+      const obligation = deferredTypeCheck(node);
+      if (importedInterfaceAdmission) obligation.requiredInterface = importedInterface;
+      unresolvedTypes.set(node, obligation);
     }
     return result;
   };
