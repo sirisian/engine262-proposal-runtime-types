@@ -9894,12 +9894,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return out;
   };
 
+  const assignedKindedArguments = new WeakSet<ParseNode>();
   const isHigherKindedPosition = (node: ParseNode): boolean => {
+    if (assignedKindedArguments.has(node)) return true;
+    if (node.parent?.type === 'ParenthesizedType') return isHigherKindedPosition(node.parent);
     // A higher-kinded default supplies a constructor, just like a written
     // argument for that slot; a bare alias is not an empty application here.
     const defaultParameter = node.parent;
     if (defaultParameter?.type === 'TypeParameter' && defaultParameter.TypeParameterDefault === node && (defaultParameter.Arity ?? 0) > 0) return true;
-    if (isHigherKindedArgument(node, (name) => functionNodes.get(name) ?? classNodes.get(name) ?? aliasNodes.get(name))) return true;
+    if (isHigherKindedArgument(node, (name) => declarationAt(node, name,
+      functionNodes.get(name) ?? classNodes.get(name) ?? aliasNodes.get(name) ?? interfaceNodes.get(name)))) return true;
     const list = node.parent;
     const application = list?.parent;
     if (list?.type !== 'TypeArguments' || application?.type !== 'TypeArgumentsExpression') return false;
@@ -12504,8 +12508,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const higherKindedArgument = !node.TypeArguments && isHigherKindedPosition(node);
         // #sec-higher-kinded-parameters: this position binds the declaration,
         // even when its alias body has a known structural shape.
-        if (higherKindedArgument && genericDeclaration?.type === 'TypeAliasDeclaration' && genericParameters.length > 0) {
-          return { Kind: 'nominal', Declaration: genericDeclaration, Arguments: [] } as TypeRecord;
+        const constructorDeclaration = genericDeclaration ?? classDeclaration;
+        if (higherKindedArgument && constructorDeclaration?.TypeParameters?.TypeParameterList.length && !parameterInScope) {
+          return { Kind: 'nominal', Declaration: constructorDeclaration, Arguments: [] } as TypeRecord;
         }
         // #sec-parameterized-types: a bare alias or interface in a concrete type position
         // binds defaults exactly as an empty application does. The cached
@@ -12665,6 +12670,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
             orderedArgList = filled as readonly ParseNode.Type[];
           }
+          // The imported receiver owns its argument roles. Until its
+          // declaration is linked, a bare argument is not an empty application.
+          if (lexicalBinding?.kind === 'import' && !selected) return null;
           const applicationDeclaration = classDeclaration ?? aliasDeclaration;
           const applicationParameters = (applicationDeclaration as { TypeParameters?: ParseNode.TypeParameters | null } | undefined)?.TypeParameters?.TypeParameterList ?? [];
           for (const [index, a] of orderedArgList.entries()) {
@@ -13914,26 +13922,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * call's evaluation raises the diagnostic. (The split runs by arity alone
    * here; a second pack needs the element bounds, which is not yet done.)
    */
-  /**
-   * What an argument written for a higher-kinded parameter denotes as a
-   * DECLARATION. A bare generic name is not a type - resolving `Box` alone
-   * answers nothing - so a class or interface is looked up by name; a
-   * parameter in scope is left alone (passing a higher-kinded parameter along
-   * is how one is forwarded); anything else is what it resolves to, which for
-   * `uint8` is a type that is no declaration at all.
-   */
+  /** Resolve with the assigned constructor role, retaining lexical binding. */
   const kindedArgumentOf = (node: ParseNode): TypeRecord | null => {
-    const ref = node as { type?: string, TypeArguments?: unknown, TypeName?: { IdentifierReference?: { name?: string }, MemberNames?: readonly unknown[] } };
-    if (ref.type === 'TypeReference' && !ref.TypeArguments && !ref.TypeName?.MemberNames?.length) {
-      const name = ref.TypeName?.IdentifierReference?.name;
-      if (!name || typeParameterInScope(name)) return null;
-      const intrinsic = !shadowedByProgram(name) && intrinsicDeclarationRecord(name);
-      if (intrinsic) return intrinsic;
-      const declared = classTypeOf(name) ?? interfaceTypeOf(name);
-      if (declared) return declared as TypeRecord;
+    const active = assignedKindedArguments.has(node);
+    assignedKindedArguments.add(node);
+    try {
+      const resolved = resolveType(node as ParseNode.Type);
+      return resolved && resolved.Kind !== 'any' && resolved.Kind !== 'parameter' ? resolved : null;
+    } finally {
+      if (!active) assignedKindedArguments.delete(node);
     }
-    const resolved = resolveType(node as ParseNode.Type);
-    return resolved && resolved.Kind !== 'any' && resolved.Kind !== 'parameter' ? resolved : null;
   };
 
   const typeParameterConstraint = (parameter: TypeParameterRecord, bindings: ReadonlyMap<string, TypeRecord>): Known => {
@@ -14115,35 +14113,21 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const kinded = new Map<string, TypeRecord>();
     typeParams.forEach((tp, k) => {
       const run = assigned.runs[k]!;
-      if (tp.Arity > 0 && !tp.Variadic && run[0]?.node) {
-        const argument = kindedArgumentOf(run[0].node);
-        if (argument && !badKindedArgument({
+      const argument = tp.Arity > 0 && !tp.Variadic && run[0]?.node ? kindedArgumentOf(run[0].node) : null;
+      if (argument) {
+        const bad = badKindedArgument({
           Declaration: { TypeParameters: { TypeParameterList: [{ BindingIdentifier: { name: tp.Name }, Arity: tp.Arity }] } },
-        } as unknown as TypeRecord, [argument])) kinded.set(tp.Name, argument);
-      }
-      // #sec-higher-kinded-parameters: an argument bound to a higher-kinded
-      // parameter must be a generic declaration of its arity - "An argument
-      // that is not a generic declaration at all is a type error naming the
-      // argument", and one "of the wrong parameter count is a type error naming
-      // both counts". The class-application path judged this; an explicit
-      // argument to a generic FUNCTION did not, so `f.<uint8>` at `W<_>` was
-      // accepted and `f.<Box>` at `W<_, _>` failed only at run time.
-      if (validation && tp.Arity > 0 && !tp.Variadic && run[0]?.node) {
-        const argument = kindedArgumentOf(run[0].node);
-        if (argument) {
-          const bad = badKindedArgument({
-            Declaration: { TypeParameters: { TypeParameterList: [{ BindingIdentifier: { name: tp.Name }, Arity: tp.Arity }] } },
-          } as unknown as TypeRecord, [argument]);
-          if (bad) {
-            errors.push((bad.kind === 'not-generic'
-              ? CreateTypeDiagnostic('rt-generic-argument', root, diagnosticPhase, '$1 is not a generic declaration; $2 expects one taking $3 type arguments', Value(displayType(bad.argument)), Value(bad.parameter), Value(String(bad.wanted)))
-              : CreateTypeDiagnostic('rt-generic-argument', root, diagnosticPhase, '$1 takes $2 type arguments; $3 expects one taking $4', Value(displayType(bad.argument)), Value(String(bad.supplied)), Value(bad.parameter), Value(String(bad.wanted)))
-            ).Value as ObjectValue);
-            return;
-          }
+        } as unknown as TypeRecord, [argument]);
+        if (bad && validation) {
+          errors.push((bad.kind === 'not-generic'
+            ? CreateTypeDiagnostic('rt-generic-argument', root, diagnosticPhase, '$1 is not a generic declaration; $2 expects one taking $3 type arguments', Value(displayType(bad.argument)), Value(bad.parameter), Value(String(bad.wanted)))
+            : CreateTypeDiagnostic('rt-generic-argument', root, diagnosticPhase, '$1 takes $2 type arguments; $3 expects one taking $4', Value(displayType(bad.argument)), Value(String(bad.supplied)), Value(bad.parameter), Value(String(bad.wanted)))
+          ).Value as ObjectValue);
+          return;
         }
+        if (!bad) kinded.set(tp.Name, argument);
       }
-      const resolvedRun = run.map((e) => e.record ?? resolveType(e.node as ParseNode.Type));
+      const resolvedRun = run.map((e) => e.record ?? kinded.get(tp.Name) ?? resolveType(e.node as ParseNode.Type));
       if (resolvedRun.some((r) => !r)) {
         pendingArguments.add(tp.Name);
         return;

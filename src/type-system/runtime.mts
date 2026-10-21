@@ -1259,8 +1259,13 @@ export function* GenericAliasDeclarationShape(
 export function* ApplyGenericInterface(record: TypeRecord, argumentsList: readonly ParseNode.Type[]): PlainEvaluator<TypeRecord> {
   const records: TypeRecord[] = [];
   const names: (string | undefined)[] = [];
+  Assert(record.Kind === 'nominal' && record.Declaration.type === 'InterfaceDeclaration');
+  const parameters = record.Declaration.TypeParameters?.TypeParameterList ?? [];
   for (const argument of argumentsList) {
-    const resolved = Q(yield* TypeNodeToTypeRecord(argument));
+    const name = typeArgumentNameOf(argument);
+    const parameter = name === undefined ? parameters[records.length] : parameters.find((p) => p.BindingIdentifier.name === name);
+    const asDeclaration = !(argument as { IsSpread?: boolean }).IsSpread && (parameter?.Arity ?? 0) > 0;
+    const resolved = Q(yield* TypeNodeToTypeRecord(argument, asDeclaration));
     if ((argument as { IsSpread?: boolean }).IsSpread) {
       const elements = spreadElementsOf(resolved);
       if (!elements) return Throw.TypeError('$1', Value('a spread type argument must be a tuple or an array of stated extent'));
@@ -5380,59 +5385,22 @@ function declarationNamed(from: ParseNode, name: string): ParseNode | null {
   return null;
 }
 
-/**
- * An argument that names a generic DECLARATION rather than a type, or *undefined*
- * where it is an ordinary type argument.
- *
- * `B.<Identity>` passes a declaration: `Identity` is generic, so resolving it as
- * a type applies it with no arguments and fails the arity check for its own `T`.
- * The annotation path has always recovered from that by resolving the NAME
- * instead - which is why `let _b_: B.<Identity>;` works - and the recovery lived
- * inline where only that path could reach it.
- *
- * Extracted so the runtime specializer can use it too. `new B.<Identity>()` took
- * the same argument node through `Q(TypeNodeToTypeRecord(...))`, propagated the
- * arity failure the annotation path swallows, and was therefore excluded from
- * specialization altogether - which is why a kinded application was never
- * specialized and `Reflect.typeOf(new B.<Id>())` reported bare `B`.
- */
+/** Resolve a higher-kinded argument as a declaration without applying its defaults. */
 export function* TypeArgumentAsDeclaration(argNode: ParseNode.Type, expectedArity: number = 0): PlainEvaluator<TypeRecord | undefined> {
-  if (expectedArity > 0 && argNode.type === 'TypeReference' && !argNode.TypeArguments && argNode.TypeName.MemberNames.length === 0) {
-    const name = argNode.TypeName.IdentifierReference.name;
-    if (Q(yield* UsesIntrinsicDeclaration(argNode, name))) {
-      const intrinsic = intrinsicDeclarationRecord(name);
-      if (intrinsic) return intrinsic;
-    }
+  if (expectedArity > 0 && argNode.type === 'TypeReference' && !argNode.TypeArguments) {
+    return yield* TypeNodeToTypeRecord(argNode, true);
   }
-  const asType = EnsureCompletion(yield* TypeNodeToTypeRecord(argNode));
-  if (asType.Type !== 'throw') {
-    return undefined;
-  }
-  const ref = argNode as unknown as {
-    type?: string,
-    TypeName?: { MemberNames?: readonly unknown[], IdentifierReference?: { name?: string } },
-    TypeArguments?: unknown,
-  };
-  if (ref.type !== 'TypeReference' || (ref.TypeName?.MemberNames?.length ?? 0) !== 0
-    || ref.TypeArguments || !ref.TypeName?.IdentifierReference?.name) {
-    return undefined;
-  }
-  const declRef = EnsureCompletion(yield* ResolveTypeName(Value(ref.TypeName.IdentifierReference.name)));
-  if (declRef.Type !== 'normal') {
-    return undefined;
-  }
-  const declValue = EnsureCompletion(yield* GetValue(declRef.Value as never));
-  if (declValue.Type !== 'normal' || !isTypeObject(declValue.Value)) {
-    return undefined;
-  }
-  return (declValue.Value as { TypeRecord: TypeRecord }).TypeRecord;
+  return undefined;
 }
 
-export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<TypeRecord> {
+export function* TypeNodeToTypeRecord(node: ParseNode.Type, asDeclaration?: boolean): PlainEvaluator<TypeRecord> {
+  const parent = node.parent;
+  asDeclaration ??= isHigherKindedArgument(node, (name) => declarationNamed(node, name) ?? undefined)
+    || parent?.type === 'TypeParameter' && parent.TypeParameterDefault === node && (parent.Arity ?? 0) > 0;
   // An executable type computation cannot be discharged by an enclosing
   // structural constraint cycle, including one reached through an alias.
   if (node.type === 'ComputedType') interfaceConstraintComputation = {};
-  let type = Q(yield* TypeNodeToTypeRecordUnchecked(node));
+  let type = Q(yield* TypeNodeToTypeRecordUnchecked(node, asDeclaration));
   if (type.Kind === 'nominal') {
     let conflict: string | undefined;
     type = MergePartialStructures(type, RuntimePartialContributions(type.DeclarationIdentity ?? type.Declaration), (key) => {
@@ -5446,7 +5414,7 @@ export function* TypeNodeToTypeRecord(node: ParseNode.Type): PlainEvaluator<Type
   return { ...type, Metadata: Q(yield* CheckMetadataRecord(type.Metadata, type.Base)) };
 }
 
-function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<TypeRecord> {
+function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boolean): PlainEvaluator<TypeRecord> {
   // #sec-matchspecializationpattern: expose the constructor without applying
   // defaults or materializing a specialization merely to inspect a pattern.
   if ((node as ParseNode).type === 'TypeName') {
@@ -5470,7 +5438,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
     return { ...pendingDeclarationDefault, DefaultEnvironment: surroundingAgent.runningExecutionContext.LexicalEnvironment } as TypeRecord;
   }
   if (node.type === 'TypeReference' && !node.TypeArguments && node.TypeName.MemberNames.length === 0
-      && isHigherKindedArgument(node, (name) => declarationNamed(node, name) ?? undefined)) {
+      && asDeclaration) {
     const intrinsic = intrinsicDeclarationRecord(node.TypeName.IdentifierReference.name);
     if (intrinsic && Q(yield* UsesIntrinsicDeclaration(node, node.TypeName.IdentifierReference.name))) return intrinsic;
   }
@@ -5601,7 +5569,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
           if (record.Kind === 'nominal' && record.Declaration.type === 'InterfaceDeclaration'
             && record.Declaration.TypeParameters?.TypeParameterList.length
             && (node.TypeArguments || record.Arguments.length === 0
-              && !isHigherKindedArgument(node, (declName) => declarationNamed(node, declName) ?? undefined))) {
+              && !asDeclaration)) {
             return Q(yield* ApplyGenericInterface(record, node.TypeArguments?.TypeArgumentList ?? []));
           }
           return base.TypeRecord;
@@ -5659,6 +5627,20 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
             } as TypeRecord, new Map());
           }
           return bound;
+        }
+      }
+      // An initialized interface binding supplies the argument roles even
+      // when its receiver was imported or forwarded under another name. The
+      // later path retains declaration/TDZ handling for unavailable bindings.
+      if (node.TypeArguments) {
+        const reference = EnsureCompletion(yield* ResolveTypeName(Value(name)));
+        const value = reference.Type === 'normal' ? EnsureCompletion(yield* GetValue(reference.Value)) : reference;
+        if (value.Type === 'normal' && isTypeObject(value.Value)) {
+          const record = value.Value.TypeRecord;
+          if (record.Kind === 'nominal' && record.Declaration.type === 'InterfaceDeclaration'
+              && record.Declaration.TypeParameters?.TypeParameterList.length) {
+            return yield* ApplyGenericInterface(record, node.TypeArguments.TypeArgumentList);
+          }
         }
       }
       const argRecords: TypeRecord[] = [];
@@ -6105,6 +6087,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
       if (isTypeObject(value)) {
         const record = value.TypeRecord;
         if (record.Kind === 'nominal' && record.Declaration.type === 'TypeAliasDeclaration' && (record.Declaration as ParseNode.TypeAliasDeclaration).TypeParameters) {
+          if (asDeclaration && !node.TypeArguments) return record;
           const decl2 = record.Declaration as ParseNode.TypeAliasDeclaration;
           return Q(yield* InstantiateGenericAlias(decl2, argRecords, record, argNames2));
         }
@@ -6117,12 +6100,13 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
         }
       }
       if (baseRecord) {
+        if (asDeclaration && !node.TypeArguments) return baseRecord;
         // #sec-type-references: an alias of a completed application already has
         // its arguments. A bare alias does not apply the family a second time.
         if (!node.TypeArguments && baseRecord.Kind === 'nominal' && baseRecord.Arguments.length > 0) return baseRecord;
         if (baseRecord.Kind === 'nominal' && baseRecord.Declaration.type === 'InterfaceDeclaration'
           && baseRecord.Declaration.TypeParameters?.TypeParameterList.length
-          && (node.TypeArguments || !isHigherKindedArgument(node, (declName) => declarationNamed(node, declName) ?? undefined))) {
+          && (node.TypeArguments || !asDeclaration)) {
           return Q(yield* InstantiateGenericInterface(baseRecord, argRecords, argNames2));
         }
         // Named type arguments are ordered into PARAMETER order here, at the single
@@ -6372,7 +6356,7 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type): PlainEvaluator<Ty
       return Throw.TypeError('$1 is not a type', Value(name));
     }
     case 'ParenthesizedType':
-      return Q(yield* TypeNodeToTypeRecord(node.Type));
+      return Q(yield* TypeNodeToTypeRecord(node.Type, asDeclaration));
     case 'PredefinedType':
       if (node.keyword === 'void') {
         return voidType;

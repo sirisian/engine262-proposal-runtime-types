@@ -5,13 +5,14 @@ import { observeModuleGraph } from '../module-observer.mts';
 import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion, TypeDiagnosticOf } from '#self';
 
 const corpus = JSON.parse(readFileSync(new URL('../conformance/alias-default-demand.json', import.meta.url), 'utf8')) as {
-  cases: { name: string; steps: { source: string; expected: Record<string, unknown>; messageIncludes?: string }[] }[];
+  cases: { name: string; budget?: { steps: number }; steps: { source: string; expected: Record<string, unknown>; messageIncludes?: string }[] }[];
 };
-for (const { name, steps } of corpus.cases) {
+for (const { name, steps, budget } of corpus.cases) {
   test(name, () => {
     const agent = new Agent({ features: ['runtime-types'] });
     setSurroundingAgent(agent);
-    const realm = new ManagedRealm();
+    // Precedence and recovery need a finite budget, not millions of spin steps.
+    const realm = new ManagedRealm({ typeEvaluationBudget: budget });
     try {
       for (const { source, expected, messageIncludes } of steps) {
         let bodyEntered = false;

@@ -732,7 +732,10 @@
             "value": "restored"
           }
         }
-      ]
+      ],
+      "budget": {
+        "steps": 2048
+      }
     }
   ]
 }

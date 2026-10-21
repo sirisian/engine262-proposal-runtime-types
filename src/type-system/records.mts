@@ -1959,7 +1959,7 @@ export function intrinsicDeclarationName(t: TypeRecord): string | undefined {
 export function declarationParameterCount(t: TypeRecord | null | undefined): number | null {
   const intrinsic = t && intrinsicDeclarationName(t);
   if (intrinsic) return intrinsicParameters(intrinsic)!.length;
-  if (!t || t.Kind !== 'nominal') {
+  if (!t || t.Kind !== 'nominal' || t.Arguments.length > 0) {
     return null;
   }
   const decl = (t as { Declaration?: { TypeParameters?: { TypeParameterList?: readonly unknown[] } } }).Declaration;

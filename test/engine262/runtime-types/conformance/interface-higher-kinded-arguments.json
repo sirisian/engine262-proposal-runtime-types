@@ -1,0 +1,615 @@
+{
+  "clause": "sec-higher-kinded-parameters",
+  "cases": [
+    {
+      "name": "direct",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}interface H<W<_>:type>{}type A=H.<I>;if(A!==H.<I>)throw new Error(\"identity\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}interface H<W<_>:type>{}type A=H.<W:I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "expression",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}interface H<W<_>:type>{}H.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "defaulted",
+      "modules": {
+        "main": "interface I<T:type=string>{value:T;}interface H<W<_>:type>{}type A=H.<I>;if(A!==H.<I>)throw new Error(\"identity\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "use member",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}interface H<W<_>:type>{value:W.<string>;}type A=H.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "forward",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}interface H<W<_>:type>{}function f<W<_>:type>():type{return H.<W>;}if(f.<I>()!==H.<I>)throw new Error(\"forward\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default hk",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}interface H<W<_>:type=I>{}type A=H;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "spread before",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}interface H<T:type,W<_>:type>{}type A=H.<...[string],I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "applied",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}interface H<W<_>:type>{}type A=H.<I.<string>>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "wrong arity",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}interface H<W<_,_>:type>{}type A=H.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "not generic",
+      "modules": {
+        "main": "interface H<W<_>:type>{}type A=H.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "ordinary missing",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}interface H<W:type>{}type A=H.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "import arg",
+      "modules": {
+        "dep": "export interface I<T:type>{value:T;}",
+        "main": "import {I} from \"dep\";interface H<W<_>:type>{}type A=H.<I>;if(A!==H.<I>)throw new Error(\"identity\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import receiver",
+      "modules": {
+        "dep": "export interface H<W<_>:type>{}",
+        "main": "import {H} from \"dep\";interface I<T:type>{value:T;}type A=H.<I>;if(A!==H.<I>)throw new Error(\"identity\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace arg",
+      "modules": {
+        "dep": "export interface I<T:type>{value:T;}",
+        "main": "import * as ns from \"dep\";interface H<W<_>:type>{}type A=H.<ns.I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace receiver",
+      "modules": {
+        "dep": "export interface H<W<_>:type>{}",
+        "main": "import * as ns from \"dep\";interface I<T:type>{value:T;}type A=ns.H.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "dynamic receiver",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}interface H<W<_>:type>{}const F:any=H;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unused throwing default",
+      "modules": {
+        "main": "function fail():type{throw new Error(\"unused\");}interface I<T:type=fail()>{value:T;}interface H<W<_>:type>{}type A=H.<I>;if(A!==H.<I>)throw new Error(\"identity\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "used throwing default",
+      "modules": {
+        "main": "function fail():type{throw new Error(\"used\");}interface I<T:type=fail()>{value:T;}type A=I;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DEFAULT_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "ordinary default",
+      "modules": {
+        "main": "interface I<T:type=string>{value:T;}interface H<T:type>{}type A=H.<I>;if(A!==H.<I.<string>>)throw new Error(\"default\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "empty spread before",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}interface H<W<_>:type>{}type A=H.<...[],I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "two spread before",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}interface H<A:type,B:type,W<_>:type>{}type C=H.<...[string,uint8],I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named after spread",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}interface H<A:type,B:type,W<_>:type>{}type C=H.<...[string,uint8],W:I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default hk used",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}interface H<W<_>:type=I>{value:W.<string>;}type A=H;if(A!==H.<I>)throw new Error(\"default\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import default hk",
+      "modules": {
+        "dep": "export interface I<T:type>{value:T;}",
+        "main": "import {I} from \"dep\";interface H<W<_>:type=I>{}type A=H;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace default hk",
+      "modules": {
+        "dep": "export interface I<T:type>{value:T;}",
+        "main": "import * as ns from \"dep\";interface H<W<_>:type=ns.I>{}type A=H;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "renamed arg",
+      "modules": {
+        "dep": "export interface I<T:type>{value:T;}",
+        "main": "import {I as J} from \"dep\";interface H<W<_>:type>{}type A=H.<J>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reexported receiver",
+      "modules": {
+        "dep": "export interface H<W<_>:type>{}",
+        "middle": "export {H as Wrap} from \"dep\";",
+        "main": "import {Wrap} from \"middle\";interface I<T:type>{value:T;}type A=Wrap.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "middle",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace both",
+      "modules": {
+        "dep": "export interface H<W<_>:type>{}export interface I<T:type>{value:T;}",
+        "main": "import * as ns from \"dep\";type A=ns.H.<ns.I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "shadowed receiver",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}interface H<W<_>:type>{}function f(){interface H<W:type>{}type A=H.<I>;}f();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "shadowed argument",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}interface H<W<_>:type>{}function f(){interface I<X:type,Y:type>{}type A=H.<I>;}f();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "separate activations",
+      "modules": {
+        "main": "interface H<W<_>:type>{}function make<T:type>():type{interface I<U:type>{outer:T;value:U;}return H.<I>;}if(make.<string>()===make.<string>())throw new Error(\"activation\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured application",
+      "modules": {
+        "main": "function apply<W<_>:type>():type{return W.<string>;}function make<T:type>():type{interface I<U:type>{outer:T;value:U;}if(apply.<I>()!==I.<string>)throw new Error(\"capture\");return I.<string>;}if(make.<string>()===make.<uint8>())throw new Error(\"capture identity\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class consumer",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}class H<W<_>:type>{}type A=H.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias consumer",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}type H<W<_>:type>=W.<string>;type A=H.<I>;if(A!==I.<string>)throw new Error(\"alias\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias argument",
+      "modules": {
+        "main": "type I<T:type>=T;interface H<W<_>:type>{}type A=H.<I>;if(A!==H.<I>)throw new Error(\"identity\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class argument",
+      "modules": {
+        "main": "class I<T:type>{value:T;}interface H<W<_>:type>{}type A=H.<I>;if(A!==H.<I>)throw new Error(\"identity\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "dynamic wrong arity",
+      "modules": {
+        "main": "interface I<X:type,Y:type>{}interface H<W<_>:type>{}const F:any=H;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "dynamic not generic",
+      "modules": {
+        "main": "interface H<W<_>:type>{}const F:any=H;F.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "dynamic applied",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}interface H<W<_>:type>{}const F:any=H;F.<I.<string>>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "repeated failure recovery",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}interface H<W<_>:type>{}const F:any=H;for(let n=0;n<2;n++){let rejected=false;try{F.<string>;}catch(e){rejected=true;}if(!rejected)throw new Error(\"admission\");if(F.<I>!==H.<I>)throw new Error(\"state\");}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "first order dynamic missing",
+      "modules": {
+        "main": "interface I<T:type>{value:T;}interface H<W:type>{}const F:any=H;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "first order dynamic default",
+      "modules": {
+        "main": "interface I<T:type=string>{}interface H<W:type>{}const F:any=H;if(F.<I>!==H.<I.<string>>)throw new Error(\"first order\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "defaulted class argument",
+      "modules": {
+        "main": "class I<T:type=string>{}interface H<W<_>:type>{}type A=H.<I>;if(A!==H.<I>)throw new Error(\"class\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "forwarded first order receiver",
+      "modules": {
+        "main": "interface I<T:type=string>{}interface H<W<_>:type>{}interface Ordinary<W:type>{}function apply(H:any):type{return H.<I>;}if(apply(Ordinary)!==Ordinary.<I.<string>>)throw new Error(\"role\");if(apply(H)!==H.<I>)throw new Error(\"constructor role\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "forwarded required first order receiver",
+      "modules": {
+        "main": "interface I<T:type>{}interface H<W<_>:type>{}interface Ordinary<W:type>{}function apply(H:any):type{return H.<I>;}apply(Ordinary);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "parenthesized argument",
+      "modules": {
+        "main": "interface I<T:type>{}interface H<W<_>:type>{}type A=H.<(I)>;if(A!==H.<I>)throw new Error(\"parentheses\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}
