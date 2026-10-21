@@ -1,9 +1,13 @@
+import { DeclaredMemberImplements } from '../type-system/implements-member.mts';
 import { ApplyGenericMap, GenericMapTypeOf } from '../abstract-ops/generic-map.mts';
 import { CreateGenericAliasRecord } from '../type-system/generic-alias-context.mts';
 import { LexicalFreeReferences, ResolveBindingDeclaration } from '../type-system/compile-time-evaluability.mts';
 import { InstallTypeLayoutProperties } from '../type-system/layout-properties.mts';
 import { RememberArrayCapacity } from '../type-system/array-capacity-origin.mts';
-import { IsPartialDeclaration, MergePartialStructures, RuntimePartialContributions } from '../type-system/partial-types.mts';
+import { IsPartialDeclaration, MergePartialStructures, RuntimePartialContributions, PartialBindings } from '../type-system/partial-types.mts';
+import { InstantiateCheckedBindings } from '../type-system/checked-bindings.mts';
+import { keyAdmittedBy } from '../type-system/literal-fit.mts';
+import { operatorTableKey } from '../type-system/overloads.mts';
 import { FixedTypeSubtrees } from '../type-system/component-patterns.mts';
 import { NominalRecordsOf } from '../type-system/intern.mts';
 import { bindIntrinsicArguments } from '../type-system/intrinsic-generics.mts';
@@ -12,7 +16,7 @@ import { PatternBindingNames } from '../type-system/pattern-scopes.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
 import { IsGenericBuiltin } from '../type-system/generic-builtins.mts';
 import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumber, wellKnownSymbols } from '../value.mts';
-import { SelfThisTypeRecord, PatternLiteralTypeOf, PublishedClassTypeOf } from '../type-system/check.mts';
+import { SelfThisTypeRecord, PatternLiteralTypeOf, PublishedClassTypeOf, DeclaredClassContractOf, DeclaredClassFieldTypeOf } from '../type-system/check.mts';
 import { SelectClassCase, CaseGroupMembers, SelectExplicitCase, StoredCaseValue, RecordSelection, InCallableDeclarationContext } from '../abstract-ops/callable-selection.mts';
 import { StampTypedArray } from '../abstract-ops/array-view.mts';
 import { CheckedConvertValue, LookupClassOperator, OverloadSignatureOf, functionWhereClauses, functionTypeParameters, classFrameOfObject, classFrameOfMethod } from '../abstract-ops/runtime-types.mts';
@@ -23,7 +27,7 @@ import { JSStringValue, TypedString, TypedBigInt } from '../value.mts';
 import type { Arguments, ReferenceRecord } from '../value.mts';
 import { ClaimEnumerator } from '../abstract-ops/runtime-types.mts';
 import { CreateArrayFromList } from '../abstract-ops/all.mts';
-import { SameType } from '../type-system/relations.mts';
+import { IsAssignable, SameType } from '../type-system/relations.mts';
 import { TypedNumberValue } from '../value.mts';
 import { StampReflectionContext } from '../type-system/reflection-contexts.mts';
 import { EnsureCompletion, Q, X } from '../completion.mts';
@@ -37,12 +41,12 @@ import { GetValue } from '../abstract-ops/all.mts';
 import { iterationInterfaceRecord } from '../type-system/iteration-types.mts';
 import { CanonicalizeType } from '../type-system/intern.mts';
 import { GetTypeObject, isTypeObject } from '../type-system/intern.mts';
-import { InjectedClassOf, mentionsTypeParameter, type TypeRecord, type SignatureRecord } from '../type-system/records.mts';
+import { InjectedClassOf, mentionsTypeParameter, substituteFreeTypeParameters, parameter, type TypeRecord, type SignatureRecord } from '../type-system/records.mts';
 import { beginResolvingAlias, endResolvingAlias, tieAliasKnot, recordResolvedAlias } from '../type-system/resolving-aliases.mts';
 import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin, RecordDeclaredMemberOrigins } from '../type-system/provenance.mts';
 import { BindTypeParameterTyped, toNumericArgument,
-  GenericAliasDeclarationShape, InstantiateGenericAlias, ApplyGenericInterface, IsOfType, TypeNodeToTypeRecord, spreadElementsOf,
+  SubstituteTypeArguments, GenericAliasDeclarationShape, InstantiateGenericAlias, ApplyGenericInterface, IsOfType, TypeNodeToTypeRecord, spreadElementsOf,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
 import { currentTypeParameterFrame, BindTypeArgumentsInto, MetadataObjectFromType, publishedReturnTypeOfFunction, WithClassInterfaceChecks } from '../type-system/runtime.mts';
 import { InferGenericBindings, TakePendingCalleeContext, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
@@ -64,7 +68,7 @@ import {
 import { R as MathematicalValue } from "../abstract-ops/all.mjs";
 import { ThrowCompletion } from '../completion.mts';
 import { DeclarativeEnvironmentRecord, DeclarativeBindingIdentity, UninitializedBindingIdentity } from '../execution-context/Environment.mts';
-import { ClassDefinitionEvaluation, PartialClassMergeEvaluation } from './ClassDefinitionEvaluation.mts';
+import { ClassDefinitionEvaluation, PartialClassMergeEvaluation, OwnClassMemberContractsOf } from './ClassDefinitionEvaluation.mts';
  import { Evaluate_PropertyName } from './PropertyName.mts';
 import { ApplyDecorators } from './ClassDefinitionEvaluation.mts';
 import { InitializeBoundName } from './BindingInitialization.mts';
@@ -1897,6 +1901,13 @@ type PartialClassExtension = {
   privateEnvironment: typeof surroundingAgent.runningExecutionContext.PrivateEnvironment,
 };
 const partialClassExtensions = new WeakMap<object, PartialClassExtension[]>();
+const partialTypeContexts = new WeakMap<object, CapturedTypeContext>();
+function currentPartialTypeContext(): CapturedTypeContext {
+  const context = surroundingAgent.runningExecutionContext;
+  return { Environment: context.LexicalEnvironment, PrivateEnvironment: context.PrivateEnvironment,
+    TypeParameterFrame: currentTypeParameterFrame(), Realm: context.Realm, ScriptOrModule: context.ScriptOrModule };
+}
+
 
 function* PartialPatternTypes(node: ParseNode.ClassDeclaration | ParseNode.InterfaceDeclaration): PlainEvaluator<Map<ParseNode, TypeRecord>> {
   const resolved = new Map<ParseNode, TypeRecord>();
@@ -1936,7 +1947,9 @@ function* RegisterPartialInterface(node: ParseNode.InterfaceDeclaration): PlainE
   }
   const parts = RuntimePartialContributions(existing.TypeRecord.DeclarationIdentity ?? primary);
   if (parts.some((part) => part.Declaration === node)) return undefined;
-  parts.push({ Declaration: node, Structure: () => structure, Resolve: (type) => types.get(type) ?? null });
+  const contribution = { Declaration: node, Structure: () => structure, Resolve: (type: ParseNode) => types.get(type) ?? null };
+  partialTypeContexts.set(contribution, currentPartialTypeContext());
+  parts.push(contribution);
   const updates: { record: TypeRecord, merged: TypeRecord }[] = [];
   let conflict: string | undefined;
   for (const record of NominalRecordsOf(primary)) {
@@ -1997,7 +2010,9 @@ function* RegisterPartialClassStructure(primary: ParseNode.ClassDeclaration, nod
   if (published?.Kind !== 'nominal') return undefined;
   const parts = RuntimePartialContributions(family ? ClassFamilyIdentityOf(family) : primary);
   if (!parts.some((part) => part.Declaration === node)) {
-    parts.push({ Declaration: node, Structure: () => published.Structure ?? null, Resolve: (type) => types.get(type) ?? null });
+    const contribution = { Declaration: node, Structure: () => published.Structure ?? null, Resolve: (type: ParseNode) => types.get(type) ?? null };
+    partialTypeContexts.set(contribution, currentPartialTypeContext());
+    parts.push(contribution);
   }
   const updates: { record: TypeRecord, merged: TypeRecord }[] = [];
   let conflict: string | undefined;
@@ -2242,6 +2257,178 @@ function classInterfaceTargetIsOpen(target: ParseNode.Type,
   });
 }
 
+/** Read declaration evidence in the evaluated class's own captured context. */
+function* declaredClassEvidence(node: ParseNode.ClassDeclaration | ParseNode.ClassExpression, ctor: Value,
+  application?: TypeRecord, seen = new Set<Value>()): PlainEvaluator<{
+    Properties: Extract<TypeRecord, { Kind: 'object' }>['Properties'],
+    Fields: readonly (string | SymbolValue)[],
+    Operators: ReadonlyMap<string, TypeRecord>,
+    Call: TypeRecord | 'noncallable' | null,
+  }> {
+  const empty = { Properties: [], Fields: [], Operators: new Map(), Call: null };
+  if (seen.has(ctor)) return empty;
+  seen.add(ctor);
+  const declared = DeclaredClassContractOf(node);
+  if (!declared) return empty;
+  const captured = classTypeContexts.get(ctor);
+  const read = function* () {
+    const bindings = currentTypeParameterFrame() ?? new Map();
+    const instantiate = (type: TypeRecord): TypeRecord => InstantiateCheckedBindings(new Map([
+      ['contract', substituteFreeTypeParameters(type, currentTypeParameterFrame() ?? new Map())!],
+    ]), surroundingAgent.runningExecutionContext.LexicalEnvironment, application).get('contract')!;
+    const shape = instantiate(declared.Structure);
+    Assert(shape.Kind === 'object');
+    const own = { Properties: shape.Properties, Fields: declared.Fields,
+      Operators: new Map([...declared.Operators].map(([key, signature]) => [key, instantiate(signature)])),
+      Call: declared.Call && declared.Call !== 'noncallable' ? instantiate(declared.Call) : declared.Call };
+    const primary = GenericClassDeclarationOf(ClassFamilyOf(ctor)) ?? node;
+    const partialApplication: TypeRecord = { Kind: 'nominal', Declaration: primary, Arguments:
+      (primary.TypeParameters?.TypeParameterList ?? []).map((p) => bindings.get(p.BindingIdentifier.name) ?? anyType) };
+    for (const part of RuntimePartialContributions(ClassFamilyIdentityOf(ctor))) {
+      const bound = PartialBindings(partialApplication, part);
+      const contribution = DeclaredClassContractOf(part.Declaration);
+      if (!bound || !contribution) continue;
+      const readPart = function* () {
+        const shape = instantiate(contribution.Structure);
+        Assert(shape.Kind === 'object');
+        return { shape, operators: new Map([...contribution.Operators].map(([key, type]) => [key, instantiate(type)])) };
+      };
+      // instantiate reads the active context and its free bindings.
+      const added = Q(yield* InCapturedTypeContext(partialTypeContexts.get(part) ?? captured!, readPart, bound));
+      own.Properties = [...own.Properties, ...added.shape.Properties];
+      own.Fields = [...own.Fields, ...contribution.Fields];
+      own.Operators = new Map([...own.Operators, ...added.operators]);
+    }
+    // Static symbol keys are symbolic checking identities. The evaluated
+    // declaration registry supplies actual String/Symbol keys, including
+    // computed keys, without rerunning key expressions or reading getters.
+    const evaluated = OwnClassMemberContractsOf(ctor).filter((member) => !member.static);
+    const properties = new Map(own.Properties.filter((property) => typeof property.key === 'string')
+      .map((property) => [property.key as string | SymbolValue, property]));
+    const fields = new Set<string | SymbolValue>(own.Fields.filter((key) => typeof key === 'string'));
+    for (const key of new Set(evaluated.map((member) => member.key))) {
+      const members = evaluated.filter((member) => member.key === key);
+      const field = members.find((member) => member.kind === 'field');
+      if (field) {
+        fields.add(key);
+        // A field declaration's runtime contract has its evaluated key and
+        // substituted storage type, even before any instance is constructed.
+        const checked = field.Declaration && DeclaredClassFieldTypeOf(field.Declaration);
+        const type = field.type ?? checked;
+        properties.set(key, { ...properties.get(key), key, type: type ? instantiate(type) : anyType,
+          optional: false, readonly: !!field.readonly, ...(!field.type ? { writeType: anyType } : {}) });
+        continue;
+      }
+      if (properties.has(key)) continue;
+      const method = members.find((member) => member.kind === 'method');
+      if (method) {
+        const untyped = { Parameters: [], Return: null, Untyped: true, ThisType: SelfThisTypeRecord };
+        const type = method.type ? instantiate(method.type) : undefined;
+        properties.set(key, { key, type: type?.Kind === 'function' ? { ...type,
+          Signatures: type.Signatures.map((signature) => ({ ...signature, ThisType: SelfThisTypeRecord })) }
+          : { Kind: 'function', Signatures: [untyped] },
+        optional: false, readonly: false });
+        continue;
+      }
+      const getter = members.find((member) => member.kind === 'get');
+      const setter = members.find((member) => member.kind === 'set');
+      const read = getter?.type?.Kind === 'function' ? getter.type.Signatures[0]?.Return : undefined;
+      const write = setter?.type?.Kind === 'function' ? setter.type.Signatures[0]?.Parameters[0]?.Type : undefined;
+      properties.set(key, { key, type: getter ? read ? instantiate(read) : anyType : builtinTypeRecord('undefined')!,
+        optional: false, readonly: !setter, ...(setter ? { writeType: write ? instantiate(write) : anyType } : {}) });
+    }
+    own.Properties = [...properties.values()];
+    own.Fields = [...fields];
+    const base = RuntimeClassBaseOf(ctor);
+    if (base?.Kind !== 'nominal' || !base.Constructor) return own;
+    const baseCtor = base.Constructor as Value;
+    const baseNode = selectedDeclarations.get(baseCtor as object) ?? base.Declaration;
+    if (baseNode.type !== 'ClassDeclaration' && baseNode.type !== 'ClassExpression') return own;
+    const inherited = Q(yield* declaredClassEvidence(baseNode, baseCtor, undefined, seen));
+    // Own storage outranks prototype declarations, including inherited fields.
+    const merged = new Map(inherited.Properties.map((property) => [property.key, property]));
+    for (const property of own.Properties) {
+      if (!inherited.Fields.includes(property.key) || own.Fields.includes(property.key)) merged.set(property.key, property);
+    }
+    return { ...own, Properties: [...merged.values()], Fields: [...new Set([...inherited.Fields, ...own.Fields])],
+      Operators: new Map([...inherited.Operators, ...own.Operators]) };
+  };
+  return captured ? yield* InCapturedTypeContext(captured, read) : yield* read();
+}
+
+/** Verify the claim from declared contracts, never from the claim itself. */
+function* verifyImplementedInterface(node: ParseNode.ClassDeclaration | ParseNode.ClassExpression,
+  ctor: Value, target: TypeRecord, application?: TypeRecord): PlainEvaluator<void> {
+  if (target.Kind !== 'nominal' || target.Declaration.type !== 'InterfaceDeclaration') {
+    return Throw.TypeError('$1', Value('an implements target must denote an interface'));
+  }
+  const evidence = Q(yield* declaredClassEvidence(node, ctor, application));
+  const shape = target.Structure && SubstituteTypeArguments(target.Structure, target.Declaration, target.Arguments);
+  const fail = (member: string) => Throw.TypeError('$1 does not implement $2: $3',
+    Value(node.BindingIdentifier?.name ?? 'the class'), Value(displayType(target)), Value(member));
+  if (shape?.Kind === 'function') {
+    if (evidence.Call === 'noncallable') return fail('instances are not callable');
+    if (evidence.Call && !IsAssignable(evidence.Call, shape)) return fail('incompatible call signature');
+  }
+  if (shape?.Kind === 'object') {
+    for (const wanted of shape.Properties) {
+      const actual = evidence.Properties.find((property) => property.key === wanted.key);
+      if (!actual) {
+        if (!wanted.optional) return fail(`missing member ${String(wanted.key)}`);
+      } else if (!DeclaredMemberImplements(actual, wanted)) {
+        return fail(`incompatible member ${String(wanted.key)}`);
+      }
+    }
+    for (const key of evidence.Fields) {
+      if (shape.Properties.some((property) => property.key === key)) continue;
+      const field = evidence.Properties.find((property) => property.key === key);
+      if (!field) continue;
+      for (const index of shape.IndexSignatures) {
+        if (keyAdmittedBy(key, index.Key) && !IsAssignable(field.type, index.Value)) return fail(`incompatible field ${String(key)}`);
+      }
+    }
+  }
+  // Operators have no property slot. Resolve their signatures in the
+  // interface's declaration context, retaining ref/rest/default capabilities.
+  const verifyOperators = function* (declaration: ParseNode.InterfaceDeclaration): PlainEvaluator<void> {
+    for (const member of declaration.InterfaceMemberList) {
+      if (member.type !== 'OperatorDefinition') continue;
+      const key = operatorTableKey(member);
+      const actual = evidence.Operators.get(key);
+      if (!actual) return fail(`missing operator ${key}`);
+      if (!member.TypeAnnotation && !(member.FormalParameters ?? []).some((p) => 'TypeAnnotation' in p && p.TypeAnnotation)) continue;
+      const Parameters = [];
+      for (const formal of member.FormalParameters ?? []) {
+        const p = formal as ParseNode.SingleNameBinding & { Ref?: boolean, Optional?: boolean };
+        const type = p.TypeAnnotation ? Q(yield* TypeNodeToTypeRecord(p.TypeAnnotation.Type)) : anyType;
+        Parameters.push(parameter(type, { Name: p.BindingIdentifier?.name ?? '', Ref: !!p.Ref,
+          Optional: !!p.Optional || !!p.Initializer, DeclaredDefault: !!p.Initializer, Rest: formal.type === 'BindingRestElement' }));
+      }
+      const Return = member.TypeAnnotation ? Q(yield* TypeNodeToTypeRecord(member.TypeAnnotation.Type)) : anyType;
+      if (!IsAssignable(actual, { Kind: 'function', Signatures: [{ Parameters, Return }] })) return fail(`incompatible operator ${key}`);
+    }
+    return undefined;
+  };
+  const captured = InterfaceTypeContextOf(target);
+  Assert(captured !== undefined);
+  const bindings = new Map<string, TypeRecord>();
+  (target.Declaration.TypeParameters?.TypeParameterList ?? []).forEach((p, i) => {
+    const argument = target.Arguments[i];
+    if (argument !== undefined) bindings.set(p.BindingIdentifier.name, typeof argument === 'number'
+      ? { Kind: 'literal', Value: Value(argument), Base: builtinTypeRecord('number')! } : argument);
+  });
+  Q(yield* InCapturedTypeContext(captured, () => verifyOperators(target.Declaration as ParseNode.InterfaceDeclaration), bindings));
+  for (const part of RuntimePartialContributions(target.DeclarationIdentity ?? target.Declaration)) {
+    if (part.Declaration.type !== 'InterfaceDeclaration') continue;
+    const bound = PartialBindings(target, part);
+    if (bound) {
+      Q(yield* InCapturedTypeContext(partialTypeContexts.get(part) ?? captured,
+        () => verifyOperators(part.Declaration as ParseNode.InterfaceDeclaration), bound));
+    }
+  }
+  return undefined;
+}
+
 /** Resolve actual interface bindings when publishing a class's runtime contract. */
 export function* ResolveImplementedInterfaces(node: ParseNode.ClassDeclaration | ParseNode.ClassExpression,
   ctor: Value, args?: readonly (TypeRecord | number)[]): PlainEvaluator<readonly TypeRecord[] | undefined> {
@@ -2289,7 +2476,19 @@ function* resolveImplementedInterfacesInContext(node: ParseNode.ClassDeclaration
         // enclosing parameter frame. Closed targets retain their ordinary read;
         // dependent targets retain source obligations, not completed contracts.
         if (args === undefined && classInterfaceTargetIsOpen(target, node)) continue;
-        interfaces.push(Q(yield* TypeNodeToTypeRecord(target)));
+        const resolved = Q(yield* TypeNodeToTypeRecord(target));
+        if (resolved.Kind !== 'nominal' || resolved.Declaration.type !== 'InterfaceDeclaration') {
+          return Throw.TypeError('$1', Value('an implements target must denote an interface'));
+        }
+        interfaces.push(resolved);
+      }
+      // Resolve targets first so recursive member signatures can refer to the
+      // whole local graph. Presence/capability is always proved by declarations,
+      // and no relation is published or cached until every check succeeds.
+      if (args !== undefined || !node.TypeParameters?.TypeParameterList.length) {
+        for (const target of interfaces) {
+          Q(yield* verifyImplementedInterface(node, ctor, target, self));
+        }
       }
       return interfaces;
     };
@@ -2583,6 +2782,14 @@ function* SpecializeFromFrame(
       family,
       cacheKey,
     ));
+    if (specialized.Type === 'normal') {
+      // Applicable partial members, including computed keys, belong to the
+      // application being admitted. Evaluate them once while the constructor
+      // is still in progress, before verifying its complete declaration graph.
+      for (const extension of partialClassExtensions.get(family) ?? []) {
+        Q(yield* ApplyPartialClass(extension, declaration, specialized.Value as Value, argRecords));
+      }
+    }
   } finally {
     progress.delete(cacheKey);
     if (progress.size === 0) specializationsInProgress.delete(family);
@@ -2605,9 +2812,6 @@ function* SpecializeFromFrame(
   if (conflict) return Throw.TypeError('$1 is already declared on this class', Value(conflict));
   Q(yield* InstallTypeLayoutProperties(ctor as ObjectValue, record));
   AssociateClassType(ctor, GetTypeObject(record));
-  for (const extension of partialClassExtensions.get(family) ?? []) {
-    Q(yield* ApplyPartialClass(extension, declaration, ctor, argRecords));
-  }
   byArgs.set(cacheKey, ctor);
   selectedDeclarations.set(ctor as object, body);
   if (body !== declaration) {

@@ -6,6 +6,7 @@ import { IsSubtype, IsAssignable, SameType } from './relations.mts';
 export type MemberKind = 'method' | 'get' | 'set' | 'field';
 export interface MemberContract {
   readonly key: string | SymbolValue;
+  readonly Declaration?: ParseNode;
   readonly static: boolean;
   readonly kind: MemberKind;
   readonly abstract: boolean;
@@ -34,7 +35,7 @@ export function addMemberContract(members: MemberContract[], member: MemberContr
   const prior = members[index];
   if (prior?.kind === 'method' && prior.type?.Kind === 'function' && member.type?.Kind === 'function') {
     members[index] = { ...member, type: { Kind: 'function', Signatures: [...prior.type.Signatures, ...member.type.Signatures] } };
-  } else if (index >= 0) members[index] = member;
+  } else if (index >= 0) members[index] = { ...prior, ...member };
   else members.push(member);
 }
 

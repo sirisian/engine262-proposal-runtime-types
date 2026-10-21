@@ -1843,6 +1843,11 @@ export function* PartialClassMergeEvaluation(F: FunctionObject, ClassTail: Parse
     }
     const target = IsStatic(e) ? (F as ObjectValue) : proto;
     const merged = Q(yield* MethodDefinitionEvaluation(e, target, Value.false));
+    if (surroundingAgent.feature('runtime-types')) {
+      const evaluatedKey = TakeEvaluatedMethodKey(e);
+      const key = (evaluatedKey ?? MemberKeyOf(e, merged)) as Value;
+      Q(yield* RecordMemberDeclarationFor(e, memberContextKind(e as never), key, target));
+    }
     Q(yield* decorateMember(merged as unknown as Value));
   }
   return undefined;
@@ -2402,6 +2407,11 @@ export interface MemberDeclaration {
 const memberDeclarations = new WeakMap<Value, Map<string, MemberDeclaration>>();
 const memberContracts = new WeakMap<Value, MemberContract[]>();
 
+/** Evaluated declaration keys and contracts, without reading instance values. */
+export function OwnClassMemberContractsOf(owner: Value): readonly MemberContract[] {
+  return memberContracts.get(owner) ?? [];
+}
+
 /**
  * proposal-runtime-types: the key a member is stored and looked up under.
  *
@@ -2693,7 +2703,7 @@ function* RecordMemberDeclarationFor(node: ParseNode, kind: string, key: Value |
   if (contractKind) {
     const contracts = memberContracts.get(owner) ?? [];
     addMemberContract(contracts, { key: key instanceof JSStringValue ? key.stringValue() : key,
-      static: n.static === true, kind: contractKind, abstract: node.type === 'AbstractMethodDefinition', type: declaredType ?? null });
+      Declaration: node, static: n.static === true, kind: contractKind, abstract: node.type === 'AbstractMethodDefinition', type: declaredType ?? null });
     memberContracts.set(owner, contracts);
   }
   if (!(key instanceof JSStringValue)) return undefined;

@@ -1,3 +1,4 @@
+import { DeclaredMemberImplements } from './implements-member.mts';
 import type { Formattable } from '../host-defined/error-messages.mts';
 import { SelectCase, ValueArityAdmits, CaseParameters, CaseArgumentsAdmit, PlaceCaseArguments } from '../abstract-ops/callable-selection.mts';
 import { BigIntValue, NumberValue, TypedNumberValue, Value, type ObjectValue, SymbolValue, JSStringValue } from '../value.mts';
@@ -1295,6 +1296,22 @@ const publishedClassTypes = new WeakMap<object, TypeRecord>();
 
 export function PublishedClassTypeOf(declaration: object): TypeRecord | undefined {
   return publishedClassTypes.get(declaration);
+}
+
+/** Declaration evidence, before interface members augment the lookup shape. */
+export interface DeclaredClassContract {
+  Structure: Extract<TypeRecord, { Kind: 'object' }>;
+  Fields: readonly (string | SymbolValue)[];
+  Call: TypeRecord | 'noncallable' | null;
+  Operators: ReadonlyMap<string, TypeRecord>;
+}
+const declaredClassFieldTypes = new WeakMap<object, TypeRecord>();
+export function DeclaredClassFieldTypeOf(field: object): TypeRecord | undefined {
+  return declaredClassFieldTypes.get(field);
+}
+const declaredClassContracts = new WeakMap<object, DeclaredClassContract>();
+export function DeclaredClassContractOf(declaration: object): DeclaredClassContract | undefined {
+  return declaredClassContracts.get(declaration);
 }
 
 // ---- module tables, read at link time -------------------------------
@@ -8687,7 +8704,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         continue;
       }
       const key = classElementKey((el as ParseNode.FieldDefinition).ClassElementName);
-      if (key === undefined || (f.ClassElementName?.type === 'PrivateIdentifier') !== privateNames) {
+      if ((f.ClassElementName?.type === 'PrivateIdentifier') !== privateNames) {
         continue;
       }
       // A field with no annotation still declares a member: its type is the one
@@ -8749,6 +8766,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return inferred ? widen(inferred as TypeRecord) as Known : null;
           })()
           : null);
+      // Computed names can be unknown to checking while the initializer's
+      // contract is known. Runtime declaration evidence supplies the actual key.
+      declaredClassFieldTypes.set(el, t ?? anyTypeRecord);
+      if (key === undefined) continue;
       if (t || !annotated) {
         const previous = fieldProperties.get(key);
         if (previous && previous.writeType === undefined) continue;
@@ -9295,6 +9316,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const {
       Properties, accessorKeys, getterKeys, setterTypes, construct,
     } = acc;
+    const declaredProperties = [...Properties];
     const cls = n as unknown as {
       BindingIdentifier?: { name: string } | null,
       ClassTail?: { ClassBody?: readonly ParseNode[] | null } | null,
@@ -9359,6 +9381,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       Base: base ?? undefined,
     } as TypeRecord;
     inferClassMethods(acc, receiver);
+    const operators = new Map<string, TypeRecord>();
+    const contribution = partialContribution(n);
+    for (const member of classBodyOf(n)) {
+      if (member.type !== 'OperatorDefinition' || member.static) continue;
+      const key = operatorTableKey(member);
+      const signature = contribution.Operator?.(key);
+      if (signature) operators.set(key, signature);
+    }
+    declaredClassContracts.set(n, {
+      Structure: { Kind: 'object', Properties: declaredProperties.map((property) => ({ ...property, readonly: !!property.readonly })), IndexSignatures: [] },
+      Fields: [...acc.fieldProperties.keys()],
+      Call: implemented.length ? classCallCapability(n) : null,
+      Operators: operators,
+    });
     for (const ref of implemented) {
       const pushed = pushTypeParameterScopeOf(n, 'type-only');
       let it: Known;
@@ -9425,10 +9461,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           }
           // #sec-interfaces-semantics: a property promises its availability and
           // write capability as well as its readable value type.
-          const propertyShape = (property: { key: string | SymbolValue, type: TypeRecord, optional: boolean, readonly?: boolean }): TypeRecord => ({
-            Kind: 'object', Properties: [{ ...property, readonly: !!property.readonly }], IndexSignatures: [],
-          });
-          if (own.type && p.type && !IsAssignable(propertyShape(own), propertyShape(p))) {
+          if (own.type && p.type && !DeclaredMemberImplements(own, p)) {
             report(own.type, p.type);
           }
         }

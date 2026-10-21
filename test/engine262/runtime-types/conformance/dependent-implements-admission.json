@@ -1,0 +1,1072 @@
+{
+  "description": "Dependent interface targets discharge declared-member obligations before completed specialization publication.",
+  "cases": [
+    {
+      "name": "reject-target-string",
+      "modules": {
+        "main": "class E<T:type> implements T {}const F:any=E;F.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "reject-target-any",
+      "modules": {
+        "main": "class E<T:type> implements T {}const F:any=E;F.<any>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "reject-target-never",
+      "modules": {
+        "main": "class E<T:type> implements T {}const F:any=E;F.<never>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "reject-target-uint8",
+      "modules": {
+        "main": "class E<T:type> implements T {}const F:any=E;F.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "reject-target-{get:()=>string}",
+      "modules": {
+        "main": "class E<T:type> implements T {}const F:any=E;F.<{get:()=>string}>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "reject-target-string|boolean",
+      "modules": {
+        "main": "class E<T:type> implements T {}const F:any=E;F.<string|boolean>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "reject-target-()=>string",
+      "modules": {
+        "main": "class E<T:type> implements T {}const F:any=E;F.<()=>string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "reject-class-target",
+      "modules": {
+        "main": "class I {} class E<T:type>  implements T {} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "empty-interface",
+      "modules": {
+        "main": "interface I {} class E<T:type>  implements T {} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "missing-method",
+      "modules": {
+        "main": "interface I {get():string;} class E<T:type>  implements T {} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "wrong-result",
+      "modules": {
+        "main": "interface I {get():string;} class E<T:type>  implements T {get():uint8{return 1;}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "wrong-parameter",
+      "modules": {
+        "main": "interface I {get(x:string):string;} class E<T:type>  implements T {get(x:uint8):string{return \"ok\";}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "valid-method",
+      "modules": {
+        "main": "interface I {get():string;} class E<T:type>  implements T {get():string{return \"ok\";}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inferred-method",
+      "modules": {
+        "main": "interface I {get():string;} class E<T:type>  implements T {get(){return \"ok\";}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "static-member-is-not-instance",
+      "modules": {
+        "main": "interface I {get():string;} class E<T:type>  implements T {static get():string{return \"ok\";}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "optional-missing",
+      "modules": {
+        "main": "interface I {get?():string;} class E<T:type>  implements T {} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "optional-present-incompatible",
+      "modules": {
+        "main": "interface I {get?():string;} class E<T:type>  implements T {get():uint8{return 1;}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "getter-cannot-write",
+      "modules": {
+        "main": "interface I {x:string;} class E<T:type>  implements T {get x():string{throw new Error(\"read getter\");}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "readonly-getter",
+      "modules": {
+        "main": "interface I {readonly x:string;} class E<T:type>  implements T {get x():string{throw new Error(\"read getter\");}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "writable-field",
+      "modules": {
+        "main": "interface I {x:string;} class E<T:type>  implements T {x:string=\"ok\";} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "field-invariance",
+      "modules": {
+        "main": "interface I {x:string|boolean;} class E<T:type>  implements T {x:string=\"ok\";} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "readonly-covariance",
+      "modules": {
+        "main": "interface I {readonly x:string|boolean;} class E<T:type>  implements T {get x():string{return \"ok\";}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inherited-method",
+      "modules": {
+        "main": "class B<U:type>{get():U{throw new Error(\"called\");}}interface I {get():string;} class E<T:type> extends B.<string> implements T {} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inherited-wrong",
+      "modules": {
+        "main": "class B<U:type>{get():U{throw new Error(\"called\");}}interface I {get():string;} class E<T:type> extends B.<boolean> implements T {} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "claim-is-not-declaration",
+      "modules": {
+        "main": "class B implements I {}interface I {x?:string;}interface J {x:string;} class E<T:type> extends B implements T {} const F:any=E;F.<J>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "own-field-index-reject",
+      "modules": {
+        "main": "interface I {[k:string]:string;} class E<T:type>  implements T {x:boolean=false;} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "own-field-index-valid",
+      "modules": {
+        "main": "interface I {[k:string]:string;} class E<T:type>  implements T {x:string=\"ok\";} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-not-index-field",
+      "modules": {
+        "main": "interface I {[k:string]:string;} class E<T:type>  implements T {get():boolean{return false;}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "explicit-index-exemption",
+      "modules": {
+        "main": "interface I {x:boolean;[k:string]:string;} class E<T:type>  implements T {x:boolean=false;} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inherited-field-index",
+      "modules": {
+        "main": "class B{x:boolean=false;}interface I {[k:string]:string;} class E<T:type> extends B implements T {} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "callable-reject",
+      "modules": {
+        "main": "interface I {(x:string):string;} class E<T:type>  implements T {} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "call-method-not-callable",
+      "modules": {
+        "main": "interface I {(x:string):string;} class E<T:type>  implements T {call(x:string):string{return x;}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "callable-result",
+      "modules": {
+        "main": "interface I {(x:string):string;} class E<T:type>  implements T {constructor(){return (x:string):string=>x;}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "callable-wrong",
+      "modules": {
+        "main": "interface I {(x:string):string;} class E<T:type>  implements T {constructor(){return (x:boolean):boolean=>x;}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "generic-alpha",
+      "modules": {
+        "main": "interface I {get<U:type>(x:U):U;} class E<T:type>  implements T {get<V:type>(x:V):V{return x;}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-shadow",
+      "modules": {
+        "main": "interface I {get<T:type>(x:T):T;} class E<T:type>  implements T {get<T:type>(x:T):T{return x;}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-arity",
+      "modules": {
+        "main": "interface I {get<U:type>(x:U):U;} class E<T:type>  implements T {get<V:type,W:type>(x:V):V{return x;}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "alias-interface",
+      "modules": {
+        "main": "interface I {get():string;}type A=I; class E<T:type>  implements T {get():string{return \"ok\";}} const F:any=E;F.<A>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "closed-target-universal-mismatch",
+      "modules": {
+        "main": "interface I {get():string;}class E<T:type> implements I {get():T{throw new Error(\"unused\");}}const F:any=E;F.<boolean>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "closed-target-universal-mismatch-valid-argument",
+      "modules": {
+        "main": "interface I {get():string;}class E<T:type> implements I {get():T{throw new Error(\"unused\");}}const F:any=E;F.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "operator-missing",
+      "modules": {
+        "main": "interface I {operator<(other:string):boolean;} class E<T:type>  implements T {} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "operator-valid",
+      "modules": {
+        "main": "interface I {operator<(other:string):boolean;} class E<T:type>  implements T {operator<(other:string):boolean{return false;}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "operator-wrong",
+      "modules": {
+        "main": "interface I {operator<(other:string):boolean;} class E<T:type>  implements T {operator<(other:boolean):boolean{return false;}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "operator-inherited",
+      "modules": {
+        "main": "class B<U:type>{operator<(other:U):boolean{return false;}}interface I {operator<(other:string):boolean;} class E<T:type> extends B.<string> implements T {} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "no-construction",
+      "modules": {
+        "main": "interface I {get():string;} class E<T:type>  implements T {constructor(){throw new Error(\"constructed\");}get():string{throw new Error(\"called\");}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "retry-and-cache",
+      "modules": {
+        "main": "interface I {get():string;}interface Empty{}class E<T:type> implements T {}const F:any=E;let count=0;for(let i=0;i<2;i+=1){try{F.<I>;}catch(e){if(e instanceof TypeError)count+=1;}}const C=F.<Empty>;if(count!==2||C!==F.<Empty>)throw new Error(\"cache\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "published-inferred-method",
+      "modules": {
+        "main": "interface I {get(x:string):string;} class E<T:type>  implements T {get(x:string){return x;}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "published-inferred-wrong",
+      "modules": {
+        "main": "interface I {get(x:boolean):string;} class E<T:type>  implements T {get(x:boolean){return x;}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "method-covariant-result",
+      "modules": {
+        "main": "interface I {get():string|boolean;} class E<T:type>  implements T {get():string{return \"ok\";}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "function-field-invariance",
+      "modules": {
+        "main": "interface I {get:()=>string|boolean;} class E<T:type>  implements T {get:()=>string=():string=>\"ok\";} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "reference-method-mismatch",
+      "modules": {
+        "main": "interface I {get(ref x:string):string;} class E<T:type>  implements T {get(x:string):string{return x;}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "reference-operator-mismatch",
+      "modules": {
+        "main": "interface I {operator<(ref other:string):boolean;} class E<T:type>  implements T {operator<(other:string):boolean{return false;}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "operator-default-no-evaluation",
+      "modules": {
+        "main": "interface I {operator<(other:string=\"ok\"):boolean;} class E<T:type>  implements T {operator<(other:string=\"ok\"):boolean{return false;}} const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "partial-method",
+      "modules": {
+        "main": "interface I{get():string;}class E<T:type> implements T{}partial class E {get():string{return \"ok\";}}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "partial-operator",
+      "modules": {
+        "main": "interface I{operator<(other:string):boolean;}class E<T:type> implements T{}partial class E {operator<(other:string):boolean{return false;}}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "partial-interface-operator",
+      "modules": {
+        "main": "interface I{}partial interface I {operator<(other:string):boolean;}class E<T:type> implements T{}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "captured-interface",
+      "modules": {
+        "main": "interface I {get():string;}function make<U:type>(){class E<T:type> implements U{get():string{return \"ok\";}}return E;}const F:any=make.<I>();F.<boolean>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-interface-invalid",
+      "modules": {
+        "main": "function make<U:type>(){class E<T:type> implements U{}return E;}const F:any=make.<string>();F.<boolean>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "closed-case-static-target",
+      "modules": {
+        "main": "interface I{get():string;}class E<T:type> implements T{get():string{return \"ok\";}}class E<string> implements string{}const F:any=E;F.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "self-return",
+      "modules": {
+        "main": "interface I<U:type>{get():U;}class E<T:type> implements I.<E>{get():E{return this;}}const F:any=E;F.<string>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "recursive-interface-member",
+      "modules": {
+        "main": "interface I {get():I;}class E<T:type> implements T{get():E{return this;}}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "left-to-right-target-failure",
+      "modules": {
+        "main": "interface I {get():string;}class E<T:type,U:type> implements T,U {}const F:any=E;let message=\"\";try{F.<I,string>;}catch(e){message=String(e);}if(!message.includes(\"must denote an interface\"))throw new Error(message);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-selected-case-valid",
+      "modules": {
+        "main": "interface I{get():string;}class E<T:type> implements T{}class E<const X:type> implements X{get():string{return \"ok\";}}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-selected-case-missing",
+      "modules": {
+        "main": "interface I{get():string;}class E<T:type> implements T{}class E<const X:type> implements X{}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "partial-distinct-activations",
+      "modules": {
+        "main": "function make<U:type>(){interface I{get(x:U):U;}class E<T:type> implements T{}partial class E {get(x:U):U{return x;}}return {E,I};}const a:any=make.<string>(),b:any=make.<boolean>();const A:any=a.E,B:any=b.E;const IA:any=a.I,IB:any=b.I;A.<IA>;B.<IB>;let failed=false;try{A.<IB>;}catch(e){failed=e instanceof TypeError;}if(!failed)throw new Error(\"context\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "mutually-recursive-members",
+      "modules": {
+        "main": "interface I{left():J;}interface J{right():I;}class E<T:type,U:type> implements T,U {left():E{return this;}right():E{return this;}}const F:any=E;F.<I,J>;F.<J,I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "method-static-covariance",
+      "modules": {
+        "main": "interface I{get():string|boolean;}class E implements I{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "symbol-field-exemption",
+      "modules": {
+        "main": "const k=Symbol();interface I{[k]:string;[key:symbol]:uint8;}class E<T:type> implements T{[k]:string=\"ok\";}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "symbol-method",
+      "modules": {
+        "main": "const k=Symbol();interface I{[k]():string;}class E<T:type> implements T{[k]():string{return \"ok\";}}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-method",
+      "modules": {
+        "main": "let key:any=\"get\";interface I{get():string;}class E<T:type> implements T{[key]():string{return \"ok\";}}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-method-wrong",
+      "modules": {
+        "main": "let key:any=\"get\";interface I{get():string;}class E<T:type> implements T{[key]():boolean{return false;}}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "computed-getter",
+      "modules": {
+        "main": "let key:any=\"x\";interface I{readonly x:string;}class E<T:type> implements T{get [key]():string{throw new Error(\"getter invoked\");}}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-getter-cannot-write",
+      "modules": {
+        "main": "let key:any=\"x\";interface I{x:string;}class E<T:type> implements T{get [key]():string{return \"ok\";}}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "computed-field",
+      "modules": {
+        "main": "let key:any=\"x\";interface I{x:string;}class E<T:type> implements T{[key]:string=\"ok\";}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-field-wrong",
+      "modules": {
+        "main": "let key:any=\"x\";interface I{x:string;}class E<T:type> implements T{[key]:boolean=false;}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "computed-key-once",
+      "modules": {
+        "main": "let calls=0;function key():string{calls+=1;return \"get\";}interface I{get():string;}class E<T:type> implements T{[key()]():string{return \"ok\";}}const F:any=E;const before=calls;const C=F.<I>;if(calls!==before+1||C!==F.<I>||calls!==before+1)throw new Error(\"key evaluation\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "partial-computed-key-once",
+      "modules": {
+        "main": "let calls=0;function key():string{calls+=1;return \"get\";}interface I{get():string;}class E<T:type> implements T{}partial class E{[key()]():string{return \"ok\";}}const F:any=E;const before=calls;const C=F.<I>;if(calls!==before+1||C!==F.<I>||calls!==before+1)throw new Error(\"partial key evaluation\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-self-member",
+      "modules": {
+        "main": "let key:any=\"get\";interface I{get():I;}class E<T:type> implements T{[key]():E{return this;}}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-generic-shadow",
+      "modules": {
+        "main": "let key:any=\"get\";interface I{get<U:type>(x:U):U;}class E<T:type> implements T{[key]<T:type>(x:T):T{return x;}}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inferred-field-named",
+      "modules": {
+        "main": "interface I{x:string;}class E<T:type> implements T{x=\"ok\";}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inferred-field-wrong-named",
+      "modules": {
+        "main": "interface I{x:string;}class E<T:type> implements T{x=false;}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "inferred-field-symbol",
+      "modules": {
+        "main": "const k=Symbol();interface I{[k]:string;}class E<T:type> implements T{[k]=\"ok\";}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inferred-field-wrong-symbol",
+      "modules": {
+        "main": "const k=Symbol();interface I{[k]:string;}class E<T:type> implements T{[k]=false;}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "inferred-field-computed",
+      "modules": {
+        "main": "let k:any=\"x\";interface I{x:string;}class E<T:type> implements T{[k]=\"ok\";}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inferred-field-wrong-computed",
+      "modules": {
+        "main": "let k:any=\"x\";interface I{x:string;}class E<T:type> implements T{[k]=false;}const F:any=E;F.<I>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    }
+  ]
+}
