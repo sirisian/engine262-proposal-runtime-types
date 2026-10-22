@@ -1,0 +1,1519 @@
+{
+  "description": "Producer environments and retained inner alias applications at their required checking boundaries. Four unresolved evaluability/handled cyclic-input observations are recorded separately, not accepted as conformance results.",
+  "cases": [
+    {
+      "name": "cycle-computed",
+      "modules": {
+        "main": "import {marker} from \"dep\";const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;",
+        "dep": "import {I} from \"main\";export const marker=1;I.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "where-source-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";function allowed(n:uint32):boolean{return true;}I.<0>;",
+        "dep": "function allowed(n:uint32):boolean{return n>0;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "nested-foreign-bound",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "import {Inner} from \"leaf\";export type I<T:type> = Inner.<T>;",
+        "leaf": "export type Inner<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nested-computed-foreign-bound",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "import {Inner} from \"leaf\";export type I<T:type> = Inner.<T>;",
+        "leaf": "function bound():type{return string;}export type Inner<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "leaf",
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "source-const-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "bound-direct-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "bound-direct-good",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<string>;",
+        "dep": "const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bound-unused-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(){I.<uint8>;}",
+        "dep": "const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "bound-unused-good",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(){I.<string>;}",
+        "dep": "const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bound-unreachable-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";if(false){I.<uint8>;}",
+        "dep": "const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "bound-unreachable-good",
+      "modules": {
+        "main": "import {I} from \"dep\";if(false){I.<string>;}",
+        "dep": "const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bound-annotation-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(v:I.<uint8>){}",
+        "dep": "const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "bound-annotation-good",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(v:I.<string>){}",
+        "dep": "const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bound-enclosing-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";function outer<X:type>(){I.<uint8>;}outer.<string>();",
+        "dep": "const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "bound-enclosing-good",
+      "modules": {
+        "main": "import {I} from \"dep\";function outer<X:type>(){I.<string>;}outer.<string>();",
+        "dep": "const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bound-consumer-shadow",
+      "modules": {
+        "main": "import {I} from \"dep\";const B=uint8;const minimum=0;function bound():type{return uint8;}function allowed(n:uint32):boolean{return true;}function defaultType():type{return uint8;}I.<uint8>;",
+        "dep": "const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "bound-dependency-throw",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "throw new Error(\"dependency\");const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "Error"
+      }
+    },
+    {
+      "name": "bound-reexport-bad",
+      "modules": {
+        "main": "import {Renamed as I} from \"bridge\";I.<uint8>;",
+        "bridge": "export {I as Renamed} from \"dep\";",
+        "dep": "const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "bridge"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "where-direct-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<0>;",
+        "dep": "const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "where-direct-good",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<1>;",
+        "dep": "const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "where-unused-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(){I.<0>;}",
+        "dep": "const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "where-unused-good",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(){I.<1>;}",
+        "dep": "const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "where-unreachable-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";if(false){I.<0>;}",
+        "dep": "const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "where-unreachable-good",
+      "modules": {
+        "main": "import {I} from \"dep\";if(false){I.<1>;}",
+        "dep": "const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "where-annotation-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(v:I.<0>){}",
+        "dep": "const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "where-annotation-good",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(v:I.<1>){}",
+        "dep": "const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "where-enclosing-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";function outer<X:type>(){I.<0>;}outer.<string>();",
+        "dep": "const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "where-enclosing-good",
+      "modules": {
+        "main": "import {I} from \"dep\";function outer<X:type>(){I.<1>;}outer.<string>();",
+        "dep": "const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "where-consumer-shadow",
+      "modules": {
+        "main": "import {I} from \"dep\";const B=uint8;const minimum=0;function bound():type{return uint8;}function allowed(n:uint32):boolean{return true;}function defaultType():type{return uint8;}I.<0>;",
+        "dep": "const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "where-dependency-throw",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<0>;",
+        "dep": "throw new Error(\"dependency\");const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "Error"
+      }
+    },
+    {
+      "name": "where-reexport-bad",
+      "modules": {
+        "main": "import {Renamed as I} from \"bridge\";I.<0>;",
+        "bridge": "export {I as Renamed} from \"dep\";",
+        "dep": "const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "bridge"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "default-direct-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "const B=string;function defaultType():type{return B;}export type I<T:type extends string=defaultType()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-direct-good",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<string>;",
+        "dep": "const B=string;function defaultType():type{return B;}export type I<T:type extends string=defaultType()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-unused-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(){I.<uint8>;}",
+        "dep": "const B=string;function defaultType():type{return B;}export type I<T:type extends string=defaultType()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-unused-good",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(){I.<string>;}",
+        "dep": "const B=string;function defaultType():type{return B;}export type I<T:type extends string=defaultType()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-unreachable-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";if(false){I.<uint8>;}",
+        "dep": "const B=string;function defaultType():type{return B;}export type I<T:type extends string=defaultType()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-unreachable-good",
+      "modules": {
+        "main": "import {I} from \"dep\";if(false){I.<string>;}",
+        "dep": "const B=string;function defaultType():type{return B;}export type I<T:type extends string=defaultType()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-annotation-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(v:I.<uint8>){}",
+        "dep": "const B=string;function defaultType():type{return B;}export type I<T:type extends string=defaultType()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-annotation-good",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(v:I.<string>){}",
+        "dep": "const B=string;function defaultType():type{return B;}export type I<T:type extends string=defaultType()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-enclosing-bad",
+      "modules": {
+        "main": "import {I} from \"dep\";function outer<X:type>(){I.<uint8>;}outer.<string>();",
+        "dep": "const B=string;function defaultType():type{return B;}export type I<T:type extends string=defaultType()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-enclosing-good",
+      "modules": {
+        "main": "import {I} from \"dep\";function outer<X:type>(){I.<string>;}outer.<string>();",
+        "dep": "const B=string;function defaultType():type{return B;}export type I<T:type extends string=defaultType()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-consumer-shadow",
+      "modules": {
+        "main": "import {I} from \"dep\";const B=uint8;const minimum=0;function bound():type{return uint8;}function allowed(n:uint32):boolean{return true;}function defaultType():type{return uint8;}I.<uint8>;",
+        "dep": "const B=string;function defaultType():type{return B;}export type I<T:type extends string=defaultType()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-dependency-throw",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "throw new Error(\"dependency\");const B=string;function defaultType():type{return B;}export type I<T:type extends string=defaultType()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-reexport-bad",
+      "modules": {
+        "main": "import {Renamed as I} from \"bridge\";I.<uint8>;",
+        "bridge": "export {I as Renamed} from \"dep\";",
+        "dep": "const B=string;function defaultType():type{return B;}export type I<T:type extends string=defaultType()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "selected-default",
+      "modules": {
+        "main": "import {I} from \"dep\";if(I.<>!==string)throw new Error(\"default\");",
+        "dep": "const B=string;function defaultType():type{return B;}export type I<T:type extends string=defaultType()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "invalid-selected-default",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<>;",
+        "dep": "const B=uint8;function defaultType():type{return B;}export type I<T:type extends string=defaultType()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "bypassed-default",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<string>;",
+        "dep": "function defaultType():type{throw new Error(\"unused\");}export type I<T:type extends string=defaultType()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "transitive-bound-False-string",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<string>;",
+        "dep": "import {Inner as Nested} from \"bridge\";export type I<T:type> = Nested.<T>;",
+        "bridge": "export {Inner} from \"leaf\";",
+        "leaf": "export type Inner<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "leaf",
+          "bridge",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "transitive-bound-False-uint8",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "import {Inner as Nested} from \"bridge\";export type I<T:type> = Nested.<T>;",
+        "bridge": "export {Inner} from \"leaf\";",
+        "leaf": "export type Inner<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "transitive-bound-True-string",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<string>;",
+        "dep": "import {Inner as Nested} from \"bridge\";export type I<T:type> = Nested.<T>;",
+        "bridge": "export {Inner} from \"leaf\";",
+        "leaf": "const B=string;function bound():type{return B;}export type Inner<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "leaf",
+          "bridge",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "transitive-bound-True-uint8",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "import {Inner as Nested} from \"bridge\";export type I<T:type> = Nested.<T>;",
+        "bridge": "export {Inner} from \"leaf\";",
+        "leaf": "const B=string;function bound():type{return B;}export type Inner<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "leaf",
+          "bridge",
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "transitive-where-0",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<0>;",
+        "dep": "import {Inner} from \"leaf\";export type I<N:uint32> = Inner.<N>;",
+        "leaf": "const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type Inner<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "leaf",
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "transitive-where-1",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<1>;",
+        "dep": "import {Inner} from \"leaf\";export type I<N:uint32> = Inner.<N>;",
+        "leaf": "const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type Inner<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "leaf",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-helper-string",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<string>;",
+        "dep": "import {bound} from \"leaf\";export type I<T:type extends bound()> = T;",
+        "leaf": "const B=string;export function bound():type{return B;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "leaf",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-helper-uint8",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "import {bound} from \"leaf\";export type I<T:type extends bound()> = T;",
+        "leaf": "const B=string;export function bound():type{return B;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "leaf",
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "imported-predicate-0",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<0>;",
+        "dep": "import {allowed} from \"leaf\";export type I<N:uint32> = uint32 where allowed(N);",
+        "leaf": "const minimum=1;export function allowed(n:uint32):boolean{return n>=minimum;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "leaf",
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "imported-predicate-1",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<1>;",
+        "dep": "import {allowed} from \"leaf\";export type I<N:uint32> = uint32 where allowed(N);",
+        "leaf": "const minimum=1;export function allowed(n:uint32):boolean{return n>=minimum;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "leaf",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "cycle-where",
+      "modules": {
+        "main": "import {marker} from \"dep\";const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);",
+        "dep": "import {I} from \"main\";export const marker=1;I.<1>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "local-constant-pending",
+      "modules": {
+        "main": "const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}type I<N:uint32> = uint32 where allowed(N);I.<0>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "mutable-producer-bound",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<string>;",
+        "dep": "let B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "rule": "rt-compile-time-evaluability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "where-helper-throw",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<1>;",
+        "dep": "function allowed(n:uint32):boolean{throw new Error(\"helper\");}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "where-helper-caught",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<1>;",
+        "dep": "function allowed(n:uint32):boolean{try{throw new Error(\"helper\");}catch(e){return true;}}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "consumer-name-collision",
+      "modules": {
+        "main": "import {I} from \"dep\";type Inner<T:type> = T;I.<uint8>;",
+        "dep": "import {Inner} from \"leaf\";export type I<T:type> = Inner.<T>;",
+        "leaf": "export type Inner<T:type extends string> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "bound-async-dependency",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "await Promise.resolve();const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "bound-async-rejection",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "await Promise.reject(new Error(\"dependency\"));const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "Error"
+      }
+    },
+    {
+      "name": "bound-named",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<T:uint8>;",
+        "dep": "const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "bound-spread",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<...[uint8]>;",
+        "dep": "const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "where-async-dependency",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<0>;",
+        "dep": "await Promise.resolve();const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "where-async-rejection",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<0>;",
+        "dep": "await Promise.reject(new Error(\"dependency\"));const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "Error"
+      }
+    },
+    {
+      "name": "where-named",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<N:0>;",
+        "dep": "const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "where-spread",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<...[0]>;",
+        "dep": "const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "three-aliases-where-0",
+      "modules": {
+        "main": "import {Outer} from \"dep\";Outer.<0>;",
+        "dep": "import {Middle} from \"middle\";export type Outer<A:uint32> = Middle.<A>;",
+        "middle": "import {Inner} from \"leaf\";export type Middle<B:uint32> = Inner.<B>;",
+        "leaf": "const lower=1;function allowed(n:uint32):boolean{return n>=lower;}export type Inner<C:uint32> = uint32 where allowed(C);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "leaf",
+          "middle",
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "enclosing-dependent-where-0",
+      "modules": {
+        "main": "import {I} from \"dep\";function outer<N:uint32>(){I.<N>;}outer.<0>;",
+        "dep": "const lower=1;function allowed(n:uint32):boolean{return n>=lower;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "three-aliases-where-1",
+      "modules": {
+        "main": "import {Outer} from \"dep\";Outer.<1>;",
+        "dep": "import {Middle} from \"middle\";export type Outer<A:uint32> = Middle.<A>;",
+        "middle": "import {Inner} from \"leaf\";export type Middle<B:uint32> = Inner.<B>;",
+        "leaf": "const lower=1;function allowed(n:uint32):boolean{return n>=lower;}export type Inner<C:uint32> = uint32 where allowed(C);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "leaf",
+          "middle",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "enclosing-dependent-where-1",
+      "modules": {
+        "main": "import {I} from \"dep\";function outer<N:uint32>(){I.<N>;}outer.<1>;",
+        "dep": "const lower=1;function allowed(n:uint32):boolean{return n>=lower;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "open-application",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused<N:uint32>(){I.<N>;}",
+        "dep": "function allowed(n:uint32):boolean{throw new Error(\"not selected\");}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "foreign-helper-own-caught-tdz",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<1>;",
+        "dep": "function allowed(n:uint32):boolean{try{return n>=minimum;}catch(e){return true;}const minimum=1;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "foreign-helper-own-tdz",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<1>;",
+        "dep": "function allowed(n:uint32):boolean{return n>=minimum;const minimum=1;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "rule": "rt-type-evaluation",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "producer-class-identity",
+      "modules": {
+        "main": "import {I,C} from \"dep\";class B{};if(I.<C>!==C)throw new Error(\"identity\");",
+        "dep": "export class C{}const B=C;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "consumer-class-identity",
+      "modules": {
+        "main": "import {I} from \"dep\";class C{}I.<C>;",
+        "dep": "class C{}const B=C;function bound():type{return B;}export type I<T:type extends bound()> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "source-local-pending-predicate",
+      "modules": {
+        "main": "const lower=1;function allowed(n:uint32):boolean{try{return n>=lower;}catch(e){return true;}}type I<N:uint32> = uint32 where allowed(N);function unused(){I.<0>;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-source-local-not-module-binding",
+      "modules": {
+        "main": "const lower=0;function outer(){const lower=1;function allowed(n:uint32):boolean{return n>=lower;}type I<N:uint32> = uint32 where allowed(N);I.<0>;}outer();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nested-alias-argument-erased",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<uint8>;",
+        "dep": "import {Inner} from \"leaf\";export type I<T:type> = Inner.<T>;",
+        "leaf": "const B=string;function bound():type{return B;}export type Inner<T:type extends bound()> = boolean;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "leaf",
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "same-name-foreign-origins",
+      "modules": {
+        "main": "import {A} from \"dep\";import {I} from \"other\";I.<uint8>;A.<uint8>;",
+        "dep": "import {I} from \"leaf\";export type A<T:type> = I.<T>;",
+        "leaf": "const B=string;function bound():type{return B;}export type I<T:type extends bound()> = T;",
+        "other": "export type I<T:type> = T;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "leaf",
+          "dep",
+          "other"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "where-finally-replaces-return",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<1>;",
+        "dep": "function allowed(n:uint32):boolean{try{return true;}finally{return false;}}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "rule": "rt-where-unsatisfied",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "where-short-circuit",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<1>;",
+        "dep": "function boom():boolean{throw new Error(\"not selected\");}export type I<N:uint32> = uint32 where N>0 || boom();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "cycle-keeps-own-predicate-pending",
+      "modules": {
+        "main": "import {Local} from \"dep\";export type I<T:type> = T;",
+        "dep": "import {I} from \"main\";const minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type Local<N:uint32> = uint32 where allowed(N);function unused(){Local.<0>;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "cycle-keeps-own-bound-pending",
+      "modules": {
+        "main": "import {Local} from \"dep\";export type I<T:type> = T;",
+        "dep": "import {I} from \"main\";const B=string;function bound():type{return B;}export type Local<T:type extends bound()> = T;function unused(){Local.<uint8>;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unbound-global-predicate",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<1>;",
+        "dep": "globalThis.externalAllowed=false;export type I<N:uint32> = uint32 where externalAllowed;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    }
+  ]
+}

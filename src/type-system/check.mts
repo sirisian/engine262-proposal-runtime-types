@@ -837,6 +837,7 @@ export function SetEvaluatedGenericDefault(check: GenericDefaultCheck, type: Typ
 }
 
 export interface GenericWhereCheck {
+  readonly sourceModule?: AbstractModuleRecord;
   readonly declaration: ParseNode.FunctionDeclaration | ParseNode.TypeAliasDeclaration;
   readonly clauses: readonly ParseNode.WhereClause[];
   readonly bindings: ReadonlyMap<string, TypeRecord>;
@@ -3285,11 +3286,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const whereChecks = new Map<object, GenericWhereCheck[]>();
   const recordWhereCheck = (application: object, declaration: GenericWhereCheck['declaration'], bindings: ReadonlyMap<string, TypeRecord>): void => {
     const clauses = (declaration as { WhereClauses?: readonly ParseNode.WhereClause[] | null }).WhereClauses;
-    if (!clauses?.length) return;
+    if (!clauses?.length || declaration.TypeParameters?.TypeParameterList.some((parameter) => !bindings.has(parameter.BindingIdentifier.name))) return;
     const checks = whereChecks.get(application) ?? [];
     if (checks.some((check) => check.declaration === declaration && check.bindings.size === bindings.size
       && [...bindings].every(([name, bound]) => check.bindings.has(name) && SameType(bound, check.bindings.get(name)!)))) return;
-    checks.push({ declaration, clauses, bindings: new Map(bindings) });
+    checks.push({ declaration, clauses, bindings: new Map(bindings), sourceModule: importedDeclarationSourceModule(declaration) });
     whereChecks.set(application, checks);
   };
   const signatureDeclarations = new WeakMap<object, ParseNode>();
@@ -4934,8 +4935,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // its consumer declares an unrelated parameter with the same name.
         const applicationScope = check.stored ? new Map(check.stored.context.map((capture) =>
           [capture.Declaration.BindingIdentifier.name, inputs.get(capture.Declaration) ?? capture.Type])) : scoped;
+        let describedBindings = check.bindings;
+        let pendingArguments = check.pendingArguments;
+        if (check.declaration && node.type === 'TypeReference' && pendingArguments.size) {
+          // A value parameter is deliberately absent from a type-only alias
+          // description. Revisit its written argument when specialization
+          // supplies the producer's declaration-bound inputs. A supplied slot
+          // that remains unknown still cannot select its fallback default.
+          const rebound = new Map(check.bindings);
+          typeParameterScopes.push(scoped);
+          try {
+            pendingArguments = bindExplicitTypeArguments(check.parameters, node.TypeArguments?.TypeArgumentList ?? [], rebound);
+          } finally {
+            typeParameterScopes.pop();
+          }
+          describedBindings = rebound;
+        }
         const closed = new Map<string, TypeRecord>();
-        for (const [name, bound] of check.bindings) {
+        for (const [name, bound] of describedBindings) {
           const resolved = substituteFreeTypeParameters(bound, applicationScope);
           if (resolved) closed.set(name, resolved);
         }
@@ -4944,7 +4961,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }] }, applicationScope, undefined, inputs);
         if (signature?.Kind !== 'function') continue;
         finishTypeArgumentBindings(signature.Signatures[0].TypeParameters!, closed, {
-          complete: false, application: check.stored?.application ?? node as GenericDefaultCheck['application'], pendingArguments: check.pendingArguments,
+          complete: false, application: check.stored?.application ?? node as GenericDefaultCheck['application'], pendingArguments,
         });
         const freeApplicationScope = new Map(applicationScope);
         for (const parameter of check.parameters) freeApplicationScope.delete(parameter.Name);
@@ -4966,6 +4983,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           requireAssignable(source, target, node);
         }
         if (!check.declaration) continue;
+        recordWhereCheck(node, check.declaration, closed);
         // An alias body can apply another alias whose result also erases its
         // arguments. Follow the retained application, not the expanded result.
         // Re-entry into the same active inputs adds no new obligation; it is
@@ -6802,20 +6820,31 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * implements.
    */
   const importedInterfaces = moduleCheckInputs.get(root)?.interfaces;
-  const importedTypeAliases = moduleCheckInputs.get(root)?.aliases;
   const importedInterfacesByNode = new Map([...importedInterfaces?.values() ?? []].map((entry) => [entry.declaration, entry]));
   const interfaceNodes = new Map<string, ParseNode>([...importedInterfaces ?? []].map(([name, entry]) => [name, entry.declaration]));
   const importedDeclarationSourceModules = new Map<ParseNode, AbstractModuleRecord>();
-  for (const entry of [...importedInterfaces?.values() ?? [], ...importedTypeAliases?.values() ?? []]) {
-    let source = entry.declaration;
+  const visitedImportSources = new Set<ParseNode>();
+  const retainImportedSources = (source: ParseNode): void => {
+    if (visitedImportSources.has(source)) return;
+    visitedImportSources.add(source);
+    const input = moduleCheckInputs.get(source);
+    for (const [declaration, module] of [
+      ...[...input?.interfaces?.values() ?? [], ...input?.aliases?.values() ?? []]
+        .map((entry) => [entry.declaration, entry.module] as const),
+      ...input?.classModules ?? [],
+    ]) {
+      let owner = declaration;
+      while (owner.parent) owner = owner.parent;
+      if (owner !== root) importedDeclarationSourceModules.set(owner, module);
+      retainImportedSources(owner);
+    }
+  };
+  retainImportedSources(root);
+  const importedAliasAt = (reference: ParseNode, name: string): ParseNode.TypeAliasDeclaration | undefined => {
+    let source = reference;
     while (source.parent) source = source.parent;
-    importedDeclarationSourceModules.set(source, entry.module);
-  }
-  for (const [declaration, module] of moduleCheckInputs.get(root)?.classModules ?? []) {
-    let source = declaration;
-    while (source.parent) source = source.parent;
-    importedDeclarationSourceModules.set(source, module);
-  }
+    return moduleCheckInputs.get(source)?.aliases?.get(name)?.declaration;
+  };
   const foreignDeclaration = (node: ParseNode): boolean => {
     let source = node;
     while (source.parent) source = source.parent;
@@ -6929,7 +6958,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   const declarationAt = (reference: ParseNode, name: string, external?: ParseNode): ParseNode | undefined => {
     const binding = ResolveBindingDeclaration(reference, name);
-    if (binding) return binding.kind === 'import' ? external
+    if (binding) return binding.kind === 'import' ? importedAliasAt(reference, name) ?? external
       : ['class', 'type', 'function'].includes(binding.kind) ? binding.node : undefined;
     if (!external) return undefined;
     let source = external;
@@ -10949,7 +10978,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (constructor && !constructor.arguments) return constructor.declaration;
     // Resolve an import by its linked origin, not a same-spelled local registry
     // entry. Keeping this separate from alias expansion preserves its meaning.
-    const external = binding?.kind === 'import' ? importedTypeAliases?.get(node.name)?.declaration : undefined;
+    const external = binding?.kind === 'import' ? importedAliasAt(node, node.name) : undefined;
     const declaration = declarationAt(node, node.name, external ?? interfaceNodes.get(node.name) ?? aliasNodes.get(node.name));
     return declaration?.type === 'InterfaceDeclaration' || declaration?.type === 'TypeAliasDeclaration' ? declaration : undefined;
   };

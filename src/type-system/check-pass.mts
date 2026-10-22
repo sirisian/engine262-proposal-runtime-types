@@ -33,7 +33,7 @@ import {
 } from './check.mts';
 import { BeginTypeEvaluation, BudgetExhaustionKind, EndTypeEvaluation, IsBudgetExhausted } from './budget.mts';
 import { FirstNonEvaluableForm } from './evaluable-fragment.mts';
-import { LexicalFreeReferences, ResolveBindingDeclaration } from './compile-time-evaluability.mts';
+import { LexicalFreeReferences, ResolveBindingDeclaration, ModuleBindingDeclaration } from './compile-time-evaluability.mts';
 import { TypeExpressionEvaluabilityViolation } from './builder-evaluability.mts';
 import { resolvedAlias } from './resolving-aliases.mts';
 import { CreateGenericAliasRecord } from './generic-alias-context.mts';
@@ -335,6 +335,14 @@ function isPendingDeclarationRead(error: unknown, items: readonly ParseNode[]): 
   return false;
 }
 
+/** A source module binding is supplied by its actual environment, not a reconstructed closure. */
+function isModuleBinding(reference: ParseNode & { name: string }): boolean {
+  let source: ParseNode = reference;
+  while (source.parent) source = source.parent;
+  const binding = ResolveBindingDeclaration(reference, reference.name);
+  return !!binding && source.type === 'Module' && ModuleBindingDeclaration(source, reference.name)?.node === binding.node;
+}
+
 /** Evaluate a required generic source with its original lexical declarations. */
 export function* EvaluateGenericSource(check: Pick<GenericDefaultCheck, 'node' | 'parameters' | 'bindings' | 'captures' | 'sourceModule'>, runtimeEnvironment = false): PlainEvaluator<TypeRecord | undefined> {
   const inputs = new Map((check.captures ?? []).map((capture) => [capture.Declaration, capture.Type]));
@@ -357,10 +365,11 @@ export function* EvaluateGenericSource(check: Pick<GenericDefaultCheck, 'node' |
         const bound = parameter && inputs.get(parameter);
         return !bound || whereInputNeedsRuntimeValue(bound);
       }
+      if (check.sourceModule && isModuleBinding(reference)) return false;
       if (binding.kind === 'function') return binding.node.type !== 'FunctionDeclaration';
       if (binding.node.type === 'TypeAliasDeclaration') return false;
       return true;
-    })) return false;
+    }, check.sourceModule)) return false;
     for (const reference of LexicalFreeReferences(source)) {
       const binding = ResolveBindingDeclaration(reference, reference.name);
       if (!binding && !builtinTypeRecord(reference.name) && !BoundTypeRecordForName(reference.name)
@@ -422,6 +431,7 @@ export function* EvaluateGenericSource(check: Pick<GenericDefaultCheck, 'node' |
       }
       for (const reference of LexicalFreeReferences(source)) {
         const binding = ResolveBindingDeclaration(reference, reference.name);
+        if (check.sourceModule && isModuleBinding(reference)) continue;
         if (binding?.kind === 'function' && binding.node.type === 'FunctionDeclaration') {
           if (!functions.has(binding.node)) {
             const prepared = Q(yield* prepare(binding.node));
@@ -756,92 +766,105 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
     return declaration?.type === 'FunctionDeclaration' || declaration?.type === 'ImportDeclaration' ? [declaration] : [];
   }));
   for (const check of GenericWhereChecksOf(root)) {
-    const parameters = check.declaration.TypeParameters!.TypeParameterList;
-    const frame = new Map<string, TypeRecord>();
-    for (const parameter of parameters) {
-      const name = parameter.BindingIdentifier.name;
-      // Alias applications use the ordinary binder's value domains. Keep
-      // the checked predicate's inputs identical to its runtime inputs.
-      if (check.declaration.type === 'TypeAliasDeclaration') {
-        Q(yield* BindTypeParameterTyped(frame, name, check.bindings.get(name)!, parameter));
-      } else {
-        bindTypeParameter(frame, name, check.bindings.get(name)!, parameter);
-      }
+    const sourceContext = surroundingAgent.runningExecutionContext;
+    const callerEnvironment = sourceContext.LexicalEnvironment;
+    if (check.sourceModule) {
+      if (!check.sourceModule.Environment) continue;
+      sourceContext.LexicalEnvironment = check.sourceModule.Environment;
     }
-    const available = new Set(frame.keys());
-    for (const clause of check.clauses) {
-      const predicate = clause.RefinementPredicate;
-      if (GenericWhereVerified(clause, frame) || FirstNonEvaluableForm(predicate)) continue;
-      // Free names must denote available source bindings, never a same-spelled
-      // outer value in place of an uninstantiated nested declaration.
-      const admitted = new Set(available);
-      const references = LexicalFreeReferences(predicate);
-      for (const reference of references) {
-        if (admitted.has(reference.name)) continue;
-        const binding = ResolveBindingDeclaration(reference, reference.name);
-        if ((!binding && (builtinTypeRecord(reference.name) || FRAGMENT_FLOOR.includes(reference.name) || ERROR_CONSTRUCTORS.includes(reference.name)))
-          || ((binding?.kind === 'function' || binding?.kind === 'import') && availableDeclarations.has(binding.node))) admitted.add(reference.name);
-      }
-      if (references.some((reference) => !admitted.has(reference.name))) continue;
-      if (references.some((reference) => frame.has(reference.name) && whereInputNeedsRuntimeValue(frame.get(reference.name)!))) continue;
-      // Inspect transitive lexical captures before calling helpers. A caught
-      // premature TDZ read is no more evidence than an uncaught one. Imported
-      // inputs retain the module boundary's required-failure rule.
-      if (TypeExpressionEvaluabilityViolation(predicate, Value.undefined, (binding, reference) => {
-        let source: ParseNode = reference;
-        while (source.parent) source = source.parent;
-        if (source !== root || ResolveBindingDeclaration(reference, reference.name)?.kind === 'import') return false;
-        if (binding.kind === 'function') return !availableDeclarations.has(binding.node);
-        if (binding.kind === 'type') return !preEvaluatedTypeDeclarations.has(binding.node);
-        if (binding.kind === 'type-parameter') return binding.node !== check.declaration || !frame.has(reference.name);
-        return true;
-      })) continue;
-      // Runtime subjects and writes require their evaluation-time environment.
-      const hasRuntimeSubject = (node: ParseNode): boolean => {
-        if (['ThisExpression', 'ContractReturn', 'AssignmentExpression', 'UpdateExpression'].includes(node.type)
-          || (node.type === 'UnaryExpression' && node.operator === 'delete')) return true;
-        return Object.entries(node).some(([key, child]) => {
-          if (['parent', 'location', 'sourceText'].includes(key)) return false;
-          return Array.isArray(child) ? child.some((part) => part && typeof part === 'object' && 'type' in part && hasRuntimeSubject(part))
-            : child && typeof child === 'object' && 'type' in child && hasRuntimeSubject(child as ParseNode);
-        });
-      };
-      if (hasRuntimeSubject(predicate)) continue;
-      const context = surroundingAgent.runningExecutionContext;
-      const outer = context.LexicalEnvironment;
-      const scope = new DeclarativeEnvironmentRecord(outer);
+    try {
+      const parameters = check.declaration.TypeParameters!.TypeParameterList;
+      const frame = new Map<string, TypeRecord>();
       for (const parameter of parameters) {
         const name = parameter.BindingIdentifier.name;
-        const bound = frame.get(name)!;
-        let value: Value;
-        if (parameter.IsValueParameter && bound.Kind === 'literal') {
-          value = bound.Value;
-        } else if (parameter.IsValueParameter && bound.Kind === 'tuple') {
-          value = Q(yield* ValuePackView(bound));
+        // Alias applications use the ordinary binder's value domains. Keep
+        // the checked predicate's inputs identical to its runtime inputs.
+        if (check.declaration.type === 'TypeAliasDeclaration') {
+          Q(yield* BindTypeParameterTyped(frame, name, check.bindings.get(name)!, parameter));
         } else {
-          value = GetTypeObject(bound);
+          bindTypeParameter(frame, name, check.bindings.get(name)!, parameter);
         }
-        X(scope.CreateImmutableBinding(Value(name), Value.true));
-        X(scope.InitializeBinding(Value(name), value));
       }
-      context.LexicalEnvironment = scope;
-      pushTypeParameterFrame(frame);
-      BeginFragmentEvaluation();
-      let result;
-      try {
-        result = EnsureCompletion(yield* EvaluateRefinementPredicate(predicate, Value.undefined));
-      } finally {
-        EndFragmentEvaluation();
-        popTypeParameterFrame();
-        context.LexicalEnvironment = outer;
+      const available = new Set(frame.keys());
+      for (const clause of check.clauses) {
+        const predicate = clause.RefinementPredicate;
+        if (GenericWhereVerified(clause, frame) || FirstNonEvaluableForm(predicate)) continue;
+        // Free names must denote available source bindings, never a same-spelled
+        // outer value in place of an uninstantiated nested declaration.
+        const admitted = new Set(available);
+        const references = LexicalFreeReferences(predicate);
+        for (const reference of references) {
+          if (admitted.has(reference.name)) continue;
+          const binding = ResolveBindingDeclaration(reference, reference.name);
+          if ((!binding && (builtinTypeRecord(reference.name) || FRAGMENT_FLOOR.includes(reference.name) || ERROR_CONSTRUCTORS.includes(reference.name)))
+            || (check.sourceModule && isModuleBinding(reference))
+            || ((binding?.kind === 'function' || binding?.kind === 'import') && availableDeclarations.has(binding.node))) admitted.add(reference.name);
+        }
+        if (references.some((reference) => !admitted.has(reference.name))) continue;
+        if (references.some((reference) => frame.has(reference.name) && whereInputNeedsRuntimeValue(frame.get(reference.name)!))) continue;
+        // Inspect transitive lexical captures before calling helpers. A caught
+        // premature TDZ read is no more evidence than an uncaught one. Imported
+        // inputs retain the module boundary's required-failure rule.
+        if (TypeExpressionEvaluabilityViolation(predicate, Value.undefined, (binding, reference) => {
+          let source: ParseNode = reference;
+          while (source.parent) source = source.parent;
+          if (ResolveBindingDeclaration(reference, reference.name)?.kind === 'import') return false;
+          if (binding.kind === 'type-parameter') return binding.node !== check.declaration || !frame.has(reference.name);
+          if (check.sourceModule && isModuleBinding(reference)) return false;
+          if (source !== root) return true;
+          if (binding.kind === 'function') return !availableDeclarations.has(binding.node);
+          if (binding.kind === 'type') return !preEvaluatedTypeDeclarations.has(binding.node);
+          return true;
+        }, check.sourceModule)) continue;
+        // Runtime subjects and writes require their evaluation-time environment.
+        const hasRuntimeSubject = (node: ParseNode): boolean => {
+          if (['ThisExpression', 'ContractReturn', 'AssignmentExpression', 'UpdateExpression'].includes(node.type)
+            || (node.type === 'UnaryExpression' && node.operator === 'delete')) return true;
+          return Object.entries(node).some(([key, child]) => {
+            if (['parent', 'location', 'sourceText'].includes(key)) return false;
+            return Array.isArray(child) ? child.some((part) => part && typeof part === 'object' && 'type' in part && hasRuntimeSubject(part))
+              : child && typeof child === 'object' && 'type' in child && hasRuntimeSubject(child as ParseNode);
+          });
+        };
+        if (hasRuntimeSubject(predicate)) continue;
+        const context = surroundingAgent.runningExecutionContext;
+        const outer = context.LexicalEnvironment;
+        const scope = new DeclarativeEnvironmentRecord(outer);
+        for (const parameter of parameters) {
+          const name = parameter.BindingIdentifier.name;
+          const bound = frame.get(name)!;
+          let value: Value;
+          if (parameter.IsValueParameter && bound.Kind === 'literal') {
+            value = bound.Value;
+          } else if (parameter.IsValueParameter && bound.Kind === 'tuple') {
+            value = Q(yield* ValuePackView(bound));
+          } else {
+            value = GetTypeObject(bound);
+          }
+          X(scope.CreateImmutableBinding(Value(name), Value.true));
+          X(scope.InitializeBinding(Value(name), value));
+        }
+        context.LexicalEnvironment = scope;
+        pushTypeParameterFrame(frame);
+        BeginFragmentEvaluation();
+        let result;
+        try {
+          result = EnsureCompletion(yield* EvaluateRefinementPredicate(predicate, Value.undefined));
+        } finally {
+          EndFragmentEvaluation();
+          popTypeParameterFrame();
+          context.LexicalEnvironment = outer;
+        }
+        if (result.Type === 'throw') {
+          if (IsBudgetExhausted()) return result;
+          return CreateTypeDiagnostic('rt-type-evaluation', clause, 'pre-evaluation',
+            'a $1 clause could not be evaluated: $2', Value('where'), inspect(result.Value));
+        }
+        if (!result.Value) return CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this application', Value('where'));
+        MarkGenericWhereVerified(clause, frame);
       }
-      if (result.Type === 'throw') {
-        if (IsBudgetExhausted()) return result;
-        return CreateTypeDiagnostic('rt-type-evaluation', clause, 'pre-evaluation',
-          'a $1 clause could not be evaluated: $2', Value('where'), inspect(result.Value));
-      }
-      if (!result.Value) return CreateTypeDiagnostic('rt-where-unsatisfied', clause, 'pre-evaluation', 'a $1 clause is not satisfied by this application', Value('where'));
-      MarkGenericWhereVerified(clause, frame);
+    } finally {
+      sourceContext.LexicalEnvironment = callerEnvironment;
     }
   }
   // The unclaimed-key error, adjudicated HERE and not in the walk: claims

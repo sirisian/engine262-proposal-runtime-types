@@ -1,4 +1,4 @@
-import { SourceTextModuleRecord } from '../modules.mts';
+import { SourceTextModuleRecord, type AbstractModuleRecord } from '../modules.mts';
 import { isModuleNamespaceObject } from '../abstract-ops/module-namespace-exotic-objects.mts';
 import { JSStringValue, Value } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
@@ -18,11 +18,11 @@ export function BuilderEvaluabilityViolation(call: ParseNode.ComputedType, calle
 }
 
 export function TypeExpressionEvaluabilityViolation(
-  expression: ParseNode, callee: Value = Value.undefined, unavailable?: EvaluabilityContext['unavailable'],
+  expression: ParseNode, callee: Value = Value.undefined, unavailable?: EvaluabilityContext['unavailable'], sourceModule?: AbstractModuleRecord,
 ): string | undefined {
   const fn = callee as { ECMAScriptCode?: { parent?: ParseNode }, ScriptOrModule?: unknown };
   const modules = new Map<ParseNode, SourceTextModuleRecord>();
-  for (const module of [surroundingAgent.runningExecutionContext.ScriptOrModule, fn.ScriptOrModule]) {
+  for (const module of [surroundingAgent.runningExecutionContext.ScriptOrModule, fn.ScriptOrModule, sourceModule]) {
     if (module instanceof SourceTextModuleRecord) modules.set(module.ECMAScriptCode, module);
   }
   const resolve = (reference: ParseNode, name: string): BindingDeclaration | undefined => {
