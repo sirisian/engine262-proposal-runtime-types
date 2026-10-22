@@ -15,7 +15,7 @@ export interface ModuleObservation {
 export async function observeModuleGraph(
   sources: Readonly<Record<string, string>>,
   entry = 'main',
-  options: { runtimeTypes?: boolean; timeoutMs?: number } = {},
+  options: { runtimeTypes?: boolean; timeoutMs?: number; typeEvaluationBudget?: { steps?: number; records?: number; depth?: number } } = {},
 ): Promise<ModuleObservation> {
   return (await observeModuleSequence(sources, [entry], options))[0];
 }
@@ -24,11 +24,11 @@ export async function observeModuleGraph(
 export async function observeModuleSequence(
   sources: Readonly<Record<string, string>>,
   entries: readonly string[],
-  options: { runtimeTypes?: boolean; timeoutMs?: number } = {},
+  options: { runtimeTypes?: boolean; timeoutMs?: number; typeEvaluationBudget?: { steps?: number; records?: number; depth?: number } } = {},
 ): Promise<ModuleObservation[]> {
   const agent = new Agent({ features: options.runtimeTypes === false ? [] : ['runtime-types'] });
   setSurroundingAgent(agent);
-  const realm = new ManagedRealm();
+  const realm = new ManagedRealm({ typeEvaluationBudget: options.typeEvaluationBudget } as never);
   const modules = new Map<string, ReturnType<ManagedRealm['compileModule']>>();
   const bodies = new Map<object, string>();
   const loaded: string[] = [];

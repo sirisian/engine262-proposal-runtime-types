@@ -1,5 +1,6 @@
 import { GetTypeObject } from './intern.mts';
 import type { TypeRecord } from './records.mts';
+import { RequiredModuleInputFailure } from './required-module-inputs.mts';
 
 interface ArgumentNode {
   readonly next: Map<object, ArgumentNode>;
@@ -40,5 +41,6 @@ export function GenericWhereVerified(clause: object, bindings: ReadonlyMap<strin
 }
 
 export function MarkGenericWhereVerified(clause: object, bindings: ReadonlyMap<string, TypeRecord>): void {
+  if (RequiredModuleInputFailure()) return;
   entry(clause, bindings, true)!.verified = true;
 }

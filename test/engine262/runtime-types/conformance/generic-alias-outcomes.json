@@ -378,11 +378,16 @@
       }
     },
     {
-      "name": "Checking an uncalled alias does not execute a mutable closure",
+      "name": "An uncalled alias rejects its mutable predicate closure",
       "source": "let calls=0; function predicate(){calls++;return false;} type P<N:uint32>=uint8 where predicate(); function unused(){let x:P.<1>;} if(calls!==0)throw new Error(\"unexpected calls\");",
       "expected": {
-        "completion": "normal",
-        "bodyEntered": true
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
       }
     },
     {
@@ -712,19 +717,29 @@
       }
     },
     {
-      "name": "Mutable helper is not invoked speculatively",
+      "name": "Mutable predicate helper is rejected without invocation",
       "source": "let calls=0;function predicate(){calls++;return true;}type P<N:uint32>=uint8 where predicate();function unused(){let x:P.<1>;}if(calls!==0)throw new Error(\"wrong effect\");",
       "expected": {
-        "completion": "normal",
-        "bodyEntered": true
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
       }
     },
     {
-      "name": "Reassigned helper is not treated as a fixed predicate",
+      "name": "Reassigned helper is not an evaluable specialization predicate",
       "source": "function predicate(){return false;}predicate=()=>true;type P<N:uint32>=uint8 where predicate();function unused(){let x:P.<1>;}",
       "expected": {
-        "completion": "normal",
-        "bodyEntered": true
+        "completion": "throw",
+        "bodyEntered": false,
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
       }
     },
     {

@@ -14,6 +14,7 @@ import { bindIntrinsicArguments } from '../type-system/intrinsic-generics.mts';
 import { setCaseSpecializationLookup } from '../type-system/layout.mts';
 import { PatternBindingNames } from '../type-system/pattern-scopes.mts';
 import { GenericWhereVerified } from '../type-system/generic-where.mts';
+import { RequiredModuleInputFailure } from '../type-system/required-module-inputs.mts';
 import { IsGenericBuiltin } from '../type-system/generic-builtins.mts';
 import { BigIntValue, NumberValue, ObjectValue, SymbolValue, Value, isTypedNumber, wellKnownSymbols } from '../value.mts';
 import { SelfThisTypeRecord, PatternLiteralTypeOf, PublishedClassTypeOf, DeclaredClassContractOf, DeclaredClassFieldTypeOf } from '../type-system/check.mts';
@@ -3049,6 +3050,8 @@ export function* SpecializeGenericFunction(fn: ObjectValue, ref: unknown, node: 
         Narrows: sig.Narrows, TypeParameters: sig.TypeParameters }] } as unknown as TypeRecord;
       RegisterSpecializedFunctionType(specialized as unknown as object, substituteParameterRecords(generic, bindings));
     }
+    const unavailable = RequiredModuleInputFailure();
+    if (unavailable) return unavailable;
     table.set(key, specialized);
     return specialized;
   });

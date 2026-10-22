@@ -68,6 +68,7 @@ import { indexTypeRecord } from './index-type.mts';
 import { CanonicalizeType, isTypeObject } from './intern.mts';
 import { elementTypeOfIterable, widenForBinding } from './unify.mts';
 import { CompileTimeEvaluabilityChecker, ResolveBindingDeclaration, LexicalFreeReferences } from './compile-time-evaluability.mts';
+import { TypeExpressionEvaluabilityViolation } from './builder-evaluability.mts';
 import { LexicalMutationAnalysis } from './lexical-mutations.mts';
 import {
   iterationInterfaceRecord, identityRecord, setParsedIdentityDeclaration, getParsedIdentityDeclaration, generatorPropertyType,
@@ -2803,6 +2804,8 @@ const moduleCheckInputs = new WeakMap<object, {
   classModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>,
   interfaces?: ReadonlyMap<string, ImportedInterface>,
   aliases?: ReadonlyMap<string, ImportedTypeAlias>,
+  sourceModule?: AbstractModuleRecord,
+  builderModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>,
 }>();
 
 export function DeferredTypeChecksOf(root: object): readonly DeferredTypeCheck[] {
@@ -3181,8 +3184,8 @@ export function CheckModule(module: ParseNode.Module, specifier?: string): Objec
  * bindings are only there on the second pass. `function f() { return c.x; }
  * let s: string = f();` is refused because of that second pass.
  */
-export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, specifier?: string, classes?: ReadonlyMap<string, ParseNode>, classModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>, interfaces?: ReadonlyMap<string, ImportedInterface>, aliases?: ReadonlyMap<string, ImportedTypeAlias>): ObjectValue[] {
-  moduleCheckInputs.set(module, { imported, builders, classes, classModules, interfaces, aliases });
+export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, specifier?: string, classes?: ReadonlyMap<string, ParseNode>, classModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>, interfaces?: ReadonlyMap<string, ImportedInterface>, aliases?: ReadonlyMap<string, ImportedTypeAlias>, sourceModule?: AbstractModuleRecord, builderModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>): ObjectValue[] {
+  moduleCheckInputs.set(module, { imported, builders, classes, classModules, interfaces, aliases, sourceModule, builderModules });
   if (imported.size === 0 && !aliases?.size) {
     return [];
   }
@@ -6832,6 +6835,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       ...[...input?.interfaces?.values() ?? [], ...input?.aliases?.values() ?? []]
         .map((entry) => [entry.declaration, entry.module] as const),
       ...input?.classModules ?? [],
+      ...input?.builderModules ?? [],
     ]) {
       let owner = declaration;
       while (owner.parent) owner = owner.parent;
@@ -11913,6 +11917,29 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     for (const tp of (n.TypeParameters as { TypeParameterList?: readonly { TypeParameterConstraint?: ParseNode | null, TypeParameterDefault?: ParseNode | null }[] } | null | undefined)?.TypeParameterList ?? []) {
       if (tp.TypeParameterConstraint) checkTypePositionEvaluability(tp.TypeParameterConstraint);
       if (tp.TypeParameterDefault) checkTypePositionEvaluability(tp.TypeParameterDefault);
+    }
+    if (n.TypeParameters && Array.isArray(n.WhereClauses)) {
+      for (const clause of n.WhereClauses as readonly ParseNode.WhereClause[]) {
+        const predicate = clause.RefinementPredicate;
+        const runtimeSubject = (value: unknown): boolean => {
+          if (Array.isArray(value)) return value.some(runtimeSubject);
+          if (!value || typeof value !== 'object') return false;
+          const part = value as ParseNode;
+          if (typeof part.type !== 'string') return false;
+          if (part.type === 'ThisExpression' || part.type === 'ContractReturn') return true;
+          return Object.entries(part).some(([key, child]) => !['parent', 'location', 'sourceText', 'strict'].includes(key) && runtimeSubject(child));
+        };
+        // Value/result contracts have their own evaluation boundary. A generic
+        // specialization predicate cannot acquire permission to read ambient
+        // mutable state merely because its arguments are not bound yet.
+        if (runtimeSubject(predicate) || LexicalFreeReferences(predicate).some((reference) => {
+          const binding = ResolveBindingDeclaration(reference, reference.name);
+          return binding?.kind === 'parameter' && binding.node === n;
+        })) continue;
+        const violation = TypeExpressionEvaluabilityViolation(predicate, Value.undefined, () => false, moduleCheckInputs.get(root)?.sourceModule);
+        if (violation !== undefined) reportType('rt-compile-time-evaluability', clause,
+          'a specialization predicate must be compile-time evaluable: $1', Value(violation));
+      }
     }
     for (const key of Object.keys(n)) {
       if (key === 'parent' || key === 'location' || key === 'sourceText' || key === 'strict') continue;

@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { Agent, ManagedRealm, setSurroundingAgent, EnsureCompletion } from '#self';
 import { evaluated, expectStaticTypeError } from '../harness.mts';
 
 /**
@@ -23,18 +24,42 @@ import { evaluated, expectStaticTypeError } from '../harness.mts';
  * distinctions that diagnostic text cannot express (such as signed zero).
  */
 
-const P = 'let n = 0; function probe(x) { n++; return true; } ';
+const P = 'function probe(x) { return true; } ';
+
+// Observe execution from the host: ambient counters are not evaluable inputs
+// to a specialization predicate, even when the counter is used only by a test.
+function probeCalls(source: string): number {
+  const agent = new Agent({ features: ['runtime-types'] });
+  setSurroundingAgent(agent);
+  const realm = new ManagedRealm();
+  let calls = 0;
+  agent.hostDefinedOptions.onNodeEvaluation = (node) => {
+    if (node.type !== 'ReturnStatement') return;
+    for (let owner = node.parent; owner; owner = owner.parent) {
+      if (owner.type !== 'FunctionDeclaration') continue;
+      if (owner.BindingIdentifier?.name === 'probe') calls++;
+      break;
+    }
+  };
+  try {
+    const result = EnsureCompletion(realm.evaluateScriptSkipDebugger(`${P}${F}${source}`));
+    expect(result.Type).toBe('normal');
+    return calls;
+  } finally {
+    delete agent.hostDefinedOptions.onNodeEvaluation;
+  }
+}
 const F = 'function f<N: uint32>(a: uint32): uint32 where probe(N) { return a; } ';
 
 test('a clause is evaluated once for a specialization, however often it is called', () => {
-  expect(evaluated(`${P}${F}let g = f.<4>; String(n);`)).toBe('1');
-  expect(evaluated(`${P}${F}f.<4>((1 := uint32)); String(n);`)).toBe('1');
-  expect(evaluated(`${P}${F}f.<4>((1 := uint32)); f.<4>((2 := uint32)); f.<4>((3 := uint32)); String(n);`)).toBe('1');
+  expect(probeCalls('let g = f.<4>;')).toBe(1);
+  expect(probeCalls('f.<4>((1 := uint32));')).toBe(1);
+  expect(probeCalls('f.<4>((1 := uint32)); f.<4>((2 := uint32)); f.<4>((3 := uint32));')).toBe(1);
 });
 
 test('a different specialization is a different evaluation', () => {
   // The memo is keyed on the bound arguments, so `f.<5>` is not `f.<4>`.
-  expect(evaluated(`${P}${F}f.<4>((1 := uint32)); f.<5>((1 := uint32)); String(n);`)).toBe('2');
+  expect(probeCalls('f.<4>((1 := uint32)); f.<5>((1 := uint32));')).toBe(2);
 });
 
 test('a CONTRACT still runs at every evaluation, which is a different rule', () => {

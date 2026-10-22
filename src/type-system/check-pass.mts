@@ -19,6 +19,7 @@ import {
   DefaultValueOf, TypeNodeToTypeRecord, TypeNodeToTypeRecordInContext, BindTypeParameterTyped, bindTypeParameter, pushTypeParameterFrame, popTypeParameterFrame,
   EvaluateRefinementPredicate, ValuePackView, InferGenericBindingsFrom, staticArguments, markValueParameterBinding } from './runtime.mts';
 import { GenericWhereVerified, MarkGenericWhereVerified } from './generic-where.mts';
+import { BeginRequiredModuleInputs, RequireModuleInputs, RequiredModuleInputFailure } from './required-module-inputs.mts';
 import { PrimitiveDeclaresParameters } from './specialization-patterns.mts';
 import { SetMetResolution, CanonicalizeType } from './intern.mts';
 import { GetTypeObject } from './intern.mts';
@@ -278,6 +279,7 @@ export function* RunPreEvaluationTypeCheck(root: ParseNode.Script | ParseNode.Mo
   // pass is an unbounded denial-of-service surface on any tool that runs it,
   // which is every tool that type-checks a file.
   BeginTypeEvaluation();
+  const endRequiredInputs = BeginRequiredModuleInputs(surroundingAgent.runningExecutionContext.LexicalEnvironment);
   try {
     const items = sourcePreparationItems(root);
     const names = items.flatMap((item) => (
@@ -291,12 +293,15 @@ export function* RunPreEvaluationTypeCheck(root: ParseNode.Script | ParseNode.Mo
       endPreparation();
     }
   } finally {
+    endRequiredInputs();
     EndTypeEvaluation();
   }
 }
 
 function* runPreEvaluationTypeCheckWithDiagnostics(root: ParseNode.Script | ParseNode.Module): PlainEvaluator {
-  const result = EnsureCompletion(yield* runPreEvaluationTypeCheckMetered(root));
+  const completed = EnsureCompletion(yield* runPreEvaluationTypeCheckMetered(root));
+  const result = completed.Type === 'throw' && TypeDiagnosticOf(completed.Value)
+    ? completed : RequiredModuleInputFailure() ?? completed;
   // Exhaustion takes precedence over incidental completions from an abandoned hook.
   if (IsBudgetExhausted()) {
     return CreateTypeDiagnostic('rt-type-evaluation-limit', root, 'pre-evaluation',
@@ -469,6 +474,7 @@ export function* EvaluateGenericSource(check: Pick<GenericDefaultCheck, 'node' |
       context.LexicalEnvironment = previous;
     }
   }
+  const endRequiredInputs = check.sourceModule ? RequireModuleInputs() : () => {};
   BeginFragmentEvaluation();
   try {
     // A live callable already supplies its declaration environment and frame.
@@ -487,6 +493,7 @@ export function* EvaluateGenericSource(check: Pick<GenericDefaultCheck, 'node' |
   } finally {
     context.LexicalEnvironment = outer;
     EndFragmentEvaluation();
+    endRequiredInputs();
   }
 }
 
@@ -685,7 +692,8 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
   for (;;) {
     let resolved = false;
     for (const check of GenericDefaultChecksOf(root)) {
-      const result = EnsureCompletion(yield* EvaluateGenericSource(check));
+      const completed = EnsureCompletion(yield* EvaluateGenericSource(check));
+      const result = RequiredModuleInputFailure() ?? completed;
       if (result.Type !== 'normal') {
         if (IsBudgetExhausted()) return result;
         if (check.constraint) return CreateTypeDiagnostic('rt-type-evaluation', check.node, 'pre-evaluation',
@@ -772,18 +780,16 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       if (!check.sourceModule.Environment) continue;
       sourceContext.LexicalEnvironment = check.sourceModule.Environment;
     }
+    const endRequiredInputs = check.sourceModule ? RequireModuleInputs() : () => {};
     try {
       const parameters = check.declaration.TypeParameters!.TypeParameterList;
       const frame = new Map<string, TypeRecord>();
       for (const parameter of parameters) {
         const name = parameter.BindingIdentifier.name;
-        // Alias applications use the ordinary binder's value domains. Keep
-        // the checked predicate's inputs identical to its runtime inputs.
-        if (check.declaration.type === 'TypeAliasDeclaration') {
-          Q(yield* BindTypeParameterTyped(frame, name, check.bindings.get(name)!, parameter));
-        } else {
-          bindTypeParameter(frame, name, check.bindings.get(name)!, parameter);
-        }
+        // Use the ordinary binder's value domains for functions and aliases.
+        // A checking-time number and its runtime uint32 value must not form
+        // different verification keys for the same bound parameter.
+        Q(yield* BindTypeParameterTyped(frame, name, check.bindings.get(name)!, parameter));
       }
       const available = new Set(frame.keys());
       for (const clause of check.clauses) {
@@ -855,6 +861,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
           popTypeParameterFrame();
           context.LexicalEnvironment = outer;
         }
+        result = RequiredModuleInputFailure() ?? result;
         if (result.Type === 'throw') {
           if (IsBudgetExhausted()) return result;
           return CreateTypeDiagnostic('rt-type-evaluation', clause, 'pre-evaluation',
@@ -865,6 +872,7 @@ function* runPreEvaluationTypeCheckMetered(root: ParseNode.Script | ParseNode.Mo
       }
     } finally {
       sourceContext.LexicalEnvironment = callerEnvironment;
+      endRequiredInputs();
     }
   }
   // The unclaimed-key error, adjudicated HERE and not in the walk: claims

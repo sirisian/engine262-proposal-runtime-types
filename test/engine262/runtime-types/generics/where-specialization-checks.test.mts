@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluated, expectStaticTypeError, expectThrownKind } from '../harness.mts';
+import { evaluated, expectStaticTypeError, expectThrownKind, observeScript } from '../harness.mts';
 
 const LIMITED = 'function limited<N: uint32>(x: uint32): uint32 where N < 4 { return x; }';
 for (const use of ['limited.<9>(1);', 'const f = limited.<9>;', 'limited.<N: 9>(1);']) {
@@ -27,8 +27,11 @@ test('open generic constraints remain specialization-time checks', () => {
   expectThrownKind(`${LIMITED} function call<N: uint32>(): uint32 { return limited.<N>(1); } call.<9>();`, 'TypeError');
 });
 
-test('a runtime closure is not executed by the checking pass', () => {
-  expect(evaluated('let calls = 0; function predicate() { calls++; return true; } function f<N: uint32>(): void where predicate() {} function unused() { f.<1>(); } String(calls);')).toBe('0');
+test('a specialization predicate cannot defer its ambient mutable dependency', () => {
+  const result = observeScript('let calls = 0; function predicate() { calls++; return true; } function f<N: uint32>(): void where predicate() {} function unused() { f.<1>(); } String(calls);');
+  expect(result.bodyEntered).toBe(false);
+  expect(result.errorClass).toBe('StaticTypeError');
+  expect(result.diagnostic).toMatchObject({ code: 'RT_COMPILE_TIME_EVALUABILITY', phase: 'static' });
 });
 
 test('bound generic parameters shadow unrelated runtime bindings during checking', () => {

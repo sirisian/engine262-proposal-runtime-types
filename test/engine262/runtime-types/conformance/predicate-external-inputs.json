@@ -1,0 +1,1102 @@
+{
+  "cases": [
+    {
+      "name": "cycle-caught-where",
+      "modules": {
+        "main": "import {marker} from \"dep\";const minimum=1;function allowed(n:uint32):boolean{try{return n>=minimum;}catch(e){return true;}}export type I<N:uint32> = uint32 where allowed(N);",
+        "dep": "import {I} from \"main\";export const marker=1;I.<1>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "cycle-caught-computed",
+      "modules": {
+        "main": "import {marker} from \"dep\";const B=string;function bound():type{try{return B;}catch(e){return string;}}export type I<T:type extends bound()> = T;",
+        "dep": "import {I} from \"main\";export const marker=1;I.<string>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "mutable-producer-where",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<1>;",
+        "dep": "let minimum=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "where-source-imported-mutable",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<1>;",
+        "dep": "import {allowed} from \"leaf\";export type I<N:uint32> = uint32 where allowed(N);",
+        "leaf": "let minimum=1;export function allowed(n:uint32):boolean{return n>=minimum;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "cycle-caught-cached-where",
+      "modules": {
+        "main": "import {use} from \"dep\";const minimum:uint32=1;function allowed(n:uint32):boolean{try{return n>=minimum;}catch(e){return true;}}export type I<N:uint32> = uint32 where allowed(N);use();",
+        "dep": "import {I} from \"main\";export function use(){I.<0>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "let-direct",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<0>;",
+        "dep": "let minimum:uint32=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-unused",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(){I.<0>;}",
+        "dep": "let minimum:uint32=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-open",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused<N:uint32>(){I.<N>;}",
+        "dep": "let minimum:uint32=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-unreachable",
+      "modules": {
+        "main": "import {I} from \"dep\";if(false){I.<0>;}",
+        "dep": "let minimum:uint32=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-transitive",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<0>;",
+        "dep": "import {allowed} from \"leaf\";export type I<N:uint32> = uint32 where allowed(N);",
+        "leaf": "let minimum:uint32=1;export function allowed(n:uint32):boolean{return n>=minimum;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-local",
+      "modules": {
+        "main": "let minimum:uint32=1;function allowed(n:uint32):boolean{return n>=minimum;}type I<N:uint32> = uint32 where allowed(N);I.<0>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "var-direct",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<0>;",
+        "dep": "var minimum:uint32=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "var-unused",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(){I.<0>;}",
+        "dep": "var minimum:uint32=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "var-open",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused<N:uint32>(){I.<N>;}",
+        "dep": "var minimum:uint32=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "var-unreachable",
+      "modules": {
+        "main": "import {I} from \"dep\";if(false){I.<0>;}",
+        "dep": "var minimum:uint32=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "var-transitive",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<0>;",
+        "dep": "import {allowed} from \"leaf\";export type I<N:uint32> = uint32 where allowed(N);",
+        "leaf": "var minimum:uint32=1;export function allowed(n:uint32):boolean{return n>=minimum;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "var-local",
+      "modules": {
+        "main": "var minimum:uint32=1;function allowed(n:uint32):boolean{return n>=minimum;}type I<N:uint32> = uint32 where allowed(N);I.<0>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-direct",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<0>;",
+        "dep": "const minimum:uint32=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "const-unused",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(){I.<0>;}",
+        "dep": "const minimum:uint32=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "const-open",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused<N:uint32>(){I.<N>;}",
+        "dep": "const minimum:uint32=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "const-unreachable",
+      "modules": {
+        "main": "import {I} from \"dep\";if(false){I.<0>;}",
+        "dep": "const minimum:uint32=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "const-transitive",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<0>;",
+        "dep": "import {allowed} from \"leaf\";export type I<N:uint32> = uint32 where allowed(N);",
+        "leaf": "const minimum:uint32=1;export function allowed(n:uint32):boolean{return n>=minimum;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "leaf",
+          "dep"
+        ],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_WHERE_UNSATISFIED",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "const-local",
+      "modules": {
+        "main": "const minimum:uint32=1;function allowed(n:uint32):boolean{return n>=minimum;}type I<N:uint32> = uint32 where allowed(N);I.<0>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "mutable-cached-function",
+      "modules": {
+        "main": "let minimum:uint32=1;function allowed(n:uint32):boolean{return n>=minimum;}function f<N:uint32>() where allowed(N) {}f.<1>();minimum=2;f.<1>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "cycle-unselected-read",
+      "modules": {
+        "main": "import {use} from \"dep\";const minimum:uint32=1;function allowed(n:uint32):boolean{return n>0 || n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);use();",
+        "dep": "import {I} from \"main\";export function use(){I.<1>;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "cycle-where-catch-true",
+      "modules": {
+        "main": "import {use} from \"dep\";const input=false;function helper():boolean{try{return input;}catch(e){return true;}}export type I<N:uint32> = uint32 where helper();use();",
+        "dep": "import {I} from \"main\";export function use(){I.<0>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "cycle-where-catch-false",
+      "modules": {
+        "main": "import {use} from \"dep\";const input=false;function helper():boolean{try{return input;}catch(e){return false;}}export type I<N:uint32> = uint32 where helper();use();",
+        "dep": "import {I} from \"main\";export function use(){I.<0>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "cycle-where-finally-true",
+      "modules": {
+        "main": "import {use} from \"dep\";const input=false;function helper():boolean{try{return input;}finally{return true;}}export type I<N:uint32> = uint32 where helper();use();",
+        "dep": "import {I} from \"main\";export function use(){I.<0>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "cycle-where-rethrow",
+      "modules": {
+        "main": "import {use} from \"dep\";const input=false;function helper():boolean{try{return input;}catch(e){throw e;}}export type I<N:uint32> = uint32 where helper();use();",
+        "dep": "import {I} from \"main\";export function use(){I.<0>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "cycle-bound-catch-true",
+      "modules": {
+        "main": "import {use} from \"dep\";const input=uint8;function helper():type{try{return input;}catch(e){return string;}}export type I<T:type extends helper()> = T;use();",
+        "dep": "import {I} from \"main\";export function use(){I.<string>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "cycle-bound-catch-false",
+      "modules": {
+        "main": "import {use} from \"dep\";const input=uint8;function helper():type{try{return input;}catch(e){return uint8;}}export type I<T:type extends helper()> = T;use();",
+        "dep": "import {I} from \"main\";export function use(){I.<string>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "cycle-bound-finally-true",
+      "modules": {
+        "main": "import {use} from \"dep\";const input=uint8;function helper():type{try{return input;}finally{return string;}}export type I<T:type extends helper()> = T;use();",
+        "dep": "import {I} from \"main\";export function use(){I.<string>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "cycle-bound-rethrow",
+      "modules": {
+        "main": "import {use} from \"dep\";const input=uint8;function helper():type{try{return input;}catch(e){throw e;}}export type I<T:type extends helper()> = T;use();",
+        "dep": "import {I} from \"main\";export function use(){I.<string>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "cycle-default-catch-true",
+      "modules": {
+        "main": "import {use} from \"dep\";const input=uint8;function helper():type{try{return input;}catch(e){return string;}}export type I<T:type = helper()> = T;use();",
+        "dep": "import {I} from \"main\";export function use(){I.<>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DEFAULT_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "cycle-default-catch-false",
+      "modules": {
+        "main": "import {use} from \"dep\";const input=uint8;function helper():type{try{return input;}catch(e){return uint8;}}export type I<T:type = helper()> = T;use();",
+        "dep": "import {I} from \"main\";export function use(){I.<>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DEFAULT_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "cycle-default-finally-true",
+      "modules": {
+        "main": "import {use} from \"dep\";const input=uint8;function helper():type{try{return input;}finally{return string;}}export type I<T:type = helper()> = T;use();",
+        "dep": "import {I} from \"main\";export function use(){I.<>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DEFAULT_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "cycle-default-rethrow",
+      "modules": {
+        "main": "import {use} from \"dep\";const input=uint8;function helper():type{try{return input;}catch(e){throw e;}}export type I<T:type = helper()> = T;use();",
+        "dep": "import {I} from \"main\";export function use(){I.<>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DEFAULT_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "cycle-function-catch-true",
+      "modules": {
+        "main": "import {use} from \"dep\";const input=false;function helper():boolean{try{return input;}catch(e){return true;}}export function I<N:uint32>() where helper() {}use();",
+        "dep": "import {I} from \"main\";export function use(){I.<0>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "cycle-function-catch-false",
+      "modules": {
+        "main": "import {use} from \"dep\";const input=false;function helper():boolean{try{return input;}catch(e){return false;}}export function I<N:uint32>() where helper() {}use();",
+        "dep": "import {I} from \"main\";export function use(){I.<0>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "cycle-function-finally-true",
+      "modules": {
+        "main": "import {use} from \"dep\";const input=false;function helper():boolean{try{return input;}finally{return true;}}export function I<N:uint32>() where helper() {}use();",
+        "dep": "import {I} from \"main\";export function use(){I.<0>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "cycle-function-rethrow",
+      "modules": {
+        "main": "import {use} from \"dep\";const input=false;function helper():boolean{try{return input;}catch(e){throw e;}}export function I<N:uint32>() where helper() {}use();",
+        "dep": "import {I} from \"main\";export function use(){I.<0>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "import-direct-let",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused<N:uint32>(){I.<N>;}",
+        "dep": "import {minimum} from \"leaf\";function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);",
+        "leaf": "export let minimum:uint32=1;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "import-direct-var",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused<N:uint32>(){I.<N>;}",
+        "dep": "import {minimum} from \"leaf\";function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);",
+        "leaf": "export var minimum:uint32=1;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "import-direct-const",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused<N:uint32>(){I.<N>;}",
+        "dep": "import {minimum} from \"leaf\";function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);",
+        "leaf": "export const minimum:uint32=1;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "leaf",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-reexport-let",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused<N:uint32>(){I.<N>;}",
+        "dep": "import {minimum} from \"bridge\";function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);",
+        "leaf": "export let minimum:uint32=1;",
+        "bridge": "export {minimum} from \"leaf\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "import-reexport-var",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused<N:uint32>(){I.<N>;}",
+        "dep": "import {minimum} from \"bridge\";function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);",
+        "leaf": "export var minimum:uint32=1;",
+        "bridge": "export {minimum} from \"leaf\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "import-reexport-const",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused<N:uint32>(){I.<N>;}",
+        "dep": "import {minimum} from \"bridge\";function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);",
+        "leaf": "export const minimum:uint32=1;",
+        "bridge": "export {minimum} from \"leaf\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "leaf",
+          "bridge",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-namespace-let",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused<N:uint32>(){I.<N>;}",
+        "dep": "import * as values from \"leaf\";function allowed(n:uint32):boolean{return n>=values.minimum;}export type I<N:uint32> = uint32 where allowed(N);",
+        "leaf": "export let minimum:uint32=1;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "import-namespace-var",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused<N:uint32>(){I.<N>;}",
+        "dep": "import * as values from \"leaf\";function allowed(n:uint32):boolean{return n>=values.minimum;}export type I<N:uint32> = uint32 where allowed(N);",
+        "leaf": "export var minimum:uint32=1;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "import-namespace-const",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused<N:uint32>(){I.<N>;}",
+        "dep": "import * as values from \"leaf\";function allowed(n:uint32):boolean{return n>=values.minimum;}export type I<N:uint32> = uint32 where allowed(N);",
+        "leaf": "export const minimum:uint32=1;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "leaf",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-transitive-let",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused<N:uint32>(){I.<N>;}",
+        "dep": "import {allowed} from \"bridge\";export type I<N:uint32> = uint32 where allowed(N);",
+        "leaf": "export let minimum:uint32=1;",
+        "bridge": "import {minimum} from \"leaf\";export function allowed(n:uint32):boolean{return n>=minimum;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "import-transitive-var",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused<N:uint32>(){I.<N>;}",
+        "dep": "import {allowed} from \"bridge\";export type I<N:uint32> = uint32 where allowed(N);",
+        "leaf": "export var minimum:uint32=1;",
+        "bridge": "import {minimum} from \"leaf\";export function allowed(n:uint32):boolean{return n>=minimum;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "import-transitive-const",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused<N:uint32>(){I.<N>;}",
+        "dep": "import {allowed} from \"bridge\";export type I<N:uint32> = uint32 where allowed(N);",
+        "leaf": "export const minimum:uint32=1;",
+        "bridge": "import {minimum} from \"leaf\";export function allowed(n:uint32):boolean{return n>=minimum;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "leaf",
+          "bridge",
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "mutable-syntax-let-minimum",
+      "modules": {
+        "main": "let minimum:uint32=1;function I<N:uint32>() where (minimum) {}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "mutable-syntax-let-true || minimum>0",
+      "modules": {
+        "main": "let minimum:uint32=1;function I<N:uint32>() where (true || minimum>0) {}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "mutable-syntax-let-false && minimum>0",
+      "modules": {
+        "main": "let minimum:uint32=1;function I<N:uint32>() where (false && minimum>0) {}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "mutable-syntax-var-minimum",
+      "modules": {
+        "main": "var minimum:uint32=1;function I<N:uint32>() where (minimum) {}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "mutable-syntax-var-true || minimum>0",
+      "modules": {
+        "main": "var minimum:uint32=1;function I<N:uint32>() where (true || minimum>0) {}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "mutable-syntax-var-false && minimum>0",
+      "modules": {
+        "main": "var minimum:uint32=1;function I<N:uint32>() where (false && minimum>0) {}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-helper-state",
+      "modules": {
+        "main": "function allowed(n:uint32):boolean{let count:uint32=0;while(count<n){count++;}return count===n;}function I<N:uint32>() where allowed(N) {}I.<2>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "mutable-shadow-cannot-hide-capture",
+      "modules": {
+        "main": "let minimum:uint32=1;function allowed(n:uint32):boolean{{let minimum:uint32=0;}return n>=minimum;}function I<N:uint32>() where allowed(N) {}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "untyped-imported-helper",
+      "modules": {
+        "main": "import {allowed} from \"dep\";function I<N:uint32>() where allowed(N) {}",
+        "dep": "let minimum:uint32=1;export function allowed(n){return n>=minimum;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_COMPILE_TIME_EVALUABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "unselected-immutable-operand",
+      "modules": {
+        "main": "import {use} from \"dep\";const minimum:uint32=1;function allowed(n:uint32):boolean{return n>0 ? true : n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);use();",
+        "dep": "import {I} from \"main\";export function use(){I.<1>;}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "helper-local-tdz-caught",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<1>;",
+        "dep": "function allowed(n:uint32):boolean{try{return n>=minimum;}catch(e){return true;}const minimum:uint32=1;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "spoofed-tdz-caught",
+      "modules": {
+        "main": "import {I} from \"dep\";I.<1>;",
+        "dep": "function allowed(n:uint32):boolean{try{throw new ReferenceError(\"minimum cannot be used before initialization\");}catch(e){return true;}}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "ordinary-cyclic-read-caught",
+      "modules": {
+        "main": "import {result} from \"dep\";export const input=1;if(result!==true)throw new Error(\"catch\");",
+        "dep": "import {input} from \"main\";function helper(){try{return input;}catch(e){return true;}}export const result=helper();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "runtime-result-contract",
+      "modules": {
+        "main": "let calls=0;function seen(r){calls++;return true;}function f(x:uint32):uint32 where seen(return){return x;}f(1);f(2);if(calls!==2)throw new Error(\"contract count\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "dependency-throw-before-cyclic-check",
+      "modules": {
+        "main": "import {I} from \"dep\";function unused(){I.<0>;}",
+        "dep": "throw new RangeError(\"dependency\");const minimum:uint32=1;function allowed(n:uint32):boolean{return n>=minimum;}export type I<N:uint32> = uint32 where allowed(N);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "RangeError"
+      }
+    },
+    {
+      "name": "cycle-helper-reads-consumer-binding",
+      "modules": {
+        "main": "import {minimum,use} from \"dep\";function allowed(n:uint32):boolean{try{return n>=minimum;}catch(e){return true;}}export type I<N:uint32> = uint32 where allowed(N);use();",
+        "dep": "import {I} from \"main\";export const minimum:uint32=1;export function use(){I.<0>;}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    }
+  ]
+}

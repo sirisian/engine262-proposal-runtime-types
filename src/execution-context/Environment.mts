@@ -22,6 +22,7 @@ import { SoAScatter, SoAElementBackingOf } from '../intrinsics/SoA.mts';
 import { RequireArrayBorrowLive, PutValue } from '../abstract-ops/reference-operations.mts';
 import { RequireType, functionTypeParameters } from '../abstract-ops/runtime-types.mts';
 import { lookupTypeParameter } from '../type-system/runtime.mts';
+import { RecordUnavailableModuleInput } from '../type-system/required-module-inputs.mts';
 import {
   Assert,
   DefinePropertyOrThrow,
@@ -595,7 +596,9 @@ export class ModuleEnvironmentRecord extends DeclarativeEnvironmentRecord {
     }
     // 5. If the binding for N in envRec is an uninitialized binding, throw a ReferenceError exception.
     if (binding.initialized === false) {
-      return uninitializedBindingRead(binding, N);
+      const failure = uninitializedBindingRead(binding, N);
+      RecordUnavailableModuleInput(envRec, failure);
+      return failure;
     }
     // 6. Return the value currently bound to N in envRec.
     return TransferResultDependency(binding, NormalCompletion(binding.value!));

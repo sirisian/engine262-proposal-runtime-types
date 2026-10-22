@@ -1,4 +1,5 @@
 import type { PlainEvaluator } from '../evaluator.mts';
+import { RequiredModuleInputFailure } from './required-module-inputs.mts';
 import { surroundingAgent, EnsureCompletion, Throw, Value } from '#self';
 
 /** #sec-evaluation-budget. Counters measure logical requests, not allocation. */
@@ -168,7 +169,7 @@ export function* EvaluateWithTypeBudget<T>(subject: string, evaluation: PlainEva
     ConsumeEvaluationSteps(1);
     if (!IsBudgetExhausted()) {
       const result = EnsureCompletion(yield* evaluation);
-      if (!IsBudgetExhausted()) return result;
+      if (!IsBudgetExhausted()) return RequiredModuleInputFailure() ?? result;
     }
     return Throw.TypeError('the type evaluation budget was exhausted at $1', Value(subject));
   } finally {
