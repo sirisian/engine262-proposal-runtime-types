@@ -695,6 +695,9 @@ export type TypeRecord =
     readonly InstanceFieldKeys?: readonly (string | SymbolValue)[],
     // Lookup entries introduced only by interface claims are not declarations.
     readonly LookupOnlyMemberKeys?: readonly (string | SymbolValue)[],
+    // A partial's self template is closed by its receiving application before
+    // a member's own generic binders are applied. This is not type identity.
+    readonly PartialSelf?: ParseNode.ClassDeclaration,
     // The WRITE type of each setter, which a derived class checks its own
     // setters against and which [[Structure]] cannot carry: a property has one
     // type there, and a getter already claims it. Declared beside [[Base]]
@@ -2173,12 +2176,21 @@ export const mentionsTypeParameter = (t: Known, seen: Set<Known> = new Set()): b
 /** Instantiate a signature's own parameters as well as its free parameters. */
 export const substituteTypeParameters = (t: Known, bindings: ReadonlyMap<string, TypeRecord>): Known => makeSubstitution(bindings, t)(t);
 
+/** Close self independently of same-spelled generic binders in a member. */
+export const instantiatePartialClassSelf = (t: Known, declaration: ParseNode.ClassDeclaration | ParseNode.InterfaceDeclaration,
+  target: Extract<TypeRecord, { Kind: 'nominal' }>): Known => {
+  if (declaration.type !== 'ClassDeclaration') return t;
+  const bindings = new Map<string, TypeRecord>();
+  return makeSubstitution(bindings, null, { bindings, partialSelf: { declaration, target } })(t);
+};
+
 /** Substitute an enclosing environment without applying a returned generic signature. */
 export const substituteFreeTypeParameters = (t: Known, bindings: ReadonlyMap<string, TypeRecord>,
   declarations?: readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[],
   byDeclaration?: ReadonlyMap<ParseNode.TypeParameter | ParseNode.CaptureBinding, TypeRecord>): Known => makeSubstitution(bindings, null, { bindings, declarations, byDeclaration })(t);
 
 interface CaptureSubstitution {
+  readonly partialSelf?: { declaration: ParseNode.ClassDeclaration | ParseNode.InterfaceDeclaration, target: Extract<TypeRecord, { Kind: 'nominal' }> };
   readonly byDeclaration?: ReadonlyMap<ParseNode.TypeParameter | ParseNode.CaptureBinding, TypeRecord>;
   readonly bindings: ReadonlyMap<string, TypeRecord>;
   readonly declarations?: readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[];
@@ -2191,6 +2203,13 @@ const makeSubstitution = (bindings: ReadonlyMap<string, TypeRecord>, root: Known
   const walk = (type: Known): Known => {
     if (!type) return type;
     if (seen.has(type)) return seen.get(type)!;
+    if (type.Kind === 'nominal' && type.PartialSelf && type.PartialSelf === captures.partialSelf?.declaration) {
+      const target = captures.partialSelf.target;
+      const closed = { ...type, Arguments: target.Arguments, DeclarationIdentity: target.DeclarationIdentity,
+        Constructor: target.Constructor, PartialSelf: undefined };
+      seen.set(type, closed);
+      return closed;
+    }
     const shell = { ...type } as TypeRecord;
     seen.set(type, shell);
     const result = substituteTypeParametersUncached(type, bindings, walk, root, captures);
@@ -2218,7 +2237,7 @@ const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string
     return Constraint === t.Constraint ? t : { ...t, Constraint };
   }
   if (t.Kind === 'reference' || t.Kind === 'shared') {
-    if (!mentionsTypeParameter(t)) return t;
+    if (!captures.partialSelf && !mentionsTypeParameter(t)) return t;
     const Target = walk(t.Target) as TypeRecord;
     return Target === t.Target ? t : { ...t, Target };
   }
@@ -2340,7 +2359,7 @@ const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string
   // nothing to substitute is returned as it came: an object type is reached
   // here constantly, and a fresh record is not always interchangeable with
   // the one it copies (SoA and window programs depend on the identity).
-  if (withSignatures.Signatures && mentionsTypeParameter(t)) {
+  if (withSignatures.Signatures && (captures.partialSelf || mentionsTypeParameter(t))) {
     return {
       ...t,
       Signatures: withSignatures.Signatures.map((sig) => {
@@ -2393,7 +2412,7 @@ const substituteTypeParametersUncached = (t: Known, bindings: ReadonlyMap<string
     Properties?: readonly PropertyTypeRecord[],
     IndexSignatures?: readonly { Key?: TypeRecord, Value?: TypeRecord }[],
   };
-  if ((withProperties.Properties || withProperties.IndexSignatures) && mentionsTypeParameter(t)) {
+  if ((withProperties.Properties || withProperties.IndexSignatures) && (captures.partialSelf || mentionsTypeParameter(t))) {
     return {
       ...t,
       ...(withProperties.Properties ? {

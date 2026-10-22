@@ -5,11 +5,37 @@ import { CallableGroupHostFor } from './component-patterns.mts';
 import { MatchSpecializationList } from './specialization-patterns.mts';
 import { IsSubtype } from './relations.mts';
 import { operatorTableKey } from './overloads.mts';
-import { makePrimitive, substituteTypeParameters, type TypeRecord } from './records.mts';
+import { instantiatePartialClassSelf, makePrimitive, substituteTypeParameters, type TypeRecord } from './records.mts';
+import { ResolveBindingDeclaration } from './compile-time-evaluability.mts';
 
 export function IsPartialDeclaration(node: unknown): boolean {
   const declaration = node as { Partial?: boolean, ClassModifiers?: readonly string[] } | undefined;
   return !!declaration?.Partial || !!declaration?.ClassModifiers?.includes('partial');
+}
+
+/** A bare type name in a partial body denotes that contribution's target.
+ * This finds syntax only; the checker and evaluator supply their own target
+ * context. No evaluated class is associated globally with a partial node.
+ */
+export function PartialClassSelfOf(node: ParseNode): ParseNode.ClassDeclaration | undefined {
+  if (node.type !== 'TypeReference' || node.TypeArguments || node.TypeName.MemberNames.length) return undefined;
+  const name = node.TypeName.IdentifierReference.name;
+  const visited = new Set<ParseNode>([node]);
+  for (let owner = node.parent; owner; owner = owner.parent) {
+    if ((owner.type === 'ClassDeclaration' || owner.type === 'ClassExpression') && owner.BindingIdentifier?.name === name) {
+      if (owner.type !== 'ClassDeclaration' || !IsPartialDeclaration(owner)
+        || (owner.TypeParameters && visited.has(owner.TypeParameters))
+        || (owner.ClassTail.ClassHeritage && visited.has(owner.ClassTail.ClassHeritage))) return undefined;
+      const binding = ResolveBindingDeclaration(node, name);
+      // A local alias, parameter, capture or nested declaration wins over self.
+      for (let scope = binding?.node; scope; scope = scope.parent) {
+        if (scope === owner) return undefined;
+      }
+      return owner;
+    }
+    visited.add(owner);
+  }
+  return undefined;
 }
 
 export interface PartialStructureContribution {
@@ -83,7 +109,7 @@ export function MergePartialStructures(
       operators.add(key);
     }
     const template = part.Structure();
-    const added = template && substituteTypeParameters(template, bindings);
+    const added = template && substituteTypeParameters(instantiatePartialClassSelf(template, part.Declaration, type), bindings);
     if (!added) continue;
     if (added.Kind === 'object') for (const property of added.Properties) lookupOnly.delete(property.key);
     if (!structure) {

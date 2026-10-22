@@ -41,7 +41,7 @@ import { OriginalLibraryFunction, ProvenLibraryOperations } from './library-oper
 import { bindLibraryTypeArguments, libraryTypeParameters } from './library-type-arguments.mts';
 import { ProvenStaticLibraryOperations } from './static-library-origin.mts';
 import { ProvenArrayCapacityMembers } from './array-capacity-origin.mts';
-import { IsPartialDeclaration, MergePartialStructures, PartialBindings, PublishedPartialContributions, PublishModulePartialContributions, type ModulePartialContribution, type PartialStructureContribution } from './partial-types.mts';
+import { IsPartialDeclaration, PartialClassSelfOf, MergePartialStructures, PartialBindings, PublishedPartialContributions, PublishModulePartialContributions, type ModulePartialContribution, type PartialStructureContribution } from './partial-types.mts';
 import { VectorMaskMethodSignature } from './vector-signatures.mts';
 import { ProvenResumedDelegations } from './generator-intrinsics.mts';
 import { CompletionPaths, CompletionValues } from './completion-values.mts';
@@ -9047,6 +9047,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * and of its bare name in a type position there.
    */
   const injectedInProgress = new Set<object>();
+  const partialSelfInProgress = new Set<ParseNode>();
+  const partialClassSelfType = (part: ParseNode.ClassDeclaration): Known => {
+    const primary = partialPrimaryOf(part);
+    if (primary?.type !== 'ClassDeclaration' && primary?.type !== 'ClassExpression') return null;
+    const argumentsOfSelf = (): TypeRecord[] => (primary.TypeParameters?.TypeParameterList ?? []).map((p, i) => {
+      const argument: TypeRecord = { Kind: 'parameter', Name: p.BindingIdentifier.name };
+      const pattern = part.TypeParameters?.SpecializationEntryList?.[i]?.Pattern;
+      if (!pattern || (pattern.type === 'TypeReference' && pattern.TypeName.IdentifierReference.name === '_')) return argument;
+      if (pattern.type === 'CaptureBinding') return { Kind: 'parameter', Name: pattern.BindingIdentifier.name };
+      return resolveType(pattern as ParseNode.Type) ?? argument;
+    });
+    const scope = pushTypeParameterScopeOf(part);
+    const recursive = partialSelfInProgress.has(part);
+    partialSelfInProgress.add(part);
+    try {
+      const args = argumentsOfSelf();
+      if (recursive) return CanonicalizeType({ Kind: 'nominal', Declaration: primary, Arguments: args, PartialSelf: part });
+      const own = classOverOwnParameters(primary);
+      return own?.Kind === 'nominal' ? withPartialStructure({ ...own, Arguments: args, PartialSelf: part }) : own;
+    } finally {
+      if (!recursive) partialSelfInProgress.delete(part);
+      if (scope) typeParameterScopes.pop();
+    }
+  };
   const classOverOwnParameters = (n: ParseNode): Known => {
     const declaredInstance = classInstanceType(n);
     const ownParams = ((n as unknown as { TypeParameters?: { TypeParameterList?: readonly ParseNode[] } | null }).TypeParameters?.TypeParameterList ?? []);
@@ -12487,6 +12511,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       reportType('rt-type-required', node, '$1', Value(error.message));
       return null;
     }
+    const partialSelf = PartialClassSelfOf(node);
+    if (partialSelf) {
+      const self = partialClassSelfType(partialSelf);
+      if (self) return self;
+    }
     // A generic class's bare name in its own body is the class over its own
     // parameters.
     const injected = InjectedClassOf(node);
@@ -12562,6 +12591,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // Through typeParameterNamesOf, which also reads a primitive block's
       // captures of metadata.
       (typeParameterNamesOf(parent) ?? []).forEach((name) => enclosingParameters.add(name));
+      if (IsPartialDeclaration(parent) && child.type === 'ClassTail') {
+        const primary = partialPrimaryOf(parent);
+        if (primary) (typeParameterNamesOf(primary) ?? []).forEach((name) => enclosingParameters.add(name));
+      }
     }
     let open = node.type === 'TypeReference' && node.parent?.type === 'TypeArguments'
       && !node.TypeArguments && !!((aliasNodes.get(node.TypeName.IdentifierReference.name) as ParseNode.TypeAliasDeclaration | undefined)?.TypeParameters
@@ -12585,7 +12618,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       // A bare self type injects its class's own still-unbound parameters.
-      if (n.type === 'TypeReference' && InjectedClassOf(n)) open = true;
+      if (n.type === 'TypeReference' && (InjectedClassOf(n) || PartialClassSelfOf(n))) open = true;
       const name = n.type === 'TypeReference' ? n.TypeName.IdentifierReference.name
         : n.type === 'IdentifierReference' ? n.name : undefined;
       const reference = n.type === 'TypeReference' ? n.TypeName.IdentifierReference

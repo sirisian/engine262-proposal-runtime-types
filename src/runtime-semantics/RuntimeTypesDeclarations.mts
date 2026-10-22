@@ -42,14 +42,14 @@ import { GetValue } from '../abstract-ops/all.mts';
 import { iterationInterfaceRecord } from '../type-system/iteration-types.mts';
 import { CanonicalizeType } from '../type-system/intern.mts';
 import { GetTypeObject, isTypeObject } from '../type-system/intern.mts';
-import { InjectedClassOf, mentionsTypeParameter, substituteFreeTypeParameters, parameter, type TypeRecord, type SignatureRecord } from '../type-system/records.mts';
+import { InjectedClassOf, instantiatePartialClassSelf, mentionsTypeParameter, substituteFreeTypeParameters, parameter, type TypeRecord, type SignatureRecord } from '../type-system/records.mts';
 import { beginResolvingAlias, endResolvingAlias, tieAliasKnot, recordResolvedAlias } from '../type-system/resolving-aliases.mts';
 import { FirstInlineCycle } from '../type-system/layout.mts';
 import { OriginOfNode, RecordTypeOrigin, RecordDeclaredMemberOrigins } from '../type-system/provenance.mts';
 import { BindTypeParameterTyped, toNumericArgument,
   SubstituteTypeArguments, GenericAliasDeclarationShape, InstantiateGenericAlias, ApplyGenericInterface, IsOfType, TypeNodeToTypeRecord, spreadElementsOf,
   pushTypeParameterFrame, popTypeParameterFrame, ResolveTypeName, functionRecordFromSignature, functionRecordFromCallSignatures, RegisterSpecializedFunctionType, TypeArgumentAsDeclaration } from '../type-system/runtime.mts';
-import { currentTypeParameterFrame, BindTypeArgumentsInto, MetadataObjectFromType, publishedReturnTypeOfFunction, WithClassInterfaceChecks } from '../type-system/runtime.mts';
+import { currentTypeParameterFrame, BindPartialClassSelf, BindTypeArgumentsInto, MetadataObjectFromType, publishedReturnTypeOfFunction, WithClassInterfaceChecks } from '../type-system/runtime.mts';
 import { InferGenericBindings, TakePendingCalleeContext, contextualTypeFor, pushContextualType, popContextualType } from '../type-system/runtime.mts';
 import { bindLibraryTypeArguments, RememberLibraryApplication } from '../type-system/library-type-arguments.mts';
 import { classTypeParameterFrame } from './CallExpression.mts';
@@ -1987,6 +1987,13 @@ function* ApplyPartialClass(extension: PartialClassExtension, primary: ParseNode
       if (!selected) return undefined;
       for (const [name, type] of selected.Frame) frame.set(name, type);
     }
+    const published = PublishedClassTypeOf(primary);
+    const completed = LookupClassType(ctor as object);
+    BindPartialClassSelf(frame, extension.node, completed && isTypeObject(completed) ? completed.TypeRecord : {
+      ...(published?.Kind === 'nominal' ? published : {}),
+      Kind: 'nominal', Declaration: primary, DeclarationIdentity: ClassFamilyIdentityOf(ctor),
+      Arguments: args, Constructor: ctor, Base: RuntimeClassBaseOf(ctor),
+    });
     Q(yield* PartialClassMergeEvaluation(ctor as never, extension.node.ClassTail));
   } finally {
     popTypeParameterFrame();
@@ -2031,16 +2038,18 @@ function* RegisterPartialClassStructure(primary: ParseNode.ClassDeclaration, nod
 /** #sec-partial-classes: extend existing applications and every later one. */
 export function* RegisterPartialClass(ctor: Value, node: ParseNode.ClassDeclaration): PlainEvaluator<void> {
   const declaration = GenericClassDeclarationOf(ctor);
+  const extension = { node, environment: surroundingAgent.runningExecutionContext.LexicalEnvironment,
+    privateEnvironment: surroundingAgent.runningExecutionContext.PrivateEnvironment };
   if (!declaration) {
-    Q(yield* PartialClassMergeEvaluation(ctor as never, node.ClassTail));
     const type = LookupClassType(ctor as object);
     if (type && isTypeObject(type) && type.TypeRecord.Kind === 'nominal' && type.TypeRecord.Declaration.type === 'ClassDeclaration') {
+      Q(yield* ApplyPartialClass(extension, type.TypeRecord.Declaration as ParseNode.ClassDeclaration, ctor, type.TypeRecord.Arguments));
       Q(yield* RegisterPartialClassStructure(type.TypeRecord.Declaration as ParseNode.ClassDeclaration, node));
+    } else {
+      Q(yield* PartialClassMergeEvaluation(ctor as never, node.ClassTail));
     }
     return undefined;
   }
-  const extension = { node, environment: surroundingAgent.runningExecutionContext.LexicalEnvironment,
-    privateEnvironment: surroundingAgent.runningExecutionContext.PrivateEnvironment };
   const extensions = partialClassExtensions.get(ClassFamilyOf(ctor)) ?? [];
   if (extensions.some((entry) => entry.node === node && entry.environment === extension.environment)) return undefined;
   for (const specialized of classSpecializations.get(ClassFamilyOf(ctor))?.values() ?? []) {
@@ -2288,16 +2297,18 @@ function* declaredClassEvidence(node: ParseNode.ClassDeclaration | ParseNode.Cla
       Operators: new Map([...declared.Operators].map(([key, signature]) => [key, instantiate(signature)])),
       Call: declared.Call && declared.Call !== 'noncallable' ? instantiate(declared.Call) : declared.Call };
     const primary = GenericClassDeclarationOf(ClassFamilyOf(ctor)) ?? node;
-    const partialApplication: TypeRecord = { Kind: 'nominal', Declaration: primary, Arguments:
+    const partialApplication: Extract<TypeRecord, { Kind: 'nominal' }> = { Kind: 'nominal', Declaration: primary,
+      DeclarationIdentity: ClassFamilyIdentityOf(ctor), Constructor: ctor, Arguments:
       (primary.TypeParameters?.TypeParameterList ?? []).map((p) => bindings.get(p.BindingIdentifier.name) ?? anyType) };
     for (const part of RuntimePartialContributions(ClassFamilyIdentityOf(ctor))) {
       const bound = PartialBindings(partialApplication, part);
       const contribution = DeclaredClassContractOf(part.Declaration);
       if (!bound || !contribution) continue;
       const readPart = function* () {
-        const shape = instantiate(contribution.Structure);
+        const closeSelf = (type: TypeRecord): TypeRecord => instantiate(instantiatePartialClassSelf(type, part.Declaration, partialApplication)!);
+        const shape = closeSelf(contribution.Structure);
         Assert(shape.Kind === 'object');
-        return { shape, operators: new Map([...contribution.Operators].map(([key, type]) => [key, instantiate(type)])) };
+        return { shape, operators: new Map([...contribution.Operators].map(([key, type]) => [key, closeSelf(type)])) };
       };
       // instantiate reads the active context and its free bindings.
       const added = Q(yield* InCapturedTypeContext(partialTypeContexts.get(part) ?? captured!, readPart, bound));

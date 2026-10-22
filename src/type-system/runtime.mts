@@ -51,7 +51,7 @@ import { isTokenStream } from '../intrinsics/TokenStream.mts';
 import type { ParameterRecord, SignatureRecord, TypeRecord, Known } from './records.mts';
 import { joinTypes } from './logical-types.mts';
 import { literalFitsNumericType } from './literal-fit.mts';
-import { InjectedClassOf, CanonicalWidthArgument, orderKey, typeParameterRecordsOf, setDeferredOperatorImpl, mentionsTypeParameter, substituteTypeParameters, substituteFreeTypeParameters } from './records.mts';
+import { InjectedClassOf, instantiatePartialClassSelf, CanonicalWidthArgument, orderKey, typeParameterRecordsOf, setDeferredOperatorImpl, mentionsTypeParameter, substituteTypeParameters, substituteFreeTypeParameters } from './records.mts';
 import {
   ConsumeEvaluationSteps, IsBudgetExhausted, BeginTypeEvaluation, EndTypeEvaluation, EnterTypeComputation, ExitTypeComputation, EvaluateWithTypeBudget,
 } from './budget.mts';
@@ -74,7 +74,7 @@ import { MetadataStorageKey, MetadataKey, MetadataEntries } from './metadata-key
 import { GenericWhereVerified } from './generic-where.mts';
 import { GenericAliasContextOf } from './generic-alias-context.mts';
 import { bindLibraryTypeArguments, libraryTypeParameters } from './library-type-arguments.mts';
-import { MergePartialStructures, RuntimePartialContributions } from './partial-types.mts';
+import { PartialClassSelfOf, MergePartialStructures, RuntimePartialContributions } from './partial-types.mts';
 import { wrapToType } from './arithmetic.mts';
 import { isFloatTypeName } from './numeric-signatures.mts';
 import { unifyTypeParameters, mentionsParameterNamed, substituteParametersNamed } from './unify.mts';
@@ -327,10 +327,22 @@ export function takePendingCheckerBindings(): boolean {
 // T, but cannot replace a capture of an outer declaration. Keep identities on
 // frames, never on interned Type Records, and preserve them when copying.
 const declarationBindings = new WeakMap<ReadonlyMap<string, TypeRecord>, Map<ParseNode.TypeParameter | ParseNode.CaptureBinding, TypeRecord>>();
+// A partial can execute for multiple evaluated families and applications. Its
+// self type belongs to the captured frame, not a source-node singleton or an
+// ordinary name binding that could change value-position lookup.
+const partialSelfBindings = new WeakMap<ReadonlyMap<string, TypeRecord>, Map<ParseNode.ClassDeclaration, TypeRecord>>();
+
+export function BindPartialClassSelf(frame: ReadonlyMap<string, TypeRecord>, declaration: ParseNode.ClassDeclaration, type: TypeRecord): void {
+  let bindings = partialSelfBindings.get(frame);
+  if (!bindings) partialSelfBindings.set(frame, bindings = new Map());
+  bindings.set(declaration, type);
+}
 
 export function copyTypeParameterFrame(frame: ReadonlyMap<string, TypeRecord>,
   excluding: readonly (ParseNode.TypeParameter | ParseNode.CaptureBinding)[] = []): Map<string, TypeRecord> {
   const copy = new Map(frame);
+  const partials = partialSelfBindings.get(frame);
+  if (partials) partialSelfBindings.set(copy, new Map(partials));
   const declarations = declarationBindings.get(frame);
   if (declarations) {
     declarationBindings.set(copy, new Map([...declarations]
@@ -372,7 +384,12 @@ export function CompleteCreatedFunctionResult(type: TypeRecord, value: Value, sy
 function instantiatePublishedReturn(value: unknown, application?: ReadonlyMap<string, TypeRecord>): TypeRecord | undefined {
   const fn = value as { ECMAScriptCode?: { parent?: object } | null, TypeParameterFrame?: ReadonlyMap<string, TypeRecord> };
   const declaration = fn.ECMAScriptCode?.parent as { TypeParameters?: ParseNode.TypeParameters } | undefined;
-  const published = declaration && PublishedReturnTypeOf(declaration);
+  let published = declaration && PublishedReturnTypeOf(declaration);
+  if (published && fn.TypeParameterFrame) {
+    for (const [partial, self] of partialSelfBindings.get(fn.TypeParameterFrame) ?? []) {
+      if (self.Kind === 'nominal') published = instantiatePartialClassSelf(published, partial, self)!;
+    }
+  }
   if (!published || !mentionsTypeParameter(published)) return published;
   // A case's captures belong to this application, just as an owner's parameters do.
   const own = [...declaration?.TypeParameters?.TypeParameterList ?? [], ...declaration?.TypeParameters?.Captures ?? []];
@@ -401,6 +418,7 @@ export function currentTypeParameterFrame(): Map<string, TypeRecord> | undefined
       merged.set(name, record);
     }
     for (const [declaration, record] of declarationBindings.get(frame) ?? []) declarations.set(declaration, record);
+    for (const [declaration, record] of partialSelfBindings.get(frame) ?? []) BindPartialClassSelf(merged, declaration, record);
   }
   declarationBindings.set(merged, declarations);
   return merged;
@@ -5459,6 +5477,13 @@ function* TypeNodeToTypeRecordUnchecked(node: ParseNode.Type, asDeclaration: boo
   } catch (error) {
     if (!(error instanceof FamilyPatternError)) throw error;
     return Throw.TypeError('$1', Value(error.message));
+  }
+  const partialSelf = PartialClassSelfOf(node);
+  if (partialSelf) {
+    for (let i = typeParameterFrames.length - 1; i >= 0; --i) {
+      const self = partialSelfBindings.get(typeParameterFrames[i])?.get(partialSelf);
+      if (self) return self;
+    }
   }
   // A generic class's bare name in its own body is the class over its own
   // parameters: here, their bindings in the running frames.

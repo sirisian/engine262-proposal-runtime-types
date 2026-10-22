@@ -1,0 +1,956 @@
+{
+  "description": "A partial self type retains its actual receiving application independently of names, activations, member binders and later calls.",
+  "cases": [
+    {
+      "name": "bare",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E<T:type> implements Has.<E>{}partial class E{get():E{return this;}}new E.<uint8>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "explicit",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E<T:type> implements Has.<E.<T>>{}partial class E{get():E.<T>{return this;}}new E.<uint8>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "primary",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E<T:type> implements Has.<E>{get():E{return this;}}new E.<uint8>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "call",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{self():E{return this;}}const e=new E.<uint8>();if(e.self()!==e)throw new Error(\"self\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "two-applications",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{self():E{return this;}take(x:E):E{return x;}}const a=new E.<uint8>();const b=new E.<string>();if(a.self()!==a||b.self()!==b||a.self()!==a)throw new Error(\"self\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "wrong-argument-static",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{self():E{return this;}take(x:E):E{return x;}}new E.<uint8>().take(new E.<string>());"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "checked": true,
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "wrong-argument-runtime",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{self():E{return this;}take(x:E):E{return x;}}const a:any=new E.<uint8>();a.take(new E.<string>());"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "wrong-result-runtime",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{self(x:any):E{return x;}}new E.<uint8>().self(new E.<string>());"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "defaults",
+      "modules": {
+        "main": "class E<T:type=string>{}partial class E{self():E{return this;}}const a=new E.<uint8>();const b=new E();if(a.self()!==a||b.self()!==b)throw new Error(\"defaults\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "registered-after-application",
+      "modules": {
+        "main": "class E<T:type>{}const a=new E.<uint8>();partial class E{self():E{return this;}}if(a.self()!==a)throw new Error(\"late\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "fixed-pattern",
+      "modules": {
+        "main": "class E<T:type>{}partial class E<uint8>{self():E{return this;}}const a=new E.<uint8>();if(a.self()!==a||typeof new E.<string>().self!==\"undefined\")throw new Error(\"pattern\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "capture-pattern",
+      "modules": {
+        "main": "class E<T:type>{}partial class E<const V>{self():E{return this;}}const a=new E.<uint8>();if(a.self()!==a)throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-capture-pattern",
+      "modules": {
+        "main": "class E<T:type>{}partial class E<[const V]>{self():E{return this;}}const a=new E.<[uint8]>();if(a.self()!==a)throw new Error(\"nested\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "wildcard-value-pattern",
+      "modules": {
+        "main": "class E<T:type,N:uint32>{}partial class E<_,4>{self():E{return this;}}const a=new E.<string,4>();const result:any=a.self();if(result!==a)throw new Error(\"wildcard\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "value-parameters",
+      "modules": {
+        "main": "class E<N:uint32>{}partial class E{self():E{return this;}take(x:E):E{return x;}}const a=new E.<4>();const result:any=a.self();if(result!==a)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "value-wrong-runtime",
+      "modules": {
+        "main": "class E<N:uint32>{}partial class E{take(x:E):E{return x;}}const a:any=new E.<4>();a.take(new E.<5>());"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "alias",
+      "modules": {
+        "main": "class E<T:type>{}const Alias=E;partial class Alias{self():Alias{return this;}}const a=new E.<uint8>();if(a.self()!==a)throw new Error(\"alias\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-other-name-control",
+      "modules": {
+        "main": "class E<T:type>{}const Alias=E;partial class Alias{self():E{return this;}}new E.<uint8>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "rule": "rt-generic-argument",
+          "phase": "static",
+          "checked": true,
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "alias-explicit-control",
+      "modules": {
+        "main": "class E<T:type>{}const Alias=E;partial class Alias{self():E.<T>{return this;}}const a=new E.<uint8>();if(a.self()!==a)throw new Error(\"explicit\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-renamed",
+      "modules": {
+        "main": "import {E as Alias} from \"dep\";partial class Alias{self():Alias{return this;}}const a=new Alias.<uint8>();if(a.self()!==a)throw new Error(\"import\");",
+        "dep": "export class E<T:type>{}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reexported",
+      "modules": {
+        "main": "import {Alias} from \"middle\";partial class Alias{self():Alias{return this;}}const a=new Alias.<uint8>();if(a.self()!==a)throw new Error(\"reexport\");",
+        "middle": "export {E as Alias} from \"dep\";",
+        "dep": "export class E<T:type>{}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "middle",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "middle",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-recursive",
+      "modules": {
+        "main": "import {E,Has} from \"dep\";partial class E{get():E{return this;}}const a=new E.<uint8>();if(a.get()!==a)throw new Error(\"recursive\");",
+        "dep": "export interface Has<T:type>{get():T;}export class E<T:type> implements Has.<E>{}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "producer-partial",
+      "modules": {
+        "main": "import {E} from \"dep\";const a=new E.<uint8>();if(a.self()!==a)throw new Error(\"producer\");",
+        "dep": "export class E<T:type>{}partial class E{self():E{return this;}take(x:E):E{return x;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "static-member",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{static take(x:E):E{return x;}}const a=new E.<uint8>();if(E.<uint8>.take(a)!==a)throw new Error(\"static\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "static-wrong-runtime",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{static take(x:E):E{return x;}}const C:any=E.<uint8>;C.take(new E.<string>());"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "operator",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{operator+(other:E):E{return other;}}const a=new E.<uint8>();if(a+a!==a)throw new Error(\"operator\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "accessor",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{get self():E{return this;}}const a=new E.<uint8>();if(a.self!==a)throw new Error(\"accessor\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "escaped-closure",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{make(){return (x:E):E=>x;}}const a=new E.<uint8>();const f=a.make();if(f(a)!==a)throw new Error(\"closure\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "escaped-closure-wrong",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{make(){return (x:E):E=>x;}}const f:any=new E.<uint8>().make();f(new E.<string>());"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "shadow-method-parameter",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{id<E:type>(x:E):E{return x;}}if(new E.<uint8>().id.<string>(\"ok\")!==\"ok\")throw new Error(\"shadow\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "shadow-local-alias",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{m():string{type E=string;const x:E=\"ok\";return x;}}if(new E.<uint8>().m()!==\"ok\")throw new Error(\"alias\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "shadow-nested-class",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{m():string{class E{}const x:E=new E();return \"ok\";}}if(new E.<uint8>().m()!==\"ok\")throw new Error(\"nested\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "shadow-capture",
+      "modules": {
+        "main": "class E<T:type>{}partial class E<const E>{id(x:E):E{return x;}}if(new E.<string>().id(\"ok\")!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "body-type-annotation",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{self():E{const x:E=this;return x;}}const a=new E.<uint8>();if(a.self()!==a)throw new Error(\"body\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "value-position-unchanged",
+      "modules": {
+        "main": "class E<T:type>{}const Alias=E;partial class Alias{family(){return Alias;}self():Alias{return this;}}const a=new E.<uint8>();if(a.family()!==E||a.self()!==a)throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "factory-activations",
+      "modules": {
+        "main": "function make(){class E<T:type>{}partial class E{self():E{return this;}take(x:E):E{return x;}}return E;}const A=make();const B=make();const a=new A.<uint8>();const b=new B.<uint8>();if(a.self()!==a||b.self()!==b||a.self()!==a)throw new Error(\"factory\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "factory-wrong-family",
+      "modules": {
+        "main": "function make(){class E<T:type>{}partial class E{self():E{return this;}take(x:E):E{return x;}}return E;}const A=make();const B=make();const a=new A.<uint8>();const b=new B.<uint8>();const x:any=a;x.take(b);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nongeneric-control",
+      "modules": {
+        "main": "class E{}partial class E{self():E{return this;}}const a=new E();if(a.self()!==a)throw new Error(\"plain\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "outside-body-control",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{self():E{return this;}}const a:E=new E.<uint8>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "rule": "rt-generic-argument",
+          "phase": "static",
+          "checked": true,
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "explicit-other-application",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{other():E.<string>{return new E.<string>();}}new E.<uint8>().other();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unregistered-control",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E<T:type> implements Has.<E>{}new E.<uint8>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "shadow-primary-parameter",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{take<T:type>(x:E):E{return x;}}const a=new E.<uint8>();if(a.take.<string>(a)!==a)throw new Error(\"shadow\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "shadow-primary-parameter-wrong",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{take<T:type>(x:E):E{return x;}}const a:any=new E.<uint8>();a.take.<string>(new E.<string>());"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "escaped-body-self",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{make(){return (x:any):E=>{const y:E=x;return y;};}}const f:any=new E.<uint8>().make();f(new E.<string>());"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "rebound-target",
+      "modules": {
+        "main": "class E<T:type>{}class Other<T:type>{}partial class E{self():E{return this;}}const A=E;const a=new A.<uint8>();E=Other;if(a.self()!==a)throw new Error(\"rebound\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nongeneric-rebound-target",
+      "modules": {
+        "main": "class E{}class Other{}partial class E{self():E{return this;}}const a=new E();E=Other;if(a.self()!==a)throw new Error(\"rebound\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-method-self",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{m():E{function f(x:E):E{return x;}return f(this);}}const a=new E.<uint8>();if(a.m()!==a)throw new Error(\"nested\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "failed-then-register",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E<T:type> implements Has.<E>{}let failed=false;try{new E.<uint8>();}catch(e){failed=e instanceof TypeError;}partial class E{get():E{return this;}}const a=new E.<uint8>();if(!failed||a.get()!==a||E.<uint8>!==E.<uint8>)throw new Error(\"retry\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "failed-other-application",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E<T:type> implements Has.<E>{}partial class E<uint8>{get():E{return this;}}let failed=false;try{new E.<string>();}catch(e){failed=e instanceof TypeError;}const a=new E.<uint8>();if(!failed||a.get()!==a)throw new Error(\"restore\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-key-effects",
+      "modules": {
+        "main": "let effects=0;function key():string{effects=effects+1;return \"get\";}class E<T:type>{}partial class E{[key()]():E{return this;}}const a=new E.<uint8>();const b=new E.<string>();if(a.get()!==a||b.get()!==b||effects!==2||E.<uint8>!==E.<uint8>)throw new Error(\"effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "ref-array-liveness",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{location(a:[].<E>):ref E{return ref a[0];}}const a=new E.<uint8>();let list:[].<E.<uint8>>=[a];let ref r=a.location(list);list.pop();r=a;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "generic-interface-method",
+      "modules": {
+        "main": "interface Has<S:type>{id<U:type>(x:S):S;}class E<T:type> implements Has.<E>{}partial class E{id<T:type>(x:E):E{return x;}}const a=new E.<uint8>();if(a.id.<string>(a)!==a)throw new Error(\"generic\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "shadow-primary-explicit-method",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{take<T:type>(x:E.<T>):E.<T>{return x;}}const a=new E.<uint8>();const b=new E.<string>();if(a.take.<string>(b)!==b)throw new Error(\"explicit\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "later-method-shadow-does-not-change-closure",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{make<T:type>(){return (x:E):E=>x;}}const a=new E.<uint8>();const f=a.make.<string>();if(f(a)!==a)throw new Error(\"closure\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "explicit-no-interface",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{self():E.<T>{return this;}}const a=new E.<uint8>();if(a.self()!==a)throw new Error(\"explicit\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "same-partial-source-two-targets",
+      "modules": {
+        "main": "class A<T:type>{}class B<T:type>{}function extend(C:any){partial class C{self():C{return this;}take(x:C):C{return x;}}}extend(A);extend(B);const a:any=new A.<uint8>();const b:any=new B.<uint8>();if(a.self()!==a||b.self()!==b||a.self()!==a)throw new Error(\"targets\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "same-partial-source-wrong-target",
+      "modules": {
+        "main": "class A<T:type>{}class B<T:type>{}function extend(C:any){partial class C{self():C{return this;}take(x:C):C{return x;}}}extend(A);extend(B);const a:any=new A.<uint8>();const b:any=new B.<uint8>();if(a.self()!==a||b.self()!==b||a.self()!==a)throw new Error(\"targets\");a.take(b);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "returned-closure-shadow-wrong",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{make<T:type>(){return (x:E):E=>x;}}const a=new E.<uint8>();const f:any=a.make.<string>();f(new E.<string>());"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "wrong-result-static",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{get():E{return new E.<string>();}}new E.<uint8>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "checked": true,
+          "applicability": "always"
+        }
+      }
+    },
+    {
+      "name": "ref-local-write-after-return",
+      "modules": {
+        "main": "class E<T:type>{}partial class E{location():ref E{let x:E=this;return ref x;}}const a=new E.<uint8>();let ref r=a.location();r=a;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}
