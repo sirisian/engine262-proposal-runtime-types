@@ -9509,6 +9509,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (pushed) typeParameterScopes.pop();
       }
       if (it?.Kind !== 'nominal' || it.Declaration.type !== 'InterfaceDeclaration') {
+        // Retain an open target in the symbolic class contract so an applied
+        // class can refine its actual interface argument. This is a checking
+        // obligation, not a completed runtime contract: application still
+        // resolves the target kind and verifies the registered declarations
+        // before publishing a constructor or successful cache entry.
+        if (it && it.Kind !== 'any' && mentionsTypeParameter(it)) resolvedInterfaces.push(it);
         if (it && it.Kind !== 'any' && !mentionsTypeParameter(it)) {
           reportType('rt-implements-contract', n, 'an implements target must denote an interface');
         }
