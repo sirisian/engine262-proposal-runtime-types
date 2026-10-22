@@ -601,7 +601,11 @@ export class ModuleEnvironmentRecord extends DeclarativeEnvironmentRecord {
       return failure;
     }
     // 6. Return the value currently bound to N in envRec.
-    return TransferResultDependency(binding, NormalCompletion(binding.value!));
+    // #sec-reference-bindings: a direct module binding can alias a location,
+    // just like any other lexical binding. Reuse its read-through operation,
+    // including liveness and referent effects, after the module-specific import
+    // and uninitialized-binding checks. A ref binding has no snapshot value.
+    return yield* super.GetBindingValue(N, S);
   }
 
   /** https://tc39.es/ecma262/#sec-module-environment-records-deletebinding-n */
