@@ -91,6 +91,7 @@ function* NamedEvaluation_ClassExpression(ClassExpression: ParseNode.ClassExpres
       // reads these two and this record carried neither.
       Implements: Q(yield* ResolveImplementedInterfaces(ClassExpression, value)),
       InstanceFieldKeys: published?.Kind === 'nominal' ? published.InstanceFieldKeys : undefined,
+      LookupOnlyMemberKeys: published?.Kind === 'nominal' ? published.LookupOnlyMemberKeys : undefined,
       Base: RuntimeClassBaseOf(value) ?? (published?.Kind === 'nominal' ? published.Base : undefined),
       Structure: published?.Kind === 'nominal' ? published.Structure : undefined,
     };

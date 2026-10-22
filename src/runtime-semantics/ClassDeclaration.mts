@@ -101,6 +101,7 @@ export function* BindingClassDeclarationEvaluation(ClassDeclaration: ParseNode.C
       // must include inherited members and there must be exactly one builder.
       Implements: Q(yield* ResolveImplementedInterfaces(ClassDeclaration, value)),
       InstanceFieldKeys: published?.Kind === 'nominal' ? published.InstanceFieldKeys : undefined,
+      LookupOnlyMemberKeys: published?.Kind === 'nominal' ? published.LookupOnlyMemberKeys : undefined,
       Base: RuntimeClassBaseOf(value) ?? (published?.Kind === 'nominal' ? published.Base : undefined),
       Structure: published?.Kind === 'nominal' ? published.Structure : undefined,
     };

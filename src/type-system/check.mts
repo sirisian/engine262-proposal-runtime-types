@@ -6939,7 +6939,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     try {
       return MergePartialStructures(type, [...published, ...local.map((part) => partialContribution(part, staticMembers))], (key) => {
         reportType('rt-duplicate-member', root, '$1 is already declared on this type', Value(key));
-      });
+      }, staticMembers);
     } finally {
       partialStructuresInProgress.delete(type.Declaration);
     }
@@ -9446,7 +9446,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     // Merge the specialized base shape, not its declaration's still-generic
     // members. Inherited reads and disposal lookup need the same substitution.
-    const baseStructure = base && base.Kind === 'nominal' ? structureOf(base) : null;
+    const baseWithPartials = withPartialStructure(base);
+    const baseStructure = baseWithPartials?.Kind === 'nominal' ? structureOf(baseWithPartials) : null;
+    const inheritedLookupOnlyKeys = baseWithPartials?.Kind === 'nominal' ? baseWithPartials.LookupOnlyMemberKeys ?? [] : [];
     // #sec-typed-classes, #sec-replacement-values: a decorated base is a bounded
     // origin. Override and accessor checks hold for every subclass of it, so
     // they read its declared members; merged members, constructor signatures,
@@ -9456,6 +9458,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const overrideStructure = baseStructure ?? (boundedBase?.Kind === 'nominal' ? structureOf(boundedBase) : null);
     const implemented = (cls.ClassTail as { ImplementsClause?: readonly ParseNode[] | null } | null | undefined)?.ImplementsClause ?? [];
     const resolvedInterfaces: TypeRecord[] = [];
+    // A family can receive partials after publication, including from another
+    // module. Absence is decided at application; a declared incompatibility
+    // that no legal contribution can replace remains an early error.
+    const parameters = (n as ParseNode.ClassDeclaration).TypeParameters;
+    const pendingApplication = !!parameters && ((parameters.ListKind ?? 'parameters') !== 'parameters'
+      || parameters.TypeParameterList.length > 0);
     const inheritedFields = base?.Kind === 'nominal' ? base.InstanceFieldKeys ?? [] : [];
     const instanceFieldKeys = [...new Set([...inheritedFields, ...acc.fieldProperties.keys()])];
     // An inherited own field takes precedence over a derived prototype member.
@@ -9467,6 +9475,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (inherited && index >= 0) Properties[index] = inherited;
       }
     }
+    const effectiveDeclaredProperties = [...Properties];
     const receiver: TypeRecord = {
       Kind: 'nominal', Declaration: n,
       Arguments: ((n as ParseNode.ClassDeclaration).TypeParameters?.TypeParameterList ?? [])
@@ -9485,6 +9494,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const signature = contribution.Operator?.(key);
       if (signature) operators.set(key, signature);
     }
+    const lookupOnlyKeys = inheritedLookupOnlyKeys.filter((key) => !effectiveDeclaredProperties.some((property) => property.key === key));
     declaredClassContracts.set(n, {
       Structure: { Kind: 'object', Properties: declaredProperties.map((property) => ({ ...property, readonly: !!property.readonly })), IndexSignatures: [] },
       Fields: [...acc.fieldProperties.keys()],
@@ -9550,12 +9560,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         for (const p of istruct.Properties) {
           // A member is DECLARED if the class or any class it extends declares
           // it; an inherited member satisfies the interface as an own one does.
-          const own = Properties.find((o) => o.key === p.key)
+          const own = effectiveDeclaredProperties.find((o) => o.key === p.key)
             ?? (baseStructure && baseStructure.Kind === 'object'
-              ? baseStructure.Properties.find((o) => o.key === p.key)
+              ? baseStructure.Properties.find((o) => o.key === p.key && !inheritedLookupOnlyKeys.includes(o.key))
               : undefined);
           if (!own) {
-            if (!p.optional) {
+            if (!p.optional && !pendingApplication) {
               const completion = CreateTypeDiagnostic('rt-assignability', n, diagnosticPhase, '$1 is not assignable to $2', Value(`${className}, which declares no member ${p.key},`), Value(displayType(it))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
@@ -9582,6 +9592,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         for (const p of istruct.Properties) {
           if (!Properties.some((own) => own.key === p.key)) {
             Properties.push(p);
+            if (baseStructure?.Kind !== 'object' || !baseStructure.Properties.some((property) => property.key === p.key)) {
+              lookupOnlyKeys.push(p.key);
+            }
           }
         }
       }
@@ -9653,7 +9666,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const key = operatorTableKey(member as ParseNode.OperatorDefinition);
           const declared = operatorInChain(key);
           if (!declared) {
-            reportType('rt-assignability', n, '$1 is not assignable to $2', Value(`${implementor}, which declares no ${key} operator,`), Value(`${nm}`));
+            if (!pendingApplication) {
+              reportType('rt-assignability', n, '$1 is not assignable to $2', Value(`${implementor}, which declares no ${key} operator,`), Value(`${nm}`));
+            }
             continue;
           }
           // The member's own signature, built as `declaredOperator` builds the
@@ -9859,6 +9874,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // unrelated, which is the point of the classes being nominal at all.
       Base: base ?? undefined,
       Implements: resolvedInterfaces,
+      LookupOnlyMemberKeys: lookupOnlyKeys,
       InstanceFieldKeys: instanceFieldKeys,
       // The WRITE type of each setter, which a derived class needs to check
       // its own setters against and which the Structure cannot carry: a

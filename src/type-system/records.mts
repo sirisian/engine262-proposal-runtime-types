@@ -693,6 +693,8 @@ export type TypeRecord =
     readonly Implements?: readonly TypeRecord[],
     readonly SpecializationBindings?: ReadonlyMap<string, TypeRecord>,
     readonly InstanceFieldKeys?: readonly (string | SymbolValue)[],
+    // Lookup entries introduced only by interface claims are not declarations.
+    readonly LookupOnlyMemberKeys?: readonly (string | SymbolValue)[],
     // The WRITE type of each setter, which a derived class checks its own
     // setters against and which [[Structure]] cannot carry: a property has one
     // type there, and a getter already claims it. Declared beside [[Base]]

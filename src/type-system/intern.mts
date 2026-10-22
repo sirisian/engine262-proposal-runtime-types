@@ -562,7 +562,7 @@ function completeNominalRecord(known: TypeRecord, supplied: TypeRecord): void {
     if (supplied.Implements !== undefined) (known as { Implements?: readonly TypeRecord[] }).Implements = supplied.Implements;
     if (supplied.Base !== undefined) (known as { Base?: TypeRecord }).Base = supplied.Base;
   }
-  for (const key of ['Constructor', 'Structure', 'Implements', 'Base', 'InstanceFieldKeys'] as const) {
+  for (const key of ['Constructor', 'Structure', 'Implements', 'Base', 'InstanceFieldKeys', 'LookupOnlyMemberKeys'] as const) {
     if (known[key] === undefined && supplied[key] !== undefined) {
       (known as unknown as Record<string, unknown>)[key] = supplied[key];
     }

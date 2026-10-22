@@ -1,0 +1,832 @@
+{
+  "description": "Generic-family member completion uses registered partials while fixed-target availability and decisive declaration errors retain their boundaries.",
+  "cases": [
+    {
+      "name": "closed-partial",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type> implements Has{}partial class E{get():string{return \"ok\";}}const e:Has=new E.<uint8>();if(e.get()!==\"ok\")throw new Error(\"get\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "closed-unused-family",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type> implements Has{}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "closed-conditional-match",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type> implements Has{}partial class E<uint8>{get():string{return \"ok\";}}const e:Has=new E.<uint8>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "closed-conditional-wrong-unused",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type> implements Has{}partial class E<uint8>{get():boolean{return false;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "closed-operator",
+      "modules": {
+        "main": "interface Has{operator+(other:Has):string;}class E<T:type> implements Has{}partial class E{operator+(other:Has):string{return \"ok\";}}const e:Has=new E.<uint8>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "closed-getter",
+      "modules": {
+        "main": "interface Has{readonly value:string;}class E<T:type> implements Has{}partial class E{get value():string{return \"ok\";}}const e:Has=new E.<uint8>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "closed-computed-key",
+      "modules": {
+        "main": "let calls=0;function key():string{calls++;return \"get\";}interface Has{get():string;}class E<T:type> implements Has{}partial class E{[key()]():string{return \"ok\";}}const e:Has=new E.<uint8>();if(calls!==1||e.get()!==\"ok\")throw new Error(\"key\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "recursive-self-explicit",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E<T:type> implements Has.<E.<T>>{}partial class E{get():E.<T>{return this;}}new E.<uint8>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "recursive-self-primary",
+      "modules": {
+        "main": "interface Has<T:type>{get():T;}class E<T:type> implements Has.<E>{get():E{return this;}}new E.<uint8>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "closed-optional-claim",
+      "modules": {
+        "main": "interface Optional{get?():string;}interface Has{get():string;}class E<T:type> implements Optional,Has{}partial class E{get():string{return \"ok\";}}new E.<uint8>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "closed-inherited-partial",
+      "modules": {
+        "main": "interface Has{get():string;}class B<T:type>{}partial class B{get():string{return \"ok\";}}class E<T:type> extends B.<T> implements Has{}new E.<uint8>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "closed-captured-partial",
+      "modules": {
+        "main": "interface Has<T:type>{get(x:T):T;}function make<U:type>(){class E<T:type> implements Has.<U>{}partial class E{get(x:U):U{return x;}}return E;}const E:any=make.<string>();const e:Has.<string>=new E.<uint8>();if(e.get(\"ok\")!==\"ok\")throw new Error(\"capture\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "closed-missing-application",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type> implements Has{}new E.<uint8>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "closed-wrong-partial",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type> implements Has{}partial class E{get():boolean{return false;}}new E.<uint8>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "closed-before-partial",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type> implements Has{}new E.<uint8>();partial class E{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "closed-conditional-miss",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type> implements Has{}partial class E<uint8>{get():string{return \"ok\";}}new E.<boolean>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "closed-readonly-fails",
+      "modules": {
+        "main": "interface Has{value:string;}class E<T:type> implements Has{}partial class E{get value():string{return \"ok\";}}new E.<uint8>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "closed-wrong-primary",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type> implements Has{get():boolean{return false;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "non-generic-later",
+      "modules": {
+        "main": "interface Has{get():string;}class E implements Has{}partial class E{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "closed-base-field-wins",
+      "modules": {
+        "main": "interface Has{get():string;}class B{get:boolean=false;}class E<T:type> extends B implements Has{}partial class E{get():string{return \"ok\";}}new E.<uint8>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "closed-primary-collision",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type> implements Has{get():string{return \"one\";}}partial class E{get():string{return \"two\";}}new E.<uint8>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DUPLICATE_MEMBER",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "closed-partial-collision",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type> implements Has{}partial class E{get():string{return \"one\";}}partial class E{get():string{return \"two\";}}new E.<uint8>();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DUPLICATE_MEMBER",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "closed-non-interface",
+      "modules": {
+        "main": "class E<T:type> implements string{}partial class E{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "closed-import-local-partial",
+      "modules": {
+        "main": "import {E,Has} from \"dep\";partial class E{get():string{return \"ok\";}}const e:Has=new E.<uint8>();",
+        "dep": "export interface Has{get():string;}export class E<T:type> implements Has{}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "closed-import-producer-partial",
+      "modules": {
+        "main": "import {E,Has} from \"dep\";const e:Has=new E.<uint8>();",
+        "dep": "export interface Has{get():string;}export class E<T:type> implements Has{}partial class E{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "closed-cycle-with-partial",
+      "modules": {
+        "main": "import {E} from \"dep\";export interface Has{get():string;}",
+        "dep": "import {Has} from \"main\";export class E<T:type> implements Has{}partial class E{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_TYPE_EVALUATION",
+          "phase": "pre-evaluation"
+        }
+      }
+    },
+    {
+      "name": "retry-after-registration",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type> implements Has{}let failed=false;try{E.<uint8>;}catch(e){failed=e instanceof TypeError;}partial class E{get():string{return \"ok\";}}const e:Has=new E.<uint8>();if(!failed||e.get()!==\"ok\"||E.<uint8>!==E.<uint8>)throw new Error(\"retry\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-retries-and-success",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type> implements Has{}partial class E<uint8>{get():string{return \"ok\";}}let failed=0;for(let n=0;n<2;n++){try{E.<boolean>;}catch(e){if(e instanceof TypeError)failed++;}}const e:Has=new E.<uint8>();if(failed!==2||e.get()!==\"ok\")throw new Error(\"cache\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-key-cache",
+      "modules": {
+        "main": "let calls=0;function key():string{calls++;return \"get\";}interface Has{get():string;}class E<T:type> implements Has{}partial class E{[key()]():string{return \"ok\";}}if(calls!==0)throw new Error(\"hoist\");const C=E.<uint8>;const e:Has=new C();if(calls!==1||e.get()!==\"ok\"||C!==E.<uint8>||calls!==1)throw new Error(\"cache\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-key-failed-retries",
+      "modules": {
+        "main": "let calls=0;function key():string{calls++;return \"get\";}interface Has{get():boolean;}class E<T:type> implements Has{}partial class E{[key()]():string{return \"ok\";}}let failures=0;for(let n=0;n<2;n++){try{E.<uint8>;}catch(e){if(e instanceof TypeError)failures++;}}if(calls!==2||failures!==2)throw new Error(\"failure effects\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "symbol-key",
+      "modules": {
+        "main": "const key=Symbol(\"get\");interface Has{[key]():string;}class E<T:type> implements Has{}partial class E{[key]():string{return \"ok\";}}const e:Has=new E.<uint8>();if(e[key]()!==\"ok\")throw new Error(\"symbol\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "partial-alias",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type> implements Has{}const Alias=E;partial class Alias{get():string{return \"ok\";}}const e:Has=new E.<uint8>();if(e.get()!==\"ok\")throw new Error(\"alias\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-default",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type=uint8> implements Has{}partial class E{get():string{return \"ok\";}}const e:Has=new E();if(e.get()!==\"ok\")throw new Error(\"default\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "value-parameter",
+      "modules": {
+        "main": "interface Has{get():uint32;}class E<N:uint32> implements Has{}partial class E{get():uint32{return N;}}const e:Has=new E.<7>();if(e.get()!==(7:=uint32))throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "partial-primary-parameter",
+      "modules": {
+        "main": "interface Has<T:type>{get(x:T):T;}class E<T:type> implements Has.<T>{}partial class E{get(x:T):T{return x;}}const e:Has.<string>=new E.<string>();if(e.get(\"ok\")!==\"ok\")throw new Error(\"parameter\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "partial-capture",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type> implements Has{}partial class E<const U>{get():string{return \"ok\";}}const e:Has=new E.<uint8>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "partial-operator-conditional",
+      "modules": {
+        "main": "interface Has{operator+(other:Has):string;}class E<T:type> implements Has{}partial class E<uint8>{operator+(other:Has):string{return \"ok\";}}const e:Has=new E.<uint8>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "partial-operator-missing",
+      "modules": {
+        "main": "interface Has{operator+(other:Has):string;}class E<T:type> implements Has{}E.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "partial-operator-wrong",
+      "modules": {
+        "main": "interface Has{operator+(other:Has):string;}class E<T:type> implements Has{}partial class E{operator+(other:Has):boolean{return false;}}E.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "static-does-not-supply-instance",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type> implements Has{}partial class E{static get():string{return \"ok\";}}E.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "getter-admission-does-not-invoke",
+      "modules": {
+        "main": "interface Has{readonly value:string;}class E<T:type> implements Has{}partial class E{get value():string{throw new Error(\"getter invoked\");}}E.<uint8>;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "required-member-not-from-optional-claim",
+      "modules": {
+        "main": "interface Optional{get?():string;}interface Has{get():string;}class E<T:type> implements Optional,Has{}E.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "noncallable-cannot-be-repaired",
+      "modules": {
+        "main": "interface Has{():string;}class E<T:type> implements Has{}partial class E{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "primary-readonly-still-invalid",
+      "modules": {
+        "main": "interface Has{value:string;}class E<T:type> implements Has{get value():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "primary-wrong-operator-still-invalid",
+      "modules": {
+        "main": "interface Has{operator+(other:Has):string;}class E<T:type> implements Has{operator+(other:Has):boolean{return false;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "primary-field-hides-inherited-method",
+      "modules": {
+        "main": "interface Has{get():string;}class B{get:boolean=false;}class E<T:type> extends B implements Has{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "valid-primary-and-extra-partial",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type> implements Has{get():string{return \"ok\";}}partial class E{extra():boolean{return true;}}const e:Has=new E.<uint8>();if(e.get()!==\"ok\")throw new Error(\"primary\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "multiple-matching-parts",
+      "modules": {
+        "main": "interface Has{a():string;b():string;}class E<T:type> implements Has{}partial class E{a():string{return \"a\";}}partial class E<uint8>{b():string{return \"b\";}}const e:Has=new E.<uint8>();if(e.a()+e.b()!==\"ab\")throw new Error(\"parts\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "selected-case-and-partial",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type> implements Has{}class E<uint8> implements Has{}partial class E<uint8>{get():string{return \"ok\";}}const e:Has=new E.<uint8>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inherited-partial-derived-fixed",
+      "modules": {
+        "main": "interface Has{get():string;}class B<T:type> implements Has{}partial class B{get():string{return \"ok\";}}class D extends B.<uint8>{}const e:Has=new D();if(e.get()!==\"ok\")throw new Error(\"base\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "two-activations",
+      "modules": {
+        "main": "interface Has<T:type>{get(x:T):T;}function make<U:type>(){class E<T:type> implements Has.<U>{}partial class E{get(x:U):U{return x;}}return E;}const A:any=make.<string>(),B:any=make.<boolean>();const a:Has.<string>=new A.<uint8>();const b:Has.<boolean>=new B.<uint8>();if(a.get(\"ok\")!==\"ok\"||b.get(true)!==true||A.<uint8>===B.<uint8>)throw new Error(\"activation\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-symbol-partial",
+      "modules": {
+        "dep": "export const key=Symbol(\"get\");export interface Has{[key]():string;}export class E<T:type> implements Has{}",
+        "main": "import {E,Has,key} from \"dep\";partial class E{[key]():string{return \"ok\";}}const e:Has=new E.<uint8>();if(e[key]()!==\"ok\")throw new Error(\"symbol\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "reexported-family-partial",
+      "modules": {
+        "dep": "export interface Has{get():string;}export class E<T:type> implements Has{}",
+        "relay": "export {E as Alias,Has} from \"dep\";",
+        "main": "import {Alias,Has} from \"relay\";partial class Alias{get():string{return \"ok\";}}const e:Has=new Alias.<uint8>();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "relay",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-target-missing-member",
+      "modules": {
+        "dep": "export interface Has{get():string;}",
+        "main": "import {Has} from \"dep\";class E<T:type> implements Has{}E.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "imported-non-interface-unused",
+      "modules": {
+        "dep": "export type Has=string;",
+        "main": "import {Has} from \"dep\";class E<T:type> implements Has{}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPLEMENTS_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "dependency-error-precedes-registration",
+      "modules": {
+        "dep": "throw new Error(\"dependency\");export interface Has{get():string;}",
+        "main": "import {Has} from \"dep\";class E<T:type> implements Has{}partial class E{get():string{return \"ok\";}}E.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "Error"
+      }
+    },
+    {
+      "name": "inherited-optional-claim-can-be-supplied",
+      "modules": {
+        "main": "interface Optional{get?():string;}interface Has{get():string;}class B<T:type> implements Optional{}class E<T:type> extends B.<T> implements Has{}partial class E{get():string{return \"ok\";}}const e:Has=new E.<uint8>();if(e.get()!==\"ok\")throw new Error(\"inherited claim\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inherited-real-member-still-collides",
+      "modules": {
+        "main": "interface Has{get():string;}class B{get():string{return \"base\";}}class E<T:type> extends B implements Has{}partial class E{get():string{return \"partial\";}}E.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DUPLICATE_MEMBER",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "static-collision-preserved",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type> implements Has{static extra():string{return \"one\";}}partial class E{get():string{return \"ok\";}static extra():string{return \"two\";}}E.<uint8>;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_DUPLICATE_MEMBER",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "later-partial-keeps-cache-identity",
+      "modules": {
+        "main": "interface Has{get():string;}class E<T:type> implements Has{}partial class E{get():string{return \"ok\";}}const C=E.<uint8>;const e:Has=new C();partial class E{extra():string{return \"extra\";}}if(C!==E.<uint8>||e.get()!==\"ok\"||new C().extra()!==\"extra\")throw new Error(\"later partial\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "optional-claim-existing-application",
+      "modules": {
+        "main": "interface Optional{get?():string;}class E<T:type> implements Optional{}const C=E.<uint8>;partial class E{get():string{return \"ok\";}}if(C!==E.<uint8>||new C().get()!==\"ok\")throw new Error(\"existing application\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nongeneric-optional-claim",
+      "modules": {
+        "main": "interface Optional{get?():string;}class E implements Optional{}partial class E{get():string{return \"ok\";}}if(new E().get()!==\"ok\")throw new Error(\"optional\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nongeneric-inherited-claim-is-not-evidence",
+      "modules": {
+        "main": "interface Optional{get?():string;}interface Has{get():string;}class B implements Optional{}class E extends B implements Has{}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    }
+  ]
+}

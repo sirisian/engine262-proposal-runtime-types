@@ -1,5 +1,5 @@
 import type { ParseNode } from '../parser/ParseNode.mts';
-import { Value } from '../value.mts';
+import { Value, type SymbolValue } from '../value.mts';
 import { surroundingAgent } from '../execution-context/Agent.mts';
 import { CallableGroupHostFor } from './component-patterns.mts';
 import { MatchSpecializationList } from './specialization-patterns.mts';
@@ -48,6 +48,7 @@ export function MergePartialStructures(
   type: TypeRecord,
   contributions: readonly PartialStructureContribution[],
   collision: (key: string) => void,
+  staticMembers = false,
 ): TypeRecord {
   if (type.Kind !== 'nominal' || contributions.length === 0) return type;
   const parameters = (type.Declaration as { TypeParameters?: ParseNode.TypeParameters | null }).TypeParameters?.TypeParameterList ?? [];
@@ -60,6 +61,14 @@ export function MergePartialStructures(
       ? { Kind: 'literal', Value: Value(argument), Base: makePrimitive('number') } : argument);
   });
   let structure = base ? substituteTypeParameters(base, frame) : null;
+  // Interface-only entries describe the promised lookup surface, not an
+  // existing declaration. A real partial can supply them without colliding.
+  const baseLookupOnly = 'PartialBaseLookupOnlyMemberKeys' in type
+    ? (type as typeof type & { PartialBaseLookupOnlyMemberKeys?: readonly (string | SymbolValue)[] }).PartialBaseLookupOnlyMemberKeys
+    : type.LookupOnlyMemberKeys;
+  const lookupOnly = new Set(staticMembers ? [] : baseLookupOnly ?? []);
+  const keys = new Set(structure?.Kind === 'object'
+    ? structure.Properties.filter((property) => !lookupOnly.has(property.key)).map((property) => property.key) : []);
   const operatorKeys = (declaration: object): Set<string> => new Set(
     ((declaration as ParseNode.ClassDeclaration).ClassTail?.ClassBody ?? [])
       .filter((member): member is ParseNode.OperatorDefinition => member.type === 'OperatorDefinition')
@@ -76,20 +85,26 @@ export function MergePartialStructures(
     const template = part.Structure();
     const added = template && substituteTypeParameters(template, bindings);
     if (!added) continue;
+    if (added.Kind === 'object') for (const property of added.Properties) lookupOnly.delete(property.key);
     if (!structure) {
       structure = added;
+      if (added.Kind === 'object') for (const property of added.Properties) keys.add(property.key);
       continue;
     }
     if (structure.Kind === 'function' && added.Kind === 'function') {
       structure = { Kind: 'function', Signatures: [...structure.Signatures, ...added.Signatures] };
     } else if (structure.Kind === 'object' && added.Kind === 'object') {
-      const keys = new Set(structure.Properties.map((p) => p.key));
-      for (const property of added.Properties) if (keys.has(property.key)) collision(String(property.key));
-      structure = { Kind: 'object', Properties: [...structure.Properties, ...added.Properties],
+      for (const property of added.Properties) {
+        if (keys.has(property.key)) collision(String(property.key));
+        keys.add(property.key);
+      }
+      const addedKeys = new Set(added.Properties.map((property) => property.key));
+      structure = { Kind: 'object', Properties: [...structure.Properties.filter((property) => !addedKeys.has(property.key)), ...added.Properties],
         IndexSignatures: [...structure.IndexSignatures, ...added.IndexSignatures] };
     } else collision('call signatures and named members');
   }
-  return { ...type, PartialBaseStructure: base, Structure: structure ?? undefined } as TypeRecord;
+  return { ...type, PartialBaseStructure: base, PartialBaseLookupOnlyMemberKeys: baseLookupOnly,
+    Structure: structure ?? undefined, LookupOnlyMemberKeys: [...lookupOnly] } as TypeRecord;
 }
 
 const runtimeContributions = new WeakMap<object, Map<object, PartialStructureContribution[]>>();

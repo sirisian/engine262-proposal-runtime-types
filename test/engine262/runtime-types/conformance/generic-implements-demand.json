@@ -146,19 +146,17 @@
       }
     },
     {
-      "name": "invalid-static-member",
+      "name": "unused-open-member-obligation",
       "modules": {
         "main": "import {E} from \"dep\";export interface Has<T:type>{get():T;}",
         "dep": "import {Has} from \"main\";export class E<T:type> implements Has.<T>{}"
       },
       "expected": {
-        "status": "rejected",
-        "bodyEntries": [],
-        "errorClass": "StaticTypeError",
-        "diagnostic": {
-          "code": "RT_ASSIGNABILITY",
-          "phase": "static"
-        }
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
       }
     },
     {
