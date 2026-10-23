@@ -1,0 +1,1067 @@
+{
+  "description": "Array declaration provenance, iterator uncertainty, and receiving-boundary stability. Requirements are specified independently of observations.",
+  "cases": [
+    {
+      "name": "typed-string",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return [x];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed-singleton",
+      "modules": {
+        "main": "function make(){const x:\"s\"=\"s\";return [x];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed-null",
+      "modules": {
+        "main": "function make(){const x:null=null;return [x];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed-undefined",
+      "modules": {
+        "main": "function make(){const x:undefined=undefined;return [x];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed-boolean",
+      "modules": {
+        "main": "function make(){const x:boolean=true;return [x];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed-number",
+      "modules": {
+        "main": "function make(){const x:number=1;return [x];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "parentheses",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return ([x]);}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nested-array",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return [[x]];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "object-in-array",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return [{x}];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "array-in-object",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return {items:[x]};}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "mixed-values",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return [1,x,false];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "holes",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return [,x,,];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-alias",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";const a=[x];return a;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "unchanged-let-alias",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";let a=[x];return a;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "alias-chain",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";const a=[x];let b=a;return b;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "published-call",
+      "modules": {
+        "main": "function make(){function value():string{return \"s\";}return [value()];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "participating-call",
+      "modules": {
+        "main": "function make(){function value(x:any){return \"s\";}return [value(1)];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed-arrow",
+      "modules": {
+        "main": "function make(){return [(x:string)=>x];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed-method-object",
+      "modules": {
+        "main": "function make(){return [{m(x:string){return x;}}];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed-property",
+      "modules": {
+        "main": "function make(){const o:{x:string}={x:\"s\"};return [o.x];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "captured-binding",
+      "modules": {
+        "main": "const x:string=\"s\";function make(){return [x];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "separate-arm-anchor",
+      "modules": {
+        "main": "function make(){const flag:any=true;const x:string=\"s\";return flag?[x]:[\"s\"];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "mixed-any-element",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";const y:any=\"s\";return [x,y];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The array-literal static type rule makes an unknown element an unknown aggregate, even beside an anchored element.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "annotated-parameter-control",
+      "modules": {
+        "main": "function make(seed:number){return [\"s\"];}const n:number=make(1);"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "annotated-return-control",
+      "modules": {
+        "main": "function make():[].<string>{return [\"s\"];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "literal-only",
+      "modules": {
+        "main": "function make(){return [\"s\"];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "No declared contribution establishes a published factory result; the receiving number boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "literal-alias",
+      "modules": {
+        "main": "function make(){const x=\"s\";return [x];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "No declared contribution establishes a published factory result; the receiving number boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nested-literal",
+      "modules": {
+        "main": "function make(){return [[\"s\"]];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "No declared contribution establishes a published factory result; the receiving number boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "object-literal-only",
+      "modules": {
+        "main": "function make(){return [{x:\"s\"}];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "No declared contribution establishes a published factory result; the receiving number boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "empty",
+      "modules": {
+        "main": "function make(){return [];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "No declared contribution establishes a published factory result; the receiving number boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "elision-only",
+      "modules": {
+        "main": "function make(){return [,];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "No declared contribution establishes a published factory result; the receiving number boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "control-only",
+      "modules": {
+        "main": "function make(){const flag:boolean=Math.random()>0.5;return [flag?\"a\":\"b\"];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "No declared contribution establishes a published factory result; the receiving number boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "erased-element",
+      "modules": {
+        "main": "function make(){const x:any=\"s\";return [x];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "No declared contribution establishes a published factory result; the receiving number boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "erased-alias",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";const a:any=[x];return a;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "No declared contribution establishes a published factory result; the receiving number boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "literal-arrow",
+      "modules": {
+        "main": "function make(){return [()=>\"s\"];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "No declared contribution establishes a published factory result; the receiving number boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "unknown-spread",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";const a:[].<string>=[\"s\"];return [x,...a];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "No declared contribution establishes a published factory result; the receiving number boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "tuple-storage-spread",
+      "modules": {
+        "main": "function make(){const a:[string,number]=[\"s\",1];return [...a];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "No declared contribution establishes a published factory result; the receiving number boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "array-storage-spread",
+      "modules": {
+        "main": "function make(){const a:[].<string>=[\"s\"];return [...a];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "No declared contribution establishes a published factory result; the receiving number boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "literal-array-spread",
+      "modules": {
+        "main": "function make(){return [...[\"s\"]];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "No declared contribution establishes a published factory result; the receiving number boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "unresolved-result-join",
+      "modules": {
+        "main": "function make(){const flag:any=true;const x:string=\"s\";const other:any=[\"s\"];return flag?[x]:other;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "No declared contribution establishes a published factory result; the receiving number boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "erased-return",
+      "modules": {
+        "main": "function make():any{const x:string=\"s\";return [x];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "No declared contribution establishes a published factory result; the receiving number boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "immutable-tuple-spread",
+      "modules": {
+        "main": "function make(){const a:Composite.<[string,number]>=Composite.<[string,number]>([\"s\",1]);return [...a];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "immutable-tuple-spread-direct",
+      "modules": {
+        "main": "function make(){return [...Composite.<[string,number]>([\"s\",1])];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "structural-spread",
+      "modules": {
+        "main": "function make(){const a:{[Symbol.iterator]():{next():{done:boolean,value:string}}}={ [Symbol.iterator](){return {next(){return {done:true,value:\"s\"};}};}};return [...a];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "literal-protocol-spread",
+      "modules": {
+        "main": "function make(){return [...{[Symbol.iterator]():{next():{done:boolean,value:string}}{return {next(){return {done:true,value:\"s\"};}};}}];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nested-protocol-spread",
+      "modules": {
+        "main": "function make(){return [[...{[Symbol.iterator]():{next():{done:boolean,value:string}}{return {next(){return {done:true,value:\"s\"};}};}}]];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Known declaration-derived array contribution participates.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "changed-let-remains-dynamic",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";let a=[x];a=1;return a;}const n:number=make();if(n!==1)throw new Error(\"value\");"
+      },
+      "script": true,
+      "requirement": "A reassigned unannotated let is not a transparent initializer alias.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "successful-result",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return [x];}const a=make();const s:string=a[0];if(s!==\"s\")throw new Error(\"value\");"
+      },
+      "script": true,
+      "requirement": "Published array result admits its valid element.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-result",
+      "modules": {
+        "main": "function make<T:type>(value:T){return [value];}const a=make.<string>(\"s\");const s:string=a[0];if(s!==\"s\")throw new Error(\"value\");"
+      },
+      "script": true,
+      "requirement": "Generic signature instantiation preserves the array element.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-captured-result",
+      "modules": {
+        "main": "function outer<T:type>(value:T){return function make(){const x:T=value;return [x];};}const make=outer.<string>(\"s\");const a=make();const s:string=a[0];if(s!==\"s\")throw new Error(\"value\");"
+      },
+      "script": true,
+      "requirement": "Nested callable result substitutes the captured type parameter.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "mutable-array-iterator-replacement",
+      "modules": {
+        "main": "function make(){const a:[].<string>=[\"s\"];function replace(o:any){o[Symbol.iterator]=function*(){yield 1;};}replace(a);return [...a];}const a=make();if(a[0]!==1)throw new Error(\"iterator\");"
+      },
+      "script": true,
+      "requirement": "A storage annotation cannot override the iterator actually selected at evaluation.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "mutable-tuple-iterator-replacement",
+      "modules": {
+        "main": "function make(){const a:[string]=[\"s\"];function replace(o:any){o[Symbol.iterator]=function*(){yield 1;yield 2;};}replace(a);return [...a];}const a=make();if(a.length!==2||a[0]!==1||a[1]!==2)throw new Error(\"iterator\");"
+      },
+      "script": true,
+      "requirement": "Tuple storage extent does not constrain iteration count or yielded values.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-const-receiving-boundary",
+      "modules": {
+        "main": "const x:string=\"s\";const a=[x];function replace(o:any){o[0]=Symbol();}replace(a);const s:string=a[0];"
+      },
+      "script": true,
+      "requirement": "Inferred initialization preserves a conforming plain array; a later typed read must still enforce its established view.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "array-const-failed-read-recovery",
+      "modules": {
+        "main": "const x:string=\"s\";const a=[x];function replace(o:any,v:any){o[0]=v;}replace(a,Symbol());let rejected=false;try{const s:string=a[0];}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"read\");replace(a,\"t\");const s:string=a[0];if(s!==\"t\")throw new Error(\"recovery\");"
+      },
+      "script": true,
+      "requirement": "A failed inferred-view read does not poison a later valid read after a backing replacement.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-let-has-no-inferred-storage",
+      "modules": {
+        "main": "const x:string=\"s\";let a=[x];a[0]=1;if(a[0]!==1)throw new Error(\"dynamic\");"
+      },
+      "script": true,
+      "requirement": "An ordinary unannotated let does not acquire inferred array storage.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "dynamic-extent",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return [x];}const a=make();a.push(\"t\");if(a.length!==2||a[1]!==\"t\")throw new Error(\"extent\");"
+      },
+      "script": true,
+      "requirement": "Array literal length does not become a fixed extent.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "spread-effects-once",
+      "modules": {
+        "main": "let trace=\"\";function make(){return [...{[Symbol.iterator]():{next():{done:boolean,value:string}}{trace+=\"i\";let n=0;return {next(){trace+=\"n\";n++;return {done:n>1,value:\"s\"};}};}}];}const a=make();if(trace!==\"inn\"||a[0]!==\"s\")throw new Error(trace);"
+      },
+      "script": true,
+      "requirement": "Static provenance adds no iterator lookup or step; evaluation invokes one iterator and two steps.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-factory",
+      "modules": {
+        "dep": "export function make(){const x:string=\"s\";return [x];}",
+        "main": "import {make} from \"dep\";const n:number=make();"
+      },
+      "script": false,
+      "requirement": "Published provenance crosses a module boundary without executing either body.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "imported-factory-valid",
+      "modules": {
+        "dep": "export function make(){const x:string=\"s\";return [x];}",
+        "main": "import {make} from \"dep\";const a=make();const s:string=a[0];if(s!==\"s\")throw new Error(\"value\");"
+      },
+      "script": false,
+      "requirement": "A valid imported result keeps its element contract.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "forward-dependency",
+      "modules": {
+        "main": "function make(){return later();}function later(){const x:string=\"s\";return [x];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Array provenance completes a forward result dependency before publication.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "reverse-dependency",
+      "modules": {
+        "main": "function later(){const x:string=\"s\";return [x];}function make(){return later();}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Declaration order does not change contribution provenance.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "recursive-dependency",
+      "modules": {
+        "main": "const flag:any=false;function make(){if(flag)return again();const x:string=\"s\";return [x];}function again(){return make();}const n:number=again();"
+      },
+      "script": true,
+      "requirement": "An independently anchored array contribution seeds a mutually recursive result cycle.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "array-const-receiving-conversion",
+      "modules": {
+        "main": "const x:string=\"s\";const a=[x];function replace(o:any){o[0]=1;}replace(a);const s:string=a[0];function verify(v:any){if(typeof v!==\"string\"||v!==\"1\")throw new Error(\"conversion\");}verify(s);"
+      },
+      "script": true,
+      "requirement": "The retained receiving boundary performs an admitted Number-to-String conversion after backing mutation.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unknown-element-signature-anchor",
+      "modules": {
+        "main": "function make(seed:number){const x:any=\"s\";return [x];}const n:number=make(1);"
+      },
+      "script": true,
+      "requirement": "No declared contribution establishes a published factory result; the receiving number boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "unknown-element-signature-alias",
+      "modules": {
+        "main": "function make(seed:number){const x:any=\"s\";const a=[x];return a;}const n:number=make(1);"
+      },
+      "script": true,
+      "requirement": "No declared contribution establishes a published factory result; the receiving number boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "unknown-element-after-known",
+      "modules": {
+        "main": "function make(seed:number){const x:string=\"s\";const y:any=\"s\";return [x,y];}const n:number=make(1);"
+      },
+      "script": true,
+      "requirement": "No declared contribution establishes a published factory result; the receiving number boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "unknown-element-before-known",
+      "modules": {
+        "main": "function make(seed:number){const x:string=\"s\";const y:any=\"s\";return [y,x];}const n:number=make(1);"
+      },
+      "script": true,
+      "requirement": "No declared contribution establishes a published factory result; the receiving number boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    }
+  ]
+}

@@ -4554,6 +4554,14 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const carriesRange = (type: Known): boolean => type?.Kind === 'union'
         ? type.Members.some(carriesRange) : type?.Kind === 'nominal' && isRangeFamilyName(type.LibraryName);
       if (carriesRange(receiver)) return false;
+      // An inferred binding can preserve a conforming plain array without
+      // installing typed storage. Its static array/tuple view therefore does
+      // not prove that a later indexed read survived an erased backing write.
+      // Keep the receiving check unless storage stability is independently
+      // established; membership at initialization is not such a proof.
+      const carriesSequence = (type: Known): boolean => type?.Kind === 'union'
+        ? type.Members.some(carriesSequence) : type?.Kind === 'array' || type?.Kind === 'tuple';
+      if (carriesSequence(receiver)) return false;
     }
     if (node.type === 'CallExpression') {
       const callee = (node as unknown as { CallExpression?: ParseNode, MemberExpression?: ParseNode });
@@ -19614,7 +19622,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           // out rather than a one-line record.
           return null;
         }
-        let allElementsLiteral = true;
+        let anchored = false;
         const members: TypeRecord[] = [];
         for (const el of elements) {
           if (!el || typeof el !== 'object') {
@@ -19638,14 +19646,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               errors.push(completion.Value as ObjectValue);
             }
             t = StaticIterationContribution(spread, structureOf).element;
+            // Storage alone does not constrain a replaceable iterator. Retain
+            // provenance only when that protocol supplies a known contribution.
+            if (t && t.Kind !== 'any') {
+              anchored ||= derivesFromDeclaration(el.AssignmentExpression, spread);
+            }
           } else {
             t = staticType(el);
+            anchored ||= derivesFromDeclaration(el, t);
           }
-          if (!t) {
+          if (!t || t.Kind === 'any') {
             return null;
-          }
-          if (t.Kind !== 'literal') {
-            allElementsLiteral = false;
           }
           const widened = widen(t);
           if (!members.some((m) => SameType(m, widened))) {
@@ -19656,10 +19667,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           return null;
         }
         const element = members.length === 1 ? members[0]! : CanonicalizeType({ Kind: 'union', Members: members });
-        if (allElementsLiteral) {
-          literalDerivedArrays.add(node as unknown as object);
-        }
-        return { Kind: 'array', Element: element, Extent: 'dynamic' } as Known;
+        const result: TypeRecord = { Kind: 'array', Element: element, Extent: 'dynamic' };
+        if (anchored) literalContractAnchors.add(result);
+        return result;
       }
       case 'TypedConversionExpression':
         return resolveType((node as unknown as { Type: ParseNode.Type }).Type);
@@ -28736,8 +28746,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
 
-  /** Array literals every element of which is a literal; they anchor nothing. */
-  const literalDerivedArrays = new WeakSet<object>();
   // Query results, rather than source nodes: the same literal can be described
   // under different contexts. A private approximation never creates an anchor.
   const literalContractAnchors = new WeakSet<object>();
@@ -28761,8 +28769,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * narrowing and parentheses. Transparent inference locals retain their
    * initializer's provenance separately from its widened type. For other
    * expressions, self-describing literals supply no declaration evidence.
-   * Function and object literals retain declaration provenance from their
-   * particular contract query. For an object, only surviving descriptors count.
+   * Function, object and array literals retain declaration provenance from their
+   * particular contract query. For an object, only surviving descriptors count;
+   * an array spread contributes through its iteration protocol, not its storage.
    *
    * A known, non-literal contribution is NOT therefore anchored, because a
    * form that DESCRIBES ITSELF derives from no declaration either: an object
@@ -28775,8 +28784,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * inference and the call would have a Static Type where the clause gives
    * it ~any~, refusing before the program ran a mismatch the run time
    * reports as a catchable TypeError - the direction that breaks working
-   * programs. `literalDerivedArrays` is the same test for one more form,
-   * decided where the array is built.
+   * programs. Array provenance is likewise decided where its type is built.
    */
   const derivesFromDeclaration = (expr: ParseNode | null | undefined, t: { Kind?: string, Name?: string } | null | undefined): boolean => {
     expr = expr ? patternExpression(expr) : expr;
@@ -28814,9 +28822,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!expr || typeof expr !== 'object') {
       return false;
     }
-    if (literalDerivedArrays.has(expr as unknown as object)) {
-      return false;
-    }
     switch ((expr as { type?: string }).type) {
       case 'FunctionExpression':
       case 'ArrowFunction':
@@ -28825,8 +28830,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'GeneratorExpression':
       case 'AsyncGeneratorExpression':
       case 'ObjectLiteral':
-        return literalContractAnchors.has(t);
       case 'ArrayLiteral':
+        return literalContractAnchors.has(t);
       case 'ClassExpression':
       case 'RegularExpressionLiteral':
       case 'TemplateLiteral':
@@ -30837,9 +30842,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'MemberExpression':
         return !!expr.MemberExpression && constInitializerParticipates(expr.MemberExpression);
       case 'ObjectLiteral':
-        return literalContractAnchors.has(t);
       case 'ArrayLiteral':
-        return expr.ElementList.some((el) => constInitializerParticipates(el));
+        return literalContractAnchors.has(t);
       case 'ConditionalExpression':
         // A typed condition does not type the values supplied by its arms.
         return constInitializerParticipates(expr.AssignmentExpression_a)
