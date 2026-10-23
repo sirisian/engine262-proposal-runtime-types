@@ -22422,6 +22422,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const Properties: { key: string | SymbolValue, type: TypeRecord, optional: boolean, readonly?: boolean, writeType?: TypeRecord }[] = [];
     const ownMethods = new Map<string | SymbolValue, DeclaredOverload[]>();
+    // Provenance belongs to this shape query and its surviving descriptors,
+    // not to an equal structural type or an overwritten source member.
+    const memberAnchors = new Map<string | SymbolValue, { read: boolean, write?: boolean, accessor?: boolean }>();
+    const declaredAnchor = (type: Known): boolean => !!type && type.Kind !== 'any';
     // The target's member types, where the literal has a target. Recorded by
     // `staticTypeIn` because this operation is reached from `staticType`'s own
     // arm and cannot take one as a parameter.
@@ -22612,6 +22616,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             }
           }
           if (!valueType) return null;
+          const entry = memberAnchors.get(methodKey);
+          const previousAnchor = entry?.accessor ? entry : undefined;
+          memberAnchors.set(methodKey, getter
+            ? { read: declaredAnchor(valueType), write: previousAnchor?.write, accessor: true }
+            : { read: previousAnchor?.read ?? false, write: declaredAnchor(valueType), accessor: true });
           const prior = Properties.find((p) => p.key === methodKey);
           if (!prior) Properties.push({ key: methodKey, type: getter ? valueType : undefinedType,
             optional: false, readonly: getter, ...(getter ? {} : { writeType: valueType }) });
@@ -22653,6 +22662,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const generator = member.type === 'GeneratorMethod' || member.type === 'AsyncGeneratorMethod';
           const asyncGenerator = member.type === 'AsyncGeneratorMethod';
           let Return = member.TypeAnnotation ? resolveType(member.TypeAnnotation.Type) : null;
+          let anchored = parameterTypes.some(declaredAnchor) || declaredAnchor(Return)
+            || declaredAnchor(expected?.Return ?? null) || declaredAnchor(expected?.ThisType ?? null);
           if (Return && generator) Return = generatorDeclaredType(Return, asyncGenerator);
           const signature: { Parameters: ParameterRecord[], Return: Known, Untyped: boolean, InferredReturn?: Known, TypeParameters?: readonly TypeParameterRecord[], ThisType?: TypeRecord | null, Narrows?: SignatureRecord['Narrows'] } = {
             Parameters, Return, ...methodPredicate(member.TypeAnnotation, Parameters, Return),
@@ -22696,6 +22707,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const anchorage = { anchored: false };
             let inferred = inferredReturnType(member, parameterTypes, context, anchorage, mode);
             if (inferred && (annotations.some((type) => type) || expected || anchorage.anchored)) {
+              if (declaredAnchor(inferred)) anchored = true;
               if (generator) {
                 const returned = inferredReturnType(member, parameterTypes, generatorParameters(expected?.Return)?.Return ?? null, { anchored: false }, 'generator-return');
                 inferred = expected?.Return ?? generatorDeclaredType(inferred, asyncGenerator, returned ?? anyTypeRecord);
@@ -22716,6 +22728,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const priorSignatures = previousType?.Kind === 'function' ? previousType.Signatures : [];
           const Signatures = signature.Untyped && priorSignatures.every((entry) => (entry as SignatureRecord & { Untyped?: boolean }).Untyped)
             ? [signature] : [...priorSignatures, signature];
+          const retainsPrevious = priorSignatures.some((entry) => Signatures.includes(entry));
+          memberAnchors.set(methodKey, { read: anchored || retainsPrevious && !!memberAnchors.get(methodKey)?.read });
           if (previous !== -1) Properties.splice(previous, 1);
           Properties.push({ key: methodKey, type: { Kind: 'function', Signatures }, optional: false, readonly: false });
         } finally {
@@ -22742,6 +22756,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const prior = Properties.findIndex((p) => p.key === property.key);
           if (prior !== -1) Properties.splice(prior, 1);
           Properties.push({ ...property });
+          memberAnchors.set(property.key, { read: false });
         }
         continue;
       }
@@ -22951,8 +22966,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (Properties[prior].key === key) Properties.splice(prior, 1);
       }
       Properties.push({ key, type: adapted, optional: false, readonly: false });
+      memberAnchors.set(key, { read: declaredMember ? declaredAnchor(declaredMember)
+        : wantedMember ? declaredAnchor(wantedMember) : derivesFromDeclaration(prop.AssignmentExpression, memberType) });
     }
-    return { Kind: 'object', Properties, IndexSignatures: [] } as unknown as Known;
+    const result = { Kind: 'object', Properties, IndexSignatures: [] } as unknown as TypeRecord;
+    if ([...memberAnchors.values()].some((member) => member.read || member.write)) literalContractAnchors.add(result);
+    return result;
   };
 
   /** #sec-typed-classes: check the effective object-literal accessor pair. */
@@ -28742,16 +28761,16 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    * narrowing and parentheses. Transparent inference locals retain their
    * initializer's provenance separately from its widened type. For other
    * expressions, self-describing literals supply no declaration evidence.
-   * A function literal retains any declaration-derived signature positions or
-   * participating inferred result from its particular type query.
+   * Function and object literals retain declaration provenance from their
+   * particular contract query. For an object, only surviving descriptors count.
    *
    * A known, non-literal contribution is NOT therefore anchored, because a
    * form that DESCRIBES ITSELF derives from no declaration either: an object
    * literal is `{}`, an unannotated function can be `() => void`, `null` is `null`.
    * Two tests are applied - the TYPE has exactly one value
    * (`selfDescribingType`), or the EXPRESSION is a self-describing literal
-   * FORM, which is the same point for an object or function whose type has
-   * many values but whose shape no declaration supplied. Without the second,
+   * FORM without retained provenance, which is the same point for an object
+   * or function whose shape no declaration supplied. Without the second,
    * `function g(){ return {}; } let a: uint8 = g();` would PARTICIPATE in
    * inference and the call would have a Static Type where the clause gives
    * it ~any~, refusing before the program ran a mismatch the run time
@@ -28805,8 +28824,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'AsyncArrowFunction':
       case 'GeneratorExpression':
       case 'AsyncGeneratorExpression':
-        return literalContractAnchors.has(t);
       case 'ObjectLiteral':
+        return literalContractAnchors.has(t);
       case 'ArrayLiteral':
       case 'ClassExpression':
       case 'RegularExpressionLiteral':
@@ -30818,15 +30837,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'MemberExpression':
         return !!expr.MemberExpression && constInitializerParticipates(expr.MemberExpression);
       case 'ObjectLiteral':
-        return expr.PropertyDefinitionList.some((p) => !!(p as { TypeAnnotation?: unknown }).TypeAnnotation
-          || (p.type === 'MethodDefinition' && !p.UniqueFormalParameters && !p.PropertySetParameterList
-            && !!publishedReturnTypes.get(p))
-          || (p.type === 'MethodDefinition' && (p.PropertySetParameterList ?? []).some((parameter) => !!(parameter as { TypeAnnotation?: unknown }).TypeAnnotation))
-          || ((p.type === 'MethodDefinition' || p.type === 'AsyncMethod' || p.type === 'GeneratorMethod' || p.type === 'AsyncGeneratorMethod')
-            && ((p.UniqueFormalParameters ?? []).some((parameter) => !!parameter.TypeAnnotation)
-              || !!publishedReturnTypes.get(p)))
-          || (p.type === 'PropertyDefinition' && constInitializerParticipates(p.AssignmentExpression))
-          || (p.type === 'IdentifierReference' && constInitializerParticipates(p)));
+        return literalContractAnchors.has(t);
       case 'ArrayLiteral':
         return expr.ElementList.some((el) => constInitializerParticipates(el));
       case 'ConditionalExpression':

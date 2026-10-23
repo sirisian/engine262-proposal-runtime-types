@@ -1,0 +1,1277 @@
+{
+  "authority": [
+    "sec-anchored-contributions",
+    "sec-object-callable-contributions",
+    "sec-dependent-result-instantiation"
+  ],
+  "cases": [
+    {
+      "name": "family-original",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}return {get};}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "The retained callable result distinguishes evaluated class families; same-activation replacement is compatible."
+    },
+    {
+      "name": "family-checked",
+      "modules": {
+        "main": "type Audit=number;function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}return {get};}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "The retained callable result distinguishes evaluated class families; same-activation replacement is compatible."
+    },
+    {
+      "name": "family-same-activation",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}return {get};}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=a.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "The retained callable result distinguishes evaluated class families; same-activation replacement is compatible."
+    },
+    {
+      "name": "family-declared-return",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get():P.<C>{const p:P.<C>=\"x\";return p;}return {get};}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "The retained callable result distinguishes evaluated class families; same-activation replacement is compatible."
+    },
+    {
+      "name": "family-outer-anchor",
+      "modules": {
+        "main": "function make(seed:number){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}return {get};}const a=make(0),b=make(0);const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "The retained callable result distinguishes evaluated class families; same-activation replacement is compatible."
+    },
+    {
+      "name": "family-direct-return",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}return get;}const a=make(),b=make();const h={get:a};function replace(o:any){o.get=b;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "The retained callable result distinguishes evaluated class families; same-activation replacement is compatible."
+    },
+    {
+      "name": "family-direct-return-declared",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get():P.<C>{const p:P.<C>=\"x\";return p;}return get;}const a=make(),b=make();const h={get:a};function replace(o:any){o.get=b;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "The retained callable result distinguishes evaluated class families; same-activation replacement is compatible."
+    },
+    {
+      "name": "family-nongeneric-result",
+      "modules": {
+        "main": "function make(){class P{constructor(v:string){}}class C{}function get(){const p:P=\"x\";return p;}return {get};}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "The retained callable result distinguishes evaluated class families; same-activation replacement is compatible."
+    },
+    {
+      "name": "family-invoke-first",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}return {get};}const a=make(),b=make();const first=a.get();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "The retained callable result distinguishes evaluated class families; same-activation replacement is compatible."
+    },
+    {
+      "name": "family-explicit-new",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p=new P.<C>(\"x\");return p;}return {get};}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "The retained callable result distinguishes evaluated class families; same-activation replacement is compatible."
+    },
+    {
+      "name": "family-pure-type-argument",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<string>=\"x\";return p;}return {get};}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "The retained callable result distinguishes evaluated class families; same-activation replacement is compatible."
+    },
+    {
+      "name": "family-property",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}return {get:get};}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Preserve the applicable established contract, its erasure, and ordinary extraction rules."
+    },
+    {
+      "name": "family-parenthesized",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}return ({get});}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Preserve the applicable established contract, its erasure, and ordinary extraction rules."
+    },
+    {
+      "name": "family-nested",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}return {inner:{get}};}const a=make(),b=make();const h={get:a.inner.get};function replace(o:any){o.get=b.inner.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Preserve the applicable established contract, its erasure, and ordinary extraction rules."
+    },
+    {
+      "name": "family-local-const",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}const result={get};return result;}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Preserve the applicable established contract, its erasure, and ordinary extraction rules."
+    },
+    {
+      "name": "family-local-let",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}let result={get};return result;}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Preserve the applicable established contract, its erasure, and ordinary extraction rules."
+    },
+    {
+      "name": "family-arrow",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}return {get:()=>{const p:P.<C>=\"x\";return p;}};}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Preserve the applicable established contract, its erasure, and ordinary extraction rules."
+    },
+    {
+      "name": "family-method",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}return {get(){const p:P.<C>=\"x\";return p;}};}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Preserve the applicable established contract, its erasure, and ordinary extraction rules."
+    },
+    {
+      "name": "family-computed",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}return {[\"get\"]:get};}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Preserve the applicable established contract, its erasure, and ordinary extraction rules."
+    },
+    {
+      "name": "family-keyed-extraction",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}return {get};}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const {get:fn}=h;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Preserve the applicable established contract, its erasure, and ordinary extraction rules."
+    },
+    {
+      "name": "family-reflective-replacement",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}return {get};}const a=make(),b=make();const h={get:a.get};function replace(o:any){Object.defineProperty(o,\"get\",{value:b.get});}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Preserve the applicable established contract, its erasure, and ordinary extraction rules."
+    },
+    {
+      "name": "family-erased-receiver",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}return {get};}const a=make(),b=make();const h:any={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Preserve the applicable established contract, its erasure, and ordinary extraction rules."
+    },
+    {
+      "name": "family-erased-factory",
+      "modules": {
+        "main": "function make():any{class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}return {get};}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Preserve the applicable established contract, its erasure, and ordinary extraction rules."
+    },
+    {
+      "name": "family-erased-helper",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get():any{const p:P.<C>=\"x\";return p;}return {get};}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Preserve the applicable established contract, its erasure, and ordinary extraction rules."
+    },
+    {
+      "name": "family-erased-extraction",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}return {get};}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn:any=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Preserve the applicable established contract, its erasure, and ordinary extraction rules."
+    },
+    {
+      "name": "family-ordinary-let-extraction",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}return {get};}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{let fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Preserve the applicable established contract, its erasure, and ordinary extraction rules."
+    },
+    {
+      "name": "family-same-target-after-failure",
+      "modules": {
+        "main": "function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}return {get};}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");replace=function(o:any){o.get=a.get;};replace(h);const fn=h.get;if(fn!==a.get)throw new Error(\"recovery\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Preserve the applicable established contract, its erasure, and ordinary extraction rules."
+    },
+    {
+      "name": "anchor-annotated-data",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return {x};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "anchor-annotated-singleton",
+      "modules": {
+        "main": "function make(){const x:\"s\"=\"s\";return {x};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "anchor-annotated-null",
+      "modules": {
+        "main": "function make(){const x:null=null;return {x};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "anchor-annotated-undefined",
+      "modules": {
+        "main": "function make(){const x:undefined=undefined;return {x};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "anchor-declared-method",
+      "modules": {
+        "main": "function make(){return {m(x:string){return x;}};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "anchor-inferred-method",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return {m(){return x;}};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "anchor-annotated-any-parameter",
+      "modules": {
+        "main": "function make(){return {m(x:any){return \"s\";}};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "anchor-annotated-helper",
+      "modules": {
+        "main": "function make(){function m():string{return \"s\";}return {m};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "anchor-nested",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return {inner:{x}};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "anchor-arrow-member",
+      "modules": {
+        "main": "function make(){return {m:(x:string)=>x};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "anchor-function-member",
+      "modules": {
+        "main": "function make(){return {m:function(x:string){return x;}};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "anchor-getter",
+      "modules": {
+        "main": "function make(){return {get x():string{return \"s\";}};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "anchor-inferred-getter",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return {get value(){return x;}};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "anchor-setter",
+      "modules": {
+        "main": "function make(){return {set value(x:string){}};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "anchor-overwrite-to-typed",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return {x:\"s\",x};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "anchor-overwritten-but-other-anchor",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return {x,x:\"s\",y:x};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "anchor-local-const",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";const h={x};return h;}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "anchor-local-let",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";let h={x};return h;}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "anchor-conditional-arms",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return true?{x}:{x:\"s\"};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "anchor-empty-spread",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return {x,...0};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "anchor-string-spread-overwritten",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return {...\"a\",0:x};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": "A surviving declaration-derived member anchors the object contribution and its factory result."
+    },
+    {
+      "name": "unanchored-empty",
+      "modules": {
+        "main": "function make(){return {};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      },
+      "script": true,
+      "reason": "No surviving declaration provenance establishes a factory result; the written number boundary remains a runtime TypeError."
+    },
+    {
+      "name": "unanchored-literal-data",
+      "modules": {
+        "main": "function make(){return {x:\"s\"};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      },
+      "script": true,
+      "reason": "No surviving declaration provenance establishes a factory result; the written number boundary remains a runtime TypeError."
+    },
+    {
+      "name": "unanchored-literal-method",
+      "modules": {
+        "main": "function make(){return {m(){return \"s\";}};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      },
+      "script": true,
+      "reason": "No surviving declaration provenance establishes a factory result; the written number boundary remains a runtime TypeError."
+    },
+    {
+      "name": "unanchored-literal-arrow",
+      "modules": {
+        "main": "function make(){return {m:()=>\"s\"};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      },
+      "script": true,
+      "reason": "No surviving declaration provenance establishes a factory result; the written number boundary remains a runtime TypeError."
+    },
+    {
+      "name": "unanchored-nested-literal",
+      "modules": {
+        "main": "function make(){return {inner:{x:\"s\"}};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      },
+      "script": true,
+      "reason": "No surviving declaration provenance establishes a factory result; the written number boundary remains a runtime TypeError."
+    },
+    {
+      "name": "unanchored-erased-input",
+      "modules": {
+        "main": "function make(){const x:any=\"s\";return {x};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      },
+      "script": true,
+      "reason": "No surviving declaration provenance establishes a factory result; the written number boundary remains a runtime TypeError."
+    },
+    {
+      "name": "unanchored-erased-result",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";const h:any={x};return h;}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      },
+      "script": true,
+      "reason": "No surviving declaration provenance establishes a factory result; the written number boundary remains a runtime TypeError."
+    },
+    {
+      "name": "unanchored-any-method-result",
+      "modules": {
+        "main": "function make(){return {m():any{return \"s\";}};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      },
+      "script": true,
+      "reason": "No surviving declaration provenance establishes a factory result; the written number boundary remains a runtime TypeError."
+    },
+    {
+      "name": "unanchored-any-method-signature",
+      "modules": {
+        "main": "function make(){return {m(x:any):any{return x;}};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      },
+      "script": true,
+      "reason": "No surviving declaration provenance establishes a factory result; the written number boundary remains a runtime TypeError."
+    },
+    {
+      "name": "unanchored-any-getter",
+      "modules": {
+        "main": "function make(){return {get x():any{return \"s\";}};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      },
+      "script": true,
+      "reason": "No surviving declaration provenance establishes a factory result; the written number boundary remains a runtime TypeError."
+    },
+    {
+      "name": "unanchored-any-setter",
+      "modules": {
+        "main": "function make(){return {set x(value:any){}};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      },
+      "script": true,
+      "reason": "No surviving declaration provenance establishes a factory result; the written number boundary remains a runtime TypeError."
+    },
+    {
+      "name": "unanchored-typed-data-overwritten",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return {x,x:\"s\"};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      },
+      "script": true,
+      "reason": "No surviving declaration provenance establishes a factory result; the written number boundary remains a runtime TypeError."
+    },
+    {
+      "name": "unanchored-typed-method-overwritten",
+      "modules": {
+        "main": "function make(){return {m(x:string){return x;},m:()=>\"s\"};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      },
+      "script": true,
+      "reason": "No surviving declaration provenance establishes a factory result; the written number boundary remains a runtime TypeError."
+    },
+    {
+      "name": "unanchored-typed-getter-overwritten",
+      "modules": {
+        "main": "function make(){return {get x():string{return \"s\";},x:\"s\"};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      },
+      "script": true,
+      "reason": "No surviving declaration provenance establishes a factory result; the written number boundary remains a runtime TypeError."
+    },
+    {
+      "name": "unanchored-typed-setter-overwritten",
+      "modules": {
+        "main": "function make(){return {set x(value:string){},x:\"s\"};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      },
+      "script": true,
+      "reason": "No surviving declaration provenance establishes a factory result; the written number boundary remains a runtime TypeError."
+    },
+    {
+      "name": "unanchored-typed-getter-replaced",
+      "modules": {
+        "main": "function make(){return {get x():string{return \"s\";},get x():any{return \"s\";}};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      },
+      "script": true,
+      "reason": "No surviving declaration provenance establishes a factory result; the written number boundary remains a runtime TypeError."
+    },
+    {
+      "name": "unanchored-string-spread-overwrites",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return {0:x,...\"a\"};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      },
+      "script": true,
+      "reason": "No surviving declaration provenance establishes a factory result; the written number boundary remains a runtime TypeError."
+    },
+    {
+      "name": "unanchored-typed-condition",
+      "modules": {
+        "main": "function make(){function choose():boolean{return true;}const b:boolean=choose();return b?{x:1}:{x:2};}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      },
+      "script": true,
+      "reason": "No surviving declaration provenance establishes a factory result; the written number boundary remains a runtime TypeError."
+    },
+    {
+      "name": "scalar-success",
+      "modules": {
+        "main": "function make(){const x:string=\"s\";return {x};}const a=make();const b=make();const x:string=a.x;const y:string=b.x;if(x+y!==\"ss\")throw new Error(\"value\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": ""
+    },
+    {
+      "name": "forward-callable",
+      "modules": {
+        "main": "function make(){return {get};function get():string{return \"s\";}}const n:number=make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_RETURN_CONTRACT"
+        }
+      },
+      "script": true,
+      "reason": ""
+    },
+    {
+      "name": "declaration-only-no-invocation",
+      "modules": {
+        "main": "let calls=0;function make(){return {m(x:string=(calls++,\"s\")){calls++;return x;}};}const h=make();if(calls!==0)throw new Error(\"ran body\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": ""
+    },
+    {
+      "name": "getter-no-extra-read",
+      "modules": {
+        "main": "let reads=0;function make(){const x:string=\"s\";return {get value(){reads++;return x;}};}const h=make();if(reads!==2)throw new Error(\"reads\");const v:string=h.value;if(reads!==3||v!==\"s\")throw new Error(\"read\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": ""
+    },
+    {
+      "name": "immutable-failed-extraction",
+      "modules": {
+        "main": "let saved;function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}return {get};}const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{saved=()=>fn;const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");let dead=false;try{saved();}catch(e){if(!(e instanceof ReferenceError))throw e;dead=true;}if(!dead)throw new Error(\"initialized\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": ""
+    },
+    {
+      "name": "imported-family",
+      "modules": {
+        "dep": "export function make(){class P<T:type>{constructor(v:string){}}class C{}function get(){const p:P.<C>=\"x\";return p;}return {get};}",
+        "main": "import {make} from \"dep\";const a=make(),b=make();const h={get:a.get};function replace(o:any){o.get=b.get;}replace(h);let refused=false;try{const fn=h.get;}catch(e){if(!(e instanceof TypeError))throw e;refused=true;}if(!refused)throw new Error(\"family\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      },
+      "script": false,
+      "reason": ""
+    },
+    {
+      "name": "async-factory",
+      "modules": {
+        "main": "async function make(){const x:string=\"s\";return {x};}const n:number=await make();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_ASSIGNABILITY"
+        }
+      },
+      "script": false,
+      "reason": ""
+    },
+    {
+      "name": "generator-factory",
+      "modules": {
+        "main": "function* make(){const x:string=\"s\";yield {x};}const it=make();const n:number=it.next().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "phase": "static",
+          "code": "RT_ASSIGNABILITY"
+        }
+      },
+      "script": true,
+      "reason": ""
+    },
+    {
+      "name": "captured-object captured and own arguments",
+      "modules": {
+        "main": "function make<T:type>(){class P<A:type,B:type>{}const o={f<U:type>(v:U){return new P.<T,U>();}};return o.f;}const a=make.<uint8>(),b=make.<uint8>();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Complete nominal member captures by declaration identity while keeping method-owned parameters unbound."
+    },
+    {
+      "name": "captured-nested-object captured and own arguments",
+      "modules": {
+        "main": "function make<T:type>(){class P<A:type,B:type>{}const o={inner:{f<U:type>(v:U){return new P.<T,U>();}}};return o.inner.f;}const a=make.<uint8>(),b=make.<uint8>();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "The same captured input can occur below a nested object path."
+    },
+    {
+      "name": "captured-same-object captured and own arguments",
+      "modules": {
+        "main": "function make<T:type>(){class P<A:type,B:type>{}const o={f<U:type>(v:U){return new P.<T,U>();}};return o.f;}const a=make.<uint8>(),b=make.<uint8>();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=a.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(rejected)throw new Error(\"identity\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Compatible same-activation replacement remains admitted."
+    },
+    {
+      "name": "captured-reflection-object captured and own arguments",
+      "modules": {
+        "main": "function make<T:type>(){class P<A:type,B:type>{}const o={f<U:type>(v:U){return new P.<T,U>();}};return o.f;}const a=make.<uint8>(),b=make.<uint8>();Reflect.typeOf(a);const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Reflection must leave the captured frame and own binders intact."
+    },
+    {
+      "name": "captured-mixed-object captured and own arguments",
+      "modules": {
+        "main": "function make<T:type>(){class P<A:type,B:type>{}const o={f<U:type>(v:U){return new P.<T,U>();}};return o.f;}const a=make.<uint8>(),b=make.<boolean>();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "One factory activation must not complete the other activation captures."
+    },
+    {
+      "name": "captured-object own binder shadows captured binder",
+      "modules": {
+        "main": "function make<U:type>(){class P<T:type>{}const o={f<U:type>(v:U){return new P.<U>();}};return o.f;}const a=make.<string>(),b=make.<string>();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Complete nominal member captures by declaration identity while keeping method-owned parameters unbound."
+    },
+    {
+      "name": "captured-nested-object own binder shadows captured binder",
+      "modules": {
+        "main": "function make<U:type>(){class P<T:type>{}const o={inner:{f<U:type>(v:U){return new P.<U>();}}};return o.inner.f;}const a=make.<string>(),b=make.<string>();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "The same captured input can occur below a nested object path."
+    },
+    {
+      "name": "captured-same-object own binder shadows captured binder",
+      "modules": {
+        "main": "function make<U:type>(){class P<T:type>{}const o={f<U:type>(v:U){return new P.<U>();}};return o.f;}const a=make.<string>(),b=make.<string>();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=a.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(rejected)throw new Error(\"identity\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Compatible same-activation replacement remains admitted."
+    },
+    {
+      "name": "captured-reflection-object own binder shadows captured binder",
+      "modules": {
+        "main": "function make<U:type>(){class P<T:type>{}const o={f<U:type>(v:U){return new P.<U>();}};return o.f;}const a=make.<string>(),b=make.<string>();Reflect.typeOf(a);const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "Reflection must leave the captured frame and own binders intact."
+    },
+    {
+      "name": "captured-mixed-object own binder shadows captured binder",
+      "modules": {
+        "main": "function make<U:type>(){class P<T:type>{}const o={f<U:type>(v:U){return new P.<U>();}};return o.f;}const a=make.<string>(),b=make.<boolean>();const h={f:a.<uint8>};h.f(1);function replace(o:any){o.f=b.<uint8>;}replace(h);let rejected=false;try{const f=h.f;}catch(e){if(!(e instanceof TypeError))throw e;rejected=true;}if(!rejected)throw new Error(\"identity\");\"ok\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      },
+      "script": true,
+      "reason": "One factory activation must not complete the other activation captures."
+    }
+  ]
+}

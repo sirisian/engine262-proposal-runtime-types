@@ -351,6 +351,12 @@ export function copyTypeParameterFrame(frame: ReadonlyMap<string, TypeRecord>,
   return copy;
 }
 
+/** Substitute an enclosing runtime frame while preserving nested callable binders.
+ * Nominal member captures carry declaration identities, not just names. */
+export function instantiateTypeInFrame(type: TypeRecord, frame: ReadonlyMap<string, TypeRecord>): TypeRecord {
+  return substituteFreeTypeParameters(type, frame, undefined, declarationBindings.get(frame) ?? new Map())!;
+}
+
 export function instantiateGenericCapture(capture: GenericTypeCapture,
   frame: ReadonlyMap<string, TypeRecord> | undefined): TypeRecord {
   const bound = frame && declarationBindings.get(frame)?.get(capture.Declaration);

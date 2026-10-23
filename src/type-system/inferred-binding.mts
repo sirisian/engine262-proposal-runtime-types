@@ -4,9 +4,9 @@ import { Value } from '../value.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
 import { ClassTypeContextOf, InterfaceTypeContextOf } from '../runtime-semantics/RuntimeTypesDeclarations.mts';
 import { RequireType } from '../abstract-ops/runtime-types.mts';
-import { IsOfType, BindTypeArgumentRecords, currentTypeParameterFrame, InCapturedTypeContext } from './runtime.mts';
+import { IsOfType, BindTypeArgumentRecords, currentTypeParameterFrame, InCapturedTypeContext, instantiateTypeInFrame } from './runtime.mts';
 import { InferredConstTypeOf } from './check.mts';
-import { makePrimitive, substituteFreeTypeParameters, type TypeRecord } from './records.mts';
+import { makePrimitive, type TypeRecord } from './records.mts';
 import { InstantiateReturnDependency, ForwardResultDependency, RetainCheckedResult, CheckedPropertyKeyOf, InstantiateCheckedBindings, CompleteCreatedFunctionResult, surroundingAgent } from '#self';
 
 /** Reify the checker's compact numeric arguments before runtime admission. */
@@ -40,7 +40,7 @@ export function* EnforceInferredBinding(node: object, value: Value, initializer?
   // This is the enclosing environment, not an application of any generic
   // callable stored inside the binding. Retain its own binders and substitute
   // captured inputs in both declared and published result positions.
-  let target = parameters ? (substituteFreeTypeParameters(inferred, parameters) ?? inferred) : inferred;
+  let target = parameters ? instantiateTypeInFrame(inferred, parameters) : inferred;
   // Preserve the checked initializer's nested nominal dependency before
   // normalization completes an outer family from the receiving environment.
   // Knowing P does not establish the local C in an inferred P<C> result.

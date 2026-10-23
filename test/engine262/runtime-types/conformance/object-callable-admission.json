@@ -793,15 +793,33 @@
       ]
     },
     {
-      "name": "all reads precede materialization and ordinary writes",
+      "name": "ambient specialization predicate rejects before property reads",
       "steps": [
         {
           "source": "let trace=\"\";const gate:any={get value(){trace+=\"w\";return true;}};function id<T:type>(x:T):T where gate.value{return x;}type F=(x:string)=>string;const raw:any={get a(){trace+=\"a\";return id;},set a(v){trace+=\"A\";},get b(){trace+=\"b\";return id;},set b(v){trace+=\"B\";}};const o:{a:F,b:F}=raw;trace;",
           "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_COMPILE_TIME_EVALUABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "all reads precede materialization and ordinary writes",
+      "steps": [
+        {
+          "source": "let trace=\"\";function id<T:type>(x:T):T where true{return x;}type F=(x:string)=>string;const raw:any={get a(){trace+=\"a\";return id;},set a(v){if(trace!==\"ab\"||v!==id.<string>)throw new Error(\"first write\");trace+=\"A\";},get b(){trace+=\"b\";return id;},set b(v){if(trace!==\"abA\"||v!==id.<string>)throw new Error(\"second write\");trace+=\"B\";}};const o:{a:F,b:F}=raw;trace;",
+          "expected": {
             "completion": "normal",
             "bodyEntered": true,
             "scriptBodies": 1,
-            "value": "abwAB"
+            "value": "abAB"
           }
         }
       ]
