@@ -1,0 +1,1636 @@
+{
+  "description": "Independent optional-chain contribution and redundant-chain requirements; preserve live evidence and existing dead-chain diagnostics.",
+  "cases": [
+    {
+      "name": "literal-dot",
+      "modules": {
+        "main": "function make(){return ({x:\"s\"})?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "literal-key",
+      "modules": {
+        "main": "function make(){return ({x:\"s\"})?.[\"x\"];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "literal-nested",
+      "modules": {
+        "main": "function make(){return ({inner:{x:\"s\"}})?.inner;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "literal-nested-read",
+      "modules": {
+        "main": "function make(){return ({inner:{x:\"s\"}})?.inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "unrelated-member",
+      "modules": {
+        "main": "function make(){return ({seed:1:=number,x:\"s\"})?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nested-unrelated",
+      "modules": {
+        "main": "function make(){return ({inner:{seed:1:=number,x:\"s\"}})?.inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "getter-literal",
+      "modules": {
+        "main": "function make(){return ({get x(){return \"s\";}})?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "getter-erased",
+      "modules": {
+        "main": "function make(){return ({get x():any{return \"s\";}})?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "setter-only",
+      "modules": {
+        "main": "function make(){return ({set x(value:string){}})?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "getter-replaced",
+      "modules": {
+        "main": "function make(){return ({get x():string{return \"s\";},x:\"s\"})?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "literal-array",
+      "modules": {
+        "main": "function make(){return [\"s\"]?.[0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "array-unrelated",
+      "modules": {
+        "main": "function make(){return [\"s\",\"t\":=string]?.[0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "array-nested",
+      "modules": {
+        "main": "function make(){return [{x:\"s\"}]?.[0].x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "literal-method",
+      "modules": {
+        "main": "function make(){return ({m(){return \"s\";}})?.m;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "null-base",
+      "modules": {
+        "main": "function make(){return null?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing always-nullish dead-chain diagnostic retains precedence.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "undefined-base",
+      "modules": {
+        "main": "function make(){return undefined?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing always-nullish dead-chain diagnostic retains precedence.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed-null-control",
+      "modules": {
+        "main": "function make(){return (null:=null)?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing always-nullish dead-chain diagnostic retains precedence.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "null-key-annotation",
+      "modules": {
+        "main": "function make(){return null?.[(\"x\":=string)];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing always-nullish dead-chain diagnostic retains precedence.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "null-call-annotation",
+      "modules": {
+        "main": "function make(){return null?.((\"s\":=string));}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing always-nullish dead-chain diagnostic retains precedence.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed-member",
+      "modules": {
+        "main": "function make(){return ({x:\"s\":=string})?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "declared-member",
+      "modules": {
+        "main": "function make(){return ({(x:string):\"s\"})?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed-nested",
+      "modules": {
+        "main": "function make(){return ({inner:{x:\"s\":=string}})?.inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed-aggregate",
+      "modules": {
+        "main": "function make(){return ({inner:{x:\"s\":=string}})?.inner;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed-getter",
+      "modules": {
+        "main": "function make(){return ({get x():string{return \"s\";}})?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed-method",
+      "modules": {
+        "main": "function make(){return ({m():string{return \"s\";}})?.m;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed-array",
+      "modules": {
+        "main": "function make(){return [\"s\":=string]?.[0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "singleton-member",
+      "modules": {
+        "main": "function make(){return ({(x:\"s\"):\"s\"})?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "null-member",
+      "modules": {
+        "main": "function make(){return ({(x:null):null})?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "undefined-member",
+      "modules": {
+        "main": "function make(){return ({(x:undefined):undefined})?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nullable-literal-read",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?({x:\"s\"}):null)?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nullable-literal-nested",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?{inner:{x:\"s\"}}:null)?.inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nullable-literal-chain",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?{inner:{x:\"s\"}}:null)?.inner?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "alias-literal",
+      "modules": {
+        "main": "function make(){const value=({x:\"s\"})?.x;return value;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-alias-literal",
+      "modules": {
+        "main": "function make(){let value=({x:\"s\"})?.x;return value;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nullable-typed-read",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?({x:\"s\":=string}):null)?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nullable-typed-nested",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?{inner:{x:\"s\":=string}}:null)?.inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nullable-typed-chain",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?{inner:{x:\"s\":=string}}:null)?.inner?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "alias-typed",
+      "modules": {
+        "main": "function make(){const value=({x:\"s\":=string})?.x;return value;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-alias-typed",
+      "modules": {
+        "main": "function make(){let value=({x:\"s\":=string})?.x;return value;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nullable-unrelated-read",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?({seed:1:=number,x:\"s\"}):null)?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nullable-unrelated-nested",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?{inner:{seed:1:=number,x:\"s\"}}:null)?.inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nullable-unrelated-chain",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?{inner:{seed:1:=number,x:\"s\"}}:null)?.inner?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "alias-unrelated",
+      "modules": {
+        "main": "function make(){const value=({seed:1:=number,x:\"s\"})?.x;return value;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-alias-unrelated",
+      "modules": {
+        "main": "function make(){let value=({seed:1:=number,x:\"s\"})?.x;return value;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "equal-nested-left",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?{inner:{x:\"s\":=string}}:{inner:{x:\"s\"}})?.inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "equal-nullable-left",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?(Math.random()>0.5?{inner:{x:\"s\":=string}}:null):{inner:{x:\"s\"}})?.inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "equal-nested-right",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?{inner:{x:\"s\"}}:{inner:{x:\"s\":=string}})?.inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "equal-nullable-right",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?(Math.random()>0.5?{inner:{x:\"s\"}}:null):{inner:{x:\"s\":=string}})?.inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "equal-nested-neither",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?{inner:{x:\"s\"}}:{inner:{x:\"s\"}})?.inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "equal-nullable-neither",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?(Math.random()>0.5?{inner:{x:\"s\"}}:null):{inner:{x:\"s\"}})?.inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "explicit-receiver",
+      "modules": {
+        "main": "function make(){const box:{x:string}={x:\"s\"};return box?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "explicit-nullable-receiver",
+      "modules": {
+        "main": "function make(){const box:{x:string}|null=Math.random()>0.5?{x:\"s\"}:null;return box?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "private-call",
+      "modules": {
+        "main": "function make(){function producer(){return {x:\"s\"};}return producer?.();}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "published-call",
+      "modules": {
+        "main": "function make(){function producer(seed:number){return {x:\"s\"};}return producer?.(1);}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "declared-call",
+      "modules": {
+        "main": "function make(){function producer():string{return \"s\";}return producer?.();}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "erased-call",
+      "modules": {
+        "main": "function make(){function producer():any{return \"s\";}return producer?.();}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "private-call-member",
+      "modules": {
+        "main": "function make(){function producer(){return {x:\"s\"};}return producer?.().x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "published-call-member",
+      "modules": {
+        "main": "function make(){function producer(seed:number){return {x:\"s\"};}return producer?.(1).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "optional-member-call",
+      "modules": {
+        "main": "function make(){return ({m(){return {x:\"s\"};}})?.m();}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "optional-call-member",
+      "modules": {
+        "main": "function make(){return ({m(){return {x:\"s\"};}}).m?.();}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "optional-declared-method-call",
+      "modules": {
+        "main": "function make(){return ({m():string{return \"s\";}})?.m();}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "optional-erased-method-call",
+      "modules": {
+        "main": "function make(){return ({m():any{return \"s\";}})?.m();}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nullable-private-call",
+      "modules": {
+        "main": "function make(){function producer(){return {x:\"s\"};}return (Math.random()>0.5?producer:null)?.();}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nullable-declared-call",
+      "modules": {
+        "main": "function make(){function producer():string{return \"s\";}return (Math.random()>0.5?producer:null)?.();}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "computed-key-only",
+      "modules": {
+        "main": "function make(){const key:\"x\"=\"x\";return ({x:\"s\"})?.[key];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "finite-literal-key",
+      "modules": {
+        "main": "function make(){const key:\"x\"|\"y\"=Math.random()>0.5?\"x\":\"y\";return ({x:\"s\",y:\"t\"})?.[key];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "finite-mixed-key",
+      "modules": {
+        "main": "function make(){const key:\"x\"|\"y\"=Math.random()>0.5?\"x\":\"y\";return ({x:\"s\",y:\"t\":=string})?.[key];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "array-length",
+      "modules": {
+        "main": "function make(){return [\"s\":=string]?.length;}const n:()=>void=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "array-finite-unrelated",
+      "modules": {
+        "main": "function make(){const key:0|1=Math.random()>0.5?0:1;return [\"s\",\"t\",\"u\":=string]?.[key];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "array-finite-mixed",
+      "modules": {
+        "main": "function make(){const key:0|1=Math.random()>0.5?0:1;return [\"s\",\"t\":=string,\"u\"]?.[key];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "preserve-array-member-domain",
+      "modules": {
+        "main": "function make(seed:number){return [{x:\"s\"},{x:1}]?.[0].x;}const n:string=make(1);"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "captured-literal",
+      "modules": {
+        "main": "const box={seed:1:=number,x:\"s\"};function make(){return box?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "captured-typed",
+      "modules": {
+        "main": "const box={seed:1:=number,x:\"s\":=string};function make(){return box?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "imported-False-False",
+      "modules": {
+        "dep": "export const box={seed:1:=number,x:\"s\"};",
+        "main": "import {box} from \"dep\";function make(){return box?.x;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "imported-False-True",
+      "modules": {
+        "dep": "export const box={seed:1:=number,x:\"s\":=string};",
+        "main": "import {box} from \"dep\";function make(){return box?.x;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "imported-True-False",
+      "modules": {
+        "dep": "export const box={seed:1:=number,x:\"s\"};",
+        "main": "import * as ns from \"dep\";function make(){return ns.box?.x;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "imported-True-True",
+      "modules": {
+        "dep": "export const box={seed:1:=number,x:\"s\":=string};",
+        "main": "import * as ns from \"dep\";function make(){return ns.box?.x;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "getter-effects",
+      "modules": {
+        "main": "let reads=0;function make(){return ({get x():string{reads++;return \"s\";}})?.x;}const s:string=make();if(reads!==1||s!==\"s\")throw new Error(\"effects\");"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "skipped-effects",
+      "modules": {
+        "main": "let effects=0;function absent():any{return null;}absent()?.[(effects++,\"x\")];absent()?.(effects++);if(effects!==0)throw new Error(\"effects\");"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "identity",
+      "modules": {
+        "main": "const obj={x:\"s\"};function make(){return ({obj})?.obj;}if(make()!==obj)throw new Error(\"identity\");"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "chain-skips-tail",
+      "modules": {
+        "main": "function absent():any{return null;}const value:any=absent()?.a.b;if(value!==undefined)throw new Error(\"value\");"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "parentheses-end-chain",
+      "modules": {
+        "main": "function absent():any{return null;}const value:any=(absent()?.a).b;"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "checked-identity",
+      "modules": {
+        "main": "const seed:number=0;const obj={x:\"s\"};function make(){return ({obj})?.obj;}if(make()!==obj)throw new Error(\"identity\");"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-published-call",
+      "modules": {
+        "main": "function make(){function producer<T:type>(seed:T){return {x:seed};}return producer.<string>?.(\"s\");}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-published-call-member",
+      "modules": {
+        "main": "function make(){function producer<T:type>(seed:T){return {x:seed};}return producer.<string>?.(\"s\").x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "symbol-literal",
+      "modules": {
+        "main": "function make(){return ({[Symbol.iterator]:\"s\"})?.[Symbol.iterator];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "symbol-typed",
+      "modules": {
+        "main": "function make(){return ({[Symbol.iterator]:\"s\":=string})?.[Symbol.iterator];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "live-undefined-nullable",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?{(x:undefined):undefined}:null)?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "optional-coalesce-literal",
+      "modules": {
+        "main": "function make(){return ((Math.random()>0.5?{x:\"s\"}:null)?.x) ?? \"s\";}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "optional-coalesce-typed",
+      "modules": {
+        "main": "function make(){return ((Math.random()>0.5?{x:\"s\":=string}:null)?.x) ?? \"s\";}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nullable-array-literal",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?[\"s\"]:null)?.[0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nullable-array-typed",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?[\"s\":=string]:null)?.[0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nullable-private-local",
+      "modules": {
+        "main": "function make(){function producer(){return {x:\"s\"};}const value=(Math.random()>0.5?producer:null)?.();return value;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "private-local",
+      "modules": {
+        "main": "function make(){function producer(){return {x:\"s\"};}const value=producer?.();return value;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "receiver-call-kept",
+      "modules": {
+        "main": "class Box{value:string=\"s\";get(){return this.value;}}const b:Box=new Box();if(b.get?.()!==\"s\")throw new Error(\"receiver\");"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "null-alternative-annotation",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?(null:=null):{x:\"s\"})?.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "call-argument-only",
+      "modules": {
+        "main": "function make(){function producer(value){return {x:\"s\"};}return producer?.(\"s\":=string);}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "private-optional-cycle",
+      "modules": {
+        "main": "function first(flag){return flag?second?.(false):{x:\"s\"};}function second(flag){return flag?first?.(false):{x:\"s\"};}function consume(){const n:number=first(true);}"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-consumer-private-cycle",
+      "modules": {
+        "main": "function first(flag){return flag?second?.(false):{x:\"s\"};}function second(flag){return flag?first?.(false):{x:\"s\"};}function consume(seed:number){return first(true);}const n:number=consume(1);"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "redundant-optional-test",
+      "modules": {
+        "main": "function decision():boolean{return true;}if(decision?.()){}"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "redundant-optional-switch",
+      "modules": {
+        "main": "function text():string{return \"s\";}switch(text?.()){case \"s\":break;default:break;}"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "extracted-receiver-still-required",
+      "modules": {
+        "main": "class Box{value:string=\"s\";get(){return this.value;}}const b:Box=new Box();const get=b.get;get?.();"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_THIS_REQUIRED",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "falsy-present-receiver",
+      "modules": {
+        "main": "const n:number=(0)?.valueOf();if(n!==0)throw new Error(\"value\");"
+      },
+      "script": true,
+      "requirement": "An optional result retains its live member/call evidence; synthetic absence and control-only annotations supply none.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}

@@ -682,23 +682,12 @@
       }
     },
     {
-      "name": "legacy forced optional function",
+      "name": "legacy forced redundant optional function",
       "source": "function f(){function g(){return 1;}g?.();}",
       "checking": "forced",
       "expected": {
-        "completion": "throw",
-        "bodyEntered": false,
-        "errorClass": "StaticTypeError",
-        "diagnostic": {
-          "code": "RT_IMPOSSIBLE_TEST",
-          "phase": "static",
-          "errorClass": "StaticTypeError",
-          "checked": true,
-          "rule": "rt-impossible-test",
-          "location": {
-            "nodeType": "OptionalExpression"
-          }
-        }
+        "completion": "normal",
+        "bodyEntered": true
       }
     },
     {

@@ -19028,8 +19028,22 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'OptionalExpression': {
         const view = optionalChainView(node, false);
-        const live = staticType(view.expression);
-        return view.shortCircuits ? (live ? joinTypes(live, undefinedType) : null) : live;
+        const live = expressionContributionType(view.expression, staticType(view.expression));
+        if (!live) return null;
+        // Absence is supplied by the chain itself, not by an annotation on a
+        // receiver, key or skipped argument. Keep it distinct from an explicit
+        // undefined member/result contract on the live path.
+        const absent = selectedMemberType(undefinedType, false)!;
+        valueContributionEvidence.set(absent, { anchored: false, initializer: false });
+        const origins = projectedContributionOrigins(live, (type) => type);
+        if (view.shortCircuits) origins.push(absent);
+        const type = view.shortCircuits ? joinTypes(live, undefinedType) : live;
+        const result = origins.length ? retainContributionAlternatives(type, origins) : { ...type };
+        valueContributionEvidence.set(result, {
+          anchored: origins.some((origin) => valueContributionEvidence.get(origin)?.anchored),
+          initializer: origins.some((origin) => valueContributionEvidence.get(origin)?.initializer),
+        });
+        return result;
       }
       case 'TopicReference':
         return lookup(TOPIC_NAME) ?? null;
@@ -25894,14 +25908,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     unionOf(left.filter((a) => right.some((b) => equalityCompatible(a, b))));
 
   type OptionalResult = { evaluated: FlowFacts | undefined, skipped: FlowFacts | undefined, type: Known, skippedType?: TypeRecord, origins: CapturedPlace[] };
+  const checkOptionalReceiver = (node: ParseNode.OptionalExpression): void => {
+    // A redundant ?. writes no unreachable continuation. An always-nullish
+    // receiver does, regardless of whether the result is a value or a test.
+    const receiver = staticType(node.MemberExpression);
+    if (receiver && impossibleVerdict(receiver, nullishType()) === 'never-fails') {
+      pushImpossibleTest('never-fails', '?.', node);
+    }
+  };
   const visitOptionalResult = (node: ParseNode.OptionalExpression, visit: boolean): OptionalResult => {
     const live = flowLive;
     const skipped: FlowFacts[] = [];
     const origins: CapturedPlace[] = [];
-    if (visit) {
-      const receiver = staticType(node.MemberExpression);
-      if (receiver) reportImpossibleTest(receiver, nullishType(), '?.', true, node);
-    }
+    if (visit) checkOptionalReceiver(node);
     const view = optionalChainView(node, visit, skipped, true, origins);
     const clearAccessors = () => {
       for (const origin of origins) if (!origin.data) invalidateNarrowing(origin.name);
@@ -26365,8 +26384,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const skipped: FlowFacts[] = [];
       const origins: CapturedPlace[] = [];
       if (visit) {
-        const receiver = staticType(test.MemberExpression);
-        if (receiver) reportImpossibleTest(receiver, nullishType(), '?.', true, test);
+        checkOptionalReceiver(test);
       }
       const view = optionalChainView(test, visit, skipped, true, origins);
       // The chain has already visited its callee, arguments and keys. Judge
@@ -28967,7 +28985,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const derivesFromDeclaration = (expr: ParseNode | null | undefined, t: { Kind?: string, Name?: string } | null | undefined): boolean => {
     expr = expr ? patternExpression(expr) : expr;
-    if (expr && ['LogicalANDExpression', 'LogicalORExpression', 'CoalesceExpression'].includes(expr.type)
+    if (expr && ['LogicalANDExpression', 'LogicalORExpression', 'CoalesceExpression', 'OptionalExpression'].includes(expr.type)
       && t && valueContributionEvidence.has(t)) return valueContributionEvidence.get(t)!.anchored;
     if (expr?.type === 'MemberExpression' && t && selectedMemberAnchors.has(t)) return selectedMemberAnchors.get(t)!;
     if (expr?.type === 'IdentifierReference') {
@@ -31019,6 +31037,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'LogicalANDExpression':
       case 'LogicalORExpression':
       case 'CoalesceExpression':
+      case 'OptionalExpression':
         return valueContributionEvidence.get(t)?.initializer ?? false;
       case 'IdentifierReference':
         return namedCallableProvenance(t) ?? (lookup(expr.name) !== null && !isNumericConstantExpression(expr));
@@ -35136,13 +35155,19 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const present = base ? NarrowFrom(base, nullishType()) : null;
     const canShortCircuit = base === null || base.Kind === 'any' || present !== base;
+    // Narrowing may canonicalize equal receiver shapes. Retain every live
+    // origin for subsequent reads without replacing the ordinary receiver type.
+    const liveOrigins = base && present && present !== empty && contributionAlternatives.has(base)
+      ? projectedContributionOrigins(base, (type) => NarrowFrom(type, nullishType())) : undefined;
+    const liveType = present && present !== empty && liveOrigins?.length
+      ? retainContributionAlternatives(present, liveOrigins) : present === empty ? neverType : present;
     if (active) {
       const branches = nullishFlow(typedExpressionView(view.expression, base), placeStillCaptured(view.origin) ? view.origin.name : NON_PATH);
       if (canShortCircuit && branches.whenTrue) shortCircuitExits.push(branches.whenTrue);
       resumeFlow(branches.whenFalse);
     }
     view = {
-      expression: typedExpressionView(view.expression, canShortCircuit ? present === empty ? neverType : present : base),
+      expression: typedExpressionView(view.expression, canShortCircuit || liveOrigins ? liveType : base),
       shortCircuits: view.shortCircuits || canShortCircuit,
       origin: view.origin,
     };
@@ -38346,13 +38371,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return;
       }
       case 'OptionalExpression': {
-        // #sec-narrowing lists `?.` with `??` and `== null`: its nullish branch
-        // is dead where the receiver cannot be nullish, and the rest of the chain
-        // is dead where the receiver is always nullish (#sec-narrowfrom).
-        {
-          const receiver = staticType((n as ParseNode.OptionalExpression).MemberExpression as ParseNode);
-          if (receiver) reportImpossibleTest(receiver, nullishType(), '?.', true, (node as ParseNode));
-        }
+        // A known non-nullish receiver merely makes ?. redundant, which
+        // #sec-static-type-of-an-expression permits. An always-nullish receiver
+        // leaves the written chain unreachable (#sec-narrowfrom).
+        checkOptionalReceiver(n);
         optionalChainView(n, true);
         return;
       }

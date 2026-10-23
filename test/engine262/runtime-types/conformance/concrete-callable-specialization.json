@@ -663,10 +663,28 @@
       ]
     },
     {
-      "name": "source cached where is not repeated",
+      "name": "source mutable captured where is refused",
       "steps": [
         {
           "source": "function factory(){let allowed=true;function id<T:type>(x:T):T where allowed{return x;}return {id,stop(){allowed=false;}};}const o:any=factory();const first:(x:string)=>string=o.id;o.stop();const second:(x:string)=>string=o.id;String(first===second)+\"/\"+String(second===o.id.<string>);",
+          "expected": {
+            "completion": "throw",
+            "bodyEntered": false,
+            "scriptBodies": 0,
+            "errorClass": "StaticTypeError",
+            "diagnostic": {
+              "code": "RT_COMPILE_TIME_EVALUABILITY",
+              "phase": "static"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "source pure where specialization identity",
+      "steps": [
+        {
+          "source": "function factory(){function id<T:type>(x:T):T where T===string{return x;}return {id};}const o:any=factory();const first:(x:string)=>string=o.id;const second:(x:string)=>string=o.id;String(first===second)+\"/\"+String(second===o.id.<string>);",
           "expected": {
             "completion": "normal",
             "bodyEntered": true,
