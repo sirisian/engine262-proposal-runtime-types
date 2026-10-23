@@ -234,19 +234,21 @@ test('a plain parameter keeps its own boundary, unchanged', () => {
 
 test('a destructured binding carries the type of its position', () => {
   // A pattern binds names, and each takes the type of the position it
-  // destructures: a property's type for an object pattern, the element type for
-  // an array pattern, the positional type for a tuple. Same condition as a plain
+  // destructures: a property's type for an object pattern, the iteration
+  // contribution for an array pattern. Same condition as a plain
   // local - a `const`, or a `let` this function never assigns - and the same
   // limit: the bindings get no type of their own, this answers what a
   // contribution reads.
   const obj = 'const o: { p: string } = { p: "s" }; ';
   expectInferred(`${obj}const { p } = o; return p;`);
   expectInferred(`${obj}const { p: q } = o; return q;`);
-  // An array's element type, and a tuple read position-wise. The source is a
-  // LOCAL here for the reason the test below records.
-  expectInferred('let arr: [].<uint8> = [1]; const [e] = arr; return e;');
-  expectInferred('let t: [uint8, string] = [1, "s"]; const [e0] = t; return e0;');
-  expectInferred('let t2: [uint8, string] = [1, "s"]; const [e0, e1] = t2; return e1;');
+  // Mutable indexed storage does not constrain its replaceable iterator.
+  expectNotInferred('let arr: [].<uint8> = [1]; const [e] = arr; return e;');
+  expectNotInferred('let t: [uint8, string] = [1, "s"]; const [e0] = t; return e0;');
+  expectNotInferred('let t2: [uint8, string] = [1, "s"]; const [e0, e1] = t2; return e1;');
+  // Fresh literal positions retain their ordinary contribution judgment.
+  expectInferred('const [e] = [1 := uint8]; return e;');
+  expectInferred('const [e0, e1] = [1, "s"]; return e1;');
 });
 
 test('destructuring transparency keeps the same guards', () => {
@@ -258,9 +260,7 @@ test('destructuring transparency keeps the same guards', () => {
   expectInferred('function legacy() { return { p: "s" }; } const { p } = legacy(); return p;');
   // A source whose type is genuinely unknown still yields nothing to read.
   expectNotInferred('function legacy(v) { return v; } const { p } = legacy({ p: "s" }); return p;');
-  // A DEFAULTED element is left alone: its type is the union of
-  // the position's and the default's, and guessing at one of them would state
-  // something the program does not.
+  // An unknown iterator contribution remains unknown after defaulting.
   expectNotInferred('let t3: [uint8, string] = [1, "s"]; const [e0 = 5] = t3; return e0;');
 });
 
@@ -272,7 +272,7 @@ test('an OUTER binding is visible to the inference', () => {
   // publication sees every type in its final form.
   expectInferred('return outerArr[0];');
   expectInferred('const v = outerArr[0]; return v;');
-  expectInferred('const [e] = outerArr; return e;');
+  expectNotInferred('const [e] = outerArr; return e;');
   expectInferred('return g();');
   expectThrows('function f(x: number) { return later[0]; } let later: [].<uint8> = [1];'
     + ' const a: (x: number) => number = f;');

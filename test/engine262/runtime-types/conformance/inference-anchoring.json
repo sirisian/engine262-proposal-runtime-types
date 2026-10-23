@@ -819,8 +819,17 @@
       }
     },
     {
-      "name": "a typed array destructure retains declaration provenance",
+      "name": "mutable array storage does not anchor its iterator contribution",
       "source": "function g(){let source: [].<string> = [\"s\"]; const [s] = source; return s;} const q: number = g();",
+      "expected": {
+        "completion": "throw",
+        "bodyEntered": true,
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "a fresh typed array position retains declaration provenance",
+      "source": "function g(){const [s] = [\"s\":=string]; return s;} const q: number = g();",
       "expected": {
         "completion": "throw",
         "bodyEntered": false,

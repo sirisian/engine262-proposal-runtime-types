@@ -1,0 +1,2143 @@
+{
+  "description": "Independent destructuring contribution requirements; preserve selected values, binding contracts and iteration distinctions.",
+  "cases": [
+    {
+      "name": "const-literal",
+      "modules": {
+        "main": "function make(){const {x}={x:\"s\"};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-nested-literal",
+      "modules": {
+        "main": "function make(){const {inner:{x}}={inner:{x:\"s\"}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-typed",
+      "modules": {
+        "main": "function make(){const {x}={x:\"s\":=string};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-nested-typed",
+      "modules": {
+        "main": "function make(){const {inner:{x}}={inner:{x:\"s\":=string}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-unrelated",
+      "modules": {
+        "main": "function make(){const {x}={seed:1:=number,x:\"s\"};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-nested-unrelated",
+      "modules": {
+        "main": "function make(){const {inner:{x}}={inner:{seed:1:=number,x:\"s\"}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-getter",
+      "modules": {
+        "main": "function make(){const {x}={get x(){return \"s\";}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-nested-getter",
+      "modules": {
+        "main": "function make(){const {inner:{x}}={inner:{get x(){return \"s\";}}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-typed-getter",
+      "modules": {
+        "main": "function make(){const {x}={get x():string{return \"s\";}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-nested-typed-getter",
+      "modules": {
+        "main": "function make(){const {inner:{x}}={inner:{get x():string{return \"s\";}}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-replaced-getter",
+      "modules": {
+        "main": "function make(){const {x}={get x():string{return \"s\";},x:\"s\"};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-nested-replaced-getter",
+      "modules": {
+        "main": "function make(){const {inner:{x}}={inner:{get x():string{return \"s\";},x:\"s\"}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-singleton",
+      "modules": {
+        "main": "function make(){const {x}={(x:\"s\"):\"s\"};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-nested-singleton",
+      "modules": {
+        "main": "function make(){const {inner:{x}}={inner:{(x:\"s\"):\"s\"}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-undefined",
+      "modules": {
+        "main": "function make(){const {x}={(x:undefined):undefined};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-nested-undefined",
+      "modules": {
+        "main": "function make(){const {inner:{x}}={inner:{(x:undefined):undefined}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-renamed-typed",
+      "modules": {
+        "main": "function make(){const {x:value}={x:\"s\":=string};return value;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-computed-typed",
+      "modules": {
+        "main": "function make(){const {[\"x\"]:x}={x:\"s\":=string};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-symbol-typed",
+      "modules": {
+        "main": "function make(){const {[Symbol.iterator]:x}={[Symbol.iterator]:\"s\":=string};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-default-typed",
+      "modules": {
+        "main": "function make(){const {x=(\"s\":=string)}={x:undefined};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-default-skipped",
+      "modules": {
+        "main": "function make(){const {x=(\"s\":=string)}={x:\"s\"};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-default-source-typed",
+      "modules": {
+        "main": "function make(){const {x=\"s\"}={x:\"s\":=string};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-array-literal",
+      "modules": {
+        "main": "function make(){const [x]=[\"s\"];return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-array-typed",
+      "modules": {
+        "main": "function make(){const [x]=[\"s\":=string];return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-array-unrelated",
+      "modules": {
+        "main": "function make(){const [x]=[\"s\",1:=number];return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-array-nested",
+      "modules": {
+        "main": "function make(){const [{x}]=[{x:\"s\":=string}];return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-array-rest",
+      "modules": {
+        "main": "function make(){const [...x]=[\"s\":=string];return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-object-rest",
+      "modules": {
+        "main": "function make(){const {seed,...x}={seed:1:=number,x:\"s\"};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-object-rest-typed",
+      "modules": {
+        "main": "function make(){const {seed,...x}={seed:1,x:\"s\":=string};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-alias-unrelated",
+      "modules": {
+        "main": "function make(){const box={seed:1:=number,x:\"s\"};const {x}=box;return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-alias-typed",
+      "modules": {
+        "main": "function make(){const box={x:\"s\":=string};const {x}=box;return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-literal",
+      "modules": {
+        "main": "function make(){let {x}={x:\"s\"};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-nested-literal",
+      "modules": {
+        "main": "function make(){let {inner:{x}}={inner:{x:\"s\"}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-typed",
+      "modules": {
+        "main": "function make(){let {x}={x:\"s\":=string};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-nested-typed",
+      "modules": {
+        "main": "function make(){let {inner:{x}}={inner:{x:\"s\":=string}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-unrelated",
+      "modules": {
+        "main": "function make(){let {x}={seed:1:=number,x:\"s\"};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-nested-unrelated",
+      "modules": {
+        "main": "function make(){let {inner:{x}}={inner:{seed:1:=number,x:\"s\"}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-getter",
+      "modules": {
+        "main": "function make(){let {x}={get x(){return \"s\";}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-nested-getter",
+      "modules": {
+        "main": "function make(){let {inner:{x}}={inner:{get x(){return \"s\";}}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-typed-getter",
+      "modules": {
+        "main": "function make(){let {x}={get x():string{return \"s\";}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-nested-typed-getter",
+      "modules": {
+        "main": "function make(){let {inner:{x}}={inner:{get x():string{return \"s\";}}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-replaced-getter",
+      "modules": {
+        "main": "function make(){let {x}={get x():string{return \"s\";},x:\"s\"};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-nested-replaced-getter",
+      "modules": {
+        "main": "function make(){let {inner:{x}}={inner:{get x():string{return \"s\";},x:\"s\"}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-singleton",
+      "modules": {
+        "main": "function make(){let {x}={(x:\"s\"):\"s\"};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-nested-singleton",
+      "modules": {
+        "main": "function make(){let {inner:{x}}={inner:{(x:\"s\"):\"s\"}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-undefined",
+      "modules": {
+        "main": "function make(){let {x}={(x:undefined):undefined};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-nested-undefined",
+      "modules": {
+        "main": "function make(){let {inner:{x}}={inner:{(x:undefined):undefined}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-renamed-typed",
+      "modules": {
+        "main": "function make(){let {x:value}={x:\"s\":=string};return value;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-computed-typed",
+      "modules": {
+        "main": "function make(){let {[\"x\"]:x}={x:\"s\":=string};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-symbol-typed",
+      "modules": {
+        "main": "function make(){let {[Symbol.iterator]:x}={[Symbol.iterator]:\"s\":=string};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-default-typed",
+      "modules": {
+        "main": "function make(){let {x=(\"s\":=string)}={x:undefined};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-default-skipped",
+      "modules": {
+        "main": "function make(){let {x=(\"s\":=string)}={x:\"s\"};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-default-source-typed",
+      "modules": {
+        "main": "function make(){let {x=\"s\"}={x:\"s\":=string};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-array-literal",
+      "modules": {
+        "main": "function make(){let [x]=[\"s\"];return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-array-typed",
+      "modules": {
+        "main": "function make(){let [x]=[\"s\":=string];return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-array-unrelated",
+      "modules": {
+        "main": "function make(){let [x]=[\"s\",1:=number];return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-array-nested",
+      "modules": {
+        "main": "function make(){let [{x}]=[{x:\"s\":=string}];return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-array-rest",
+      "modules": {
+        "main": "function make(){let [...x]=[\"s\":=string];return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-object-rest",
+      "modules": {
+        "main": "function make(){let {seed,...x}={seed:1:=number,x:\"s\"};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-object-rest-typed",
+      "modules": {
+        "main": "function make(){let {seed,...x}={seed:1,x:\"s\":=string};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-alias-unrelated",
+      "modules": {
+        "main": "function make(){const box={seed:1:=number,x:\"s\"};let {x}=box;return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-alias-typed",
+      "modules": {
+        "main": "function make(){const box={x:\"s\":=string};let {x}=box;return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "equal-left",
+      "modules": {
+        "main": "function make(){const {inner:{x}}=Math.random()>0.5?{inner:{x:\"s\":=string}}:{inner:{x:\"s\"}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "equal-right",
+      "modules": {
+        "main": "function make(){const {inner:{x}}=Math.random()>0.5?{inner:{x:\"s\"}}:{inner:{x:\"s\":=string}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "equal-neither",
+      "modules": {
+        "main": "function make(){const {inner:{x}}=Math.random()>0.5?{inner:{x:\"s\"}}:{inner:{x:\"s\"}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "published-source",
+      "modules": {
+        "main": "function make(){function producer(seed:number){return {x:\"s\"};}const {x}=producer(1);return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "private-source",
+      "modules": {
+        "main": "function make(){function producer(){return {x:\"s\"};}const {x}=producer();return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "erased-source",
+      "modules": {
+        "main": "function make(){function producer():any{return {x:\"s\"};}const {x}=producer();return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "capture-const",
+      "modules": {
+        "main": "function make(){function read(){return x;}const {x}={x:\"s\":=string};return read();}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "capture-let",
+      "modules": {
+        "main": "function make(){function read(){return x;}let {x}={x:\"s\":=string};return read();}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "default-check-still-required",
+      "modules": {
+        "main": "function unused(){const {(x:number)=\"bad\"}={x:1};}"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "mutable-storage-not-iteration",
+      "modules": {
+        "main": "function unused(xs:[].<string>){const [x]=xs;const n:number=x;}"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "pattern-effects",
+      "modules": {
+        "main": "let count=0;function make(){const {x}={get x():string{count++;return \"s\";}};return x;}const s:string=make();if(count!==1||s!==\"s\")throw new Error(\"effects\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "const-later-default",
+      "modules": {
+        "main": "function make(){const {x,y=x}={x:\"s\":=string,y:undefined};return y;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-default-only-control",
+      "modules": {
+        "main": "function make(){const {x=\"s\"}={(x:undefined):undefined};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-nested-default",
+      "modules": {
+        "main": "function make(){const {inner:{x}={x:\"s\":=string}}={inner:undefined};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-rest-excluded-anchor",
+      "modules": {
+        "main": "function make(){const {seed,...rest}={seed:1:=number,x:\"s\"};return rest.x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-rest-unrelated-anchor",
+      "modules": {
+        "main": "function make(){const {skip,...rest}={skip:1,seed:1:=number,x:\"s\"};return rest.x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-rest-selected-anchor",
+      "modules": {
+        "main": "function make(){const {skip,...rest}={skip:1,x:\"s\":=string};return rest.x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-rest-array-excluded",
+      "modules": {
+        "main": "function make(){const [seed,...rest]=[1:=number,\"s\"];return rest[0];}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-rest-array-selected",
+      "modules": {
+        "main": "function make(){const [seed,...rest]=[1,\"s\":=string];return rest[0];}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-missing-default",
+      "modules": {
+        "main": "function make(){const {x=(\"s\":=string)}={};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-finite-key",
+      "modules": {
+        "main": "function make(){const key:\"a\"|\"b\"=Math.random()>0.5?\"a\":\"b\";const {[key]:x}={a:\"s\",b:\"s\":=string};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-computed-key-only",
+      "modules": {
+        "main": "function make(){const key:\"x\"=\"x\";const {[key]:x}={x:\"s\"};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-unknown-spread",
+      "modules": {
+        "main": "function make(){function unknown():any{return {x:\"s\"};}const {x}={x:\"s\":=string,...unknown()};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-erased-element",
+      "modules": {
+        "main": "function make(){const {(x:any)}={x:\"s\":=string};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-shadow",
+      "modules": {
+        "main": "function make(){const {inner:{x}}={inner:{x:\"s\"}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-later-default",
+      "modules": {
+        "main": "function make(){let {x,y=x}={x:\"s\":=string,y:undefined};return y;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-default-only-control",
+      "modules": {
+        "main": "function make(){let {x=\"s\"}={(x:undefined):undefined};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-nested-default",
+      "modules": {
+        "main": "function make(){let {inner:{x}={x:\"s\":=string}}={inner:undefined};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-rest-excluded-anchor",
+      "modules": {
+        "main": "function make(){let {seed,...rest}={seed:1:=number,x:\"s\"};return rest.x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-rest-unrelated-anchor",
+      "modules": {
+        "main": "function make(){let {skip,...rest}={skip:1,seed:1:=number,x:\"s\"};return rest.x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-rest-selected-anchor",
+      "modules": {
+        "main": "function make(){let {skip,...rest}={skip:1,x:\"s\":=string};return rest.x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-rest-array-excluded",
+      "modules": {
+        "main": "function make(){let [seed,...rest]=[1:=number,\"s\"];return rest[0];}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-rest-array-selected",
+      "modules": {
+        "main": "function make(){let [seed,...rest]=[1,\"s\":=string];return rest[0];}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-missing-default",
+      "modules": {
+        "main": "function make(){let {x=(\"s\":=string)}={};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-finite-key",
+      "modules": {
+        "main": "function make(){const key:\"a\"|\"b\"=Math.random()>0.5?\"a\":\"b\";let {[key]:x}={a:\"s\",b:\"s\":=string};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-computed-key-only",
+      "modules": {
+        "main": "function make(){const key:\"x\"=\"x\";let {[key]:x}={x:\"s\"};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-unknown-spread",
+      "modules": {
+        "main": "function make(){function unknown():any{return {x:\"s\"};}let {x}={x:\"s\":=string,...unknown()};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-erased-element",
+      "modules": {
+        "main": "function make(){let {(x:any)}={x:\"s\":=string};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-shadow",
+      "modules": {
+        "main": "function make(){let {inner:{x}}={inner:{x:\"s\"}};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "changed-let",
+      "modules": {
+        "main": "function make(){let {x}={x:\"s\":=string};x=1;return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inferred-binding-selected-only",
+      "modules": {
+        "main": "function unused(){const {x}={seed:1:=number,x:\"s\"};const n:number=x;}"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "inferred-binding-typed",
+      "modules": {
+        "main": "function unused(){const {x}={x:\"s\":=string};const n:number=x;}"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "ordinary-let-stays-gradual",
+      "modules": {
+        "main": "function unused(){let {x}={x:\"s\":=string};const n:number=x;}"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-later-shadow",
+      "modules": {
+        "main": "const y:string=\"s\";function make(){const {x=y,y}={x:undefined,y:undefined};return x;}make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "default-skipped-effects",
+      "modules": {
+        "main": "let count=0;const {x=(count++,\"bad\":=string)}={x:1};if(x!==1||count!==0)throw new Error(\"effects\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-selected-effects",
+      "modules": {
+        "main": "let count=0;const {x=(count++,\"s\":=string)}={x:undefined};if(x!==\"s\"||count!==1)throw new Error(\"effects\");"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "import-False-False",
+      "modules": {
+        "dep": "export const box={seed:1:=number,x:\"s\"};",
+        "main": "import {box} from \"dep\";function make(){const {x}=box;return x;}const n:number=make();"
+      },
+      "script": false,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "import-False-True",
+      "modules": {
+        "dep": "export const box={seed:1:=number,x:\"s\"};",
+        "main": "import * as ns from \"dep\";function make(){const {x}=ns.box;return x;}const n:number=make();"
+      },
+      "script": false,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "import-True-False",
+      "modules": {
+        "dep": "export const box={seed:1:=number,x:\"s\":=string};",
+        "main": "import {box} from \"dep\";function make(){const {x}=box;return x;}const n:number=make();"
+      },
+      "script": false,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "import-True-True",
+      "modules": {
+        "dep": "export const box={seed:1:=number,x:\"s\":=string};",
+        "main": "import * as ns from \"dep\";function make(){const {x}=ns.box;return x;}const n:number=make();"
+      },
+      "script": false,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-parameter-source",
+      "modules": {
+        "main": "function make<T:type>(box:{x:T}){const {x}=box;return x;}const n:number=make.<string>({x:\"s\"});"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-nested-source",
+      "modules": {
+        "main": "function make<T:type>(box:{inner:{x:T}}){const {inner:{x}}=box;return x;}const n:number=make.<string>({inner:{x:\"s\"}});"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "protocol-element",
+      "modules": {
+        "main": "function unused(xs:Iterable.<string>){function make(){const [x]=xs;return x;}const n:number=make();}"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "mutable-tuple-not-iteration",
+      "modules": {
+        "main": "function unused(xs:[string]){function make(){const [x]=xs;return x;}const n:number=make();}"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "immutable-tuple-position",
+      "modules": {
+        "main": "function unused(xs:Composite.<[string,number]>){function make(){const [x]=xs;return x;}const n:number=make();}"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-root-erasure",
+      "modules": {
+        "main": "function make(){const {x}:any={x:\"s\":=string};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-root-contract",
+      "modules": {
+        "main": "function make(){const {x}:{x:string}={x:\"s\"};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-root-singleton",
+      "modules": {
+        "main": "function make(){const {x}:{x:\"s\"}={x:\"s\"};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-default-possible",
+      "modules": {
+        "main": "function make(){const {x=\"s\":=string}={x:Math.random()>0.5?\"s\":undefined};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-source-default-possible",
+      "modules": {
+        "main": "function make(){const {x=\"s\"}={x:Math.random()>0.5?(\"s\":=string):undefined};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-explicit-undefined-default",
+      "modules": {
+        "main": "function make(){const {(x:undefined)=undefined}={};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-root-erasure",
+      "modules": {
+        "main": "function make(){let {x}:any={x:\"s\":=string};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "let-root-contract",
+      "modules": {
+        "main": "function make(){let {x}:{x:string}={x:\"s\"};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-root-singleton",
+      "modules": {
+        "main": "function make(){let {x}:{x:\"s\"}={x:\"s\"};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-default-possible",
+      "modules": {
+        "main": "function make(){let {x=\"s\":=string}={x:Math.random()>0.5?\"s\":undefined};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-source-default-possible",
+      "modules": {
+        "main": "function make(){let {x=\"s\"}={x:Math.random()>0.5?(\"s\":=string):undefined};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "let-explicit-undefined-default",
+      "modules": {
+        "main": "function make(){let {(x:undefined)=undefined}={};return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "private-captured-destructure",
+      "modules": {
+        "main": "function make(){function privateValue(){return {x:\"s\"};}const {x}=privateValue();function read(){return x;}return read();}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "const-from-mutable-alias-capture",
+      "modules": {
+        "main": "function make(){let box={x:\"s\":=string};const {x}=box;function read(){return x;}return read();}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "captured-nested-typed",
+      "modules": {
+        "main": "const {inner:{x}}={inner:{x:\"s\":=string}};function make(){return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "captured-nested-unrelated",
+      "modules": {
+        "main": "const {inner:{x}}={inner:{seed:1:=number,x:\"s\"}};function make(){return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "default-identity",
+      "modules": {
+        "main": "const original={x:1};const {item=original}={item:undefined};if(item!==original)throw new Error(\"identity\");const seed:number=1;"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "private-cycle",
+      "modules": {
+        "main": "function first(flag){if(flag)return second(false);const {inner:{x}}={inner:{x:\"s\"}};return x;}function second(flag){return flag?first(false):\"s\";}function unused(){const n:number=first(true);}"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-cycle",
+      "modules": {
+        "main": "function first(flag){if(flag)return second(false);const {inner:{x}}={inner:{x:\"s\":=string}};return x;}function second(flag){return flag?first(false):\"s\";}const n:number=first(true);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "later-captured-nested-typed",
+      "modules": {
+        "main": "function make(){return x;}const n:number=make();const {inner:{x}}={inner:{x:\"s\":=string}};"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "captured-default-typed",
+      "modules": {
+        "main": "const {x=\"s\":=string}={x:undefined};function make(){return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "captured-rest-typed",
+      "modules": {
+        "main": "const {skip,...rest}={skip:1,x:\"s\":=string};function make(){return rest.x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "captured-rest-unrelated",
+      "modules": {
+        "main": "const {skip,...rest}={skip:1,seed:1:=number,x:\"s\"};function make(){return rest.x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "captured-published-call",
+      "modules": {
+        "main": "function producer(seed:number){return {inner:{x:\"s\"}};}const {inner:{x}}=producer(1);function make(){return x;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "captured-later-default",
+      "modules": {
+        "main": "const {x,y=x}={x:\"s\":=string,y:undefined};function make(){return y;}const n:number=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    }
+  ]
+}
