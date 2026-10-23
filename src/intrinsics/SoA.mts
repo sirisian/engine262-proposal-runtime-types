@@ -12,7 +12,8 @@ import { SubclassAddsStorageOver } from '../type-system/layout.mts';
 import { RuntimeTypeOf } from '../type-system/runtime.mts';
 import { displayType } from '../type-system/records.mts';
 import type { ClassLayout } from '../type-system/layout.mts';
-import { ArrayViewBackingOf, MakeArrayView } from '../abstract-ops/array-view.mts';
+import { ArrayViewBackingOf, MakeArrayView, RequireArrayViewSourceLive, RequireBufferViewSourceLive,
+  type ArrayViewSource, type ArrayViewBacking } from '../abstract-ops/array-view.mts';
 import type { ArrayBufferObject } from '../abstract-ops/arraybuffer-objects.mts';
 import { bootstrapConstructor } from './bootstrap.mts';
 import {
@@ -34,7 +35,7 @@ import {
  * a column, and every column pass would need the overlap check that disjoint
  * extents at compile-time offsets otherwise prove away.
  */
-export interface SoAStorage {
+export interface SoAStorage extends ArrayViewSource {
   readonly Element: TypeRecord;
   /** The declared extent; 0 is growable. */
   readonly Extent: number;
@@ -704,6 +705,10 @@ export function RequireSoAReferenceLive(value: Value) {
 
 /** A viewed SoA uses its current full extent; actual detachment is permanent. */
 export function requireViewLive(storage: SoAStorage) {
+  const sourceFailure = RequireArrayViewSourceLive(storage);
+  if (sourceFailure !== undefined) {
+    return sourceFailure;
+  }
   if (storage.ViewByteLength === undefined) {
     return undefined;
   }
@@ -801,11 +806,13 @@ export function* CreateSoAView(element: TypeRecord, extent: number, args: readon
   const source = args[0];
   let buffer: ArrayBufferObject | undefined;
   let baseOffset = 0;
+  let sourceView: ArrayViewBacking | undefined;
   if (source instanceof ObjectValue && 'ArrayBufferData' in source) {
     buffer = source as unknown as ArrayBufferObject;
   } else if (source instanceof ObjectValue) {
     const inner = ArrayViewBackingOf(source as unknown as object);
     if (inner) {
+      sourceView = inner;
       buffer = inner.Buffer;
       baseOffset = inner.ByteOffset;
     } else {
@@ -826,6 +833,7 @@ export function* CreateSoAView(element: TypeRecord, extent: number, args: readon
   if (args.length > 1) {
     requested = Number(Q(yield* ToIndex(args[1]!)));
   }
+  Q(RequireBufferViewSourceLive(source));
   if (IsDetachedBuffer(buffer)) {
     return Throw.TypeError('the buffer does not hold this SoA view');
   }
@@ -857,6 +865,7 @@ export function* CreateSoAView(element: TypeRecord, extent: number, args: readon
     Generation: 0,
     ViewByteOffset: byteOffset,
     ViewByteLength: placement.byteLength,
+    SourceGeneration: sourceView?.SourceGeneration, TakenAtGeneration: sourceView?.TakenAtGeneration,
   });
   return instance;
 }
@@ -982,10 +991,11 @@ function* SoAProto_fieldsGetter(_args: Arguments, { thisValue }: FunctionCallCon
       // a view of the elements IN USE, which is its length rather than its
       // capacity - a projection describes the elements, not the allocation.
       storage.Extent === 0 ? storage.Length : storage.Extent,
-      // A growable SoA's projection is invalidated by a reallocation; a fixed
-      // one has nothing that could move, so it carries no generation at all and
-      // its accesses have no check to make.
-      storage.Extent === 0 ? storage : undefined,
+      // Owned SoAs capture their allocation; viewed SoAs retain the original
+      // source obligation even though the viewed SoA's own extent is fixed.
+      storage.Extent === 0
+        ? { SourceGeneration: storage, TakenAtGeneration: storage.Generation }
+        : storage,
     );
     X(CreateDataProperty(fields, Value(column.key), view));
   }

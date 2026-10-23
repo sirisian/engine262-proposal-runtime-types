@@ -1,0 +1,2191 @@
+{
+  "cases": [
+    {
+      "name": "soa-subarray-relocated-read",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.subarray(0,1);a.reserve(64);const n:any=v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-subarray-relocated-write",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.subarray(0,1);a.reserve(64);v[0]=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-subarray-shrunk-read",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.subarray(0,1);a.shrinkToFit();const n:any=v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-subarray-shrunk-write",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.subarray(0,1);a.shrinkToFit();v[0]=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-subarray-already-stale",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;a.reserve(64);const v=s.subarray(0,1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-subarray-live-alias",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.subarray(0,1);v[0]=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(a[0].x,3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-subarray-reserved-growth",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.subarray(0,1);a.push({x:4});function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-subarray-reserve-noop",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.subarray(0,1);a.reserve(4);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-window-relocated-read",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.window(0,1);a.reserve(64);const n:any=v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-window-relocated-write",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.window(0,1);a.reserve(64);v[0]=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-window-shrunk-read",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.window(0,1);a.shrinkToFit();const n:any=v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-window-shrunk-write",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.window(0,1);a.shrinkToFit();v[0]=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-window-already-stale",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;a.reserve(64);const v=s.window(0,1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-window-live-alias",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.window(0,1);v[0]=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(a[0].x,3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-window-reserved-growth",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.window(0,1);a.push({x:4});function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-window-reserve-noop",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.window(0,1);a.reserve(4);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-fixed-window-relocated-read",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.window.<1>(0);a.reserve(64);const n:any=v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-fixed-window-relocated-write",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.window.<1>(0);a.reserve(64);v[0]=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-fixed-window-shrunk-read",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.window.<1>(0);a.shrinkToFit();const n:any=v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-fixed-window-shrunk-write",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.window.<1>(0);a.shrinkToFit();v[0]=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-fixed-window-already-stale",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;a.reserve(64);const v=s.window.<1>(0);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-fixed-window-live-alias",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.window.<1>(0);v[0]=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(a[0].x,3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-fixed-window-reserved-growth",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.window.<1>(0);a.push({x:4});function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-fixed-window-reserve-noop",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.window.<1>(0);a.reserve(4);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-reinterpret-relocated-read",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=Span.<uint8>(s,0,1);a.reserve(64);const n:any=v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-reinterpret-relocated-write",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=Span.<uint8>(s,0,1);a.reserve(64);v[0]=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-reinterpret-shrunk-read",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=Span.<uint8>(s,0,1);a.shrinkToFit();const n:any=v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-reinterpret-shrunk-write",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=Span.<uint8>(s,0,1);a.shrinkToFit();v[0]=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-reinterpret-already-stale",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;a.reserve(64);const v=Span.<uint8>(s,0,1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-reinterpret-live-alias",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=Span.<uint8>(s,0,1);v[0]=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(a[0].x,3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-reinterpret-reserved-growth",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=Span.<uint8>(s,0,1);a.push({x:4});function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-reinterpret-reserve-noop",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=Span.<uint8>(s,0,1);a.reserve(4);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-soa-view-relocated-read",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=SoA.<P,1>(s,0);a.reserve(64);const n:any=v[0].x;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-soa-view-relocated-write",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=SoA.<P,1>(s,0);a.reserve(64);v[0]={x:3};"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-soa-view-shrunk-read",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=SoA.<P,1>(s,0);a.shrinkToFit();const n:any=v[0].x;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-soa-view-shrunk-write",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=SoA.<P,1>(s,0);a.shrinkToFit();v[0]={x:3};"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-soa-view-already-stale",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;a.reserve(64);const v=SoA.<P,1>(s,0);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-soa-view-live-alias",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=SoA.<P,1>(s,0);v[0]={x:3};function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(a[0].x,3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-soa-view-reserved-growth",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=SoA.<P,1>(s,0);a.push({x:4});function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0].x,1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-soa-view-reserve-noop",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=SoA.<P,1>(s,0);a.reserve(4);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0].x,1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "owned-subarray-relocated-read",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.subarray(0,1);a.reserve(64);const n:any=v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-subarray-relocated-write",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.subarray(0,1);a.reserve(64);v[0]=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-subarray-shrunk-read",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.subarray(0,1);a.shrinkToFit();const n:any=v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-subarray-shrunk-write",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.subarray(0,1);a.shrinkToFit();v[0]=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-subarray-already-stale",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);a.reserve(64);const v=s.subarray(0,1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-subarray-live-alias",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.subarray(0,1);v[0]=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(a[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "owned-subarray-reserved-growth",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.subarray(0,1);a.push(4);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "owned-subarray-reserve-noop",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.subarray(0,1);a.reserve(4);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "owned-window-relocated-read",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.window(0,1);a.reserve(64);const n:any=v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-window-relocated-write",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.window(0,1);a.reserve(64);v[0]=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-window-shrunk-read",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.window(0,1);a.shrinkToFit();const n:any=v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-window-shrunk-write",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.window(0,1);a.shrinkToFit();v[0]=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-window-already-stale",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);a.reserve(64);const v=s.window(0,1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-window-live-alias",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.window(0,1);v[0]=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(a[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "owned-window-reserved-growth",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.window(0,1);a.push(4);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "owned-window-reserve-noop",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.window(0,1);a.reserve(4);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "owned-fixed-window-relocated-read",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.window.<1>(0);a.reserve(64);const n:any=v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-fixed-window-relocated-write",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.window.<1>(0);a.reserve(64);v[0]=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-fixed-window-shrunk-read",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.window.<1>(0);a.shrinkToFit();const n:any=v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-fixed-window-shrunk-write",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.window.<1>(0);a.shrinkToFit();v[0]=3;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-fixed-window-already-stale",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);a.reserve(64);const v=s.window.<1>(0);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-fixed-window-live-alias",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.window.<1>(0);v[0]=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(a[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "owned-fixed-window-reserved-growth",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.window.<1>(0);a.push(4);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "owned-fixed-window-reserve-noop",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.window.<1>(0);a.reserve(4);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-subarray-zero-stale",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;a.reserve(64);const v=s.subarray(0,0);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-subarray-offset-relocates",
+      "modules": {
+        "main": "function opaque(x:any):any{return x;}class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=opaque(s).subarray({valueOf(){a.reserve(64);return 0;}},1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-subarray-end-relocates",
+      "modules": {
+        "main": "function opaque(x:any):any{return x;}class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=opaque(s).subarray(0,{valueOf(){a.reserve(64);return 1;}});"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-subarray-argument-expression",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;function start(){a.reserve(64);return 0;}const v=s.subarray(start(),1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-subarray-coercion-abrupt",
+      "modules": {
+        "main": "function opaque(x:any):any{return x;}class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const token={};let caught=false;try{opaque(s).subarray({valueOf(){a.reserve(64);throw token;}},1);}catch(e){caught=e===token;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-subarray-stale-coercion-abrupt",
+      "modules": {
+        "main": "function opaque(x:any):any{return x;}class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;a.reserve(64);const token={};let caught=false;try{opaque(s).subarray({valueOf(){throw token;}},1);}catch(e){caught=e===token;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-window-zero-stale",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;a.reserve(64);const v=s.window(0,0);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-window-offset-relocates",
+      "modules": {
+        "main": "function opaque(x:any):any{return x;}class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=opaque(s).window({valueOf(){a.reserve(64);return 0;}},1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-window-end-relocates",
+      "modules": {
+        "main": "function opaque(x:any):any{return x;}class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=opaque(s).window(0,{valueOf(){a.reserve(64);return 1;}});"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-window-argument-expression",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;function start(){a.reserve(64);return 0;}const v=s.window(start(),1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-window-coercion-abrupt",
+      "modules": {
+        "main": "function opaque(x:any):any{return x;}class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const token={};let caught=false;try{opaque(s).window({valueOf(){a.reserve(64);throw token;}},1);}catch(e){caught=e===token;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-window-stale-coercion-abrupt",
+      "modules": {
+        "main": "function opaque(x:any):any{return x;}class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;a.reserve(64);const token={};let caught=false;try{opaque(s).window({valueOf(){throw token;}},1);}catch(e){caught=e===token;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-deep-subwindows",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.subarray(0,2).window(0,2).subarray(1,2);a.reserve(64);const n:any=v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-subarray-zero-stale",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);a.reserve(64);const v=s.subarray(0,0);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-subarray-offset-relocates",
+      "modules": {
+        "main": "function opaque(x:any):any{return x;}let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=opaque(s).subarray({valueOf(){a.reserve(64);return 0;}},1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-subarray-end-relocates",
+      "modules": {
+        "main": "function opaque(x:any):any{return x;}let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=opaque(s).subarray(0,{valueOf(){a.reserve(64);return 1;}});"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-subarray-argument-expression",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);function start(){a.reserve(64);return 0;}const v=s.subarray(start(),1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-subarray-coercion-abrupt",
+      "modules": {
+        "main": "function opaque(x:any):any{return x;}let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const token={};let caught=false;try{opaque(s).subarray({valueOf(){a.reserve(64);throw token;}},1);}catch(e){caught=e===token;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "owned-subarray-stale-coercion-abrupt",
+      "modules": {
+        "main": "function opaque(x:any):any{return x;}let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);a.reserve(64);const token={};let caught=false;try{opaque(s).subarray({valueOf(){throw token;}},1);}catch(e){caught=e===token;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "owned-window-zero-stale",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);a.reserve(64);const v=s.window(0,0);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-window-offset-relocates",
+      "modules": {
+        "main": "function opaque(x:any):any{return x;}let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=opaque(s).window({valueOf(){a.reserve(64);return 0;}},1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-window-end-relocates",
+      "modules": {
+        "main": "function opaque(x:any):any{return x;}let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=opaque(s).window(0,{valueOf(){a.reserve(64);return 1;}});"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-window-argument-expression",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);function start(){a.reserve(64);return 0;}const v=s.window(start(),1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "owned-window-coercion-abrupt",
+      "modules": {
+        "main": "function opaque(x:any):any{return x;}let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const token={};let caught=false;try{opaque(s).window({valueOf(){a.reserve(64);throw token;}},1);}catch(e){caught=e===token;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "owned-window-stale-coercion-abrupt",
+      "modules": {
+        "main": "function opaque(x:any):any{return x;}let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);a.reserve(64);const token={};let caught=false;try{opaque(s).window({valueOf(){throw token;}},1);}catch(e){caught=e===token;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "owned-deep-subwindows",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.subarray(0,2).window(0,2).subarray(1,2);a.reserve(64);const n:any=v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "reinterpret-offset-relocates",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=Span.<uint8>(s,{valueOf(){a.reserve(64);return 0;}},1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-view-offset-relocates",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=SoA.<P,1>(s,{valueOf(){a.reserve(64);return 0;}});"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "reinterpret-zero-stale",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;a.reserve(64);const v=Span.<uint8>(s,0,0);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "reinterpret-offset-abrupt",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const token={};let caught=false;try{Span.<uint8>(s,{valueOf(){a.reserve(64);throw token;}},1);}catch(e){caught=e===token;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-view-reproject",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const view=SoA.<P,1>(s);const v=view.fields.x.subarray(0,1);a.reserve(64);const n:any=v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-view-reproject-stale",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const view=SoA.<P,1>(s);a.reserve(64);const v=view.fields;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-view-borrow",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const view=SoA.<P,1>(s);let ref r=view[0];a.reserve(64);const n:any=r.x;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-view-copy",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const view=SoA.<P,1>(s);a.reserve(64);const n:any=view[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "soa-view-transitive",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=Span.<uint8>(SoA.<P,1>(Span.<uint8>(s,0,1)).fields.x,0,1);a.reserve(64);const n:any=v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "retained-derived-class",
+      "modules": {
+        "main": "class N{x:uint8;}class P{n:N;}const a=new SoA.<P>(1);const s=a.fields.n.subarray(0,1);const holder={v:s[0]};a.reserve(64);const copy=holder.v;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "module-stale-derived",
+      "modules": {
+        "main": "import {v,move} from \"dep\";move();const n:any=v[0];",
+        "dep": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;export const v=s.subarray(0,1);export function move(){a.reserve(64);}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "reflective-subarray",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=Reflect.apply(s.subarray,s,[0,1]);a.reserve(64);const n:any=v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "detached-bound-method",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const method=s.subarray;const v=method.call(s,0,1);a.reserve(64);const n:any=v[0];"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "raw-buffer-captured-live",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const raw=s.buffer;const v=Span.<uint8>(raw,0,1);a.reserve(64);v[0]=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],3);equal(a[0].x,1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "raw-buffer-from-stale",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;a.reserve(64);const raw=s.buffer;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "raw-buffer-already-captured",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const raw=s.buffer;a.reserve(64);const v=Span.<uint8>(raw,0,1);v[0]=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(a[0].x,1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "buffer-subarray-independent-extent",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const s=Span.<uint8>(b,0,8);const v=s.subarray(0,2);b.resize(4);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],0);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "buffer-subarray-derive-oob",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const s=Span.<uint8>(b,0,8);b.resize(4);const v=s.subarray(0,2);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "buffer-subarray-recover",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const s=Span.<uint8>(b,0,8);b.resize(4);b.resize(8);const v=s.subarray(0,2);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],0);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "buffer-window-independent-extent",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const s=Span.<uint8>(b,0,8);const v=s.window(0,2);b.resize(4);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],0);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "buffer-window-derive-oob",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const s=Span.<uint8>(b,0,8);b.resize(4);const v=s.window(0,2);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "buffer-window-recover",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const s=Span.<uint8>(b,0,8);b.resize(4);b.resize(8);const v=s.window(0,2);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],0);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "buffer-reinterpret-independent-extent",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const s=Span.<uint8>(b,0,8);const v=Span.<uint8>(s,0,2);b.resize(4);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],0);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "buffer-reinterpret-derive-oob",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const s=Span.<uint8>(b,0,8);b.resize(4);const v=Span.<uint8>(s,0,2);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "buffer-reinterpret-recover",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const s=Span.<uint8>(b,0,8);b.resize(4);b.resize(8);const v=Span.<uint8>(s,0,2);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],0);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "buffer-soa-view-independent-extent",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const s=Span.<uint8>(b,0,8);const v=SoA.<P,2>(s,0);b.resize(4);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0].x,0);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "buffer-soa-view-derive-oob",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const s=Span.<uint8>(b,0,8);b.resize(4);const v=SoA.<P,2>(s,0);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "buffer-soa-view-recover",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const s=Span.<uint8>(b,0,8);b.resize(4);b.resize(8);const v=SoA.<P,2>(s,0);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0].x,0);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "buffer-shrink-during-begin",
+      "modules": {
+        "main": "function opaque(x:any):any{return x;}const b=new ArrayBuffer(8,{maxByteLength:32});const s=Span.<uint8>(b,0,8);const v=opaque(s).subarray({valueOf(){b.resize(4);return 0;}},2);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "buffer-regrow-during-begin",
+      "modules": {
+        "main": "function opaque(x:any):any{return x;}const b=new ArrayBuffer(8,{maxByteLength:32});const s=Span.<uint8>(b,0,8);const v=opaque(s).subarray({valueOf(){b.resize(0);b.resize(8);return 0;}},2);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v.length,2);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "buffer-detached-zero-derivation",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const s=Span.<uint8>(b,0,8);b.transfer();const v=s.subarray(0,0);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "buffer-derived-recovery",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const s=Span.<uint8>(b,0,8);const v=s.subarray(0,2);b.resize(0);let caught=false;try{const n:any=v[0];}catch(e){caught=e instanceof TypeError;}b.resize(2);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);equal(v[0],0);equal(s.length,0);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-array-span-oob",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const s=new Uint8Array(b,0,8);b.resize(4);const v=Span.<uint8>(s,0,2);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed-array-span-recover",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const s=new Uint8Array(b,0,8);b.resize(4);b.resize(8);const v=Span.<uint8>(s,0,2);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-array-soa-oob",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const s=new Uint8Array(b,0,8);b.resize(4);const v=SoA.<P,2>(s,0);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed-array-soa-recover",
+      "modules": {
+        "main": "class P{x:uint8;}const b=new ArrayBuffer(8,{maxByteLength:32});const s=new Uint8Array(b,0,8);b.resize(4);b.resize(8);const v=SoA.<P,2>(s,0);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "fixed-owned-byte-source",
+      "modules": {
+        "main": "let a:[2].<uint8>=[1,2];const v=Span.<uint8>(a,0,1).subarray(0,1);v[0]=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(a[0],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "owned-span-byte-source-control",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);Span.<uint8>(s,0,1);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "fresh-source-after-relocation",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;a.reserve(64);const v=a.fields.x.subarray(0,1);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v[0],1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "failed-derivation-keeps-destination",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const raw=new ArrayBuffer(1);let result:any=Span.<uint8>(raw,0,1);const before=result;a.reserve(64);let caught=false;try{result=s.subarray(0,1);}catch(e){caught=e instanceof TypeError;}function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(caught,true);equal(result===before,true);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "failed-derivation-effects-and-new-source",
+      "modules": {
+        "main": "function opaque(x:any):any{return x;}class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;let effects=0;let caught=false;try{opaque(s).subarray({valueOf(){effects++;a.reserve(64);return 0;}},1);}catch(e){caught=e instanceof TypeError;}const fresh=a.fields.x.subarray(0,1);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(effects,1);equal(caught,true);equal(fresh[0],1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "snapshot-copy-independent",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const copy=s.slice(0,1);a.reserve(64);copy[0]=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(copy[0],3);equal(a[0].x,1);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "owned-live-offset",
+      "modules": {
+        "main": "let a:[].<uint8>=[1,2];a.reserve(8);const s=a.subarray(0,2);const v=s.subarray(1,2);v[0]=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(a[0],1);equal(a[1],3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "soa-live-offset",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.subarray(1,2);v[0]=3;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(a[0].x,1);equal(a[1].x,3);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "empty-derived-later-relocation",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const v=s.subarray(0,0);a.reserve(64);const w=v.subarray(0,0);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "raw-buffer-from-oob",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const s=Span.<uint8>(b,0,8);b.resize(4);const raw=s.buffer;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "raw-buffer-after-regrowth",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const s=Span.<uint8>(b,0,8);b.resize(4);b.resize(8);const raw=s.buffer;function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(raw===b,true);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "raw-native-buffer-accessor-unchanged",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const native=new Uint8Array(b,0,8);b.resize(4);const v=Span.<uint8>(native.buffer,0,2);function equal(a,b){if(typeof b===\"number\")a=Number(a);if(a!==b)throw new Error(\"value\");}equal(v.length,2);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "native-source-offset-shrink",
+      "modules": {
+        "main": "const b=new ArrayBuffer(8,{maxByteLength:32});const s=new Uint8Array(b,0,8);const v=Span.<uint8>(s,{valueOf(){b.resize(4);return 0;}},2);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "two-level-soa-reinterpret",
+      "modules": {
+        "main": "class P{x:uint8;}const a=SoA.withCapacity.<P>(8);a.push({x:1});a.push({x:2});const s=a.fields.x;const t=SoA.<P,1>(s);const v=SoA.<P,1>(t.fields.x);a.reserve(64);v[0]={x:3};"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    }
+  ]
+}

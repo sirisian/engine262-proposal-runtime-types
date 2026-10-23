@@ -9,6 +9,8 @@ import { IsPlainData, LayoutOf } from '../type-system/layout.mts';
 import { ToIndexType } from './runtime-types.mts';
 import { BufferElementType, PlacedInstance } from './placement.mts';
 import type { ArrayBufferObject } from './arraybuffer-objects.mts';
+import type { TypedArrayObject } from '../intrinsics/TypedArray.mts';
+import { MakeTypedArrayWithBufferWitnessRecord, IsTypedArrayOutOfBounds } from './typedarray-objects.mts';
 import type { FunctionObject } from '#self';
 import {
   GetValueFromBuffer, SetValueInBuffer, IsDetachedBuffer, OrdinaryObjectCreate, R, RequireType,
@@ -31,16 +33,10 @@ import {
  * IT - the design's own example reads `uint16`s at a 3-byte stride out of an
  * array of a 3-byte class. So the stride is carried rather than derived, and a
  * view's element addressing is offset plus index times stride.
+ *
+ * Derived views retain the original owned-allocation obligation unchanged.
  */
-export interface ArrayViewBacking {
-  readonly Element: TypeRecord;
-  readonly Buffer: ArrayBufferObject;
-  readonly ByteOffset: number;
-  readonly Stride: number;
-  /** The declared extent, or ~dynamic~ for a length-tracking view. */
-  readonly Extent: number | 'dynamic';
-  /** For a fixed view, the byte extent recorded at construction. */
-  readonly ByteExtent: number;
+export interface ArrayViewSource {
   /**
    * For a projection of an SoA column: the container and the generation its
    * allocation had when the projection was taken. A growth that reallocates
@@ -49,6 +45,17 @@ export interface ArrayViewBacking {
    */
   readonly SourceGeneration?: { readonly Generation: number };
   readonly TakenAtGeneration?: number;
+}
+
+export interface ArrayViewBacking extends ArrayViewSource {
+  readonly Element: TypeRecord;
+  readonly Buffer: ArrayBufferObject;
+  readonly ByteOffset: number;
+  readonly Stride: number;
+  /** The declared extent, or ~dynamic~ for a length-tracking view. */
+  readonly Extent: number | 'dynamic';
+  /** For a fixed view, the byte extent recorded at construction. */
+  readonly ByteExtent: number;
 }
 
 const views = new WeakMap<object, ArrayViewBacking>();
@@ -87,22 +94,13 @@ export function ArrayViewLength(backing: ArrayViewBacking): number {
   return available <= 0 ? 0 : Math.floor(available / backing.Stride);
 }
 
-function requireLive(backing: ArrayViewBacking) {
+export function RequireArrayViewLive(backing: ArrayViewBacking) {
   if (IsDetachedBuffer(backing.Buffer)) {
     return Throw.TypeError('this view is over a detached buffer');
   }
-  // A projection of an SoA column is invalidated by a growth that reallocates,
-  // exactly as a `ref` into the same SoA is. Without this the projection kept
-  // reading the OLD allocation and disagreed with the container silently, which
-  // is the one outcome none of the alternatives chose.
-  //
-  // The comparison is loop-invariant: the generation cannot change without a
-  // call, and a loop containing no call cannot change it, so it hoists rather
-  // than costing anything per element. A FIXED SoA can never be invalidated at
-  // all, which is the case the feature's performance argument cares about.
-  if (backing.SourceGeneration !== undefined
-      && backing.SourceGeneration.Generation !== backing.TakenAtGeneration) {
-    return Throw.TypeError('this column projection is into an SoA that has since grown');
+  const sourceFailure = RequireArrayViewSourceLive(backing);
+  if (sourceFailure !== undefined) {
+    return sourceFailure;
   }
   if (backing.Extent !== 'dynamic'
       && backing.ByteOffset + backing.ByteExtent > bufferByteLength(backing.Buffer)) {
@@ -113,9 +111,34 @@ function requireLive(backing: ArrayViewBacking) {
   return undefined;
 }
 
+/** Compare the captured generation, never refresh it from the owner. */
+export function RequireArrayViewSourceLive(source: ArrayViewSource) {
+  if (source.SourceGeneration !== undefined
+      && source.SourceGeneration.Generation !== source.TakenAtGeneration) {
+    return Throw.TypeError('this column projection is into an SoA that has since grown');
+  }
+  return undefined;
+}
+
+/** Source validity at a byte-view derivation boundary, after argument effects. */
+export function RequireBufferViewSourceLive(source: Value | undefined) {
+  if (!(source instanceof ObjectValue)) {
+    return undefined;
+  }
+  const view = ArrayViewBackingOf(source);
+  if (view !== undefined) {
+    return RequireArrayViewLive(view);
+  }
+  if ('TypedArrayName' in source
+      && IsTypedArrayOutOfBounds(MakeTypedArrayWithBufferWitnessRecord(source as TypedArrayObject, 'seq-cst'))) {
+    return Throw.TypeError('this view is over a buffer that no longer covers it');
+  }
+  return undefined;
+}
+
 /** An element read: decode at the view's offset plus index times stride. */
 export function* ReadArrayViewElement(backing: ArrayViewBacking, index: number): ValueEvaluator {
-  const live = requireLive(backing);
+  const live = RequireArrayViewLive(backing);
   if (live) {
     return live;
   }
@@ -147,7 +170,7 @@ export function* ReadArrayViewElement(backing: ArrayViewBacking, index: number):
       backing.Buffer,
       backing.ByteOffset + index * backing.Stride,
       backing.Stride,
-      () => requireLive(backing),
+      () => RequireArrayViewLive(backing),
     ));
     if (placed) {
       return placed;
@@ -166,7 +189,7 @@ export function* ReadArrayViewElement(backing: ArrayViewBacking, index: number):
 
 /** An element write: the store check first, then encode at the same position. */
 export function* WriteArrayViewElement(backing: ArrayViewBacking, index: number, value: Value): PlainEvaluator<boolean> {
-  const live = requireLive(backing);
+  const live = RequireArrayViewLive(backing);
   if (live) {
     return live;
   }
@@ -188,7 +211,7 @@ export function* WriteArrayViewElement(backing: ArrayViewBacking, index: number,
       backing.Buffer,
       backing.ByteOffset + index * backing.Stride,
       backing.Stride,
-      () => requireLive(backing),
+      () => RequireArrayViewLive(backing),
     ));
     if (!placed || !(source instanceof ObjectValue)) {
       return Throw.TypeError('an element of this type cannot be viewed in a buffer');
@@ -206,7 +229,7 @@ export function* WriteArrayViewElement(backing: ArrayViewBacking, index: number,
   const converted = Q(yield* RequireType(value, backing.Element));
   // Admission can execute user conversions. Recheck the view and index before
   // touching bytes; a tracking view may have lost this element in the meantime.
-  Q(requireLive(backing));
+  Q(RequireArrayViewLive(backing));
   if (index >= ArrayViewLength(backing)) {
     return Throw.RangeError('$1 is out of range', Value(String(index)));
   }
@@ -239,12 +262,14 @@ export function* CreateArrayView(element: TypeRecord, extent: number | 'dynamic'
   const source = args[0];
   let buffer: ArrayBufferObject | undefined;
   let baseOffset = 0;
+  let sourceView: ArrayViewBacking | undefined;
   if (source instanceof ObjectValue && 'ArrayBufferData' in source) {
     buffer = source as unknown as ArrayBufferObject;
   } else if (source instanceof ObjectValue) {
     // A typed array, or one of this proposal's views, viewed at its own base.
     const inner = ArrayViewBackingOf(source as unknown as object);
     if (inner) {
+      sourceView = inner;
       buffer = inner.Buffer;
       baseOffset = inner.ByteOffset;
     } else {
@@ -315,6 +340,7 @@ export function* CreateArrayView(element: TypeRecord, extent: number | 'dynamic'
   if (!IsPlainData(element)) {
     return Throw.TypeError('an element of this type cannot be viewed in a buffer');
   }
+  Q(RequireBufferViewSourceLive(source));
   if (IsDetachedBuffer(buffer)) {
     return Throw.TypeError('this view is over a detached buffer');
   }
@@ -326,6 +352,7 @@ export function* CreateArrayView(element: TypeRecord, extent: number | 'dynamic'
   const view = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Span.prototype%']);
   views.set(view as unknown as object, {
     Element: element, Buffer: buffer, ByteOffset: offset, Stride: stride, Extent: resolvedExtent, ByteExtent: byteExtent,
+    SourceGeneration: sourceView?.SourceGeneration, TakenAtGeneration: sourceView?.TakenAtGeneration,
   });
   X(view.PreventExtensions());
   return view;
@@ -337,7 +364,7 @@ export function* CreateArrayView(element: TypeRecord, extent: number | 'dynamic'
  * already a contiguous run at a known offset and stride, so there is nothing to
  * parse and nothing to check.
  */
-export function MakeArrayView(element: TypeRecord, buffer: ArrayBufferObject, byteOffset: number, stride: number, extent: number | 'dynamic', source?: { readonly Generation: number }): ObjectValue {
+export function MakeArrayView(element: TypeRecord, buffer: ArrayBufferObject, byteOffset: number, stride: number, extent: number | 'dynamic', source?: ArrayViewSource): ObjectValue {
   const view = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Span.prototype%']);
   views.set(view as unknown as object, {
     Element: element,
@@ -346,8 +373,8 @@ export function MakeArrayView(element: TypeRecord, buffer: ArrayBufferObject, by
     Stride: stride,
     Extent: extent,
     ByteExtent: extent === 'dynamic' ? 0 : extent * stride,
-    SourceGeneration: source,
-    TakenAtGeneration: source?.Generation,
+    SourceGeneration: source?.SourceGeneration,
+    TakenAtGeneration: source?.TakenAtGeneration,
   });
   X(view.PreventExtensions());
   return view;
@@ -400,14 +427,14 @@ function generationOf(source: ObjectValue): number {
  * from the array coerced, and two coercions of one array need not be the same
  * value — which is why this constructs rather than tagging the array.
  */
-export function MakeArraySpan(element: TypeRecord, source: ObjectValue, length: number, offset = 0): ObjectValue {
+export function MakeArraySpan(element: TypeRecord, source: ObjectValue, length: number, offset = 0, takenAtGeneration = generationOf(source)): ObjectValue {
   const span = OrdinaryObjectCreate(surroundingAgent.currentRealmRecord.Intrinsics['%Span.prototype%']);
   arraySpans.set(span as unknown as object, {
     Element: element,
     Source: source,
     Offset: offset,
     Length: length,
-    TakenAtGeneration: generationOf(source),
+    TakenAtGeneration: takenAtGeneration,
   });
   X(span.PreventExtensions());
   return span;
@@ -420,7 +447,7 @@ export function MakeArraySpan(element: TypeRecord, source: ObjectValue, length: 
  * on an array already at fit, leave every window over it valid — which is why
  * this compares generations rather than asking whether anything was called.
  */
-function requireSpanLive(backing: ArraySpanBacking) {
+export function RequireArraySpanLive(backing: ArraySpanBacking) {
   if (generationOf(backing.Source) !== backing.TakenAtGeneration) {
     return Throw.TypeError('this window is into an array that has since grown');
   }
@@ -429,7 +456,7 @@ function requireSpanLive(backing: ArraySpanBacking) {
 
 /** An element read through a window: the array's own element, liveness first. */
 export function* ReadArraySpanElement(backing: ArraySpanBacking, index: number): ValueEvaluator {
-  const live = requireSpanLive(backing);
+  const live = RequireArraySpanLive(backing);
   if (live) {
     return live;
   }
@@ -445,7 +472,7 @@ export function* ReadArraySpanElement(backing: ArraySpanBacking, index: number):
  * a window does not get to choose the type of storage it does not own.
  */
 export function* WriteArraySpanElement(backing: ArraySpanBacking, index: number, value: Value): PlainEvaluator<boolean> {
-  const live = requireSpanLive(backing);
+  const live = RequireArraySpanLive(backing);
   if (live) {
     return live;
   }

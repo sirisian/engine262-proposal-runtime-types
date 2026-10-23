@@ -17,7 +17,7 @@ import {
 import {
   Q, X, type ValueCompletion, type ValueEvaluator,
 } from '../completion.mts';
-import { MaterializeArrayBytes, StampTypedArray, ArrayViewBufferOf, ArrayViewByteOffsetOf, ArrayViewByteLengthOf, ArraySpanBackingOf, MakeArraySpan, ArrayViewBackingOf, MakeArrayView } from '../abstract-ops/array-view.mts';
+import { MaterializeArrayBytes, StampTypedArray, ArrayViewBufferOf, ArrayViewByteOffsetOf, ArrayViewByteLengthOf, ArraySpanBackingOf, MakeArraySpan, ArrayViewBackingOf, MakeArrayView, RequireArrayViewLive, RequireArraySpanLive } from '../abstract-ops/array-view.mts';
 import { LayoutOf } from '../type-system/layout.mts';
 import type { TypeRecord } from '../type-system/records.mts';
 import { SameType as SameTypeRecord } from '../type-system/relations.mts';
@@ -462,6 +462,7 @@ function* ArrayProto_buffer(_args: Arguments, { thisValue }: FunctionCallContext
   const O = Q(ToObject(thisValue));
   const buffer = ArrayViewBufferOf(O as unknown as object);
   if (buffer !== undefined) {
+    Q(RequireArrayViewLive(ArrayViewBackingOf(O)!));
     return buffer as unknown as Value;
   }
   // An OWNED array gets its bytes here, once, because something asked. See
@@ -556,7 +557,8 @@ function* ArrayProto_subarray(args: Arguments, { thisValue }: FunctionCallContex
   if (existing !== undefined) {
     // A subarray of a window over an OWNED array is a window over the same
     // source, further along.
-    return MakeArraySpan(existing.Element, existing.Source, count, existing.Offset + begin);
+    Q(RequireArraySpanLive(existing));
+    return MakeArraySpan(existing.Element, existing.Source, count, existing.Offset + begin, existing.TakenAtGeneration);
   }
   const view = ArrayViewBackingOf(O as unknown as object);
   if (view !== undefined) {
@@ -564,7 +566,8 @@ function* ArrayProto_subarray(args: Arguments, { thisValue }: FunctionCallContex
     // later byte offset. The two backings carve differently - one counts
     // elements, one counts bytes - and both must be handled, since a window is
     // one type over two representations.
-    return MakeArrayView(view.Element, view.Buffer, view.ByteOffset + begin * view.Stride, view.Stride, count);
+    Q(RequireArrayViewLive(view));
+    return MakeArrayView(view.Element, view.Buffer, view.ByteOffset + begin * view.Stride, view.Stride, count, view);
   }
   if (O.TypedElement === undefined) {
     return Throw.TypeError('subarray is available on an array with an element type');
