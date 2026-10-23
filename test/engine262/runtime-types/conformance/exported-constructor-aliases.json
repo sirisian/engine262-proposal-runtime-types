@@ -1,0 +1,3636 @@
+{
+  "cases": [
+    {
+      "name": "const-named-boolean",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-named-string",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:string=new Alias().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "const-named-static-member",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:boolean=Alias.label;",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-namespace-boolean",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns[\"Alias\"]().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-namespace-string",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns[\"Alias\"]().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "const-namespace-static-member",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=ns[\"Alias\"].label;",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-renamed-barrel-boolean",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:boolean=new Alias().get();",
+        "barrel": "export {Alias as Selected} from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-renamed-barrel-string",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:string=new Alias().get();",
+        "barrel": "export {Alias as Selected} from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "const-renamed-barrel-static-member",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:boolean=Alias.label;",
+        "barrel": "export {Alias as Selected} from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-star-namespace-boolean",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:boolean=new bundle.Alias().get();",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-star-namespace-string",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:string=new bundle.Alias().get();",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "const-star-namespace-static-member",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:boolean=bundle.Alias.label;",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-local-copy-boolean",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const Copy=(Alias);const result:boolean=new Copy().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "const-local-copy-string",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const Copy=(Alias);const result:string=new Copy().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "const-local-copy-static-member",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const Copy=(Alias);const result:boolean=Copy.label;",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-expression-named-boolean",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-expression-named-string",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:string=new Alias().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export default E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-expression-named-static-member",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:boolean=Alias.label;",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-expression-namespace-boolean",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns[\"default\"]().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-expression-namespace-string",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns[\"default\"]().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export default E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-expression-namespace-static-member",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=ns[\"default\"].label;",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-expression-renamed-barrel-boolean",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:boolean=new Alias().get();",
+        "barrel": "export {default as Selected} from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-expression-renamed-barrel-string",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:string=new Alias().get();",
+        "barrel": "export {default as Selected} from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export default E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-expression-renamed-barrel-static-member",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:boolean=Alias.label;",
+        "barrel": "export {default as Selected} from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-expression-star-namespace-boolean",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:boolean=new bundle.default().get();",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-expression-star-namespace-string",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:string=new bundle.default().get();",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export default E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-expression-star-namespace-static-member",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:boolean=bundle.default.label;",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-expression-local-copy-boolean",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const Copy=(Alias);const result:boolean=new Copy().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-expression-local-copy-string",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const Copy=(Alias);const result:string=new Copy().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export default E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-expression-local-copy-static-member",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const Copy=(Alias);const result:boolean=Copy.label;",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "parenthesized-chain-named-boolean",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=(E),B=(A);export const Alias=(B);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "parenthesized-chain-named-string",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:string=new Alias().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=(E),B=(A);export const Alias=(B);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "parenthesized-chain-named-static-member",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:boolean=Alias.label;",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=(E),B=(A);export const Alias=(B);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "parenthesized-chain-namespace-boolean",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns[\"Alias\"]().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=(E),B=(A);export const Alias=(B);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "parenthesized-chain-namespace-string",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns[\"Alias\"]().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=(E),B=(A);export const Alias=(B);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "parenthesized-chain-namespace-static-member",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=ns[\"Alias\"].label;",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=(E),B=(A);export const Alias=(B);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "parenthesized-chain-renamed-barrel-boolean",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:boolean=new Alias().get();",
+        "barrel": "export {Alias as Selected} from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=(E),B=(A);export const Alias=(B);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "parenthesized-chain-renamed-barrel-string",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:string=new Alias().get();",
+        "barrel": "export {Alias as Selected} from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=(E),B=(A);export const Alias=(B);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "parenthesized-chain-renamed-barrel-static-member",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:boolean=Alias.label;",
+        "barrel": "export {Alias as Selected} from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=(E),B=(A);export const Alias=(B);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "parenthesized-chain-star-namespace-boolean",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:boolean=new bundle.Alias().get();",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=(E),B=(A);export const Alias=(B);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "parenthesized-chain-star-namespace-string",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:string=new bundle.Alias().get();",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=(E),B=(A);export const Alias=(B);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "parenthesized-chain-star-namespace-static-member",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:boolean=bundle.Alias.label;",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=(E),B=(A);export const Alias=(B);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "parenthesized-chain-local-copy-boolean",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const Copy=(Alias);const result:boolean=new Copy().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=(E),B=(A);export const Alias=(B);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "parenthesized-chain-local-copy-string",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const Copy=(Alias);const result:string=new Copy().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=(E),B=(A);export const Alias=(B);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "parenthesized-chain-local-copy-static-member",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const Copy=(Alias);const result:boolean=Copy.label;",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=(E),B=(A);export const Alias=(B);"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-expression-named-boolean",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "export const Alias=class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-expression-named-string",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:string=new Alias().get();",
+        "dep": "export const Alias=class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-expression-named-static-member",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:boolean=Alias.label;",
+        "dep": "export const Alias=class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-expression-namespace-boolean",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns[\"Alias\"]().get();",
+        "dep": "export const Alias=class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-expression-namespace-string",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns[\"Alias\"]().get();",
+        "dep": "export const Alias=class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-expression-namespace-static-member",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=ns[\"Alias\"].label;",
+        "dep": "export const Alias=class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-expression-renamed-barrel-boolean",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:boolean=new Alias().get();",
+        "barrel": "export {Alias as Selected} from \"dep\";",
+        "dep": "export const Alias=class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-expression-renamed-barrel-string",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:string=new Alias().get();",
+        "barrel": "export {Alias as Selected} from \"dep\";",
+        "dep": "export const Alias=class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-expression-renamed-barrel-static-member",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:boolean=Alias.label;",
+        "barrel": "export {Alias as Selected} from \"dep\";",
+        "dep": "export const Alias=class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-expression-star-namespace-boolean",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:boolean=new bundle.Alias().get();",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "export const Alias=class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-expression-star-namespace-string",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:string=new bundle.Alias().get();",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "export const Alias=class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-expression-star-namespace-static-member",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:boolean=bundle.Alias.label;",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "export const Alias=class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-expression-local-copy-boolean",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const Copy=(Alias);const result:boolean=new Copy().get();",
+        "dep": "export const Alias=class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "class-expression-local-copy-string",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const Copy=(Alias);const result:string=new Copy().get();",
+        "dep": "export const Alias=class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "class-expression-local-copy-static-member",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const Copy=(Alias);const result:boolean=Copy.label;",
+        "dep": "export const Alias=class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-class-expression-named-boolean",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "export const Alias=class Inner{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-class-expression-named-string",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:string=new Alias().get();",
+        "dep": "export const Alias=class Inner{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-class-expression-named-static-member",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:boolean=Alias.label;",
+        "dep": "export const Alias=class Inner{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-class-expression-namespace-boolean",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns[\"Alias\"]().get();",
+        "dep": "export const Alias=class Inner{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-class-expression-namespace-string",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns[\"Alias\"]().get();",
+        "dep": "export const Alias=class Inner{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-class-expression-namespace-static-member",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=ns[\"Alias\"].label;",
+        "dep": "export const Alias=class Inner{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-class-expression-renamed-barrel-boolean",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:boolean=new Alias().get();",
+        "barrel": "export {Alias as Selected} from \"dep\";",
+        "dep": "export const Alias=class Inner{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-class-expression-renamed-barrel-string",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:string=new Alias().get();",
+        "barrel": "export {Alias as Selected} from \"dep\";",
+        "dep": "export const Alias=class Inner{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-class-expression-renamed-barrel-static-member",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:boolean=Alias.label;",
+        "barrel": "export {Alias as Selected} from \"dep\";",
+        "dep": "export const Alias=class Inner{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-class-expression-star-namespace-boolean",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:boolean=new bundle.Alias().get();",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "export const Alias=class Inner{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-class-expression-star-namespace-string",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:string=new bundle.Alias().get();",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "export const Alias=class Inner{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-class-expression-star-namespace-static-member",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:boolean=bundle.Alias.label;",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "export const Alias=class Inner{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-class-expression-local-copy-boolean",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const Copy=(Alias);const result:boolean=new Copy().get();",
+        "dep": "export const Alias=class Inner{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-class-expression-local-copy-string",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const Copy=(Alias);const result:string=new Copy().get();",
+        "dep": "export const Alias=class Inner{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-class-expression-local-copy-static-member",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const Copy=(Alias);const result:boolean=Copy.label;",
+        "dep": "export const Alias=class Inner{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-class-expression-named-boolean",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "export default (class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";});"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-class-expression-named-string",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:string=new Alias().get();",
+        "dep": "export default (class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";});"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-class-expression-named-static-member",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:boolean=Alias.label;",
+        "dep": "export default (class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";});"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-class-expression-namespace-boolean",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns[\"default\"]().get();",
+        "dep": "export default (class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";});"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-class-expression-namespace-string",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns[\"default\"]().get();",
+        "dep": "export default (class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";});"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-class-expression-namespace-static-member",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=ns[\"default\"].label;",
+        "dep": "export default (class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";});"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-class-expression-renamed-barrel-boolean",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:boolean=new Alias().get();",
+        "barrel": "export {default as Selected} from \"dep\";",
+        "dep": "export default (class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";});"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-class-expression-renamed-barrel-string",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:string=new Alias().get();",
+        "barrel": "export {default as Selected} from \"dep\";",
+        "dep": "export default (class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";});"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-class-expression-renamed-barrel-static-member",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:boolean=Alias.label;",
+        "barrel": "export {default as Selected} from \"dep\";",
+        "dep": "export default (class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";});"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-class-expression-star-namespace-boolean",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:boolean=new bundle.default().get();",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "export default (class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";});"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-class-expression-star-namespace-string",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:string=new bundle.default().get();",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "export default (class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";});"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-class-expression-star-namespace-static-member",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:boolean=bundle.default.label;",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "export default (class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";});"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-class-expression-local-copy-boolean",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const Copy=(Alias);const result:boolean=new Copy().get();",
+        "dep": "export default (class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";});"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-class-expression-local-copy-string",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const Copy=(Alias);const result:string=new Copy().get();",
+        "dep": "export default (class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";});"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-class-expression-local-copy-static-member",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const Copy=(Alias);const result:boolean=Copy.label;",
+        "dep": "export default (class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";});"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-named-class-named-boolean",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "export default class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-named-class-named-string",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:string=new Alias().get();",
+        "dep": "export default class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-named-class-named-static-member",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:boolean=Alias.label;",
+        "dep": "export default class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-named-class-namespace-boolean",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns[\"default\"]().get();",
+        "dep": "export default class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-named-class-namespace-string",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns[\"default\"]().get();",
+        "dep": "export default class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-named-class-namespace-static-member",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=ns[\"default\"].label;",
+        "dep": "export default class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-named-class-renamed-barrel-boolean",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:boolean=new Alias().get();",
+        "barrel": "export {default as Selected} from \"dep\";",
+        "dep": "export default class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-named-class-renamed-barrel-string",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:string=new Alias().get();",
+        "barrel": "export {default as Selected} from \"dep\";",
+        "dep": "export default class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-named-class-renamed-barrel-static-member",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:boolean=Alias.label;",
+        "barrel": "export {default as Selected} from \"dep\";",
+        "dep": "export default class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-named-class-star-namespace-boolean",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:boolean=new bundle.default().get();",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "export default class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-named-class-star-namespace-string",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:string=new bundle.default().get();",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "export default class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-named-class-star-namespace-static-member",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:boolean=bundle.default.label;",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "export default class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-named-class-local-copy-boolean",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const Copy=(Alias);const result:boolean=new Copy().get();",
+        "dep": "export default class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-named-class-local-copy-string",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const Copy=(Alias);const result:string=new Copy().get();",
+        "dep": "export default class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-named-class-local-copy-static-member",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const Copy=(Alias);const result:boolean=Copy.label;",
+        "dep": "export default class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-anonymous-class-named-boolean",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "export default class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-anonymous-class-named-string",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:string=new Alias().get();",
+        "dep": "export default class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-anonymous-class-named-static-member",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:boolean=Alias.label;",
+        "dep": "export default class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-anonymous-class-namespace-boolean",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns[\"default\"]().get();",
+        "dep": "export default class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-anonymous-class-namespace-string",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns[\"default\"]().get();",
+        "dep": "export default class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-anonymous-class-namespace-static-member",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=ns[\"default\"].label;",
+        "dep": "export default class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-anonymous-class-renamed-barrel-boolean",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:boolean=new Alias().get();",
+        "barrel": "export {default as Selected} from \"dep\";",
+        "dep": "export default class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-anonymous-class-renamed-barrel-string",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:string=new Alias().get();",
+        "barrel": "export {default as Selected} from \"dep\";",
+        "dep": "export default class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-anonymous-class-renamed-barrel-static-member",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:boolean=Alias.label;",
+        "barrel": "export {default as Selected} from \"dep\";",
+        "dep": "export default class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-anonymous-class-star-namespace-boolean",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:boolean=new bundle.default().get();",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "export default class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-anonymous-class-star-namespace-string",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:string=new bundle.default().get();",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "export default class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-anonymous-class-star-namespace-static-member",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:boolean=bundle.default.label;",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "export default class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-anonymous-class-local-copy-boolean",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const Copy=(Alias);const result:boolean=new Copy().get();",
+        "dep": "export default class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "default-anonymous-class-local-copy-string",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const Copy=(Alias);const result:string=new Copy().get();",
+        "dep": "export default class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-anonymous-class-local-copy-static-member",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const Copy=(Alias);const result:boolean=Copy.label;",
+        "dep": "export default class{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-export-name-named-boolean",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=E;export {A as Alias};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-export-name-named-string",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:string=new Alias().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=E;export {A as Alias};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-export-name-named-static-member",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:boolean=Alias.label;",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=E;export {A as Alias};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-export-name-namespace-boolean",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns[\"Alias\"]().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=E;export {A as Alias};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-export-name-namespace-string",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns[\"Alias\"]().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=E;export {A as Alias};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-export-name-namespace-static-member",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=ns[\"Alias\"].label;",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=E;export {A as Alias};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-export-name-renamed-barrel-boolean",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:boolean=new Alias().get();",
+        "barrel": "export {Alias as Selected} from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=E;export {A as Alias};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-export-name-renamed-barrel-string",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:string=new Alias().get();",
+        "barrel": "export {Alias as Selected} from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=E;export {A as Alias};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-export-name-renamed-barrel-static-member",
+      "modules": {
+        "main": "import {Selected as Alias} from \"barrel\";const result:boolean=Alias.label;",
+        "barrel": "export {Alias as Selected} from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=E;export {A as Alias};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-export-name-star-namespace-boolean",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:boolean=new bundle.Alias().get();",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=E;export {A as Alias};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-export-name-star-namespace-string",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:string=new bundle.Alias().get();",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=E;export {A as Alias};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-export-name-star-namespace-static-member",
+      "modules": {
+        "main": "import {bundle} from \"barrel\";const result:boolean=bundle.Alias.label;",
+        "barrel": "export * as bundle from \"dep\";",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=E;export {A as Alias};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-export-name-local-copy-boolean",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const Copy=(Alias);const result:boolean=new Copy().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=E;export {A as Alias};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "local-export-name-local-copy-string",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const Copy=(Alias);const result:string=new Copy().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=E;export {A as Alias};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "local-export-name-local-copy-static-member",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const Copy=(Alias);const result:boolean=Copy.label;",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const A=E;export {A as Alias};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-Alias-named-explicit-boolean",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:boolean=new Alias.<string>(\"ok\").get();",
+        "dep": "class E<T:type>{value:T;constructor(value:T){this.value=value;}get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-Alias-named-explicit-string",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:string=new Alias.<string>(\"ok\").get();",
+        "dep": "class E<T:type>{value:T;constructor(value:T){this.value=value;}get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-Alias-named-inferred-boolean",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:boolean=new Alias(\"ok\").get();",
+        "dep": "class E<T:type>{value:T;constructor(value:T){this.value=value;}get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-Alias-named-inferred-string",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:string=new Alias(\"ok\").get();",
+        "dep": "class E<T:type>{value:T;constructor(value:T){this.value=value;}get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-Alias-named-default-boolean",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "class E<T:type=string>{value:T;get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-Alias-named-default-string",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:string=new Alias().get();",
+        "dep": "class E<T:type=string>{value:T;get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-Alias-named-named-boolean",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:boolean=new Alias.<U:uint8,T:string>().get();",
+        "dep": "class E<T:type,U:type>{value:T;other:U;get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-Alias-named-named-string",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:string=new Alias.<U:uint8,T:string>().get();",
+        "dep": "class E<T:type,U:type>{value:T;other:U;get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-Alias-named-value-boolean",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:boolean=new Alias.<2>().get();",
+        "dep": "class E<N:uint32>{value:string=\"ok\";get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-Alias-named-value-string",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";const result:string=new Alias.<2>().get();",
+        "dep": "class E<N:uint32>{value:string=\"ok\";get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-Alias-named-bad-argument",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";new Alias.<string>(true);",
+        "dep": "class E<T:type>{constructor(value:T){}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-Alias-named-constraint",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";new Alias.<string>();",
+        "dep": "class E<T:type extends uint8>{}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_CONSTRAINT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-Alias-named-missing",
+      "modules": {
+        "main": "import {Alias as Alias} from \"dep\";new Alias();",
+        "dep": "class E<T:type>{}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-Alias-namespace-explicit-boolean",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.Alias.<string>(\"ok\").get();",
+        "dep": "class E<T:type>{value:T;constructor(value:T){this.value=value;}get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-Alias-namespace-explicit-string",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.Alias.<string>(\"ok\").get();",
+        "dep": "class E<T:type>{value:T;constructor(value:T){this.value=value;}get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-Alias-namespace-inferred-boolean",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.Alias(\"ok\").get();",
+        "dep": "class E<T:type>{value:T;constructor(value:T){this.value=value;}get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-Alias-namespace-inferred-string",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.Alias(\"ok\").get();",
+        "dep": "class E<T:type>{value:T;constructor(value:T){this.value=value;}get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-Alias-namespace-default-boolean",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.Alias().get();",
+        "dep": "class E<T:type=string>{value:T;get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-Alias-namespace-default-string",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.Alias().get();",
+        "dep": "class E<T:type=string>{value:T;get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-Alias-namespace-named-boolean",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.Alias.<U:uint8,T:string>().get();",
+        "dep": "class E<T:type,U:type>{value:T;other:U;get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-Alias-namespace-named-string",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.Alias.<U:uint8,T:string>().get();",
+        "dep": "class E<T:type,U:type>{value:T;other:U;get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-Alias-namespace-value-boolean",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.Alias.<2>().get();",
+        "dep": "class E<N:uint32>{value:string=\"ok\";get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-Alias-namespace-value-string",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.Alias.<2>().get();",
+        "dep": "class E<N:uint32>{value:string=\"ok\";get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-Alias-namespace-bad-argument",
+      "modules": {
+        "main": "import * as ns from \"dep\";new ns.Alias.<string>(true);",
+        "dep": "class E<T:type>{constructor(value:T){}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-Alias-namespace-constraint",
+      "modules": {
+        "main": "import * as ns from \"dep\";new ns.Alias.<string>();",
+        "dep": "class E<T:type extends uint8>{}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_CONSTRAINT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-Alias-namespace-missing",
+      "modules": {
+        "main": "import * as ns from \"dep\";new ns.Alias();",
+        "dep": "class E<T:type>{}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-default-named-explicit-boolean",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:boolean=new Alias.<string>(\"ok\").get();",
+        "dep": "class E<T:type>{value:T;constructor(value:T){this.value=value;}get(){return this.value;}}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-default-named-explicit-string",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:string=new Alias.<string>(\"ok\").get();",
+        "dep": "class E<T:type>{value:T;constructor(value:T){this.value=value;}get(){return this.value;}}export default E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-default-named-inferred-boolean",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:boolean=new Alias(\"ok\").get();",
+        "dep": "class E<T:type>{value:T;constructor(value:T){this.value=value;}get(){return this.value;}}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-default-named-inferred-string",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:string=new Alias(\"ok\").get();",
+        "dep": "class E<T:type>{value:T;constructor(value:T){this.value=value;}get(){return this.value;}}export default E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-default-named-default-boolean",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "class E<T:type=string>{value:T;get(){return this.value;}}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-default-named-default-string",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:string=new Alias().get();",
+        "dep": "class E<T:type=string>{value:T;get(){return this.value;}}export default E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-default-named-named-boolean",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:boolean=new Alias.<U:uint8,T:string>().get();",
+        "dep": "class E<T:type,U:type>{value:T;other:U;get(){return this.value;}}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-default-named-named-string",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:string=new Alias.<U:uint8,T:string>().get();",
+        "dep": "class E<T:type,U:type>{value:T;other:U;get(){return this.value;}}export default E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-default-named-value-boolean",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:boolean=new Alias.<2>().get();",
+        "dep": "class E<N:uint32>{value:string=\"ok\";get(){return this.value;}}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-default-named-value-string",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";const result:string=new Alias.<2>().get();",
+        "dep": "class E<N:uint32>{value:string=\"ok\";get(){return this.value;}}export default E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-default-named-bad-argument",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";new Alias.<string>(true);",
+        "dep": "class E<T:type>{constructor(value:T){}}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-default-named-constraint",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";new Alias.<string>();",
+        "dep": "class E<T:type extends uint8>{}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_CONSTRAINT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-default-named-missing",
+      "modules": {
+        "main": "import {default as Alias} from \"dep\";new Alias();",
+        "dep": "class E<T:type>{}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-default-namespace-explicit-boolean",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.default.<string>(\"ok\").get();",
+        "dep": "class E<T:type>{value:T;constructor(value:T){this.value=value;}get(){return this.value;}}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-default-namespace-explicit-string",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.default.<string>(\"ok\").get();",
+        "dep": "class E<T:type>{value:T;constructor(value:T){this.value=value;}get(){return this.value;}}export default E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-default-namespace-inferred-boolean",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.default(\"ok\").get();",
+        "dep": "class E<T:type>{value:T;constructor(value:T){this.value=value;}get(){return this.value;}}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-default-namespace-inferred-string",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.default(\"ok\").get();",
+        "dep": "class E<T:type>{value:T;constructor(value:T){this.value=value;}get(){return this.value;}}export default E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-default-namespace-default-boolean",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.default().get();",
+        "dep": "class E<T:type=string>{value:T;get(){return this.value;}}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-default-namespace-default-string",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.default().get();",
+        "dep": "class E<T:type=string>{value:T;get(){return this.value;}}export default E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-default-namespace-named-boolean",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.default.<U:uint8,T:string>().get();",
+        "dep": "class E<T:type,U:type>{value:T;other:U;get(){return this.value;}}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-default-namespace-named-string",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.default.<U:uint8,T:string>().get();",
+        "dep": "class E<T:type,U:type>{value:T;other:U;get(){return this.value;}}export default E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-default-namespace-value-boolean",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.default.<2>().get();",
+        "dep": "class E<N:uint32>{value:string=\"ok\";get(){return this.value;}}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-default-namespace-value-string",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.default.<2>().get();",
+        "dep": "class E<N:uint32>{value:string=\"ok\";get(){return this.value;}}export default E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-default-namespace-bad-argument",
+      "modules": {
+        "main": "import * as ns from \"dep\";new ns.default.<string>(true);",
+        "dep": "class E<T:type>{constructor(value:T){}}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-default-namespace-constraint",
+      "modules": {
+        "main": "import * as ns from \"dep\";new ns.default.<string>();",
+        "dep": "class E<T:type extends uint8>{}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_CONSTRAINT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-default-namespace-missing",
+      "modules": {
+        "main": "import * as ns from \"dep\";new ns.default();",
+        "dep": "class E<T:type>{}export default E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_ARGUMENT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "bridge-named-Alias",
+      "modules": {
+        "main": "import {Alias as Alias} from \"bridge\";type Local=boolean;const result:boolean=new Alias().get();",
+        "bridge": "import {E} from \"base\";export const Alias=E;",
+        "base": "type Local=string;export class E{value:Local=\"ok\";get(){return this.value;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "bridge-named-Alias-compatible",
+      "modules": {
+        "main": "import {Alias as Alias} from \"bridge\";type Local=boolean;const result:string=new Alias().get();",
+        "bridge": "import {E} from \"base\";export const Alias=E;",
+        "base": "type Local=string;export class E{value:Local=\"ok\";get(){return this.value;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "base",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bridge-named-default",
+      "modules": {
+        "main": "import {default as Alias} from \"bridge\";type Local=boolean;const result:boolean=new Alias().get();",
+        "bridge": "import {E} from \"base\";const A=E;export default A;",
+        "base": "type Local=string;export class E{value:Local=\"ok\";get(){return this.value;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "bridge-named-default-compatible",
+      "modules": {
+        "main": "import {default as Alias} from \"bridge\";type Local=boolean;const result:string=new Alias().get();",
+        "bridge": "import {E} from \"base\";const A=E;export default A;",
+        "base": "type Local=string;export class E{value:Local=\"ok\";get(){return this.value;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "base",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bridge-namespace-Alias",
+      "modules": {
+        "main": "import {Alias as Alias} from \"bridge\";type Local=boolean;const result:boolean=new Alias().get();",
+        "bridge": "import * as ns from \"base\";export const Alias=ns.E;",
+        "base": "type Local=string;export class E{value:Local=\"ok\";get(){return this.value;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "bridge-namespace-Alias-compatible",
+      "modules": {
+        "main": "import {Alias as Alias} from \"bridge\";type Local=boolean;const result:string=new Alias().get();",
+        "bridge": "import * as ns from \"base\";export const Alias=ns.E;",
+        "base": "type Local=string;export class E{value:Local=\"ok\";get(){return this.value;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "base",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "bridge-namespace-default",
+      "modules": {
+        "main": "import {default as Alias} from \"bridge\";type Local=boolean;const result:boolean=new Alias().get();",
+        "bridge": "import * as ns from \"base\";const A=ns.E;export default A;",
+        "base": "type Local=string;export class E{value:Local=\"ok\";get(){return this.value;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "bridge-namespace-default-compatible",
+      "modules": {
+        "main": "import {default as Alias} from \"bridge\";type Local=boolean;const result:string=new Alias().get();",
+        "bridge": "import * as ns from \"base\";const A=ns.E;export default A;",
+        "base": "type Local=string;export class E{value:Local=\"ok\";get(){return this.value;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "base",
+          "bridge",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-inherited",
+      "modules": {
+        "main": "import {Alias} from \"dep\";class D extends Alias{}const result:boolean=new D().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-inherited-generic",
+      "modules": {
+        "main": "import {Alias} from \"dep\";class D extends Alias.<string>{}const result:boolean=new D().get();",
+        "dep": "class E<T:type>{value:T;get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-nominal-mismatch",
+      "modules": {
+        "main": "import {Alias} from \"dep\";class Local{text:string=\"ok\";}const result:Local=new Alias();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-literal-only",
+      "modules": {
+        "main": "import {Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "class E{get(){return \"ok\";}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "named-typed-constructor-argument",
+      "modules": {
+        "main": "import {Alias} from \"dep\";new Alias(true);",
+        "dep": "class E{constructor(value:string){}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-uncalled-function",
+      "modules": {
+        "main": "import {Alias} from \"dep\";function unused(){const result:boolean=new Alias().get();}",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-inherited",
+      "modules": {
+        "main": "import * as ns from \"dep\";class D extends ns.Alias{}const result:boolean=new D().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-inherited-generic",
+      "modules": {
+        "main": "import * as ns from \"dep\";class D extends ns.Alias.<string>{}const result:boolean=new D().get();",
+        "dep": "class E<T:type>{value:T;get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-nominal-mismatch",
+      "modules": {
+        "main": "import * as ns from \"dep\";class Local{text:string=\"ok\";}const result:Local=new ns.Alias();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-literal-only",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.Alias().get();",
+        "dep": "class E{get(){return \"ok\";}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "namespace-typed-constructor-argument",
+      "modules": {
+        "main": "import * as ns from \"dep\";new ns.Alias(true);",
+        "dep": "class E{constructor(value:string){}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-uncalled-function",
+      "modules": {
+        "main": "import * as ns from \"dep\";function unused(){const result:boolean=new ns.Alias().get();}",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "control-erased",
+      "modules": {
+        "main": "import {Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias:any=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "control-mutable",
+      "modules": {
+        "main": "import {Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export let Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "control-var",
+      "modules": {
+        "main": "import {Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export var Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "control-mutated-class",
+      "modules": {
+        "main": "import {Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}const Alias=E;E=class{};export {Alias};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "control-direct-eval",
+      "modules": {
+        "main": "import {Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;eval(\"\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "control-call-result",
+      "modules": {
+        "main": "import {Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}function choose(){return E;}export const Alias=choose();"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "mutated-default-snapshot",
+      "modules": {
+        "main": "import Alias from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export default E;E=class{get(){return true;}};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "mutated-default-live",
+      "modules": {
+        "main": "import Alias from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export {E as default};E=class{get(){return true;}};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "compatible-tdz",
+      "modules": {
+        "main": "import {Alias} from \"dep\";const result:string=new Alias().get();",
+        "dep": "export const Alias=E;class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "incompatible-before-tdz",
+      "modules": {
+        "main": "import {Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "export const Alias=E;class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "alias-cycle",
+      "modules": {
+        "main": "import {Alias} from \"dep\";new Alias();",
+        "dep": "const A=B,B=A;export {A as Alias};"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep"
+        ],
+        "errorClass": "ReferenceError"
+      }
+    },
+    {
+      "name": "module-cycle",
+      "modules": {
+        "main": "import {Alias} from \"dep\";export function marker(){}const result:boolean=new Alias().get();",
+        "dep": "import {marker} from \"main\";class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "module-cycle-compatible",
+      "modules": {
+        "main": "import {Alias} from \"dep\";export function marker(){}const result:string=new Alias().get();",
+        "dep": "import {marker} from \"main\";class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "decorator-non-replacing",
+      "modules": {
+        "main": "import {Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "function decorate(value:any,context:any):void{}@decorate class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "decorator-possibly-replacing",
+      "modules": {
+        "main": "import {Alias} from \"dep\";const result:boolean=new Alias().get();",
+        "dep": "function decorate(value:any,context:any):any{return value;}@decorate class E{text:string=\"ok\";get(){return this.text;}static label:string=\"ok\";}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "bounded-decorator-override",
+      "modules": {
+        "main": "import {Alias} from \"dep\";class D extends Alias{get():boolean{return true;}}",
+        "dep": "function decorate(value:any,context:any):any{return value;}@decorate class E{get():string{return \"ok\";}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INHERITED_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-bounded-decorator-override",
+      "modules": {
+        "main": "import * as ns from \"dep\";class D extends ns.Alias{get():boolean{return true;}}",
+        "dep": "function decorate(value:any,context:any):any{return value;}@decorate class E{get():string{return \"ok\";}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_INHERITED_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-producer-default-scope",
+      "modules": {
+        "main": "import {Alias} from \"dep\";type Hidden=boolean;const result:boolean=new Alias().get();",
+        "dep": "type Hidden=string;class E<T:type=Hidden>{value:T;get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-producer-constraint-scope",
+      "modules": {
+        "main": "import {Alias} from \"dep\";type Hidden=boolean;new Alias.<boolean>();",
+        "dep": "type Hidden=string;class E<T:type extends Hidden>{}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_CONSTRAINT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "named-consumer-argument-scope",
+      "modules": {
+        "main": "import {Alias} from \"dep\";type Chosen=string;const result:string=new Alias.<Chosen>().get();",
+        "dep": "type Chosen=boolean;class E<T:type>{value:T;get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "named-producer-default-compatible",
+      "modules": {
+        "main": "import {Alias} from \"dep\";type Hidden=boolean;const result:string=new Alias().get();",
+        "dep": "type Hidden=string;class E<T:type=Hidden>{value:T;get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-producer-default-scope",
+      "modules": {
+        "main": "import * as ns from \"dep\";type Hidden=boolean;const result:boolean=new ns.Alias().get();",
+        "dep": "type Hidden=string;class E<T:type=Hidden>{value:T;get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-producer-constraint-scope",
+      "modules": {
+        "main": "import * as ns from \"dep\";type Hidden=boolean;new ns.Alias.<boolean>();",
+        "dep": "type Hidden=string;class E<T:type extends Hidden>{}export const Alias=E;"
+      },
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_GENERIC_CONSTRAINT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-consumer-argument-scope",
+      "modules": {
+        "main": "import * as ns from \"dep\";type Chosen=string;const result:string=new ns.Alias.<Chosen>().get();",
+        "dep": "type Chosen=boolean;class E<T:type>{value:T;get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-producer-default-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";type Hidden=boolean;const result:string=new ns.Alias().get();",
+        "dep": "type Hidden=string;class E<T:type=Hidden>{value:T;get(){return this.value;}}export const Alias=E;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    }
+  ]
+}

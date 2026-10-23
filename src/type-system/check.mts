@@ -1457,6 +1457,17 @@ export function ExportedAliasesOf(specifier: string | undefined): Map<string, un
  */
 const moduleBuilderNodes = new WeakMap<object, Map<string, ParseNode>>();
 const moduleClassNodes = new WeakMap<object, Map<string, ParseNode>>();
+/** A value alias publishes its producer's proof, not a new type declaration. */
+export interface ImportedConstructorOrigin {
+  readonly declaration: ParseNode.ClassDeclaration | ParseNode.ClassExpression;
+  readonly bounded?: boolean;
+  readonly module?: AbstractModuleRecord;
+}
+const moduleConstructorOrigins = new WeakMap<ParseNode.Module, ReadonlyMap<string, ImportedConstructorOrigin>>();
+const pendingModuleConstructorOrigins = new WeakMap<ParseNode, ReadonlyMap<string, ImportedConstructorOrigin>>();
+export function ExportedConstructorOriginsOf(module: ParseNode.Module): ReadonlyMap<string, ImportedConstructorOrigin> | undefined {
+  return moduleConstructorOrigins.get(module);
+}
 // Producer-owned constructor-origin proofs. true is exact; false is bounded by
 // a decorator replacement. Absence does not prove the current binding's value.
 const checkedClassOrigins = new WeakMap<ParseNode, boolean>();
@@ -2807,6 +2818,7 @@ const moduleCheckInputs = new WeakMap<object, {
   sourceModule?: AbstractModuleRecord,
   builderModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>,
   namespaces?: ReadonlyMap<string, AbstractModuleRecord>,
+  constructors?: ReadonlyMap<string, ImportedConstructorOrigin>,
 }>();
 
 export function DeferredTypeChecksOf(root: object): readonly DeferredTypeCheck[] {
@@ -2828,7 +2840,7 @@ export function RecheckAfterTypeEvaluation(root: ParseNode.Script | ParseNode.Mo
   const inputs = moduleCheckInputs.get(root);
   for (const [name, type] of inputs?.imported ?? []) {
     if (inputs?.interfaces?.has(name)) session.frame.bindings.set(name, makePrimitive('type'));
-    else if (!inputs?.classes?.has(name)) session.frame.bindings.set(name, type as TypeRecord);
+    else if (!inputs?.classes?.has(name) && !inputs?.constructors?.has(name)) session.frame.bindings.set(name, type as TypeRecord);
     session.frame.aliases.set(name, type as TypeRecord);
     session.frame.declaredNames.add(name);
     session.frame.immutableNames.add(name);
@@ -2987,10 +2999,15 @@ function checkCompletedDeclarations(statementList: readonly ParseNode[] | null, 
   try {
     const errors = checkCompletedDeclarationPasses(statementList, root, session, afterTypeEvaluation);
     if (errors.length === 0) publications = pendingModulePartials.get(root) ?? [];
+    if (root.type === 'Module') {
+      if (errors.length === 0) moduleConstructorOrigins.set(root, pendingModuleConstructorOrigins.get(root) ?? new Map());
+      else moduleConstructorOrigins.delete(root);
+    }
     return errors;
   } finally {
     if (root.type === 'Module') PublishModulePartialContributions(root, publications);
     pendingModulePartials.delete(root);
+    pendingModuleConstructorOrigins.delete(root);
   }
 }
 
@@ -3139,9 +3156,9 @@ export function CheckModule(module: ParseNode.Module, specifier?: string): Objec
   const interfaces = new Map<string, ParseNode>();
   const aliases = new Map<string, ParseNode.TypeAliasDeclaration>();
   for (const item of module.ModuleBody?.ModuleItemList ?? []) {
-    const wrapper = item as { type?: string, HoistableDeclaration?: ParseNode, Declaration?: ParseNode };
+    const wrapper = item as { type?: string, HoistableDeclaration?: ParseNode, Declaration?: ParseNode, ClassDeclaration?: ParseNode };
     const declaration = wrapper.type === 'ExportDeclaration'
-      ? (wrapper.HoistableDeclaration ?? wrapper.Declaration)
+      ? (wrapper.HoistableDeclaration ?? wrapper.Declaration ?? wrapper.ClassDeclaration)
       : (item as ParseNode);
     const named = declaration as { type?: string, BindingIdentifier?: { name?: string } } | undefined;
     if (named?.type === 'FunctionDeclaration' && typeof named.BindingIdentifier?.name === 'string') {
@@ -3185,9 +3202,9 @@ export function CheckModule(module: ParseNode.Module, specifier?: string): Objec
  * bindings are only there on the second pass. `function f() { return c.x; }
  * let s: string = f();` is refused because of that second pass.
  */
-export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, specifier?: string, classes?: ReadonlyMap<string, ParseNode>, classModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>, interfaces?: ReadonlyMap<string, ImportedInterface>, aliases?: ReadonlyMap<string, ImportedTypeAlias>, sourceModule?: AbstractModuleRecord, builderModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>, namespaces?: ReadonlyMap<string, AbstractModuleRecord>): ObjectValue[] {
-  moduleCheckInputs.set(module, { imported, builders, classes, classModules, interfaces, aliases, sourceModule, builderModules, namespaces });
-  if (imported.size === 0 && !aliases?.size && !namespaces?.size) {
+export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, specifier?: string, classes?: ReadonlyMap<string, ParseNode>, classModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>, interfaces?: ReadonlyMap<string, ImportedInterface>, aliases?: ReadonlyMap<string, ImportedTypeAlias>, sourceModule?: AbstractModuleRecord, builderModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>, namespaces?: ReadonlyMap<string, AbstractModuleRecord>, constructors?: ReadonlyMap<string, ImportedConstructorOrigin>): ObjectValue[] {
+  moduleCheckInputs.set(module, { imported, builders, classes, classModules, interfaces, aliases, sourceModule, builderModules, namespaces, constructors });
+  if (imported.size === 0 && !aliases?.size && !namespaces?.size && !constructors?.size) {
     return [];
   }
   const session = CreateCheckSession();
@@ -3196,7 +3213,7 @@ export function CheckModuleWithImports(module: ParseNode.Module, imported: Reado
     // Class imports denote constructor values here, not nominal instances. Let
     // the class-object query supply their static members, as for local classes.
     if (interfaces?.has(name)) session.frame.bindings.set(name, makePrimitive('type'));
-    else if (!classes?.has(name)) session.frame.bindings.set(name, t as TypeRecord);
+    else if (!classes?.has(name) && !constructors?.has(name)) session.frame.bindings.set(name, t as TypeRecord);
     // ALSO as an alias. A type annotation naming an import resolves through
     // `lookupAlias`, which reads `aliases` and not `bindings`, so an imported
     // type seeded only into `bindings` did not resolve - and the alias built
@@ -6837,6 +6854,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         .map((entry) => [entry.declaration, entry.module] as const),
       ...input?.classModules ?? [],
       ...input?.builderModules ?? [],
+      ...[...input?.constructors?.values() ?? []].flatMap((origin) => origin.module ? [[origin.declaration, origin.module] as const] : []),
     ]) {
       let owner = declaration;
       while (owner.parent) owner = owner.parent;
@@ -7946,16 +7964,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const resolution = namespace.ResolveExport(Value(key));
     return resolution && resolution !== 'ambiguous' ? resolution : undefined;
   };
-  const namespaceClassDeclaration = (node: ParseNode.MemberExpression): ParseNode | undefined => {
+  const namespaceClassOrigin = (node: ParseNode.MemberExpression): ImportedConstructorOrigin | undefined => {
     const resolution = importedNamespaceMember(node);
     if (!resolution || !(resolution.BindingName instanceof JSStringValue) || !('ECMAScriptCode' in resolution.Module)) return undefined;
     const source = resolution.Module.ECMAScriptCode as ParseNode.Module;
-    const declaration = ExportedClassNodesOf(source)?.get(resolution.BindingName.stringValue());
-    if (declaration) {
-      importedDeclarationSourceModules.set(source, resolution.Module);
-      retainImportedSources(source);
-    }
-    return declaration;
+    const name = resolution.BindingName.stringValue();
+    const alias = ExportedConstructorOriginsOf(source)?.get(name);
+    const declaration = alias?.declaration ?? ExportedClassNodesOf(source)?.get(name);
+    const exact = alias ? !alias.bounded : declaration && checkedClassOrigins.get(declaration);
+    if (!declaration || exact === undefined) return undefined;
+    let owner = declaration;
+    while (owner.parent) owner = owner.parent;
+    importedDeclarationSourceModules.set(owner, alias?.module ?? resolution.Module);
+    retainImportedSources(owner);
+    return { declaration: declaration as ImportedConstructorOrigin['declaration'], bounded: !exact };
   };
   // #sec-typed-classes: follow transparent syntax and immutable lexical aliases.
   // Keep declaration identity: a same-spelled name in a caller's frame is not the base.
@@ -7979,7 +8001,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (exact === undefined || (!exact && !bounded)) return undefined;
       return { declaration: declaration as ParseNode.ClassDeclaration, ...(!exact ? { bounded: true } : {}) };
     };
-    if (node.type === 'MemberExpression') return publishedOrigin(namespaceClassDeclaration(node));
+    if (node.type === 'MemberExpression') {
+      const origin = namespaceClassOrigin(node);
+      return origin && (!origin.bounded || bounded) ? origin : undefined;
+    }
     if (node.type !== 'IdentifierReference') return undefined;
     let source: ParseNode = node;
     while (source.parent) source = source.parent;
@@ -7988,7 +8013,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // Import bindings are read-only views of live producer bindings. The
     // producer's proof, not the import's immutability or consumer name table,
     // establishes the constructor. Resolve foreign heritage in its own module.
-    if (binding?.kind === 'import') return publishedOrigin(moduleCheckInputs.get(source)?.classes?.get(node.name));
+    if (binding?.kind === 'import') {
+      const origin = moduleCheckInputs.get(source)?.constructors?.get(node.name);
+      if (origin) return !origin.bounded || bounded ? origin : undefined;
+      return publishedOrigin(moduleCheckInputs.get(source)?.classes?.get(node.name));
+    }
     if (binding?.kind === 'class' && source !== root) return publishedOrigin(binding.node);
     if (binding?.kind === 'const' && binding.initializer && !(binding.node as { TypeAnnotation?: unknown }).TypeAnnotation
         && !(binding.node as { Ref?: boolean }).Ref) {
@@ -8170,8 +8199,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     // A different lexical binding still shadows the class, including an erased
     // parameter; runtime initialization remains governed by the ordinary TDZ.
     const binding = ResolveBindingDeclaration(reference, reference.name);
-    const node = binding?.kind === 'class' || binding?.kind === 'import' ? stableClassOrigin(reference)?.declaration
-      : !binding ? classNodes.get(reference.name) : undefined;
+    const origin = binding ? stableClassOrigin(reference) : undefined;
+    const node = origin && !origin.arguments ? origin.declaration : !binding ? classNodes.get(reference.name) : undefined;
     if (!node || (!binding && shadowedByProgram(reference.name))) return null;
     if (![...partialDeclarations].some((part) => partialPrimaryOf(part) === node)
       && PublishedPartialContributions(node, true).length === 0) return classObjectTypeOfNode(node);
@@ -8250,7 +8279,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const lexicalClassType = (reference: ParseNode.IdentifierReference): Known => {
     const binding = ResolveBindingDeclaration(reference, reference.name);
     if (binding?.node.type === 'ClassDeclaration' || binding?.node.type === 'ClassExpression') return instanceTypeOf(binding.node);
-    if (binding && binding.kind !== 'import') return null;
+    if (binding?.kind === 'import') {
+      const origin = stableClassOrigin(reference);
+      return origin && !origin.arguments ? instanceTypeOf(origin.declaration) : null;
+    }
+    if (binding) return null;
     return classTypeOf(reference.name);
   };
 
@@ -19943,8 +19976,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return staticType(templateCallView(node as ParseNode.TaggedTemplateExpression));
       }
       case 'MemberExpression': {
-        const namespaceClass = namespaceClassDeclaration(node);
-        if (namespaceClass && checkedClassOrigins.get(namespaceClass) === true) return classObjectTypeOfNode(namespaceClass);
+        const namespaceClass = namespaceClassOrigin(node);
+        if (namespaceClass && !namespaceClass.bounded) return classObjectTypeOfNode(namespaceClass.declaration);
         const capacity = capacityContract(node);
         if (capacity) return capacity;
         if (checkMemberReceiver(node)) return neverType;
@@ -37435,6 +37468,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         const origin = target ? stableClassOrigin(target) : undefined;
         const namedInstance = bareTarget?.type === 'IdentifierReference' ? lexicalClassType(bareTarget) : null;
         if (target && !ne.PlacementArguments) checkInvocation(target, true);
+        // An unused bare generic construction still has to bind its parameters.
+        if (origin && !origin.arguments && origin.declaration.TypeParameters) staticType(n);
         // A VALUE OF A PRIMITIVE TYPE IS NOT A CONSTRUCTOR, for the reason a
         // value of one is not callable: `new n()` for a `uint8` n was the run
         // time's "1 (typed) is not a constructor", and the type is written at
@@ -37542,6 +37577,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // #sec-type-errors: an origin-preserving alias keeps the constructor
         // contract. Conditional alternatives are checked independently.
         const constructorTargets = namedInstance ? [{ instance: namedInstance, arguments: undefined as ParseNode.TypeArguments | undefined }]
+          : origin ? [{ instance: instanceTypeOf(origin.declaration), arguments: origin.arguments }]
           : (target ? invocationFact(target)?.classTargets ?? [] : []).map((origin) => ({
             instance: instanceTypeOf(origin.declaration), arguments: origin.arguments,
           }));
@@ -39110,6 +39146,33 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   }
   genericWhereChecks.set(root, [...whereChecks.values()].flat()
     .filter((check) => [...check.bindings.values()].every((bound) => !mentionsTypeParameter(bound))));
+
+  if (root.type === 'Module') {
+    const origins = new Map<string, ImportedConstructorOrigin>();
+    const publish = (name: string, expression: ParseNode): void => {
+      if (hasDirectEval) return;
+      const origin = stableClassOrigin(expression, new Set(), true);
+      // A stored application needs its completed producer bindings as well.
+      // Publishing only its declaration would reopen it in the importing scope.
+      if (origin && !origin.arguments) origins.set(name, { declaration: origin.declaration,
+        bounded: origin.bounded, module: importedDeclarationSourceModule(origin.declaration) });
+    };
+    for (const item of root.ModuleBody?.ModuleItemList ?? []) {
+      const declaration = item.type === 'ExportDeclaration' ? item.Declaration : item;
+      if (declaration?.type === 'LexicalDeclaration' && declaration.LetOrConst === 'const') {
+        for (const binding of declaration.BindingList) {
+          if (binding.BindingIdentifier && binding.Initializer && !binding.TypeAnnotation && !binding.Ref) {
+            publish(binding.BindingIdentifier.name, binding.Initializer);
+          }
+        }
+      }
+      if (item.type === 'ExportDeclaration') {
+        if (item.AssignmentExpression) publish('*default*', item.AssignmentExpression);
+        if (item.ClassDeclaration && !item.ClassDeclaration.BindingIdentifier) publish('*default*', item.ClassDeclaration);
+      }
+    }
+    pendingModuleConstructorOrigins.set(root, origins);
+  }
 
   restoreFlow(new Map());
   for (const { supplied, bound } of pendingRecursiveConstraints) {

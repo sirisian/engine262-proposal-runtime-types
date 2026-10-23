@@ -11,7 +11,7 @@ import {
   type ImportEntry,
   type ExportEntry,
 } from './static-semantics/all.mts';
-import { CheckModuleWithImports, ExportedTypesOf, ExportedAliasesOf, ExportedBuilderNodesOf, ExportedClassNodesOf, ExportedInterfaceNodesOf, ExportedTypeAliasNodesOf, CheckedInterfaceTypeOf, type ImportedInterface, type ImportedTypeAlias } from './type-system/check.mts';
+import { CheckModuleWithImports, ExportedTypesOf, ExportedAliasesOf, ExportedBuilderNodesOf, ExportedClassNodesOf, ExportedConstructorOriginsOf, type ImportedConstructorOrigin, ExportedInterfaceNodesOf, ExportedTypeAliasNodesOf, CheckedInterfaceTypeOf, type ImportedInterface, type ImportedTypeAlias } from './type-system/check.mts';
 import { InstantiateFunctionObject } from './runtime-semantics/all.mts';
 import { collectOverloadGroups, MakeOverloadedFunction } from './abstract-ops/runtime-types.mts';
 import { skipDebugger } from './evaluator.mts';
@@ -711,6 +711,7 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
     const importedBuilders = new Map<string, ParseNode>();
     const importedBuilderModules = new Map<ParseNode, AbstractModuleRecord>();
     const importedClasses = new Map<string, ParseNode>();
+    const importedConstructors = new Map<string, ImportedConstructorOrigin>();
     const importedClassModules = new Map<ParseNode, AbstractModuleRecord>();
     const importedInterfaces = new Map<string, ImportedInterface>();
     const importedTypeAliases = new Map<string, ImportedTypeAlias>();
@@ -814,6 +815,10 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
             }
             // ...and the DECLARATION, where the name is a builder, so its
             // `where` clauses reach a generic body here (#sec-checked-contracts).
+            const constructor = ExportedConstructorOriginsOf(resolution.Module.ECMAScriptCode)?.get(bindingName);
+            if (constructor) importedConstructors.set(ie.LocalName.stringValue(), {
+              ...constructor, module: constructor.module ?? resolution.Module,
+            });
             const classNode = ExportedClassNodesOf(resolution.Module.ECMAScriptCode)?.get(bindingName);
             if (classNode) {
               importedClasses.set(ie.LocalName.stringValue(), classNode);
@@ -841,9 +846,9 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
     // unchecked however completely both sides were annotated. Nothing is
     // reported twice: a module whose parse-time check failed never reaches
     // linking, so every error found here is one that needed an import to see.
-    if (surroundingAgent.feature('runtime-types') && (importedTypes.size > 0 || importedTypeAliases.size > 0 || importedNamespaces.size > 0)) {
+    if (surroundingAgent.feature('runtime-types') && (importedTypes.size > 0 || importedTypeAliases.size > 0 || importedNamespaces.size > 0 || importedConstructors.size > 0)) {
       const typeErrors = CheckModuleWithImports(module.ECMAScriptCode, importedTypes, importedBuilders,
-        (module.HostDefined as { specifier?: string } | undefined)?.specifier, importedClasses, importedClassModules, importedInterfaces, importedTypeAliases, module, importedBuilderModules, importedNamespaces);
+        (module.HostDefined as { specifier?: string } | undefined)?.specifier, importedClasses, importedClassModules, importedInterfaces, importedTypeAliases, module, importedBuilderModules, importedNamespaces, importedConstructors);
       if (typeErrors.length > 0) {
         return ThrowCompletion(typeErrors[0]);
       }

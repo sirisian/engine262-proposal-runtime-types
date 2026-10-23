@@ -140,7 +140,8 @@ test('every parameter reached by a formal binds', () => {
 test('a parameter nothing reaches and no default is the naming error, both sides', () => {
   const K = 'class K<T: type> { items: [].<T> = []; } ';
   expectStaticTypeError(`${K} new K();`);
-  expect(evaluated(`${K} const KC = K; ${caught('new KC(); r = "admitted";')}`)).toContain('is not determined by the arguments and has no default');
+  expectStaticTypeError(`${K} const KC = K; new KC();`);
+  expect(evaluated(`${K} const KC: any = K; ${caught('new KC(); r = "admitted";')}`)).toContain('is not determined by the arguments and has no default');
   expect(evaluated(`${K} String(Reflect.typeOf(new K.<uint8>().items));`)).toBe('[].<uint.<8>>');
   expect(evaluated(`${K} const k: K.<uint8> = new K(); String(Reflect.typeOf(k.items));`)).toBe('[].<uint.<8>>');
   // The function path agrees: no `any` fallback.
