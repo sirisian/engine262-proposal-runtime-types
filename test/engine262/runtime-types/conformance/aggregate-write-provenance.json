@@ -848,10 +848,12 @@
       },
       "script": true,
       "expected": {
-        "status": "fulfilled",
-        "bodyEntries": [
-          "main"
-        ]
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
       }
     },
     {
@@ -861,10 +863,12 @@
       },
       "script": true,
       "expected": {
-        "status": "fulfilled",
-        "bodyEntries": [
-          "main"
-        ]
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
       }
     },
     {

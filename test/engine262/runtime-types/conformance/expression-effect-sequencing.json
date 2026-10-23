@@ -1,0 +1,1406 @@
+{
+  "description": "Independent expression effect sequencing requirements: guarded reads, nullish fallback, aggregate result identity, scalar snapshots, diagnostic precedence and receiving checks.",
+  "cases": [
+    {
+      "name": "and",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1)&&box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "and-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1)&&box.x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "or",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=0)||box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "or-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=0)||box.x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "conditional",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1)?box.x:0;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1)?box.x:0;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "conditional-false",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=0)?2:box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-false-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=0)?2:box.x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "nullish-comma",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1,null)??box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST"
+        }
+      }
+    },
+    {
+      "name": "nullish-comma-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1,null)??box.x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST"
+        }
+      }
+    },
+    {
+      "name": "nullish-fallback",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=null)??(box.x=1,box.x);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST"
+        }
+      }
+    },
+    {
+      "name": "nullish-fallback-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=null)??(box.x=1,box.x);}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST"
+        }
+      }
+    },
+    {
+      "name": "and-chain",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1)&&(box.x=2)&&box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "and-chain-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1)&&(box.x=2)&&box.x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "or-chain",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=0)||(box.x=0)||box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "or-chain-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=0)||(box.x=0)||box.x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "conditional-nested",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1)?((box.x=2)?box.x:0):0;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_CONSTANT_CONDITION"
+        }
+      }
+    },
+    {
+      "name": "conditional-nested-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1)?((box.x=2)?box.x:0):0;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_CONSTANT_CONDITION"
+        }
+      }
+    },
+    {
+      "name": "and-comma-left",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1,true)&&box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "and-comma-left-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1,true)&&box.x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "or-comma-left",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1,false)||box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "or-comma-left-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1,false)||box.x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "conditional-comma",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1,true)?box.x:0;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-comma-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1,true)?box.x:0;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "and-right-comma",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return seed===0&&(box.x=1,box.x);}const n:number|boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "and-right-comma-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return seed===0&&(box.x=1,box.x);}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "conditional-right-comma",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return seed===0?(box.x=1,box.x):(box.x=2,box.x);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-right-comma-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return seed===0?(box.x=1,box.x):(box.x=2,box.x);}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "and-aggregate",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1)&&box;}const n:{x:number}=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "and-selected-member",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ((box.x=1)&&box).x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "and-alias",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=(box.x=1)&&box;alias.x=true;return box.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "and-read-alias",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=(box.x=1)&&box;box.x=true;return alias.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "or-aggregate",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1,false)||box;}const n:{x:number}=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "or-selected-member",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ((box.x=1,false)||box).x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "or-alias",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=(box.x=1,false)||box;alias.x=true;return box.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "or-read-alias",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=(box.x=1,false)||box;box.x=true;return alias.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-aggregate",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1)?box:box;}const n:{x:number}=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-selected-member",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ((box.x=1)?box:box).x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-alias",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=(box.x=1)?box:box;alias.x=true;return box.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-read-alias",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=(box.x=1)?box:box;box.x=true;return alias.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nullish-aggregate",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1,null)??box;}const n:{x:number}=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST"
+        }
+      }
+    },
+    {
+      "name": "nullish-selected-member",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ((box.x=1,null)??box).x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST"
+        }
+      }
+    },
+    {
+      "name": "nullish-alias",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=(box.x=1,null)??box;alias.x=true;return box.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST"
+        }
+      }
+    },
+    {
+      "name": "nullish-read-alias",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=(box.x=1,null)??box;box.x=true;return alias.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST"
+        }
+      }
+    },
+    {
+      "name": "and-statement",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};(box.x=1)&&box.x;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-statement",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};(box.x=1)?box.x:0;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nullish-statement",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};(box.x=1,null)??box.x;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST"
+        }
+      }
+    },
+    {
+      "name": "scalar-before-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const value=box.x;return (box.x=1)&&value;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "alias-before-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=box;return (box.x=1)&&alias.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-alias",
+      "modules": {
+        "main": "function make(seed:number){const box={inner:{x:\"s\"}};const inner=box.inner;return (inner.x=1)&&box.inner.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-logical-rhs",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=(box.x=0)||1)&&box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNREACHABLE_OPERAND"
+        }
+      }
+    },
+    {
+      "name": "receiver-before-rhs",
+      "modules": {
+        "main": "function make(seed:number){const box={inner:{x:\"s\"}};const before=box.inner;return (box.inner.x=(box.inner={x:true},1))&&before.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "replacement-after-rhs",
+      "modules": {
+        "main": "function make(seed:number){const box={inner:{x:\"s\"}};return (box.inner.x=(box.inner={x:true},1))&&box.inner.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-invalidates",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const other={get value(){box.x=1;return true;}};return other.value&&box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "call-invalidates",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};function change(){box.x=1;return true;}return change()&&box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "call-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};function change(){box.x=1;return true;}return change()&&box.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "declared-view",
+      "modules": {
+        "main": "function make(seed:number){const box:{x:string}={x:\"s\"};function change(o:any){o.x=1;return true;}return change(box)&&box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "inferred-view",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\":=string};function change(o:any){o.x=1;return true;}return change(box)&&box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "erased-view",
+      "modules": {
+        "main": "function make(seed:number){const box:any={x:\"s\"};return (box.x=1)&&box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-stored-anchor",
+      "modules": {
+        "main": "function make(){const box={x:\"s\"};return (box.x=(1:=number))&&box.x;}const n:boolean=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "untyped-stored-no-anchor",
+      "modules": {
+        "main": "function make(){const box={x:\"s\"};return (box.x=1)&&box.x;}const n:boolean=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "contextual-result",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const fn:()=>number=()=>((box.x=1)&&box.x);return fn();}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "skipped-arm-does-not-pollute",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const value=seed===0?box.x:(box.x=1);return value;}const n:string|number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-effects-join",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const unused=seed===0?(box.x=1):(box.x=2);return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "logical-maybe-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};seed===0&&(box.x=1);return box.x;}const n:string|number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "scalar-alias-result",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const value=(box.x=1)&&box.x;box.x=\"s\";return value;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-after-logical",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const {a=((box.x=1)&&box.x)}={a:undefined};return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nullish-live",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1, seed===0?null:2)??box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nullish-live-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1, seed===0?null:2)??box.x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "nullish-rhs-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (seed===0?null:2)??(box.x=1,box.x);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nullish-rhs-write-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (seed===0?null:2)??(box.x=1,box.x);}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "nullish-live-aggregate",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1,seed===0?null:box)??box;}const n:{x:number}=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nullish-live-selected",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return ((box.x=1,seed===0?null:box)??box).x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nullish-live-alias",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=(box.x=1,seed===0?null:box)??box;alias.x=true;return box.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nullish-live-read-alias",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=(box.x=1,seed===0?null:box)??box;box.x=true;return alias.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "comma-alias",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=(box.x=1,box);alias.x=true;return box.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "comma-read-alias",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=(box.x=1,box);box.x=true;return alias.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "and-aggregate-incompatible",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1)&&box;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "or-aggregate-incompatible",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1,false)||box;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "conditional-aggregate-incompatible",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1)?box:box;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "nullish-live-aggregate-incompatible",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1,seed===0?null:box)??box;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "and-read-alias-incompatible",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=(box.x=1)&&box;box.x=true;return alias.x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "or-read-alias-incompatible",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=(box.x=1,false)||box;box.x=true;return alias.x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "conditional-read-alias-incompatible",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=(box.x=1)?box:box;box.x=true;return alias.x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "nullish-live-read-alias-incompatible",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=(box.x=1,seed===0?null:box)??box;box.x=true;return alias.x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "comma-alias-incompatible",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=(box.x=1,box);alias.x=true;return box.x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "comma-read-alias-incompatible",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=(box.x=1,box);box.x=true;return alias.x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "same-origin-branches",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=seed===0?box:(box.x=1,box);box.x=true;return alias.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "same-origin-branches-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=seed===0?box:(box.x=1,box);box.x=true;return alias.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "independent-aggregate",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const other={x:2};return (box.x=1)&&other.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-left-before-right",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1,box.x)||(box.x=\"s\",box.x);}const n:number|string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-left-before-right-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1,box.x)||(box.x=\"s\",box.x);}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "conditional-arm-aggregate",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return seed===0?(box.x=1,box):(box.x=2,box);}const n:{x:number}=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-arm-aggregate-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return seed===0?(box.x=1,box):(box.x=2,box);}const n:{x:boolean}=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "call-argument-order",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};function pick(a:any,b:any){return b;}return pick(box.x=1,box.x);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "skipped-call-effects",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};seed===0||(()=>{box.x=1;return true;})();return box.x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "erased-call-result",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};function change():any{box.x=1;return true;}return change()&&box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "same-origin-write-test",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=seed===0?box:(box.x=1,box);return (box.x=true)&&alias.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "same-origin-write-test-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=seed===0?box:(box.x=1,box);return (box.x=true)&&alias.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "conditional-maybe-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};seed===0?(box.x=1):0;return box.x;}const n:string|number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "logical-skipped-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};seed===0&&(box.x=1);return box.x;}const n:string|number=make(1);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}
