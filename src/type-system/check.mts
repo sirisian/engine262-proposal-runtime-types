@@ -1271,6 +1271,23 @@ export function TakeStaticCallResolution(node: object): (TypeRecord & { Kind: 'p
  */
 const publishedReturnTypes = new WeakMap<object, TypeRecord>();
 const publishedNarrowings = new WeakMap<object, Pick<SignatureRecord, 'Return' | 'Narrows'>>();
+// Signature-owned provenance crosses module checking sessions with the exported
+// contract. Structural equality with another signature supplies no evidence.
+// Record written results before adding resumable carriers; absence denotes a
+// different type origin, such as an explicit callable storage annotation.
+const declaredCallableResults = new WeakMap<SignatureRecord, boolean>();
+const baselineGeneratorSignatures = new WeakSet<object>();
+const publishedCallableResults = new WeakSet<object>();
+
+/** A published result supplies evidence independently of the returned item. */
+function retainPublishedCallableResult(type: TypeRecord | null): TypeRecord | null {
+  if (type?.Kind !== 'function') return type;
+  // Do not mark the item's shared type: another read of its declaration may
+  // still have no participating contract. This metadata belongs to this query.
+  const result = { ...type };
+  publishedCallableResults.add(result);
+  return result;
+}
 
 /** #sec-contextual-types: a fresh literal may declare its contextual predicate. */
 export function PublishedNarrowingOf(declaration: object): Pick<SignatureRecord, 'Return' | 'Narrows'> | undefined {
@@ -19584,6 +19601,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               parameters.map((parameter) => parameter.Declaration)) } : {}),
           };
           if (declaration) signatureDeclarations.set(specialized, declaration);
+          const resultAnchor = declaredCallableResults.get(signature);
+          if (resultAnchor !== undefined) declaredCallableResults.set(specialized, resultAnchor);
+          if (baselineGeneratorSignatures.has(signature)) baselineGeneratorSignatures.add(specialized);
           formalPatternBindings.set(specialized, bindings);
           return [specialized];
         });
@@ -19591,7 +19611,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // A completed alternative is still a possible callable. One pending
         // candidate alone does not prove that it is the selected signature.
         if (!asCallee) pendingStoredApplications.set(specialization, Signatures.length === 1 ? pendingApplications : []);
-        return pending ? null : { ...base, Signatures };
+        if (pending) return null;
+        const result = { ...base, Signatures };
+        if (publishedCallableResults.has(base)) publishedCallableResults.add(result);
+        return result;
       }
       case 'ObjectLiteral':
         // An object literal HAS a type. #table-type-record-kinds, quoted
@@ -20180,7 +20203,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 bindTypeParametersFromArguments(parameters, passed, names, bindings);
               }
               if (declaredOrPublished && bindings.size > 0) {
-                return substituteFreeTypeParameters(declaredOrPublished, bindings, only.TypeParameters?.map((parameter) => parameter.Declaration));
+                const result = substituteFreeTypeParameters(declaredOrPublished, bindings, only.TypeParameters?.map((parameter) => parameter.Declaration));
+                return only.Return || only.InferredReturn && !baselineGeneratorSignatures.has(only)
+                  ? retainPublishedCallableResult(result) : result;
               }
             }
           }
@@ -20242,7 +20267,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 }
               }
             }
-            return only.Return ?? only.InferredReturn ?? null;
+            return retainPublishedCallableResult(only.Return ?? only.InferredReturn ?? null);
           }
           if (inferenceDepth > 0) {
             // Seed a recursive reference only before its first answer. A
@@ -28017,7 +28042,6 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   let changedInferences: Set<ReturnInference> | undefined;
   let inferenceConsumers: Map<object, Set<ReturnInference>> | undefined;
   const activeReturnInferences: ReturnInference[] = [];
-  const baselineGeneratorSignatures = new WeakSet<object>();
 
   const inDeclarationScope = <T,>(item: InferenceScope, action: () => T): T => {
     const outerFrames = frames.slice();
@@ -28761,6 +28785,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     && (t.Kind === 'literal'
       || (t.Kind === 'primitive' && (t.Name === 'null' || t.Name === 'undefined')));
 
+  /** A declaration name does not itself annotate its callable contract. */
+  const namedCallableProvenance = (type: Known): boolean | undefined => {
+    if (type && publishedCallableResults.has(type)) return true;
+    if (type?.Kind !== 'function' || !type.Signatures.length
+        || !type.Signatures.every((signature) => declaredCallableResults.has(signature))) return undefined;
+    const known = (position: Known): boolean => !!position && position.Kind !== 'any';
+    return type.Signatures.some((signature) => signature.Parameters.some((parameter) => known(parameter.Type))
+      || known(signature.ThisType ?? null)
+      || declaredCallableResults.get(signature) && known(signature.Return)
+      || !signature.Return && !baselineGeneratorSignatures.has(signature) && known(signature.InferredReturn ?? null));
+  };
+
   /**
    * #sec-anchored-contributions: whether a contribution is ANCHORED, meaning its
    * Static Type derives from a declared type rather than from a literal alone.
@@ -28795,7 +28831,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (frames[i].declaredNames.has(expr.name)) break;
       }
       const declared = lookupDeclared(expr.name);
-      return !!declared && declared.Kind !== 'any';
+      return namedCallableProvenance(declared) ?? (!!declared && declared.Kind !== 'any');
+    }
+    if (expr?.type === 'TypeArgumentsExpression') {
+      const anchored = namedCallableProvenance(t as Known);
+      if (anchored !== undefined) return anchored;
+    }
+    if (expr?.type === 'MemberExpression' && importedNamespaceMember(expr)) {
+      const anchored = namedCallableProvenance(t as Known);
+      if (anchored !== undefined) return anchored;
     }
     if (expr?.type === 'ConditionalExpression') {
       // Joining or widening arms does not manufacture an annotation. Read
@@ -30040,6 +30084,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         : undefined;
       const signature: { Parameters: ParameterRecord[], Return: Known, Untyped: boolean, ReturnWasWritten: boolean, InferredReturn?: Known, TypeParameters?: readonly TypeParameterRecord[], Narrows?: readonly { Target: string, Type: TypeRecord }[] } = { Parameters, Return: (predicateNarrows ? makePrimitive('boolean') : declared) as Known, Untyped, ReturnWasWritten: returnWasWritten, ...(predicateNarrows ? { Narrows: predicateNarrows } : {}) } as never;
       signatureDeclarations.set(signature, n as ParseNode);
+      declaredCallableResults.set(signature, !!predicateNarrows || !!Return && Return.Kind !== 'any');
       // #sec-generics: the type parameters a call binds with its
       // arguments, as RECORDS - name, kind, variance, arity, and the constraint and
       // default nodes - because a call site needs them to order named
@@ -30819,9 +30864,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!t || t.Kind === 'any') {
       return false;
     }
+    if (expr.type === 'TypeArgumentsExpression') {
+      const anchored = namedCallableProvenance(t);
+      if (anchored !== undefined) return anchored;
+    }
     switch (expr.type) {
       case 'IdentifierReference':
-        return lookup(expr.name) !== null && !isNumericConstantExpression(expr);
+        return namedCallableProvenance(t) ?? (lookup(expr.name) !== null && !isNumericConstantExpression(expr));
       case 'ThisExpression':
       case 'SuperProperty':
       case 'NewExpression':
@@ -30840,6 +30889,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             ?? (expr as { ArrowParameters?: readonly ParseNode[] }).ArrowParameters ?? [])
             .some((p) => !!(p as { TypeAnnotation?: unknown }).TypeAnnotation);
       case 'MemberExpression':
+        if (importedNamespaceMember(expr)) {
+          const anchored = namedCallableProvenance(t);
+          if (anchored !== undefined) return anchored;
+        }
         return !!expr.MemberExpression && constInitializerParticipates(expr.MemberExpression);
       case 'ObjectLiteral':
       case 'ArrayLiteral':

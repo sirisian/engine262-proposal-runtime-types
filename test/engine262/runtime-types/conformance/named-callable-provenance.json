@@ -1,0 +1,1581 @@
+{
+  "description": "Independent requirements for named callable contribution provenance; no private result or declaration spelling supplies an annotation.",
+  "cases": [
+    {
+      "name": "untyped-named",
+      "modules": {
+        "main": "function make(){function helper(){return \"s\";}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "empty-named",
+      "modules": {
+        "main": "function make(){function helper(){}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "untyped-undefined",
+      "modules": {
+        "main": "function make(){function helper(){return undefined;}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "untyped-object-result",
+      "modules": {
+        "main": "function make(){function helper(){return {x:\"s\"};}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "untyped-array-result",
+      "modules": {
+        "main": "function make(){function helper(){return [\"s\"];}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "any-result",
+      "modules": {
+        "main": "function make(){function helper():any{return \"s\";}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "any-positions",
+      "modules": {
+        "main": "function make(){function helper(value:any):any{return value;}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "unknown-inferred",
+      "modules": {
+        "main": "function make(){function opaque():any{return \"s\";}function helper(value:any){return opaque();}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed-control-only",
+      "modules": {
+        "main": "function make(){function helper(){const flag:boolean=Math.random()>0.5;return flag?\"a\":\"b\";}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "generic-list-only",
+      "modules": {
+        "main": "function make(){function helper<T:type>(){return \"s\";}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "generic-default-only",
+      "modules": {
+        "main": "function make(){function helper<T:type=string>(){return \"s\";}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "generator-baseline",
+      "modules": {
+        "main": "function make(){function* helper(){yield \"s\";}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "generator-any",
+      "modules": {
+        "main": "function make(){function* helper():any{yield \"s\";}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "async-baseline",
+      "modules": {
+        "main": "function make(){async function helper(){return \"s\";}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "async-generator-baseline",
+      "modules": {
+        "main": "function make(){async function* helper(){yield \"s\";}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "declared-result",
+      "modules": {
+        "main": "function make(){function helper():string{return \"s\";}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "declared-void",
+      "modules": {
+        "main": "function make(){function helper():void{}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "declared-singleton",
+      "modules": {
+        "main": "function make(){function helper():\"s\"{return \"s\";}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "declared-parameter",
+      "modules": {
+        "main": "function make(){function helper(value:string):any{return value;}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "any-parameter-published-result",
+      "modules": {
+        "main": "function make(){function helper(value:any){return \"s\";}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "annotated-local-result",
+      "modules": {
+        "main": "function make(){function helper(){const value:string=\"s\";return value;}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "annotated-array-result",
+      "modules": {
+        "main": "function make(){function helper(){const value:string=\"s\";return [value];}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "annotated-object-result",
+      "modules": {
+        "main": "function make(){function helper(){const value:string=\"s\";return {value};}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "declared-generic",
+      "modules": {
+        "main": "function make(){function helper<T:type>(value:T):T{return value;}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "inferred-generic",
+      "modules": {
+        "main": "function make(){function helper<T:type>(value:T){return value;}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generator-yield",
+      "modules": {
+        "main": "function make(){function* helper(){const value:string=\"s\";yield value;}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generator-completion",
+      "modules": {
+        "main": "function make(){function* helper(){const value:string=\"s\";return value;}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "async-result",
+      "modules": {
+        "main": "function make(){async function helper(){const value:string=\"s\";return value;}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "async-generator-yield",
+      "modules": {
+        "main": "function make(){async function* helper(){const value:string=\"s\";yield value;}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "untyped-parenthesized",
+      "modules": {
+        "main": "function make(){function helper(){return \"s\";}return ((helper));}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed-parenthesized",
+      "modules": {
+        "main": "function make(){function helper():string{return \"s\";}return ((helper));}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "untyped-object",
+      "modules": {
+        "main": "function make(){function helper(){return \"s\";}return {helper};}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed-object",
+      "modules": {
+        "main": "function make(){function helper():string{return \"s\";}return {helper};}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "untyped-array",
+      "modules": {
+        "main": "function make(){function helper(){return \"s\";}return [helper];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed-array",
+      "modules": {
+        "main": "function make(){function helper():string{return \"s\";}return [helper];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "untyped-nested-object-array",
+      "modules": {
+        "main": "function make(){function helper(){return \"s\";}return {items:[helper]};}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed-nested-object-array",
+      "modules": {
+        "main": "function make(){function helper():string{return \"s\";}return {items:[helper]};}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "untyped-const-alias",
+      "modules": {
+        "main": "function make(){function helper(){return \"s\";}const f=helper;return f;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed-const-alias",
+      "modules": {
+        "main": "function make(){function helper():string{return \"s\";}const f=helper;return f;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "untyped-unchanged-let-alias",
+      "modules": {
+        "main": "function make(){function helper(){return \"s\";}let f=helper;return f;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed-unchanged-let-alias",
+      "modules": {
+        "main": "function make(){function helper():string{return \"s\";}let f=helper;return f;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "untyped-alias-chain",
+      "modules": {
+        "main": "function make(){function helper(){return \"s\";}const a=helper;let f=a;return f;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed-alias-chain",
+      "modules": {
+        "main": "function make(){function helper():string{return \"s\";}const a=helper;let f=a;return f;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "explicit-callable-storage",
+      "modules": {
+        "main": "function make(){function helper():any{return \"s\";}const f:()=>any=helper;return f;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "erased-storage",
+      "modules": {
+        "main": "function make(){function helper():string{return \"s\";}const f:any=helper;return f;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "literal-control",
+      "modules": {
+        "main": "function make(){return function helper(){return \"s\";};}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "literal-typed-control",
+      "modules": {
+        "main": "function make(){return function helper():string{return \"s\";};}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-only-applied",
+      "modules": {
+        "main": "function make(){function helper<T:type>(){return \"s\";}return helper.<string>;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "generic-only-defaulted",
+      "modules": {
+        "main": "function make(){function helper<T:type=string>(){return \"s\";}return helper.<>;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "generic-applied-contract",
+      "modules": {
+        "main": "function make(){function helper<T:type>(value:T):T{return value;}return helper.<string>;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-any-erasure",
+      "modules": {
+        "main": "function make(){function helper<T:type>(value:T):T{return value;}return helper.<any>;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "generic-inferred-any-erasure",
+      "modules": {
+        "main": "function make(){function helper<T:type>(value:T){return value;}return helper.<any>;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "generic-generator-baseline",
+      "modules": {
+        "main": "function make(){function* helper<T:type>(){yield \"s\";}return helper.<string>;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "generic-generator-typed",
+      "modules": {
+        "main": "function make(){function* helper<T:type>(value:T){yield value;}return helper.<string>;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "untyped-shadow",
+      "modules": {
+        "main": "function helper():string{return \"outer\";}function make(){function helper(){return \"s\";}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed-shadow",
+      "modules": {
+        "main": "function helper(){return \"s\";}function make(){function helper():string{return \"s\";}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "signature-anchor-control",
+      "modules": {
+        "main": "function make(seed:number){function helper(){return \"s\";}return helper;}const n:number=make(1);"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "captured-untyped-alias",
+      "modules": {
+        "main": "function helper(){return \"s\";}const f=helper;function make(){return f;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An unannotated captured alias of an unparticipating callable acquires no declaration-derived binding contract.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "captured-typed-alias",
+      "modules": {
+        "main": "function helper():string{return \"s\";}const f=helper;function make(){return f;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A captured inferred callable binding retains the helper's declared contract.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "forward-declaration",
+      "modules": {
+        "main": "function make(){return helper;}function helper(){return \"s\";}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Hoisting does not make a name an annotation.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "forward-typed-declaration",
+      "modules": {
+        "main": "function make(){return helper;}function helper():string{return \"s\";}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Forward callable publication retains its declared result.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "mutual-private-values",
+      "modules": {
+        "main": "function a(){return b;}function b(){return a;}const n:number=a();"
+      },
+      "script": true,
+      "requirement": "A cycle of private callable shapes cannot seed its own publication.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "ordinary-invocation",
+      "modules": {
+        "main": "function make(){function helper(){return \"s\";}return helper;}const f=make();if(f()!==\"s\")throw new Error(\"value\");"
+      },
+      "script": true,
+      "requirement": "Removing false publication preserves ordinary invocation.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "identity-preserved",
+      "modules": {
+        "main": "function make(){function helper(){return \"s\";}return [helper,helper];}const pair=make();if(pair[0]!==pair[1]||pair[0]()!==\"s\")throw new Error(\"identity\");"
+      },
+      "script": true,
+      "requirement": "The provenance judgment creates no callable wrapper or replacement identity.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "effects-not-run",
+      "modules": {
+        "main": "let calls=0;function make(){function helper(){calls++;return \"s\";}return helper;}const f=make();if(calls!==0)throw new Error(\"inference executed helper\");f();if(calls!==1)throw new Error(\"call\");"
+      },
+      "script": true,
+      "requirement": "Type discovery does not run the returned helper.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "explicit-storage-enforces",
+      "modules": {
+        "main": "function helper():string{return \"s\";}const f:()=>string=helper;const value:string=f();if(value!==\"s\")throw new Error(\"value\");"
+      },
+      "script": true,
+      "requirement": "Explicit callable storage retains its independent contract.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "imported-untyped",
+      "modules": {
+        "dep": "export function helper(){return \"s\";}",
+        "main": "import {helper} from \"dep\";function make(){return helper;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "Imported callable provenance follows the declaration contract, not the import spelling.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "imported-untyped-factory",
+      "modules": {
+        "dep": "export function make(){function helper(){return \"s\";}return helper;}",
+        "main": "import {make} from \"dep\";const n:number=make();"
+      },
+      "script": false,
+      "requirement": "A factory's published result or absence crosses a module boundary.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "imported-typed",
+      "modules": {
+        "dep": "export function helper():string{return \"s\";}",
+        "main": "import {helper} from \"dep\";function make(){return helper;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "Imported callable provenance follows the declaration contract, not the import spelling.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "imported-typed-factory",
+      "modules": {
+        "dep": "export function make(){function helper():string{return \"s\";}return helper;}",
+        "main": "import {make} from \"dep\";const n:number=make();"
+      },
+      "script": false,
+      "requirement": "A factory's published result or absence crosses a module boundary.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "published-callable-local-alias",
+      "modules": {
+        "main": "function producer(seed:number){function helper(){return \"s\";}return helper;}function make(){const f=producer(1);return f;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A participating producer independently publishes a callable contract; naming its result retains that anchor.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "published-callable-captured-alias",
+      "modules": {
+        "main": "function producer(seed:number){function helper(){return \"s\";}return helper;}const f=producer(1);function make(){return f;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A captured binding retains an independently published callable result rather than inheriting the private helper origin.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "published-callable-exported-alias",
+      "modules": {
+        "dep": "function producer(seed:number){function helper(){return \"s\";}return helper;}export const f=producer(1);",
+        "main": "import {f} from \"dep\";function make(){return f;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "Exporting an inferred binding preserves its independently published initializer contract.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "imported-generator",
+      "modules": {
+        "dep": "export function* helper(){yield \"s\";}",
+        "main": "import {helper} from \"dep\";function make(){return helper;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "Imported resumable signatures retain their actual participation rather than using carrier existence as an anchor.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "imported-async",
+      "modules": {
+        "dep": "export async function helper(){return \"s\";}",
+        "main": "import {helper} from \"dep\";function make(){return helper;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "Imported resumable signatures retain their actual participation rather than using carrier existence as an anchor.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "imported-generator-typed",
+      "modules": {
+        "dep": "export function* helper(){const value:string=\"s\";yield value;}",
+        "main": "import {helper} from \"dep\";function make(){return helper;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "Imported resumable signatures retain their actual participation rather than using carrier existence as an anchor.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "reexported-untyped",
+      "modules": {
+        "dep": "export function helper(){return \"s\";}",
+        "bridge": "export {helper as forwarded} from \"dep\";",
+        "main": "import {forwarded as helper} from \"bridge\";function make(){return helper;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "Renaming and re-exporting do not annotate an unparticipating callable.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "bridge",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "imported-namespace-untyped",
+      "modules": {
+        "dep": "export function helper(){return \"s\";}",
+        "main": "import * as ns from \"dep\";function make(){return ns.helper;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "Namespace selection retains the exported callable declaration's participation.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "generic-alias-any-erasure",
+      "modules": {
+        "main": "function make(){function helper<T:type>(value:T):T{return value;}const f=helper;return f.<any>;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Naming a callable, an any-only contract, a private answer or a baseline carrier supplies no anchor; the receiving boundary runs.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "generic-alias-known-contract",
+      "modules": {
+        "main": "function make(){function helper<T:type>(value:T):T{return value;}const f=helper;return f.<string>;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "published-generic-callable-erasure",
+      "modules": {
+        "main": "function producer(seed:number){function helper<T:type>(value:T):T{return value;}return helper;}const f=producer(1);function make(){return f.<any>;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A published callable result remains an independent contract through specialization, even when its own signature positions become any.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "published-callable-direct",
+      "modules": {
+        "main": "function producer(seed:number){function helper(){return \"s\";}return helper;}function make(){return producer(1);}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A direct participating call supplies its own declaration-derived result.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "published-callable-no-contamination",
+      "modules": {
+        "main": "function helper(){return \"s\";}function producer(seed:number){return helper;}const f=producer(1);function make(){return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Publishing one result does not annotate a separate read of the same helper declaration.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "published-callable-conditional",
+      "modules": {
+        "main": "function producer(seed:number){function helper(){return \"s\";}return helper;}const f=Math.random()>0.5?producer(1):producer(2);function make(){return f;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Joining independently published callable results retains their contribution evidence.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-untyped-alias",
+      "modules": {
+        "dep": "export function helper(){return \"s\";}",
+        "main": "import * as ns from \"dep\";function make(){const f=ns.helper;return f;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "Resolved namespace members and immutable aliases retain exported callable provenance.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "namespace-untyped-bracket",
+      "modules": {
+        "dep": "export function helper(){return \"s\";}",
+        "main": "import * as ns from \"dep\";function make(){return ns[\"helper\"];}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "Resolved namespace members and immutable aliases retain exported callable provenance.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "namespace-untyped-namespace-alias",
+      "modules": {
+        "dep": "export function helper(){return \"s\";}",
+        "main": "import * as ns from \"dep\";function make(){const alias=ns;return alias.helper;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "Resolved namespace members and immutable aliases retain exported callable provenance.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "namespace-typed-alias",
+      "modules": {
+        "dep": "export function helper():string{return \"s\";}",
+        "main": "import * as ns from \"dep\";function make(){const f=ns.helper;return f;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "Resolved namespace members and immutable aliases retain exported callable provenance.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-typed-bracket",
+      "modules": {
+        "dep": "export function helper():string{return \"s\";}",
+        "main": "import * as ns from \"dep\";function make(){return ns[\"helper\"];}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "Resolved namespace members and immutable aliases retain exported callable provenance.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-typed-namespace-alias",
+      "modules": {
+        "dep": "export function helper():string{return \"s\";}",
+        "main": "import * as ns from \"dep\";function make(){const alias=ns;return alias.helper;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "Resolved namespace members and immutable aliases retain exported callable provenance.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-published-callable",
+      "modules": {
+        "dep": "function producer(seed:number){function helper(){return \"s\";}return helper;}export const f=producer(1);",
+        "main": "import * as ns from \"dep\";function make(){return ns.f;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "Namespace selection preserves independently published binding contracts.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-shadowed-object",
+      "modules": {
+        "dep": "export function helper(){return \"s\";}",
+        "main": "import * as ns from \"dep\";function make(){const ns:{helper:()=>any}={helper(){return \"s\";}};return ns.helper;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "A shadowing annotated object is not resolved as the outer namespace.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "imported-generic-erasure",
+      "modules": {
+        "dep": "export function helper<T:type>(value:T):T{return value;}",
+        "main": "import {helper} from \"dep\";function make(){return helper.<any>;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "Imported generic specialization preserves erasure of all signature positions.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "generic-private-producer",
+      "modules": {
+        "main": "function producer<T:type>(){function helper(){return \"s\";}return helper;}function make(){const f=producer.<number>();return f;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A private generic approximation does not become independently published callable evidence.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "generic-published-producer",
+      "modules": {
+        "main": "function producer<T:type>(seed:T){function helper(){return \"s\";}return helper;}const f=producer(1);function make(){return f;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "An instantiated published generic result retains its independent callable contribution evidence.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "declared-predicate",
+      "modules": {
+        "main": "function make(){function helper(value:any):value is string{return typeof value===\"string\";}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "declared-predicate-any-target",
+      "modules": {
+        "main": "function make(){function helper(value:any):value is any{return true;}return helper;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "A known written callable position or participating published result anchors the factory.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    }
+  ]
+}
