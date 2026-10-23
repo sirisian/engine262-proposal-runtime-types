@@ -707,6 +707,7 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
     // Accumulates each imported name's type, for the import-aware check that
     // follows the loop.
     const importedTypes = new Map<string, unknown>();
+    const importedNamespaces = new Map<string, AbstractModuleRecord>();
     const importedBuilders = new Map<string, ParseNode>();
     const importedBuilderModules = new Map<ParseNode, AbstractModuleRecord>();
     const importedClasses = new Map<string, ParseNode>();
@@ -733,19 +734,16 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
         // decide whether a program is checked.
         if (surroundingAgent.feature('runtime-types')
             && importedModule instanceof SourceTextModuleRecord) {
-          const exported = ExportedTypesOf(importedModule.ECMAScriptCode);
-          if (exported) {
-            const names = new Set(importedModule.GetExportedNames([]).map((v) => (typeof v === 'string' ? v : (v as JSStringValue).stringValue())));
-            const Properties = [];
-            for (const [local, t] of exported) {
-              if (names.has(local) && t) {
-                Properties.push({ key: local, type: t, optional: false, readonly: true });
-              }
-            }
-            if (Properties.length > 0) {
-              importedTypes.set(ie.LocalName.stringValue(), { Kind: 'object', Properties, IndexSignatures: [] });
-            }
+          importedNamespaces.set(ie.LocalName.stringValue(), importedModule);
+          const Properties = [];
+          for (const name of importedModule.GetExportedNames([])) {
+            const resolution = importedModule.ResolveExport(name);
+            if (!resolution || resolution === 'ambiguous' || !(resolution.BindingName instanceof JSStringValue)
+                || !(resolution.Module instanceof SourceTextModuleRecord)) continue;
+            const t = ExportedTypesOf(resolution.Module.ECMAScriptCode)?.get(resolution.BindingName.stringValue());
+            if (t) Properties.push({ key: name.stringValue(), type: t, optional: false, readonly: true });
           }
+          importedTypes.set(ie.LocalName.stringValue(), { Kind: 'object', Properties, IndexSignatures: [] });
         }
       } else if (ie.ImportName === 'source') {
         const moduleSourceObject = importedModule.ModuleSource;
@@ -771,6 +769,7 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
           const phase = resolution.BindingName === 'namespace' ? 'evaluation' : 'defer';
           // 1. Let namespace be GetModuleNamespace(resolution.[[Module]]).
           const namespace = GetModuleNamespace(resolution.Module, phase);
+          if (surroundingAgent.feature('runtime-types')) importedNamespaces.set(ie.LocalName.stringValue(), resolution.Module);
           // 2. Perform ! env.CreateImmutableBinding(in.[[LocalName]], true).
           X(env.CreateImmutableBinding(ie.LocalName, Value.true));
           // 3. Call env.InitializeBinding(in.[[LocalName]], namespace).
@@ -842,9 +841,9 @@ export class SourceTextModuleRecord extends CyclicModuleRecord {
     // unchecked however completely both sides were annotated. Nothing is
     // reported twice: a module whose parse-time check failed never reaches
     // linking, so every error found here is one that needed an import to see.
-    if (surroundingAgent.feature('runtime-types') && (importedTypes.size > 0 || importedTypeAliases.size > 0)) {
+    if (surroundingAgent.feature('runtime-types') && (importedTypes.size > 0 || importedTypeAliases.size > 0 || importedNamespaces.size > 0)) {
       const typeErrors = CheckModuleWithImports(module.ECMAScriptCode, importedTypes, importedBuilders,
-        (module.HostDefined as { specifier?: string } | undefined)?.specifier, importedClasses, importedClassModules, importedInterfaces, importedTypeAliases, module, importedBuilderModules);
+        (module.HostDefined as { specifier?: string } | undefined)?.specifier, importedClasses, importedClassModules, importedInterfaces, importedTypeAliases, module, importedBuilderModules, importedNamespaces);
       if (typeErrors.length > 0) {
         return ThrowCompletion(typeErrors[0]);
       }

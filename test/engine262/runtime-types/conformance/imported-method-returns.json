@@ -1,0 +1,4716 @@
+{
+  "cases": [
+    {
+      "name": "literal-local",
+      "modules": {
+        "main": "class E{get(){return \"ok\";}}const result:boolean=new E().get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "literal-import",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:boolean=new E().get();",
+        "dep": "export class E{get(){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "literal-namespace",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.E().get();",
+        "dep": "export class E{get(){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "literal-reexport",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:boolean=new E().get();",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "export class E{get(){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "literal-inherited",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:boolean=new D().get();",
+        "dep": "export class E{get(){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed-parameter-local",
+      "modules": {
+        "main": "class E{get(flag:boolean){return \"ok\";}}const result:boolean=new E().get(true);"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 79,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 61,
+            "end": 78,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-parameter-import",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:boolean=new E().get(true);",
+        "dep": "export class E{get(flag:boolean){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 61,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 43,
+            "end": 60,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-parameter-namespace",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.E().get(true);",
+        "dep": "export class E{get(flag:boolean){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 68,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 47,
+            "end": 67,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-parameter-reexport",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:boolean=new E().get(true);",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "export class E{get(flag:boolean){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 64,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 46,
+            "end": 63,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-parameter-inherited",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:boolean=new D().get(true);",
+        "dep": "export class E{get(flag:boolean){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 80,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 62,
+            "end": 79,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-local-local",
+      "modules": {
+        "main": "class E{get(){const s:string=\"ok\";return s;}}const result:boolean=new E().get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 80,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 66,
+            "end": 79,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-local-import",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:boolean=new E().get();",
+        "dep": "export class E{get(){const s:string=\"ok\";return s;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 57,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 43,
+            "end": 56,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-local-namespace",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.E().get();",
+        "dep": "export class E{get(){const s:string=\"ok\";return s;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 64,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 47,
+            "end": 63,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-local-reexport",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:boolean=new E().get();",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "export class E{get(){const s:string=\"ok\";return s;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 60,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 46,
+            "end": 59,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-local-inherited",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:boolean=new D().get();",
+        "dep": "export class E{get(){const s:string=\"ok\";return s;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 76,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 62,
+            "end": 75,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-capture-local",
+      "modules": {
+        "main": "const s:string=\"ok\";class E{get(){return s;}}const result:boolean=new E().get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 80,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 66,
+            "end": 79,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-capture-import",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:boolean=new E().get();",
+        "dep": "const s:string=\"ok\";export class E{get(){return s;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 57,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 43,
+            "end": 56,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-capture-namespace",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.E().get();",
+        "dep": "const s:string=\"ok\";export class E{get(){return s;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 64,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 47,
+            "end": 63,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-capture-reexport",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:boolean=new E().get();",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "const s:string=\"ok\";export class E{get(){return s;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 60,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 46,
+            "end": 59,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-capture-inherited",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:boolean=new D().get();",
+        "dep": "const s:string=\"ok\";export class E{get(){return s;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 76,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 62,
+            "end": 75,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-field-local",
+      "modules": {
+        "main": "class E{s:string=\"ok\";get(){return this.s;}}const result:boolean=new E().get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 79,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 65,
+            "end": 78,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-field-import",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:boolean=new E().get();",
+        "dep": "export class E{s:string=\"ok\";get(){return this.s;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 57,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 43,
+            "end": 56,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-field-namespace",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.E().get();",
+        "dep": "export class E{s:string=\"ok\";get(){return this.s;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 64,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 47,
+            "end": 63,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-field-reexport",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:boolean=new E().get();",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "export class E{s:string=\"ok\";get(){return this.s;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 60,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 46,
+            "end": 59,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-field-inherited",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:boolean=new D().get();",
+        "dep": "export class E{s:string=\"ok\";get(){return this.s;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 76,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 62,
+            "end": 75,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-forward-local",
+      "modules": {
+        "main": "class E{get(){return this.value();}value():string{return \"ok\";}}const result:boolean=new E().get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 99,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 85,
+            "end": 98,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-forward-import",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:boolean=new E().get();",
+        "dep": "export class E{get(){return this.value();}value():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 57,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 43,
+            "end": 56,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-forward-namespace",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.E().get();",
+        "dep": "export class E{get(){return this.value();}value():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 64,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 47,
+            "end": 63,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-forward-reexport",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:boolean=new E().get();",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "export class E{get(){return this.value();}value():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 60,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 46,
+            "end": 59,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "typed-forward-inherited",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:boolean=new D().get();",
+        "dep": "export class E{get(){return this.value();}value():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 76,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 62,
+            "end": 75,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "untyped-local-local",
+      "modules": {
+        "main": "class E{get(){const s=\"ok\";return s;}}const result:boolean=new E().get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "untyped-local-import",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:boolean=new E().get();",
+        "dep": "export class E{get(){const s=\"ok\";return s;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "untyped-local-namespace",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.E().get();",
+        "dep": "export class E{get(){const s=\"ok\";return s;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "untyped-local-reexport",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:boolean=new E().get();",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "export class E{get(){const s=\"ok\";return s;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "untyped-local-inherited",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:boolean=new D().get();",
+        "dep": "export class E{get(){const s=\"ok\";return s;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "untyped-callee-local",
+      "modules": {
+        "main": "function value(){return \"ok\";}class E{get(){return value();}}const result:boolean=new E().get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "untyped-callee-import",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:boolean=new E().get();",
+        "dep": "function value(){return \"ok\";}export class E{get(){return value();}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "untyped-callee-namespace",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.E().get();",
+        "dep": "function value(){return \"ok\";}export class E{get(){return value();}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "untyped-callee-reexport",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:boolean=new E().get();",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "function value(){return \"ok\";}export class E{get(){return value();}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "untyped-callee-inherited",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:boolean=new D().get();",
+        "dep": "function value(){return \"ok\";}export class E{get(){return value();}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "declared-return-local",
+      "modules": {
+        "main": "class E{get():string{return \"ok\";}}const result:boolean=new E().get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 70,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 56,
+            "end": 69,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "declared-return-import",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:boolean=new E().get();",
+        "dep": "export class E{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 57,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 43,
+            "end": 56,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "declared-return-namespace",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.E().get();",
+        "dep": "export class E{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 64,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 47,
+            "end": 63,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "declared-return-reexport",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:boolean=new E().get();",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "export class E{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 60,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 46,
+            "end": 59,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "declared-return-inherited",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:boolean=new D().get();",
+        "dep": "export class E{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 76,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 62,
+            "end": 75,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "generic-method-local",
+      "modules": {
+        "main": "class E{get<T:type>(value:T){return value;}}const result:boolean=new E().get.<string>(\"ok\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 92,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 65,
+            "end": 91,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "generic-method-import",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:boolean=new E().get.<string>(\"ok\");",
+        "dep": "export class E{get<T:type>(value:T){return value;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 70,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 43,
+            "end": 69,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "generic-method-namespace",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.E().get.<string>(\"ok\");",
+        "dep": "export class E{get<T:type>(value:T){return value;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 77,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 47,
+            "end": 76,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "generic-method-reexport",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:boolean=new E().get.<string>(\"ok\");",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "export class E{get<T:type>(value:T){return value;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 73,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 46,
+            "end": 72,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "generic-method-inherited",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:boolean=new D().get.<string>(\"ok\");",
+        "dep": "export class E{get<T:type>(value:T){return value;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 89,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 62,
+            "end": 88,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "getter-literal-local",
+      "modules": {
+        "main": "class E{get value(){return \"ok\";}}const result:boolean=new E().value;"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "getter-literal-import",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:boolean=new E().value;",
+        "dep": "export class E{get value(){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "getter-literal-namespace",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.E().value;",
+        "dep": "export class E{get value(){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "getter-literal-reexport",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:boolean=new E().value;",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "export class E{get value(){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "getter-literal-inherited",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:boolean=new D().value;",
+        "dep": "export class E{get value(){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "static-field-local",
+      "modules": {
+        "main": "class E{static s:string=\"ok\";static get(){return this.s;}}const result:boolean=E.get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 87,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 79,
+            "end": 86,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "static-field-import",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:boolean=E.get();",
+        "dep": "export class E{static s:string=\"ok\";static get(){return this.s;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 51,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 43,
+            "end": 50,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "static-field-namespace",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=ns.E.get();",
+        "dep": "export class E{static s:string=\"ok\";static get(){return this.s;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 58,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 47,
+            "end": 57,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "static-field-reexport",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:boolean=E.get();",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "export class E{static s:string=\"ok\";static get(){return this.s;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 54,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 46,
+            "end": 53,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "static-field-inherited",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:boolean=D.get();",
+        "dep": "export class E{static s:string=\"ok\";static get(){return this.s;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 70,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 62,
+            "end": 69,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "generic-class-local",
+      "modules": {
+        "main": "class E<T:type>{value:T;get(){return this.value;}}const result:boolean=new E.<string>().get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 94,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 71,
+            "end": 93,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "nominal-return-local",
+      "modules": {
+        "main": "class P{x:uint8;}class E{get(){const p:P=new P();return p;}}const result:boolean=new E().get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 95,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 81,
+            "end": 94,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"P\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "declaration-identity-local",
+      "modules": {
+        "main": "class P{x:uint8;}class E{get():P{return new P();}}const result:boolean=new E().get();"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 85,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 71,
+            "end": 84,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"P\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "generic-class-import",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:boolean=new E.<string>().get();",
+        "dep": "class E<T:type>{value:T;get(){return this.value;}}export {E};"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 66,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 43,
+            "end": 65,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "nominal-return-import",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:boolean=new E().get();",
+        "dep": "class P{x:uint8;}class E{get(){const p:P=new P();return p;}}export {E};"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 57,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 43,
+            "end": 56,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"P\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "declaration-identity-import",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:boolean=new E().get();",
+        "dep": "class P{x:uint8;}class E{get():P{return new P();}}export {E};"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 57,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 43,
+            "end": 56,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"P\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "literal-local-compatible",
+      "modules": {
+        "main": "class E{get(){return \"ok\";}}const result:string=new E().get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "literal-import-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:string=new E().get();",
+        "dep": "export class E{get(){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "literal-namespace-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.E().get();",
+        "dep": "export class E{get(){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "literal-reexport-compatible",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:string=new E().get();",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "export class E{get(){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "literal-inherited-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:string=new D().get();",
+        "dep": "export class E{get(){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-parameter-local-compatible",
+      "modules": {
+        "main": "class E{get(flag:boolean){return \"ok\";}}const result:string=new E().get(true);"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-parameter-import-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:string=new E().get(true);",
+        "dep": "export class E{get(flag:boolean){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-parameter-namespace-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.E().get(true);",
+        "dep": "export class E{get(flag:boolean){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-parameter-reexport-compatible",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:string=new E().get(true);",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "export class E{get(flag:boolean){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-parameter-inherited-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:string=new D().get(true);",
+        "dep": "export class E{get(flag:boolean){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-local-local-compatible",
+      "modules": {
+        "main": "class E{get(){const s:string=\"ok\";return s;}}const result:string=new E().get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-local-import-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:string=new E().get();",
+        "dep": "export class E{get(){const s:string=\"ok\";return s;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-local-namespace-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.E().get();",
+        "dep": "export class E{get(){const s:string=\"ok\";return s;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-local-reexport-compatible",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:string=new E().get();",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "export class E{get(){const s:string=\"ok\";return s;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-local-inherited-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:string=new D().get();",
+        "dep": "export class E{get(){const s:string=\"ok\";return s;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-capture-local-compatible",
+      "modules": {
+        "main": "const s:string=\"ok\";class E{get(){return s;}}const result:string=new E().get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-capture-import-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:string=new E().get();",
+        "dep": "const s:string=\"ok\";export class E{get(){return s;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-capture-namespace-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.E().get();",
+        "dep": "const s:string=\"ok\";export class E{get(){return s;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-capture-reexport-compatible",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:string=new E().get();",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "const s:string=\"ok\";export class E{get(){return s;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-capture-inherited-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:string=new D().get();",
+        "dep": "const s:string=\"ok\";export class E{get(){return s;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-field-local-compatible",
+      "modules": {
+        "main": "class E{s:string=\"ok\";get(){return this.s;}}const result:string=new E().get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-field-import-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:string=new E().get();",
+        "dep": "export class E{s:string=\"ok\";get(){return this.s;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-field-namespace-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.E().get();",
+        "dep": "export class E{s:string=\"ok\";get(){return this.s;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-field-reexport-compatible",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:string=new E().get();",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "export class E{s:string=\"ok\";get(){return this.s;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-field-inherited-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:string=new D().get();",
+        "dep": "export class E{s:string=\"ok\";get(){return this.s;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-forward-local-compatible",
+      "modules": {
+        "main": "class E{get(){return this.value();}value():string{return \"ok\";}}const result:string=new E().get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-forward-import-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:string=new E().get();",
+        "dep": "export class E{get(){return this.value();}value():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-forward-namespace-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.E().get();",
+        "dep": "export class E{get(){return this.value();}value():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-forward-reexport-compatible",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:string=new E().get();",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "export class E{get(){return this.value();}value():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-forward-inherited-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:string=new D().get();",
+        "dep": "export class E{get(){return this.value();}value():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "untyped-local-local-compatible",
+      "modules": {
+        "main": "class E{get(){const s=\"ok\";return s;}}const result:string=new E().get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "untyped-local-import-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:string=new E().get();",
+        "dep": "export class E{get(){const s=\"ok\";return s;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "untyped-local-namespace-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.E().get();",
+        "dep": "export class E{get(){const s=\"ok\";return s;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "untyped-local-reexport-compatible",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:string=new E().get();",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "export class E{get(){const s=\"ok\";return s;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "untyped-local-inherited-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:string=new D().get();",
+        "dep": "export class E{get(){const s=\"ok\";return s;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "untyped-callee-local-compatible",
+      "modules": {
+        "main": "function value(){return \"ok\";}class E{get(){return value();}}const result:string=new E().get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "untyped-callee-import-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:string=new E().get();",
+        "dep": "function value(){return \"ok\";}export class E{get(){return value();}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "untyped-callee-namespace-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.E().get();",
+        "dep": "function value(){return \"ok\";}export class E{get(){return value();}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "untyped-callee-reexport-compatible",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:string=new E().get();",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "function value(){return \"ok\";}export class E{get(){return value();}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "untyped-callee-inherited-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:string=new D().get();",
+        "dep": "function value(){return \"ok\";}export class E{get(){return value();}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "declared-return-local-compatible",
+      "modules": {
+        "main": "class E{get():string{return \"ok\";}}const result:string=new E().get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "declared-return-import-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:string=new E().get();",
+        "dep": "export class E{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "declared-return-namespace-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.E().get();",
+        "dep": "export class E{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "declared-return-reexport-compatible",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:string=new E().get();",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "export class E{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "declared-return-inherited-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:string=new D().get();",
+        "dep": "export class E{get():string{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-method-local-compatible",
+      "modules": {
+        "main": "class E{get<T:type>(value:T){return value;}}const result:string=new E().get.<string>(\"ok\");"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-method-import-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:string=new E().get.<string>(\"ok\");",
+        "dep": "export class E{get<T:type>(value:T){return value;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-method-namespace-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.E().get.<string>(\"ok\");",
+        "dep": "export class E{get<T:type>(value:T){return value;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-method-reexport-compatible",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:string=new E().get.<string>(\"ok\");",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "export class E{get<T:type>(value:T){return value;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-method-inherited-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:string=new D().get.<string>(\"ok\");",
+        "dep": "export class E{get<T:type>(value:T){return value;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-literal-local-compatible",
+      "modules": {
+        "main": "class E{get value(){return \"ok\";}}const result:string=new E().value;"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-literal-import-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:string=new E().value;",
+        "dep": "export class E{get value(){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-literal-namespace-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.E().value;",
+        "dep": "export class E{get value(){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-literal-reexport-compatible",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:string=new E().value;",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "export class E{get value(){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-literal-inherited-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:string=new D().value;",
+        "dep": "export class E{get value(){return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "static-field-local-compatible",
+      "modules": {
+        "main": "class E{static s:string=\"ok\";static get(){return this.s;}}const result:string=E.get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "static-field-import-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:string=E.get();",
+        "dep": "export class E{static s:string=\"ok\";static get(){return this.s;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "static-field-namespace-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=ns.E.get();",
+        "dep": "export class E{static s:string=\"ok\";static get(){return this.s;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "static-field-reexport-compatible",
+      "modules": {
+        "main": "import {E} from \"barrel\";const result:string=E.get();",
+        "barrel": "export {E} from \"dep\";",
+        "dep": "export class E{static s:string=\"ok\";static get(){return this.s;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "static-field-inherited-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";class D extends E{}const result:string=D.get();",
+        "dep": "export class E{static s:string=\"ok\";static get(){return this.s;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-class-local-compatible",
+      "modules": {
+        "main": "class E<T:type>{value:T;get(){return this.value;}}const result:string=new E.<string>().get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nominal-return-local-compatible",
+      "modules": {
+        "main": "class P{x:uint8;}class E{get(){const p:P=new P();return p;}}const result:any=new E().get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "declaration-identity-local-compatible",
+      "modules": {
+        "main": "class P{x:uint8;}class E{get():P{return new P();}}const result:any=new E().get();"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main"
+        ],
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "generic-class-import-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:string=new E.<string>().get();",
+        "dep": "class E<T:type>{value:T;get(){return this.value;}}export {E};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nominal-return-import-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:any=new E().get();",
+        "dep": "class P{x:uint8;}class E{get(){const p:P=new P();return p;}}export {E};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "declaration-identity-import-compatible",
+      "modules": {
+        "main": "import {E} from \"dep\";const result:any=new E().get();",
+        "dep": "class P{x:uint8;}class E{get():P{return new P();}}export {E};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-bracket",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns[\"E\"]().get();",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 67,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 47,
+            "end": 66,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-bracket-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns[\"E\"]().get();",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-key-constant",
+      "modules": {
+        "main": "import * as ns from \"dep\";const key=\"E\";const result:boolean=new ns[key]().get();",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 81,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 61,
+            "end": 80,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-key-constant-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const key=\"E\";const result:string=new ns[key]().get();",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-namespace-alias",
+      "modules": {
+        "main": "import * as ns from \"dep\";const alias=ns;const result:boolean=new alias.E().get();",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 82,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 62,
+            "end": 81,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-namespace-alias-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const alias=ns;const result:string=new alias.E().get();",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-constructor-alias",
+      "modules": {
+        "main": "import * as ns from \"dep\";const Alias=ns.E;const result:boolean=new Alias().get();",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 82,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 64,
+            "end": 81,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-constructor-alias-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const Alias=ns.E;const result:string=new Alias().get();",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-renamed",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.Renamed().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}}export {E as Renamed};"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 70,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 47,
+            "end": 69,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-renamed-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.Renamed().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}}export {E as Renamed};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-default",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.default().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}}export {E as default};"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 70,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 47,
+            "end": 69,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-default-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.default().get();",
+        "dep": "class E{text:string=\"ok\";get(){return this.text;}}export {E as default};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-star-barrel",
+      "modules": {
+        "main": "import * as ns from \"barrel\";const result:boolean=new ns.E().get();",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}",
+        "barrel": "export * from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 67,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 50,
+            "end": 66,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-star-barrel-compatible",
+      "modules": {
+        "main": "import * as ns from \"barrel\";const result:string=new ns.E().get();",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}",
+        "barrel": "export * from \"dep\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-renamed-barrel",
+      "modules": {
+        "main": "import * as ns from \"barrel\";const result:boolean=new ns.Renamed().get();",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}",
+        "barrel": "export {E as Renamed} from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 73,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 50,
+            "end": 72,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-renamed-barrel-compatible",
+      "modules": {
+        "main": "import * as ns from \"barrel\";const result:string=new ns.Renamed().get();",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}",
+        "barrel": "export {E as Renamed} from \"dep\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-nested",
+      "modules": {
+        "main": "import * as ns from \"barrel\";const result:boolean=new ns.inner.E().get();",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}",
+        "barrel": "export * as inner from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 73,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 50,
+            "end": 72,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-nested-compatible",
+      "modules": {
+        "main": "import * as ns from \"barrel\";const result:string=new ns.inner.E().get();",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}",
+        "barrel": "export * as inner from \"dep\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-named-namespace",
+      "modules": {
+        "main": "import {inner as ns} from \"barrel\";const result:boolean=new ns.E().get();",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}",
+        "barrel": "export * as inner from \"dep\";"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 73,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 56,
+            "end": 72,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-named-namespace-compatible",
+      "modules": {
+        "main": "import {inner as ns} from \"barrel\";const result:string=new ns.E().get();",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}",
+        "barrel": "export * as inner from \"dep\";"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "barrel",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "barrel",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-namespace-heritage",
+      "modules": {
+        "main": "import * as ns from \"dep\";class D extends ns.E{}const result:boolean=new D().get();",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 83,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 69,
+            "end": 82,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-namespace-heritage-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";class D extends ns.E{}const result:string=new D().get();",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-uncalled",
+      "modules": {
+        "main": "import * as ns from \"dep\";function unused(){const result:boolean=new ns.E().get();}",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 26,
+            "end": 83,
+            "nodeType": "FunctionDeclaration"
+          },
+          "location": {
+            "start": 65,
+            "end": 81,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-uncalled-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";function unused(){const result:string=new ns.E().get();}",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-generic-explicit",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.E.<string>().get();",
+        "dep": "export class E<T:type>{value:T;get(){return this.value;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 73,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 47,
+            "end": 72,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-generic-explicit-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.E.<string>().get();",
+        "dep": "export class E<T:type>{value:T;get(){return this.value;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-generic-default",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.E().get();",
+        "dep": "export class E<T:type=string>{value:T;get(){return this.value;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 64,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 47,
+            "end": 63,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-generic-default-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.E().get();",
+        "dep": "export class E<T:type=string>{value:T;get(){return this.value;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-generic-inferred",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.E(\"ok\").get();",
+        "dep": "export class E<T:type>{value:T;constructor(x:T){this.value=x;}get(){return this.value;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 68,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 47,
+            "end": 67,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-generic-inferred-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.E(\"ok\").get();",
+        "dep": "export class E<T:type>{value:T;constructor(x:T){this.value=x;}get(){return this.value;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-generic-named",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.E.<T:string>().get();",
+        "dep": "export class E<T:type>{value:T;get(){return this.value;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 75,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 47,
+            "end": 74,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-generic-named-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=new ns.E.<T:string>().get();",
+        "dep": "export class E<T:type>{value:T;get(){return this.value;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-generic-heritage",
+      "modules": {
+        "main": "import * as ns from \"dep\";class D extends ns.E.<string>{}const result:boolean=new D().get();",
+        "dep": "export class E<T:type>{value:T;get(){return this.value;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 92,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 78,
+            "end": 91,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-generic-heritage-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";class D extends ns.E.<string>{}const result:string=new D().get();",
+        "dep": "export class E<T:type>{value:T;get(){return this.value;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-producer-local-alias",
+      "modules": {
+        "main": "import * as ns from \"dep\";type Result=boolean;const result:boolean=new ns.E().get();",
+        "dep": "type Result=string;export class E{get():Result{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 84,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 67,
+            "end": 83,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-producer-local-alias-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";type Result=boolean;const result:string=new ns.E().get();",
+        "dep": "type Result=string;export class E{get():Result{return \"ok\";}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-cycle",
+      "modules": {
+        "main": "import * as ns from \"dep\";export function unused(){}const result:boolean=new ns.E().get();",
+        "dep": "import {unused} from \"main\";export class E{text:string=\"ok\";get(){return this.text;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 90,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 73,
+            "end": 89,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-cycle-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";export function unused(){}const result:string=new ns.E().get();",
+        "dep": "import {unused} from \"main\";export class E{text:string=\"ok\";get(){return this.text;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-renamed-value",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=ns.renamed;",
+        "dep": "const local:string=\"ok\";export {local as renamed};"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 58,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 47,
+            "end": 57,
+            "nodeType": "MemberExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-renamed-value-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=ns.renamed;",
+        "dep": "const local:string=\"ok\";export {local as renamed};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-renamed-function",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=ns.renamed();",
+        "dep": "function local():string{return \"ok\";}export {local as renamed};"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 60,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 47,
+            "end": 59,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"string\"",
+            "\"boolean\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-renamed-function-compatible",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:string=ns.renamed();",
+        "dep": "function local():string{return \"ok\";}export {local as renamed};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-shadowed-parameter",
+      "modules": {
+        "main": "import * as ns from \"dep\";function use(ns:any){const result:boolean=new ns.E().get();return result;}use({E:class{get(){return true;}}});",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-shadowed-local",
+      "modules": {
+        "main": "import * as ns from \"dep\";{const ns={E:class{get(){return true;}}};const result:boolean=new ns.E().get();}",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-mutable-alias",
+      "modules": {
+        "main": "import * as ns from \"dep\";let alias:any=ns;alias={E:class{get(){return true;}}};const result:boolean=new alias.E().get();",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-mutable-export",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.E().get();",
+        "dep": "export let E:any=class{get():string{return \"ok\";}};E=class{get(){return true;}};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-same-shape-nominal",
+      "modules": {
+        "main": "import * as ns from \"dep\";class P{x:uint8;}const result:P=new ns.E().get();",
+        "dep": "class P{x:uint8;}export class E{get():P{return new P();}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "rule": "rt-assignability",
+          "phase": "static",
+          "errorClass": "StaticTypeError",
+          "checked": true,
+          "applicability": "always",
+          "unit": {
+            "start": 0,
+            "end": 75,
+            "nodeType": "Module"
+          },
+          "location": {
+            "start": 58,
+            "end": 74,
+            "nodeType": "CallExpression"
+          },
+          "arguments": [
+            "\"P\"",
+            "\"P\""
+          ],
+          "related": []
+        }
+      }
+    },
+    {
+      "name": "namespace-reassigned-class",
+      "modules": {
+        "main": "import * as ns from \"dep\";const result:boolean=new ns.E().get();",
+        "dep": "export class E{get():string{return \"ok\";}}E=class{get(){return true;}};"
+      },
+      "expected": {
+        "status": "fulfilled",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "namespace-missing-export",
+      "modules": {
+        "main": "import * as ns from \"dep\";new ns.Missing();",
+        "dep": "export class E{text:string=\"ok\";get(){return this.text;}}"
+      },
+      "expected": {
+        "status": "rejected",
+        "loaded": [
+          "main",
+          "dep"
+        ],
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    }
+  ]
+}

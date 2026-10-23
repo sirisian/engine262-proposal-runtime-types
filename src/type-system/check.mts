@@ -7,7 +7,7 @@ import { EnsureCompletion } from '../completion.mts';
 import { skipDebugger } from '../evaluator.mts';
 import { MostSpecificPrimitiveOperator, OperandNamesCapture } from '../runtime-semantics/ApplyStringOrNumericBinaryOperator.mts';
 import type { ParseNode } from '../parser/ParseNode.mts';
-import type { AbstractModuleRecord } from '../modules.mts';
+import type { AbstractModuleRecord, ResolvedBindingRecord } from '../modules.mts';
 import { setNodeParent } from '../parse.mts';
 import { surroundingAgent } from '../execution-context/Agent.mts';
 import { type PrimitiveOperatorEntry, ContractFactsOf, NumericArmRank, RegisteredPrimitiveOperators, GoverningMetaTypes, MetadataMismatchDescription } from '../abstract-ops/runtime-types.mts';
@@ -2806,6 +2806,7 @@ const moduleCheckInputs = new WeakMap<object, {
   aliases?: ReadonlyMap<string, ImportedTypeAlias>,
   sourceModule?: AbstractModuleRecord,
   builderModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>,
+  namespaces?: ReadonlyMap<string, AbstractModuleRecord>,
 }>();
 
 export function DeferredTypeChecksOf(root: object): readonly DeferredTypeCheck[] {
@@ -3184,9 +3185,9 @@ export function CheckModule(module: ParseNode.Module, specifier?: string): Objec
  * bindings are only there on the second pass. `function f() { return c.x; }
  * let s: string = f();` is refused because of that second pass.
  */
-export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, specifier?: string, classes?: ReadonlyMap<string, ParseNode>, classModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>, interfaces?: ReadonlyMap<string, ImportedInterface>, aliases?: ReadonlyMap<string, ImportedTypeAlias>, sourceModule?: AbstractModuleRecord, builderModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>): ObjectValue[] {
-  moduleCheckInputs.set(module, { imported, builders, classes, classModules, interfaces, aliases, sourceModule, builderModules });
-  if (imported.size === 0 && !aliases?.size) {
+export function CheckModuleWithImports(module: ParseNode.Module, imported: ReadonlyMap<string, unknown>, builders?: ReadonlyMap<string, ParseNode>, specifier?: string, classes?: ReadonlyMap<string, ParseNode>, classModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>, interfaces?: ReadonlyMap<string, ImportedInterface>, aliases?: ReadonlyMap<string, ImportedTypeAlias>, sourceModule?: AbstractModuleRecord, builderModules?: ReadonlyMap<ParseNode, AbstractModuleRecord>, namespaces?: ReadonlyMap<string, AbstractModuleRecord>): ObjectValue[] {
+  moduleCheckInputs.set(module, { imported, builders, classes, classModules, interfaces, aliases, sourceModule, builderModules, namespaces });
+  if (imported.size === 0 && !aliases?.size && !namespaces?.size) {
     return [];
   }
   const session = CreateCheckSession();
@@ -7916,6 +7917,46 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       return returned?.Kind === 'void' || (returned?.Kind === 'primitive' && (returned as { Name?: string }).Name === 'undefined');
     });
   });
+  // Namespace identity comes from the resolved import, not an object's shape.
+  // Const aliases retain that identity; mutable storage and arbitrary objects do not.
+  const importedNamespace = (expression: ParseNode, seen = new Set<ParseNode>()): AbstractModuleRecord | undefined => {
+    const node = patternExpression(expression)!;
+    if (seen.has(node) || seen.size >= 256) return undefined;
+    seen.add(node);
+    if (node.type === 'MemberExpression') {
+      const resolution = importedNamespaceMember(node, seen);
+      return resolution?.BindingName === 'namespace' || resolution?.BindingName === 'deferred-namespace'
+        ? resolution.Module : undefined;
+    }
+    if (node.type !== 'IdentifierReference') return undefined;
+    let source: ParseNode = node;
+    while (source.parent) source = source.parent;
+    if (source === root && hasDirectEval) return undefined;
+    const binding = ResolveBindingDeclaration(node, node.name);
+    if (binding?.kind === 'import') return moduleCheckInputs.get(source)?.namespaces?.get(node.name);
+    if (binding?.kind === 'const' && binding.initializer && !(binding.node as { TypeAnnotation?: unknown }).TypeAnnotation
+        && !(binding.node as { Ref?: boolean }).Ref) return importedNamespace(binding.initializer, seen);
+    return undefined;
+  };
+  const importedNamespaceMember = (node: ParseNode.MemberExpression, seen = new Set<ParseNode>()): ResolvedBindingRecord | undefined => {
+    const namespace = importedNamespace(node.MemberExpression, seen);
+    if (!namespace) return undefined;
+    const key = memberKey(node);
+    if (typeof key !== 'string') return undefined;
+    const resolution = namespace.ResolveExport(Value(key));
+    return resolution && resolution !== 'ambiguous' ? resolution : undefined;
+  };
+  const namespaceClassDeclaration = (node: ParseNode.MemberExpression): ParseNode | undefined => {
+    const resolution = importedNamespaceMember(node);
+    if (!resolution || !(resolution.BindingName instanceof JSStringValue) || !('ECMAScriptCode' in resolution.Module)) return undefined;
+    const source = resolution.Module.ECMAScriptCode as ParseNode.Module;
+    const declaration = ExportedClassNodesOf(source)?.get(resolution.BindingName.stringValue());
+    if (declaration) {
+      importedDeclarationSourceModules.set(source, resolution.Module);
+      retainImportedSources(source);
+    }
+    return declaration;
+  };
   // #sec-typed-classes: follow transparent syntax and immutable lexical aliases.
   // Keep declaration identity: a same-spelled name in a caller's frame is not the base.
   // A class a decorator may replace is not established; with _bounded_, it is a
@@ -7933,16 +7974,17 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const origin = stableClassOrigin(node.Expression, seen, bounded);
       return origin ? { ...origin, arguments: node.TypeArguments } : undefined;
     }
-    if (node.type !== 'IdentifierReference') return undefined;
-    let source = node as ParseNode;
-    while (source.parent) source = source.parent;
-    if (source === root && hasDirectEval) return undefined;
-    const binding = ResolveBindingDeclaration(node, node.name);
     const publishedOrigin = (declaration: ParseNode | undefined): ClassOrigin | undefined => {
       const exact = declaration && checkedClassOrigins.get(declaration);
       if (exact === undefined || (!exact && !bounded)) return undefined;
       return { declaration: declaration as ParseNode.ClassDeclaration, ...(!exact ? { bounded: true } : {}) };
     };
+    if (node.type === 'MemberExpression') return publishedOrigin(namespaceClassDeclaration(node));
+    if (node.type !== 'IdentifierReference') return undefined;
+    let source: ParseNode = node;
+    while (source.parent) source = source.parent;
+    if (source === root && hasDirectEval) return undefined;
+    const binding = ResolveBindingDeclaration(node, node.name);
     // Import bindings are read-only views of live producer bindings. The
     // producer's proof, not the import's immutability or consumer name table,
     // establishes the constructor. Resolve foreign heritage in its own module.
@@ -19901,6 +19943,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         return staticType(templateCallView(node as ParseNode.TaggedTemplateExpression));
       }
       case 'MemberExpression': {
+        const namespaceClass = namespaceClassDeclaration(node);
+        if (namespaceClass && checkedClassOrigins.get(namespaceClass) === true) return classObjectTypeOfNode(namespaceClass);
         const capacity = capacityContract(node);
         if (capacity) return capacity;
         if (checkMemberReceiver(node)) return neverType;
@@ -20437,6 +20481,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             && !((target as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null }).TypeParameters?.TypeParameterList?.length)) {
           return instanceTypeOf(target);
         }
+        if (target?.type === 'MemberExpression' && origin && !application && !origin.arguments) {
+          const declared = instanceTypeOf(origin.declaration);
+          return ownBodyConstruction(node, declared) ?? constructedType(node, declared);
+        }
         if (target && target.type === 'IdentifierReference' && !application) {
           const targetName = (target as { name: string }).name;
           const declared = origin && !origin.arguments ? instanceTypeOf(origin.declaration) : lexicalClassType(target);
@@ -20532,10 +20580,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               Kind: 'array', Element: element as TypeRecord, Extent: extent,
             } as unknown as TypeRecord) as Known;
           }
-          if (spec.Expression.type === 'IdentifierReference') {
-            const specName = spec.Expression.name;
-            const binding = ResolveBindingDeclaration(spec.Expression, specName);
-            const libraryName = libraryConstructorOrigin(spec.Expression);
+          if (spec.Expression.type === 'IdentifierReference' || spec.Expression.type === 'MemberExpression' && origin) {
+            const reference = spec.Expression.type === 'IdentifierReference' ? spec.Expression : undefined;
+            const specName = reference?.name ?? origin!.declaration.BindingIdentifier?.name ?? 'class';
+            const binding = reference ? ResolveBindingDeclaration(reference, specName) : undefined;
+            const libraryName = reference ? libraryConstructorOrigin(reference) : undefined;
             if (libraryName === 'Proxy') return resolvedLibraryArguments(libraryName, spec.TypeArguments.TypeArgumentList as readonly ParseNode.Type[])?.[0] ?? null;
             // `new Proxy.<T>(...)` has Static Type _T_, not `Proxy.<T>`.
             // #sec-reflection-and-declared-types gives such a proxy a
@@ -20573,7 +20622,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             // Contribution queries run before the ordinary class walk. Resolve
             // the constructor's source binding rather than a collected name.
             const base = origin ? instanceTypeOf(origin.declaration)
-              : lexicalClassType(spec.Expression) ?? (!binding ? libraryTypeRecord(specName) : null);
+              : (reference ? lexicalClassType(reference) : null) ?? (!binding ? libraryTypeRecord(specName) : null);
             if (base && base.Kind === 'nominal') {
               // An argument naming an enclosing declaration's parameter - a
               // VALUE parameter's name, `new C.<S>()`, is not a type - is that
@@ -37383,6 +37432,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         while (bareTarget?.type === 'ParenthesizedExpression' || bareTarget?.type === 'TypeArgumentsExpression') {
           bareTarget = bareTarget.Expression;
         }
+        const origin = target ? stableClassOrigin(target) : undefined;
         const namedInstance = bareTarget?.type === 'IdentifierReference' ? lexicalClassType(bareTarget) : null;
         if (target && !ne.PlacementArguments) checkInvocation(target, true);
         // A VALUE OF A PRIMITIVE TYPE IS NOT A CONSTRUCTOR, for the reason a
@@ -37399,7 +37449,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // provoke. A class is not a primitive, so skipping one costs nothing.
         // A TOPIC is asked as well as an identifier: it names no class either,
         // and `n |> new %()` is the same mistake as `new n()`.
-        if (target && !namedInstance) {
+        if (target && !namedInstance && !origin) {
           const notConstructor = (t: Known): boolean => {
             const at = erasedForJudgment(callableForm(t));
             if (!at) {
