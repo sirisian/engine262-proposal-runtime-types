@@ -98,7 +98,7 @@ import { isFloatTypeName, isIntegerTypeName, numericLibraryRows } from './numeri
 import { inferRegExpLiteralType } from './regexp-inference.mts';
 import { Atoms, AtomsOfType } from './Atoms.mts';
 import { eraseMetadata, literalFitsNumericType, keyAdmittedBy } from './literal-fit.mts';
-import { falsyPartOf, truthyPartOf, joinTypes, logicalResultType } from './logical-types.mts';
+import { falsyPartOf, truthyPartOf, joinTypes, logicalResultType, shortCircuitPartOf } from './logical-types.mts';
 import {
   effectiveFunctionType, callableForm, sameConstructParameter, selectConstructSignature,
 } from './callable-shapes.mts';
@@ -1281,6 +1281,8 @@ const independentResultContracts = new WeakSet<object>();
 const literalMemberReadAnchors = new WeakMap<object, ReadonlyMap<string | SymbolValue, boolean>>();
 const selectedMemberAnchors = new WeakMap<object, boolean>();
 const contributionAlternatives = new WeakMap<object, readonly TypeRecord[]>();
+type ValueContributionEvidence = { anchored: boolean, initializer: boolean };
+const valueContributionEvidence = new WeakMap<object, ValueContributionEvidence>();
 type LiteralArrayContribution = { type: TypeRecord, anchored: boolean };
 const literalArrayReadAnchors = new WeakMap<object, {
   prefix: readonly LiteralArrayContribution[], tail?: readonly LiteralArrayContribution[],
@@ -16490,20 +16492,30 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // Result inference and contextual typing need the same predecessor facts as
   // the ordinary flow walk. The right operand of &&/|| is not typed in the
   // unrefined entry state merely because its result is consumed as a value.
-  const guardedLogicalResultType = (node: ParseNode, typeOf: (part: ParseNode) => Known, contextual: Known = null): Known => {
-    if (node.type !== 'LogicalANDExpression' && node.type !== 'LogicalORExpression') {
-      return logicalResultType(node, typeOf, contextual);
-    }
+  const guardedLogicalResultType = (node: ParseNode.LogicalANDExpression | ParseNode.LogicalORExpression | ParseNode.CoalesceExpression,
+    typeOf: (part: ParseNode) => Known, contextual: Known = null): Known => {
     const isAnd = node.type === 'LogicalANDExpression';
-    const left = isAnd ? node.LogicalANDExpression : node.LogicalORExpression;
-    const right = isAnd ? node.BitwiseORExpression : node.LogicalANDExpression;
+    const coalesce = node.type === 'CoalesceExpression';
+    const left = coalesce ? node.CoalesceExpressionHead : isAnd ? node.LogicalANDExpression : node.LogicalORExpression;
+    const right = coalesce || isAnd ? node.BitwiseORExpression : node.LogicalANDExpression;
     return logicalResultType(node, (part) => {
-      if (part !== right) return typeOf(part);
-      const admitted = () => typeOf(part);
+      const admitted = () => expressionContributionType(part, typeOf(part));
+      if (part !== right || coalesce) return admitted();
       const skipped = () => null;
       return isAnd ? conditionalArmTypes(left, admitted, skipped)[0]
         : conditionalArmTypes(left, skipped, admitted)[1];
-    }, contextual);
+    }, contextual, (result, keptLeft, keptRight) => {
+      const origins = [
+        ...(keptLeft ? projectedContributionOrigins(keptLeft, (type) => shortCircuitPartOf(node, type)) : []),
+        ...(keptRight ? projectedContributionOrigins(keptRight, (type) => type) : []),
+      ];
+      const retained = origins.length ? retainContributionAlternatives(result, origins) : { ...result };
+      valueContributionEvidence.set(retained, {
+        anchored: origins.some((type) => valueContributionEvidence.get(type)?.anchored),
+        initializer: origins.some((type) => valueContributionEvidence.get(type)?.initializer),
+      });
+      return retained;
+    });
   };
 
   /**
@@ -18907,6 +18919,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     seen.set(type, result);
     if (selectedMemberAnchors.has(type)) selectedMemberAnchors.set(result, selectedMemberAnchors.get(type)!);
+    if (valueContributionEvidence.has(type)) valueContributionEvidence.set(result, valueContributionEvidence.get(type)!);
+    if (contributionAlternatives.has(type)) contributionAlternatives.set(result, contributionAlternatives.get(type)!);
     return result;
   };
   const staticType = (node: ParseNode): Known => withPatternScope(node, () => {
@@ -21903,8 +21917,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         // ternary failed identically.
         const [a, b] = conditionalArmTypes(
           c.ShortCircuitExpression,
-          () => staticType(c.AssignmentExpression_a as ParseNode),
-          () => staticType(c.AssignmentExpression_b as ParseNode),
+          () => expressionContributionType(c.AssignmentExpression_a as ParseNode, staticType(c.AssignmentExpression_a as ParseNode)),
+          () => expressionContributionType(c.AssignmentExpression_b as ParseNode, staticType(c.AssignmentExpression_b as ParseNode)),
         );
         if (!a || !b) {
           return null;
@@ -28830,7 +28844,34 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (alternatives) contributionAlternatives.set(result, alternatives);
     if (literalContractAnchors.has(type)) literalContractAnchors.add(result);
     if (independentResultContracts.has(type)) independentResultContracts.add(result);
+    if (valueContributionEvidence.has(type)) valueContributionEvidence.set(result, valueContributionEvidence.get(type)!);
     return result;
+  };
+
+  // Capture evidence in the operand's own guarded/contextual environment. A
+  // narrowed result keeps this evidence independently of its structural type.
+  const expressionContributionType = (expression: ParseNode, type: Known): Known => {
+    if (!type) return null;
+    const anchored = derivesFromDeclaration(expression, type);
+    const result = selectedMemberType(type, selectedMemberAnchors.get(type) ?? anchored)!;
+    valueContributionEvidence.set(result, {
+      anchored,
+      initializer: constInitializerParticipates(expression, type),
+    });
+    return result;
+  };
+
+  const projectedContributionOrigins = (type: TypeRecord, project: (type: TypeRecord) => TypeRecord | typeof empty,
+    inherited?: ValueContributionEvidence): TypeRecord[] => {
+    const evidence = valueContributionEvidence.get(type) ?? (selectedMemberAnchors.has(type)
+      ? { anchored: selectedMemberAnchors.get(type)!, initializer: selectedMemberAnchors.get(type)! } : inherited);
+    const alternatives = contributionAlternatives.get(type);
+    if (alternatives) return alternatives.flatMap((arm) => projectedContributionOrigins(arm, project, evidence));
+    const selected = project(type);
+    if (selected === empty || (selected.Kind === 'union' && !selected.Members.length)) return [];
+    const result = selectedMemberType(selected, evidence?.anchored ?? false)!;
+    valueContributionEvidence.set(result, evidence ?? { anchored: false, initializer: false });
+    return [result];
   };
 
   const retainContributionAlternatives = (type: TypeRecord, alternatives: readonly TypeRecord[]): TypeRecord => {
@@ -28865,7 +28906,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const sources = position === undefined ? [...array.prefix, ...array.tail ?? []]
       : Number.isInteger(position) && position >= 0 ? position < array.prefix.length
         ? [array.prefix[position]!] : array.tail ?? [] : [];
-    const result = sources.length ? retainContributionAlternatives(type, sources.map((source) => source.type)) : type;
+    const result = sources.length ? retainContributionAlternatives(type,
+      sources.map((source) => selectedMemberType(source.type, source.anchored)!)) : type;
     return selectedMemberType(result, sources.some((source) => source.anchored));
   };
 
@@ -28925,6 +28967,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const derivesFromDeclaration = (expr: ParseNode | null | undefined, t: { Kind?: string, Name?: string } | null | undefined): boolean => {
     expr = expr ? patternExpression(expr) : expr;
+    if (expr && ['LogicalANDExpression', 'LogicalORExpression', 'CoalesceExpression'].includes(expr.type)
+      && t && valueContributionEvidence.has(t)) return valueContributionEvidence.get(t)!.anchored;
     if (expr?.type === 'MemberExpression' && t && selectedMemberAnchors.has(t)) return selectedMemberAnchors.get(t)!;
     if (expr?.type === 'IdentifierReference') {
       for (let i = frames.length - 1; i >= 0; i -= 1) {
@@ -28939,6 +28983,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const anchored = namedCallableProvenance(t as Known);
       if (anchored !== undefined) return anchored;
     }
+    if (expr?.type === 'TypedConversionExpression') return !!t && t.Kind !== 'any';
     if (expr?.type === 'MemberExpression' && importedNamespaceMember(expr)) {
       const anchored = namedCallableProvenance(t as Known);
       if (anchored !== undefined) return anchored;
@@ -30960,9 +31005,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /** Typed information can pass through syntax without another binding opt-in. */
-  const constInitializerParticipates = (expression: ParseNode): boolean => {
+  const constInitializerParticipates = (expression: ParseNode, described?: Known): boolean => {
     const expr = patternExpression(expression)!;
-    const t = staticType(expr);
+    const t = described === undefined ? staticType(expr) : described;
     if (!t || t.Kind === 'any') {
       return false;
     }
@@ -30971,6 +31016,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (anchored !== undefined) return anchored;
     }
     switch (expr.type) {
+      case 'LogicalANDExpression':
+      case 'LogicalORExpression':
+      case 'CoalesceExpression':
+        return valueContributionEvidence.get(t)?.initializer ?? false;
       case 'IdentifierReference':
         return namedCallableProvenance(t) ?? (lookup(expr.name) !== null && !isNumericConstantExpression(expr));
       case 'ThisExpression':

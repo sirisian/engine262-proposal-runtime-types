@@ -149,13 +149,21 @@ export const truthyPartOf = (t: TypeRecord): TypeRecord | typeof empty => {
   return kept.length === 1 ? kept[0]! : CanonicalizeType({ Kind: 'union', Members: kept });
 };
 
+/** The left operand's value domain that supplies a short-circuit result. */
+export const shortCircuitPartOf = (node: ParseNode, type: TypeRecord): TypeRecord | typeof empty => (node.type === 'CoalesceExpression'
+  ? NarrowFrom(type, nullishType())
+  : node.type === 'LogicalANDExpression' ? falsyPartOf(type) : truthyPartOf(type));
+
 /**
  * The Static Type of `a && b`, `a || b`, and `a ?? b`: the part of the left
  * that SHORT-CIRCUITS, joined with the right. _typeOf_ is how an operand is
  * typed, which is what lets the contextual form pass a position's type down
- * to both operands while the plain form types them in isolation.
+ * to both operands while the plain form types them in isolation. The optional
+ * retention callback receives only operands that can supply the result; their
+ * original types let the caller project provenance without changing this type.
  */
-export const logicalResultType = (node: ParseNode, typeOf: (n: ParseNode) => Known, contextual: Known = null): Known => {
+export const logicalResultType = (node: ParseNode, typeOf: (n: ParseNode) => Known, contextual: Known = null,
+  retain = (result: TypeRecord, _left: Known, _right: Known): TypeRecord => result): Known => {
   let leftNode: ParseNode;
   let rightNode: ParseNode;
   if (node.type === 'CoalesceExpression') {
@@ -183,9 +191,7 @@ export const logicalResultType = (node: ParseNode, typeOf: (n: ParseNode) => Kno
   // dead-test diagnostic reads. A part that cannot occur contributes nothing,
   // which is what makes `s || 'anon'` a plain `string`, `x ?? 10` on an
   // optional a plain `uint32`, and `obj && f()` the type of `f()`.
-  const kept = node.type === 'CoalesceExpression'
-    ? NarrowFrom(left, nullishType())
-    : (node.type === 'LogicalANDExpression' ? falsyPartOf(left) : truthyPartOf(left));
+  const kept = shortCircuitPartOf(node, left);
   // Where the left ALWAYS short-circuits, the right is never evaluated and so
   // contributes nothing: `undefined && f()` is `undefined`, not
   // `undefined | uint32`. This is the dual of the case just below, where the
@@ -195,7 +201,7 @@ export const logicalResultType = (node: ParseNode, typeOf: (n: ParseNode) => Kno
     ? NarrowTo(left, nullishType())
     : (node.type === 'LogicalANDExpression' ? truthyPartOf(left) : falsyPartOf(left));
   if (passedOver === empty && kept !== empty) {
-    return kept as TypeRecord;
+    return retain(kept, left, null);
   }
   // #sec-literal-propagation: a literal in a contextual position IS
   // of that position's type where it fits. Elsewhere that is settled by the
@@ -209,5 +215,5 @@ export const logicalResultType = (node: ParseNode, typeOf: (n: ParseNode) => Kno
     ? contextual
     : t);
   const adoptedRight = adopt(right);
-  return kept === empty ? adoptedRight : joinTypes(adopt(kept as TypeRecord), adoptedRight);
+  return retain(kept === empty ? adoptedRight : joinTypes(adopt(kept), adoptedRight), kept === empty ? null : left, right);
 };

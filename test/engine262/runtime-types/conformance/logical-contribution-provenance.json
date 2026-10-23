@@ -1,0 +1,1822 @@
+{
+  "description": "Independent requirements for logical contribution provenance; only surviving value-producing operands retain declaration evidence.",
+  "cases": [
+    {
+      "name": "and-literal-object",
+      "modules": {
+        "main": "function make(){return true && ({x:\"s\"});}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "and-typed-object",
+      "modules": {
+        "main": "function make(seed:number){return true && ({x:\"s\"});}const n:number=make(1);"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "and-literal-array",
+      "modules": {
+        "main": "function make(){return true && ([\"s\"]);}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "and-typed-array",
+      "modules": {
+        "main": "function make(seed:number){return true && ([\"s\"]);}const n:number=make(1);"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "and-literal-callable",
+      "modules": {
+        "main": "function make(){return true && (()=>\"s\");}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "and-typed-callable",
+      "modules": {
+        "main": "function make(seed:number){return true && (()=>\"s\");}const n:number=make(1);"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "and-literal-string",
+      "modules": {
+        "main": "function make(){return true && (\"s\");}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "and-typed-string",
+      "modules": {
+        "main": "function make(seed:number){return true && (\"s\");}const n:number=make(1);"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "and-typed-selected",
+      "modules": {
+        "main": "function make(){return (true && ({x:\"s\":=string})).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "and-literal-selected",
+      "modules": {
+        "main": "function make(){return (true && ({seed:1:=number,x:\"s\"})).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "and-alias-literal",
+      "modules": {
+        "main": "function make(){const result=true && ({x:\"s\"});return result;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "and-let-literal",
+      "modules": {
+        "main": "function make(){let result=true && ({x:\"s\"});return result;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "or-literal-object",
+      "modules": {
+        "main": "function make(){return false || ({x:\"s\"});}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "or-typed-object",
+      "modules": {
+        "main": "function make(seed:number){return false || ({x:\"s\"});}const n:number=make(1);"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "or-literal-array",
+      "modules": {
+        "main": "function make(){return false || ([\"s\"]);}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "or-typed-array",
+      "modules": {
+        "main": "function make(seed:number){return false || ([\"s\"]);}const n:number=make(1);"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "or-literal-callable",
+      "modules": {
+        "main": "function make(){return false || (()=>\"s\");}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "or-typed-callable",
+      "modules": {
+        "main": "function make(seed:number){return false || (()=>\"s\");}const n:number=make(1);"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "or-literal-string",
+      "modules": {
+        "main": "function make(){return false || (\"s\");}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "or-typed-string",
+      "modules": {
+        "main": "function make(seed:number){return false || (\"s\");}const n:number=make(1);"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "or-typed-selected",
+      "modules": {
+        "main": "function make(){return (false || ({x:\"s\":=string})).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "or-literal-selected",
+      "modules": {
+        "main": "function make(){return (false || ({seed:1:=number,x:\"s\"})).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "or-alias-literal",
+      "modules": {
+        "main": "function make(){const result=false || ({x:\"s\"});return result;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "or-let-literal",
+      "modules": {
+        "main": "function make(){let result=false || ({x:\"s\"});return result;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "coalesce-literal-object",
+      "modules": {
+        "main": "function make(){return null ?? ({x:\"s\"});}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing impossible nullish-test diagnostic remains authoritative.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-typed-object",
+      "modules": {
+        "main": "function make(seed:number){return null ?? ({x:\"s\"});}const n:number=make(1);"
+      },
+      "script": true,
+      "requirement": "The existing impossible nullish-test diagnostic remains authoritative.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-literal-array",
+      "modules": {
+        "main": "function make(){return null ?? ([\"s\"]);}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing impossible nullish-test diagnostic remains authoritative.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-typed-array",
+      "modules": {
+        "main": "function make(seed:number){return null ?? ([\"s\"]);}const n:number=make(1);"
+      },
+      "script": true,
+      "requirement": "The existing impossible nullish-test diagnostic remains authoritative.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-literal-callable",
+      "modules": {
+        "main": "function make(){return null ?? (()=>\"s\");}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing impossible nullish-test diagnostic remains authoritative.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-typed-callable",
+      "modules": {
+        "main": "function make(seed:number){return null ?? (()=>\"s\");}const n:number=make(1);"
+      },
+      "script": true,
+      "requirement": "The existing impossible nullish-test diagnostic remains authoritative.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-literal-string",
+      "modules": {
+        "main": "function make(){return null ?? (\"s\");}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing impossible nullish-test diagnostic remains authoritative.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-typed-string",
+      "modules": {
+        "main": "function make(seed:number){return null ?? (\"s\");}const n:number=make(1);"
+      },
+      "script": true,
+      "requirement": "The existing impossible nullish-test diagnostic remains authoritative.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-typed-selected",
+      "modules": {
+        "main": "function make(){return (null ?? ({x:\"s\":=string})).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing impossible nullish-test diagnostic remains authoritative.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-literal-selected",
+      "modules": {
+        "main": "function make(){return (null ?? ({seed:1:=number,x:\"s\"})).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing impossible nullish-test diagnostic remains authoritative.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-alias-literal",
+      "modules": {
+        "main": "function make(){const result=null ?? ({x:\"s\"});return result;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing impossible nullish-test diagnostic remains authoritative.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-let-literal",
+      "modules": {
+        "main": "function make(){let result=null ?? ({x:\"s\"});return result;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing impossible nullish-test diagnostic remains authoritative.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "or-literal-left",
+      "modules": {
+        "main": "function make(){return ({x:\"s\"}) || ({x:\"s\":=string});}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing unreachable-operand diagnostic retains precedence.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNREACHABLE_OPERAND",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "or-literal-left-selected",
+      "modules": {
+        "main": "function make(){return (({x:\"s\"}) || ({x:\"s\":=string})).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing unreachable-operand diagnostic retains precedence.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNREACHABLE_OPERAND",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-literal-left",
+      "modules": {
+        "main": "function make(){return ({x:\"s\"}) ?? ({x:\"s\":=string});}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing impossible nullish-test diagnostic remains authoritative.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-literal-left-selected",
+      "modules": {
+        "main": "function make(){return (({x:\"s\"}) ?? ({x:\"s\":=string})).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing impossible nullish-test diagnostic remains authoritative.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "and-typed-left-control",
+      "modules": {
+        "main": "function make(){const flag:true=true;return flag && ({x:\"s\"});}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "and-typed-left-alias",
+      "modules": {
+        "main": "function make(){const flag:true=true;const result=flag && ({x:\"s\"});return result;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "or-typed-left-control",
+      "modules": {
+        "main": "function make(){const flag:false=false;return flag || ({x:\"s\"});}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "or-typed-left-alias",
+      "modules": {
+        "main": "function make(){const flag:false=false;const result=flag || ({x:\"s\"});return result;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "coalesce-typed-left-control",
+      "modules": {
+        "main": "function make(){const flag:null=null;return flag ?? ({x:\"s\"});}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing impossible nullish-test diagnostic remains authoritative.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-typed-left-alias",
+      "modules": {
+        "main": "function make(){const flag:null=null;const result=flag ?? ({x:\"s\"});return result;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing impossible nullish-test diagnostic remains authoritative.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "and-typed-false-value",
+      "modules": {
+        "main": "function make(){const flag:false=false;return flag && ({x:\"s\"});}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing unreachable-operand diagnostic retains precedence.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNREACHABLE_OPERAND",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "or-typed-true-value",
+      "modules": {
+        "main": "function make(){const flag:true=true;return flag || ({x:\"s\"});}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing unreachable-operand diagnostic retains precedence.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNREACHABLE_OPERAND",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "and-typed-null-value",
+      "modules": {
+        "main": "function make(){const flag:null=null;return flag && ({x:\"s\"});}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing unreachable-operand diagnostic retains precedence.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNREACHABLE_OPERAND",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "and-excluded-typed-right",
+      "modules": {
+        "main": "function make(){return false && (\"s\":=string);}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing unreachable-operand diagnostic retains precedence.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNREACHABLE_OPERAND",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "and-null-literal",
+      "modules": {
+        "main": "function make(){return null && (\"s\":=string);}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing unreachable-operand diagnostic retains precedence.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNREACHABLE_OPERAND",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "or-string-literal-left",
+      "modules": {
+        "main": "function make(){return \"s\" || (\"t\":=string);}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing unreachable-operand diagnostic retains precedence.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNREACHABLE_OPERAND",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "or-equal-nested-left",
+      "modules": {
+        "main": "function make(){return ((Math.random()>0.5 ? {inner:{x:\"s\":=string}} : false) || {inner:{x:\"s\"}}).inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "or-equal-array-left",
+      "modules": {
+        "main": "function make(){return ((Math.random()>0.5 ? [\"s\":=string] : false) || [\"s\"])[0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "or-equal-nested-right",
+      "modules": {
+        "main": "function make(){return ((Math.random()>0.5 ? {inner:{x:\"s\"}} : false) || {inner:{x:\"s\":=string}}).inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "or-equal-array-right",
+      "modules": {
+        "main": "function make(){return ((Math.random()>0.5 ? [\"s\"] : false) || [\"s\":=string])[0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "or-equal-nested-neither",
+      "modules": {
+        "main": "function make(){return ((Math.random()>0.5 ? {inner:{x:\"s\"}} : false) || {inner:{x:\"s\"}}).inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "or-equal-array-neither",
+      "modules": {
+        "main": "function make(){return ((Math.random()>0.5 ? [\"s\"] : false) || [\"s\"])[0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "coalesce-equal-nested-left",
+      "modules": {
+        "main": "function make(){return ((Math.random()>0.5 ? {inner:{x:\"s\":=string}} : null) ?? {inner:{x:\"s\"}}).inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-equal-array-left",
+      "modules": {
+        "main": "function make(){return ((Math.random()>0.5 ? [\"s\":=string] : null) ?? [\"s\"])[0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-equal-nested-right",
+      "modules": {
+        "main": "function make(){return ((Math.random()>0.5 ? {inner:{x:\"s\"}} : null) ?? {inner:{x:\"s\":=string}}).inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-equal-array-right",
+      "modules": {
+        "main": "function make(){return ((Math.random()>0.5 ? [\"s\"] : null) ?? [\"s\":=string])[0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-equal-nested-neither",
+      "modules": {
+        "main": "function make(){return ((Math.random()>0.5 ? {inner:{x:\"s\"}} : null) ?? {inner:{x:\"s\"}}).inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "coalesce-equal-array-neither",
+      "modules": {
+        "main": "function make(){return ((Math.random()>0.5 ? [\"s\"] : null) ?? [\"s\"])[0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "and-unannotated-boolean-control",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5) && ({x:\"s\"});}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "and-declared-boolean-value",
+      "modules": {
+        "main": "function make(){const flag:boolean=Math.random()>0.5;return flag && ({x:\"s\"});}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "or-typed-scalar-right",
+      "modules": {
+        "main": "function make(){return false || (\"s\":=string);}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-typed-null-right",
+      "modules": {
+        "main": "function make(){return null ?? (null:=null);}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing impossible nullish-test diagnostic remains authoritative.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "or-erased-right",
+      "modules": {
+        "main": "function make(){return false || (\"s\":=any);}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "coalesce-erased-right",
+      "modules": {
+        "main": "function make(){return null ?? (\"s\":=any);}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The existing impossible nullish-test diagnostic remains authoritative.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "and-erased-control",
+      "modules": {
+        "main": "function make(){const flag:any=true;return flag && ({x:\"s\"});}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "private-call-right",
+      "modules": {
+        "main": "function make(){function producer(){return {x:\"s\"};}return true && producer();}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "published-call-right",
+      "modules": {
+        "main": "function make(){function producer(seed:number){return {x:\"s\"};}return true && producer(1);}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-published-right",
+      "modules": {
+        "main": "function make(){function producer<T:type>(seed:T){return {x:seed};}return (true && producer.<string>(\"s\")).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "imported-typed-control",
+      "modules": {
+        "dep": "export const flag:true=true;",
+        "main": "import {flag} from \"dep\";function make(){return flag && {x:\"s\"};}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "imported-typed-right",
+      "modules": {
+        "dep": "export const value:string=\"s\";",
+        "main": "import {value} from \"dep\";function make(){return true && value;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "logical-effects",
+      "modules": {
+        "main": "let trace=\"\";function left():false{trace+=\"L\";return false;}function right(){trace+=\"R\";return {x:\"s\"};}function make(){return left()&&right();}if(make()!==false||trace!==\"L\")throw new Error(\"short circuit\");"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "logical-identity",
+      "modules": {
+        "main": "const obj={x:\"s\"};function make(){return false||obj;}if(make()!==obj)throw new Error(\"identity\");"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "preserve-array-member-domain",
+      "modules": {
+        "main": "function make(seed:number){return (true && [{x:\"s\"},{x:1}])[0].x;}const n:string=make(1);"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-live-object",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5 ? null : ({x:\"s\"})) ?? ({x:\"s\"});}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "coalesce-live-alias-object",
+      "modules": {
+        "main": "function make(){const value=(Math.random()>0.5 ? null : ({x:\"s\"})) ?? ({x:\"s\"});return value;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "coalesce-live-array",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5 ? null : ([\"s\"])) ?? ([\"s\"]);}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "coalesce-live-alias-array",
+      "modules": {
+        "main": "function make(){const value=(Math.random()>0.5 ? null : ([\"s\"])) ?? ([\"s\"]);return value;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "coalesce-live-callable",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5 ? null : (()=>\"s\")) ?? (()=>\"s\");}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "coalesce-live-alias-callable",
+      "modules": {
+        "main": "function make(){const value=(Math.random()>0.5 ? null : (()=>\"s\")) ?? (()=>\"s\");return value;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "coalesce-live-string",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5 ? null : (\"s\")) ?? (\"s\");}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "coalesce-live-alias-string",
+      "modules": {
+        "main": "function make(){const value=(Math.random()>0.5 ? null : (\"s\")) ?? (\"s\");return value;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "and-filtered-annotation",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5 ? ({x:\"s\":=string}) : false) && \"s\";}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "and-filtered-annotation-alias",
+      "modules": {
+        "main": "function make(){const value=(Math.random()>0.5 ? ({x:\"s\":=string}) : false) && \"s\";return value;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "or-filtered-annotation",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5 ? (false:=false) : \"s\") || \"t\";}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "or-filtered-annotation-alias",
+      "modules": {
+        "main": "function make(){const value=(Math.random()>0.5 ? (false:=false) : \"s\") || \"t\";return value;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "coalesce-filtered-annotation",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5 ? (null:=null) : \"s\") ?? \"t\";}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "coalesce-filtered-annotation-alias",
+      "modules": {
+        "main": "function make(){const value=(Math.random()>0.5 ? (null:=null) : \"s\") ?? \"t\";return value;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "and-surviving-singleton",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5 ? (false:=false) : {x:\"s\"}) && \"s\";}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "or-surviving-singleton",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5 ? false : (\"s\":=\"s\")) || \"s\";}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-surviving-singleton",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5 ? null : (\"s\":=\"s\")) ?? \"s\";}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "and-array-filtered-annotation",
+      "modules": {
+        "main": "function make(){return ([false,{x:\"s\":=string}][Math.random()>0.5?0:1]) && \"s\";}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "singleton-conversion-direct",
+      "modules": {
+        "main": "function make(){return (\"s\":=\"s\");}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "null-conversion-direct",
+      "modules": {
+        "main": "function make(){return (null:=null);}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "erased-conversion-direct",
+      "modules": {
+        "main": "function make(){return (\"s\":=any);}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "and-declared-singleton-origin",
+      "modules": {
+        "main": "function make(){const seed:false=false;return (Math.random()>0.5 ? seed : {x:\"s\"}) && \"s\";}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "or-declared-singleton-origin",
+      "modules": {
+        "main": "function make(){const seed:\"s\"=\"s\";return (Math.random()>0.5 ? false : seed) || \"s\";}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "coalesce-declared-singleton-origin",
+      "modules": {
+        "main": "function make(){const seed:\"s\"=\"s\";return (Math.random()>0.5 ? null : seed) ?? \"s\";}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "private-logical-cycle",
+      "modules": {
+        "main": "function first(flag){return flag ? (true && second(false)) : {x:\"s\"};}function second(flag){return flag ? (false || first(false)) : {x:\"s\"};}function consume(){const n:number=first(true);}"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "typed-consumer-private-cycle",
+      "modules": {
+        "main": "function first(flag){return flag ? (true && second(false)) : {x:\"s\"};}function second(flag){return flag ? (false || first(false)) : {x:\"s\"};}function consume(seed:number){return first(true);}const n:number=consume(1);"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nested-logical-literal",
+      "modules": {
+        "main": "function make(){return true && (false || {x:\"s\"});}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nested-logical-typed",
+      "modules": {
+        "main": "function make(){return true && (false || {x:\"s\":=string});}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "shadowed-control",
+      "modules": {
+        "main": "const flag:true=true;function make(){const flag=false;return flag || {x:\"s\"};}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "imported-namespace-control",
+      "modules": {
+        "dep": "export const flag:true=true;",
+        "main": "import * as ns from \"dep\";function make(){return ns.flag && {x:\"s\"};}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "contextual-logical-callable",
+      "modules": {
+        "main": "const fn:(x:string)=>string=true && ((x)=>x);if(fn(\"ok\")!==\"ok\")throw new Error(\"value\");"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "logical-getter-effects",
+      "modules": {
+        "main": "let reads=0;function make(){return true && ({get x(){reads++;return \"s\";}}).x;}const s:string=make();if(s!==\"s\"||reads!==1)throw new Error(\"effects\");"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "published-left-member",
+      "modules": {
+        "main": "function make(){function producer(seed:number){return {x:\"s\"};}return ((Math.random()>0.5 ? producer(1) : null) ?? {x:\"s\"}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "private-left-member",
+      "modules": {
+        "main": "function make(){function producer(){return {x:\"s\"};}return ((Math.random()>0.5 ? producer() : null) ?? {x:\"s\"}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Only an operand that can supply the result retains declaration evidence; its controls and excluded operands do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    }
+  ]
+}
