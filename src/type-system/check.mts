@@ -3429,6 +3429,20 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
     };
+    // An instance initializer is a callable evaluated during construction,
+    // not while the class is declared. Its writes must enter the same
+    // captured-effect inventory as writes in an explicit function body.
+    // Computed names, decorators and static initializers keep their ordinary
+    // class-evaluation context.
+    if (n.type === 'FieldDefinition' && !n.static) {
+      for (const key of Object.keys(n)) {
+        if (key === 'parent' || key === 'location' || key === 'strict' || key === 'sourceText') continue;
+        if (key === 'Initializer') functionDepth += 1;
+        collectMutations(n[key]);
+        if (key === 'Initializer') functionDepth -= 1;
+      }
+      return;
+    }
     // A function-ish node is recognised by carrying a parameter list, which is
     // steadier than enumerating the eleven node types that are functions.
     const isFunctionLike = n.FormalParameters !== undefined || n.ArrowParameters !== undefined
@@ -3554,7 +3568,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (typeof n.type !== 'string') {
       return false;
     }
-    if (immediate && functionBoundary(node as ParseNode)) {
+    if (immediate && (functionBoundary(node as ParseNode)
+      || n.type === 'FieldDefinition' && !n.static)) {
       // Computed names and decorators run when the callable is created;
       // its parameters and body run only when it is invoked.
       return ['ClassElementName', 'PropertyName', 'Decorators'].some((key) => containsCall(n[key], true));
@@ -3572,7 +3587,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (Array.isArray(node)) return node.some((child) => containsPropertyRead(child, immediate));
     const value = node as Record<string, unknown>;
     if (typeof value.type !== 'string') return false;
-    if (immediate && functionBoundary(node as ParseNode)) {
+    if (immediate && (functionBoundary(node as ParseNode)
+      || value.type === 'FieldDefinition' && !value.static)) {
       return ['ClassElementName', 'PropertyName', 'Decorators'].some((key) => containsPropertyRead(value[key], true));
     }
     if (value.type === 'MatchObjectPattern' || value.type === 'MatchArrayPattern') return true;
@@ -3602,6 +3618,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       // Calls are handled by the captured-write inventory below.
       let child = place;
       for (let at = place.parent; at && at !== node; child = at, at = at.parent) {
+        if (at.type === 'FieldDefinition' && !at.static && at.Initializer === child) return false;
         if (!functionBoundary(at)) continue;
         const callable = at as unknown as Record<string, unknown>;
         const creation = ['ClassElementName', 'PropertyName', 'Decorators'].some((key) => {
@@ -31951,6 +31968,37 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return null;
   };
 
+  const withInstanceInitializerFlow = <T,>(action: () => T): T => {
+    const saved = captureFlow();
+    const live = flowLive;
+    const exits = flowExits;
+    // A field initializer runs in a later construction, not in the class's
+    // declaration-time flow. Its local effects cannot escape this check.
+    const stable: FlowFacts = new Map();
+    for (const [owner, facts] of saved) for (const [name, type] of facts) {
+      // Constness fixes an ordinary binding's value, not its object's members
+      // or a reference's referent. Import immutability alone is insufficient.
+      if (name.includes('.') || !owner.immutableNames.has(name)
+        || owner.bindingKinds.get(name)?.endsWith('-ref')
+        || owner === sourceFrame && importedNames.has(name)) continue;
+      if (!stable.has(owner)) stable.set(owner, new Map());
+      stable.get(owner)!.set(name, type);
+    }
+    restoreFlow(new Map());
+    flowLive = true;
+    flowExits = [];
+    try {
+      return withCaptureContracts(() => {
+        restoreFlow(stable);
+        return action();
+      });
+    } finally {
+      restoreFlow(saved);
+      flowLive = live;
+      flowExits = exits;
+    }
+  };
+
   const enterFunction = (params: readonly ParseNode[] | null | undefined, returnAnnotation: ParseNode.TypeAnnotation | null | undefined, body: ParseNode | readonly ParseNode[] | null | undefined, checkReturns: boolean, contextual?: readonly Known[], generatorType?: Known, resumable?: boolean, contextualReturn?: Known | null, contributions?: GeneratorContributions, rawOperatorResult = false) => {
     const formals = params ?? [];
     // Subtarget decorators are evaluated at declaration time, outside the
@@ -38560,52 +38608,56 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       }
       case 'FieldDefinition': {
         walkMemberName(n);
-        // #sec-declared-zero: `static default = ...` declares the class's zero.
-        // "The expression must be compile-time evaluable" and "It is a type
-        // error if the declared zero is not a value of the class." Neither was
-        // judged: `static default = 5` and `static default = () => 1` were
-        // registered as the zero at evaluation and every default-initialized
-        // binding of the class then held them.
-        //
-        // Evaluability is the same judgment every default takes
-        // (`checkDefaultEvaluability`); membership compares the initializer's
-        // Static Type with the class's own instance type where both are known,
-        // and defers to the run time's check where the class is generic or the
-        // initializer's type is not decided here (`new Box()` inside `class
-        // Box<T>` is the case the note on `new` below already stands down for).
-        const zeroKey = (n as { ClassElementName?: { type?: string, name?: string } }).ClassElementName;
-        if ((n as { static?: boolean }).static && zeroKey?.type === 'IdentifierName' && zeroKey.name === 'default' && n.Initializer) {
-          checkDefaultEvaluability(n.Initializer);
-          const owner = n.parent?.parent as ParseNode | undefined;
-          const ownerName = owner?.type === 'ClassDeclaration' || owner?.type === 'ClassExpression'
-            ? (owner as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name
-            : undefined;
-          const ownerParams = (owner as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } | undefined)?.TypeParameters?.TypeParameterList;
-          // A class EXPRESSION is judged from its own node, named or not:
-          // the rule is about the class body alone.
-          const instance = !(ownerParams && ownerParams.length > 0)
-            ? (owner?.type === 'ClassExpression' ? instanceTypeOf(owner) : ownerName ? classTypeOf(ownerName) : null) : null;
-          const zero = instance ? staticType(n.Initializer) : null;
-          if (instance && zero && zero.Kind !== 'any' && !mentionsTypeParameter(zero) && !IsAssignable(zero, instance)) {
-            reportType('rt-declared-zero', (node as ParseNode), 'the declared zero of $1 is not a value of it: $2', Value(ownerName ?? 'the class'), Value(displayType(zero)));
+        const checkInitializer = (): void => {
+          // #sec-declared-zero: `static default = ...` declares the class's zero.
+          // "The expression must be compile-time evaluable" and "It is a type
+          // error if the declared zero is not a value of the class." Neither was
+          // judged: `static default = 5` and `static default = () => 1` were
+          // registered as the zero at evaluation and every default-initialized
+          // binding of the class then held them.
+          //
+          // Evaluability is the same judgment every default takes
+          // (`checkDefaultEvaluability`); membership compares the initializer's
+          // Static Type with the class's own instance type where both are known,
+          // and defers to the run time's check where the class is generic or the
+          // initializer's type is not decided here (`new Box()` inside `class
+          // Box<T>` is the case the note on `new` below already stands down for).
+          const zeroKey = (n as { ClassElementName?: { type?: string, name?: string } }).ClassElementName;
+          if ((n as { static?: boolean }).static && zeroKey?.type === 'IdentifierName' && zeroKey.name === 'default' && n.Initializer) {
+            checkDefaultEvaluability(n.Initializer);
+            const owner = n.parent?.parent as ParseNode | undefined;
+            const ownerName = owner?.type === 'ClassDeclaration' || owner?.type === 'ClassExpression'
+              ? (owner as { BindingIdentifier?: { name?: string } | null }).BindingIdentifier?.name
+              : undefined;
+            const ownerParams = (owner as { TypeParameters?: { TypeParameterList?: readonly unknown[] } | null } | undefined)?.TypeParameters?.TypeParameterList;
+            // A class EXPRESSION is judged from its own node, named or not:
+            // the rule is about the class body alone.
+            const instance = !(ownerParams && ownerParams.length > 0)
+              ? (owner?.type === 'ClassExpression' ? instanceTypeOf(owner) : ownerName ? classTypeOf(ownerName) : null) : null;
+            const zero = instance ? staticType(n.Initializer) : null;
+            if (instance && zero && zero.Kind !== 'any' && !mentionsTypeParameter(zero) && !IsAssignable(zero, instance)) {
+              reportType('rt-declared-zero', (node as ParseNode), 'the declared zero of $1 is not a value of it: $2', Value(ownerName ?? 'the class'), Value(displayType(zero)));
+            }
           }
-        }
-        if (n.TypeAnnotation) {
-          const declared = resolveType(n.TypeAnnotation.Type);
-          if (n.Initializer) {
-            checkInitializerAssignable(n.Initializer, declared, false);
-          } else if (declared && !mentionsTypeParameter(declared) && !n.Decorators?.length) {
-            // #sec-typed-classes: a field without an initializer needs a
-            // default. check-pass.mts resolves this after metadata processing.
-            const written = n.TypeAnnotation.Type;
-            refuseClassWithoutDefault(declared as TypeRecord);
-            defaultsNeeded.push({
-              node: n, type: declared, display: displayType(declared),
-              annotationName: written.type === 'TypeReference' ? written.TypeName.IdentifierReference?.name : undefined,
-            });
+          if (n.TypeAnnotation) {
+            const declared = resolveType(n.TypeAnnotation.Type);
+            if (n.Initializer) {
+              checkInitializerAssignable(n.Initializer, declared, false);
+            } else if (declared && !mentionsTypeParameter(declared) && !n.Decorators?.length) {
+              // #sec-typed-classes: a field without an initializer needs a
+              // default. check-pass.mts resolves this after metadata processing.
+              const written = n.TypeAnnotation.Type;
+              refuseClassWithoutDefault(declared as TypeRecord);
+              defaultsNeeded.push({
+                node: n, type: declared, display: displayType(declared),
+                annotationName: written.type === 'TypeReference' ? written.TypeName.IdentifierReference?.name : undefined,
+              });
+            }
           }
-        }
-        walk(n.Initializer);
+          walk(n.Initializer);
+        };
+        if (!n.static && n.Initializer) withInstanceInitializerFlow(checkInitializer);
+        else checkInitializer();
         return;
       }
       case 'FunctionDeclaration':

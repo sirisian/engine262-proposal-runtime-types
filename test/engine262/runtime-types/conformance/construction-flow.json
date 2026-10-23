@@ -1,0 +1,913 @@
+{
+  "cases": [
+    {
+      "name": "original-construction-counter",
+      "modules": {
+        "main": "let gets=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){gets++;return this.text;}}if(gets!==0||fields!==0)throw new Error(\"checking executed source\");const e=new E();if(gets!==0||fields!==1)throw new Error(\"construction\");const q:string=e.value;if(gets!==1||q!==\"ok\")throw new Error(\"get\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Construction and later reads retain ordinary counter effects; a later consumer cannot change an earlier guard."
+    },
+    {
+      "name": "construction-counter-only",
+      "modules": {
+        "main": "let fields=0;class E{text:string=(fields++,\"ok\");}if(fields!==0)throw new Error(\"checking\");const e=new E();if(fields!==1)throw new Error(\"construction\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Construction and later reads retain ordinary counter effects; a later consumer cannot change an earlier guard."
+    },
+    {
+      "name": "construction-pair-fields",
+      "modules": {
+        "main": "let a=0;let fields=0;class E{text:string=(fields++,\"ok\");}if(a!==0||fields!==0)throw new Error(\"before\");const e=new E();if(fields!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Construction and later reads retain ordinary counter effects; a later consumer cannot change an earlier guard."
+    },
+    {
+      "name": "construction-pair-with-writer",
+      "modules": {
+        "main": "let a=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(a!==0||fields!==0)throw new Error(\"before\");const e=new E();if(fields!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Construction and later reads retain ordinary counter effects; a later consumer cannot change an earlier guard."
+    },
+    {
+      "name": "construction-pair-field-left",
+      "modules": {
+        "main": "let a=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(fields!==0||a!==0)throw new Error(\"before\");const e=new E();if(fields!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Construction and later reads retain ordinary counter effects; a later consumer cannot change an earlier guard."
+    },
+    {
+      "name": "construction-sequential",
+      "modules": {
+        "main": "let a=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(a!==0)throw new Error(\"before\");if(fields!==0)throw new Error(\"field before\");const e=new E();if(fields!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Construction and later reads retain ordinary counter effects; a later consumer cannot change an earlier guard."
+    },
+    {
+      "name": "construction-only-field-with-writer",
+      "modules": {
+        "main": "let a=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(fields!==0)throw new Error(\"before\");const e=new E();if(fields!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Construction and later reads retain ordinary counter effects; a later consumer cannot change an earlier guard."
+    },
+    {
+      "name": "construction-compound-after",
+      "modules": {
+        "main": "let a=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(a!==0||fields!==0)throw new Error(\"before\");const e=new E();if(a!==0||fields!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Construction and later reads retain ordinary counter effects; a later consumer cannot change an earlier guard."
+    },
+    {
+      "name": "construction-reversed-after",
+      "modules": {
+        "main": "let a=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(a!==0||fields!==0)throw new Error(\"before\");const e=new E();if(fields!==1||a!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Construction and later reads retain ordinary counter effects; a later consumer cannot change an earlier guard."
+    },
+    {
+      "name": "construction-single-after",
+      "modules": {
+        "main": "let a=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){a++;return this.text;}}if(a!==0||fields!==0)throw new Error(\"before\");const e=new E();if(fields!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Construction and later reads retain ordinary counter effects; a later consumer cannot change an earlier guard."
+    },
+    {
+      "name": "construction-typed-getter",
+      "modules": {
+        "main": "let gets=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){gets++;return this.text;}}if(gets!==0||fields!==0)throw new Error(\"before\");const e=new E();if(gets!==0||fields!==1)throw new Error(\"after\");const q:string=e.value;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Construction and later reads retain ordinary counter effects; a later consumer cannot change an earlier guard."
+    },
+    {
+      "name": "construction-inferred-getter",
+      "modules": {
+        "main": "let gets=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){gets++;return this.text;}}if(gets!==0||fields!==0)throw new Error(\"before\");const e=new E();if(gets!==0||fields!==1)throw new Error(\"after\");const q=e.value;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Construction and later reads retain ordinary counter effects; a later consumer cannot change an earlier guard."
+    },
+    {
+      "name": "construction-bare-getter",
+      "modules": {
+        "main": "let gets=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){gets++;return this.text;}}if(gets!==0||fields!==0)throw new Error(\"before\");const e=new E();if(gets!==0||fields!==1)throw new Error(\"after\");e.value;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Construction and later reads retain ordinary counter effects; a later consumer cannot change an earlier guard."
+    },
+    {
+      "name": "construction-typed-field",
+      "modules": {
+        "main": "let gets=0;let fields=0;class E{text:string=(fields++,\"ok\");get value(){gets++;return this.text;}}if(gets!==0||fields!==0)throw new Error(\"before\");const e=new E();if(gets!==0||fields!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Construction and later reads retain ordinary counter effects; a later consumer cannot change an earlier guard."
+    },
+    {
+      "name": "construction-annotated-getter",
+      "modules": {
+        "main": "let gets=0;let fields=0;class E{text:string=(fields++,\"ok\");get value():string{gets++;return this.text;}}if(gets!==0||fields!==0)throw new Error(\"before\");const e=new E();if(gets!==0||fields!==1)throw new Error(\"after\");const q:string=e.value;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Construction and later reads retain ordinary counter effects; a later consumer cannot change an earlier guard."
+    },
+    {
+      "name": "store-n++-field",
+      "modules": {
+        "main": "let n=0;class E{text:string=(n++,\"ok\");get value():string{return this.text;}}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "store-n++-getter",
+      "modules": {
+        "main": "let n=0;class E{text:string=(n++,\"ok\");get value():string{return this.text;}}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.value;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "store-++n-field",
+      "modules": {
+        "main": "let n=0;class E{text:string=(++n,\"ok\");get value():string{return this.text;}}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "store-++n-getter",
+      "modules": {
+        "main": "let n=0;class E{text:string=(++n,\"ok\");get value():string{return this.text;}}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.value;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "store-n+=1-field",
+      "modules": {
+        "main": "let n=0;class E{text:string=(n+=1,\"ok\");get value():string{return this.text;}}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "store-n+=1-getter",
+      "modules": {
+        "main": "let n=0;class E{text:string=(n+=1,\"ok\");get value():string{return this.text;}}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.value;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "store-n=1-field",
+      "modules": {
+        "main": "let n=0;class E{text:string=(n=1,\"ok\");get value():string{return this.text;}}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "store-n=1-getter",
+      "modules": {
+        "main": "let n=0;class E{text:string=(n=1,\"ok\");get value():string{return this.text;}}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.value;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "store-[n]=[1]-field",
+      "modules": {
+        "main": "let n=0;class E{text:string=([n]=[1],\"ok\");get value():string{return this.text;}}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "store-[n]=[1]-getter",
+      "modules": {
+        "main": "let n=0;class E{text:string=([n]=[1],\"ok\");get value():string{return this.text;}}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.value;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "store-({x:n}={x:1})-field",
+      "modules": {
+        "main": "let n=0;class E{text:string=(({x:n}={x:1}),\"ok\");get value():string{return this.text;}}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "store-({x:n}={x:1})-getter",
+      "modules": {
+        "main": "let n=0;class E{text:string=(({x:n}={x:1}),\"ok\");get value():string{return this.text;}}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.value;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "store-n||=1-field",
+      "modules": {
+        "main": "let n=0;class E{text:string=(n||=1,\"ok\");get value():string{return this.text;}}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "store-n||=1-getter",
+      "modules": {
+        "main": "let n=0;class E{text:string=(n||=1,\"ok\");get value():string{return this.text;}}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.value;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "store-n??=1-field",
+      "modules": {
+        "main": "let n=null;class E{text:string=(n??=1,\"ok\");get value():string{return this.text;}}if(n!==null)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "store-n??=1-getter",
+      "modules": {
+        "main": "let n=null;class E{text:string=(n??=1,\"ok\");get value():string{return this.text;}}if(n!==null)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.value;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "expression",
+      "modules": {
+        "main": "let n=0;const E=class {text:string=(n++,\"ok\");};if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "private",
+      "modules": {
+        "main": "let n=0;class E{#text:string=(n++,\"ok\");get text():string{return this.#text;}}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "inherited",
+      "modules": {
+        "main": "let n=0;class B{text:string=(n++,\"ok\");}class E extends B{}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "explicit-super",
+      "modules": {
+        "main": "let n=0;class B{text:string=(n++,\"ok\");}class E extends B{constructor(){super();}}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "generic",
+      "modules": {
+        "main": "let n=0;class E<T: type>{text:string=(n++,\"ok\");}if(n!==0)throw new Error(\"before\");const e=new E.<string>();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "alias",
+      "modules": {
+        "main": "let n=0;let ref r=n;class E{text:string=(r++,\"ok\");}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "alias-chain",
+      "modules": {
+        "main": "let n=0;let ref a=n;let ref r=a;class E{text:string=(r++,\"ok\");}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "constructor-arg",
+      "modules": {
+        "main": "let n=0;class E{constructor(x){}text:string=(n++,\"ok\");}if(n!==0)throw new Error(\"before\");const e=new E(2);if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "constructor-alias",
+      "modules": {
+        "main": "let n=0;class C{text:string=(n++,\"ok\");}const E=C;if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "computed-key",
+      "modules": {
+        "main": "let n=0;const k=\"text\";class E{[k]:string=(n++,\"ok\");}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "context-function",
+      "modules": {
+        "main": "function run(){let n=0;class E{text:string=(n++,\"ok\");get value():string{return this.text;}}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;}run();"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "context-arrow",
+      "modules": {
+        "main": "const run=()=>{let n=0;class E{text:string=(n++,\"ok\");get value():string{return this.text;}}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;};run();"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "context-block",
+      "modules": {
+        "main": "{let n=0;class E{text:string=(n++,\"ok\");get value():string{return this.text;}}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;}"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "context-loop",
+      "modules": {
+        "main": "for(let i=0;i<2;i++){let n=0;class E{text:string=(n++,\"ok\");get value():string{return this.text;}}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;}"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "two-instances",
+      "modules": {
+        "main": "let n=0;class E{text:string=(n++,\"ok\");}if(n!==0)throw new Error(\"before\");const a=new E();if(n!==1)throw new Error(\"one\");const b=new E();if(n!==2)throw new Error(\"two\");const x:string=a.text;const y:string=b.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "loop-construction",
+      "modules": {
+        "main": "let n=0;class E{text:string=(n++,\"ok\");}if(n!==0)throw new Error(\"before\");for(let i=0;i<2;i++){const e=new E();const q:string=e.text;}if(n!==2)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "catch-construction",
+      "modules": {
+        "main": "let n=0;function fail(){throw new Error(\"field\");}class E{text:string=(n++,fail());}if(n!==0)throw new Error(\"before\");try{new E();}catch(e){if(n!==1)throw new Error(\"after\");}"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "finally-construction",
+      "modules": {
+        "main": "let n=0;class E{text:string=(n++,\"ok\");}if(n!==0)throw new Error(\"before\");try{}finally{const e=new E();const q:string=e.text;}if(n!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "initializer-getter",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return \"ok\";}};class E{text:string=o.x;}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "initializer-reference-read",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return \"ok\";}};let ref r=o.x;class E{text:string=r;}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "declaration-preserves",
+      "modules": {
+        "main": "let n=0;if(n!==0)throw new Error(\"before\");class E{text:string=(n++,\"ok\");}if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "The module has no own proposal syntax: its typed class is a separate checked unit. No narrowing diagnostic is required outside checked code."
+    },
+    {
+      "name": "declaration-reference-preserves",
+      "modules": {
+        "main": "let n=0;const o={get x(){n++;return \"ok\";}};let ref r=o.x;if(n!==0)throw new Error(\"before\");class E{text:string=r;}if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "Checking a later instance read does not invoke it during class declaration."
+    },
+    {
+      "name": "immutable-preserves",
+      "modules": {
+        "main": "const n:number=0;class E{text:string=\"ok\";}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "An unrelated immutable ordinary binding retains its contract."
+    },
+    {
+      "name": "shadowed-write-preserves",
+      "modules": {
+        "main": "let n=0;class E{text:string=(()=>{let n=0;n++;return \"ok\";})();}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==0)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "A write to an initializer-local shadow does not change the outer binding."
+    },
+    {
+      "name": "static-initializer",
+      "modules": {
+        "main": "let n=0;if(n!==0)throw new Error(\"before\");class E{static text:string=(n++,\"ok\");}if(n!==1)throw new Error(\"after\");const q:string=E.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "computed-name-evaluation",
+      "modules": {
+        "main": "let n=0;if(n!==0)throw new Error(\"before\");class E{[(n++,\"text\")]:string=\"ok\";}if(n!==1)throw new Error(\"after\");const e=new E();const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "instance-body-capture",
+      "modules": {
+        "main": "let n=0;if(n!==0)throw new Error(\"before\");class E{text:string=(n===0?\"zero\":\"later\");}n=1;const e=new E();if(e.text!==\"later\")throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "initializer-type-error",
+      "modules": {
+        "main": "class E{text:string=42;}const e=new E();"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_ASSIGNABILITY",
+          "phase": "static"
+        }
+      },
+      "reason": "An incompatible written field initializer is rejected before source execution."
+    },
+    {
+      "name": "initializer-rebinding",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;function redirect(){ref r=y;return \"ok\";}class E{text:string=redirect();}if(r!==1)throw new Error(\"before\");const e=new E();if(r!==2)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "import-callback",
+      "modules": {
+        "dep": "export const hooks={run(){}};export class E{text:string=(hooks.run(),\"ok\");}",
+        "main": "import {E,hooks} from \"dep\";let n=0;hooks.run=()=>{n++;};if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Instance initializer writes invalidate affected captured facts when construction can run them."
+    },
+    {
+      "name": "checked-declaration-preserves",
+      "modules": {
+        "main": "type Audit = number;let n=0;if(n!==0)throw new Error(\"before\");class E{text:string=(n++,\"ok\");}if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "In a checked enclosing module, declaring an instance initializer preserves the preceding counter fact."
+    },
+    {
+      "name": "field-read-after-rebinding",
+      "modules": {
+        "main": "let x=1,y=2;let ref r=x;if(r!==1)throw new Error(\"before\");class E{text:string=(r===1?\"one\":\"two\");}ref r=y;const e=new E();if(e.text!==\"two\")throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A separately checked instance initializer uses captured contracts and retains ordinary construction effects."
+    },
+    {
+      "name": "immutable-initializer-diagnostic",
+      "modules": {
+        "main": "const n:number=1;class E{text:string=(n===1?\"yes\":\"no\");}"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "A separately checked instance initializer uses captured contracts and retains ordinary construction effects."
+    },
+    {
+      "name": "repeated-field-effects",
+      "modules": {
+        "main": "let n=0;class E{a:string=(n++,\"a\");b:string=(n++,\"b\");}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==2)throw new Error(\"after\");const q:string=e.b;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A separately checked instance initializer uses captured contracts and retains ordinary construction effects."
+    },
+    {
+      "name": "field-order-runtime",
+      "modules": {
+        "main": "let order=\"\";class B{a:string=(order+=\"a\",\"a\");}class E extends B{b:string=(order+=\"b\",\"b\");constructor(){super();order+=\"c\";}}const e=new E();if(JSON.stringify([order])!==\"[\\\"abc\\\"]\")throw new Error(\"order\");const q:string=e.b;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A separately checked instance initializer uses captured contracts and retains ordinary construction effects."
+    },
+    {
+      "name": "field-do-block",
+      "modules": {
+        "main": "let n=0;class E{text:string=do {n++;\"ok\";};}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==1)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A separately checked instance initializer uses captured contracts and retains ordinary construction effects."
+    },
+    {
+      "name": "no-construction-loop-preserves",
+      "modules": {
+        "main": "let n=0;if(n!==0)throw new Error(\"before\");for(let i=0;i<2;i++){class E{text:string=(n++,\"ok\");}}if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "The enclosing module is unchecked; the nested typed class does not trigger its narrowing diagnostics."
+    },
+    {
+      "name": "checked-no-construction-loop-preserves",
+      "modules": {
+        "main": "type Audit = number;let n=0;if(n!==0)throw new Error(\"before\");for(let i=0;i<2;i++){class E{text:string=(n++,\"ok\");}}if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "A loop or finalizer that only declares a class does not execute its instance initializer."
+    },
+    {
+      "name": "no-construction-finally-preserves",
+      "modules": {
+        "main": "let n=0;if(n!==0)throw new Error(\"before\");try{}finally{class E{text:string=(n++,\"ok\");}}if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "The enclosing module is unchecked; the nested typed class does not trigger its narrowing diagnostics."
+    },
+    {
+      "name": "checked-no-construction-finally-preserves",
+      "modules": {
+        "main": "type Audit = number;let n=0;if(n!==0)throw new Error(\"before\");try{}finally{class E{text:string=(n++,\"ok\");}}if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "A loop or finalizer that only declares a class does not execute its instance initializer."
+    },
+    {
+      "name": "no-construction-shadow-preserves",
+      "modules": {
+        "main": "let n=0;class E{text:string=do {let n=0;n++;\"ok\";};}if(n!==0)throw new Error(\"before\");const e=new E();if(n!==0)throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "A separately checked instance initializer uses captured contracts and retains ordinary construction effects."
+    },
+    {
+      "name": "later-getter-capture",
+      "modules": {
+        "main": "let n=0;if(n!==0)throw new Error(\"before\");class E{text:string=(n===0?\"zero\":\"later\");get value():string{return this.text;}}n=1;const e=new E();if(e.value!==\"later\")throw new Error(\"after\");const q:string=e.value;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A separately checked instance initializer uses captured contracts and retains ordinary construction effects."
+    },
+    {
+      "name": "escaped-class-capture",
+      "modules": {
+        "main": "function make(){let n=0;if(n!==0)throw new Error(\"before\");class E{text:string=(n===0?\"zero\":\"later\");}n=1;return E;}const E=make();const e=new E();if(e.text!==\"later\")throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A separately checked instance initializer uses captured contracts and retains ordinary construction effects."
+    },
+    {
+      "name": "getter-declaration-loop",
+      "modules": {
+        "main": "type Audit=number;let n=0;const o={get x(){n++;return \"ok\";}};let ref r=o.x;if(n!==0)throw new Error(\"before\");for(let i=0;i<2;i++){class E{text:string=r;}}if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "A separately checked instance initializer uses captured contracts and retains ordinary construction effects."
+    },
+    {
+      "name": "call-declaration-loop",
+      "modules": {
+        "main": "type Audit=number;let n=0;function field(){n++;return \"ok\";}if(n!==0)throw new Error(\"before\");for(let i=0;i<2;i++){class E{text:string=field();}}if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "A separately checked instance initializer uses captured contracts and retains ordinary construction effects."
+    },
+    {
+      "name": "const-reference-capture",
+      "modules": {
+        "main": "let x=1,y=2;let ref a=x;const ref r=a;if(r!==1)throw new Error(\"before\");class E{text:string=(r===1?\"one\":\"two\");}ref a=y;const e=new E();if(e.text!==\"two\")throw new Error(\"after\");const q:string=e.text;"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "A separately checked instance initializer uses captured contracts and retains ordinary construction effects."
+    },
+    {
+      "name": "checked-skip-construction",
+      "modules": {
+        "main": "type Audit=number;let n=0;class E{text:string=(n++,\"ok\");}if(n!==0)throw new Error(\"before\");true?0:new E();if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "A separately checked instance initializer uses captured contracts and retains ordinary construction effects."
+    },
+    {
+      "name": "unchecked-import-ordinary-data-preserves",
+      "modules": {
+        "dep": "export const value:number=1;",
+        "main": "import {value} from \"dep\";if(value!==1)throw new Error(\"before\");const v=value;if(value!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Importing typed bindings does not add proposal syntax to the importing module; the original fulfillment is correct."
+    },
+    {
+      "name": "checked-import-ordinary-data-preserves",
+      "modules": {
+        "dep": "export const value:number=1;",
+        "main": "type Audit = number;import {value} from \"dep\";if(value!==1)throw new Error(\"before\");const v=value;if(value!==1)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "An explicit top-level type declaration activates the existing narrowing diagnostics for the whole module."
+    },
+    {
+      "name": "unchecked-import-shadow-preserves",
+      "modules": {
+        "dep": "export const hooks={run(){}};const o={get x(){hooks.run();return 1;}};export let ref r=o.x;",
+        "main": "import {r,hooks} from \"dep\";let n=0;hooks.run=()=>{n++;};if(n!==0)throw new Error(\"before\");{let r=1;const v=r;}if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "fulfilled"
+      },
+      "reason": "Importing typed bindings does not add proposal syntax to the importing module; the original fulfillment is correct."
+    },
+    {
+      "name": "checked-import-shadow-preserves",
+      "modules": {
+        "dep": "export const hooks={run(){}};const o={get x(){hooks.run();return 1;}};export let ref r=o.x;",
+        "main": "type Audit = number;import {r,hooks} from \"dep\";let n=0;hooks.run=()=>{n++;};if(n!==0)throw new Error(\"before\");{let r=1;const v=r;}if(n!==0)throw new Error(\"after\");"
+      },
+      "expected": {
+        "status": "rejected",
+        "errorClass": "StaticTypeError",
+        "bodyEntries": [],
+        "diagnostic": {
+          "code": "RT_IMPOSSIBLE_TEST",
+          "phase": "static"
+        }
+      },
+      "reason": "An explicit top-level type declaration activates the existing narrowing diagnostics for the whole module."
+    }
+  ]
+}
