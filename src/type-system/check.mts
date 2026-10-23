@@ -1277,15 +1277,22 @@ const publishedNarrowings = new WeakMap<object, Pick<SignatureRecord, 'Return' |
 // different type origin, such as an explicit callable storage annotation.
 const declaredCallableResults = new WeakMap<SignatureRecord, boolean>();
 const baselineGeneratorSignatures = new WeakSet<object>();
-const publishedCallableResults = new WeakSet<object>();
+const independentResultContracts = new WeakSet<object>();
+const literalMemberReadAnchors = new WeakMap<object, ReadonlyMap<string | SymbolValue, boolean>>();
+const selectedMemberAnchors = new WeakMap<object, boolean>();
+const contributionAlternatives = new WeakMap<object, readonly TypeRecord[]>();
+type LiteralArrayContribution = { type: TypeRecord, anchored: boolean };
+const literalArrayReadAnchors = new WeakMap<object, {
+  prefix: readonly LiteralArrayContribution[], tail?: readonly LiteralArrayContribution[],
+}>();
 
-/** A published result supplies evidence independently of the returned item. */
-function retainPublishedCallableResult(type: TypeRecord | null): TypeRecord | null {
-  if (type?.Kind !== 'function') return type;
+/** An established result supplies evidence independently of its literal origin. */
+function retainIndependentResultContract(type: TypeRecord | null): TypeRecord | null {
+  if (!type || !['function', 'object', 'array', 'tuple'].includes(type.Kind)) return type;
   // Do not mark the item's shared type: another read of its declaration may
   // still have no participating contract. This metadata belongs to this query.
   const result = { ...type };
-  publishedCallableResults.add(result);
+  independentResultContracts.add(result);
   return result;
 }
 
@@ -6611,12 +6618,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (range) return range;
     if (typeof key !== 'string') return null;
     if (receiver.Kind === 'array') {
-      if (key === 'length' || key === 'capacity') return indexTypeRecord();
+      if (key === 'length' || key === 'capacity') return literalArrayLengthType(receiver, indexTypeRecord());
       if (!/^(0|[1-9][0-9]*)$/.test(key)) return null;
       const index = BigInt(key);
       if (index >= 2n ** 64n) return null;
       if (typeof receiver.Extent === 'number' && index >= BigInt(receiver.Extent)) return null;
-      return receiver.Element;
+      return literalArrayReadType(receiver, index, receiver.Element);
     }
     if (receiver.Kind === 'tuple') {
       // Tuple storage is an ordinary Array with per-position boundaries. Its
@@ -6640,7 +6647,18 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
 
   /** Declared member reads use the same contract for String and Symbol keys. */
-  const memberReadType = (type: Known, key: string | SymbolValue, forDelete = false): Known => {
+  const memberReadType = (type: Known, key: string | SymbolValue, forDelete = false, useOrigins = true): Known => {
+    const alternatives = useOrigins && type && contributionAlternatives.get(type);
+    if (alternatives) {
+      // Origins determine evidence, not a narrower Static Type. In particular,
+      // selecting one literal-array position keeps its uniform element domain.
+      const read = memberReadType(type, key, forDelete, false);
+      if (!read) return null;
+      const origins = alternatives.map((arm) => memberReadType(arm, key, forDelete));
+      const result = retainContributionAlternatives(read, origins.filter((origin): origin is TypeRecord => !!origin));
+      return selectedMemberType(result, origins.some((origin) => !!origin
+        && (selectedMemberAnchors.get(origin) ?? origin.Kind !== 'any')));
+    }
     // #sec-typed-string-properties: an index within a literal String's length is
     // its own fixed character. Nothing is claimed past the end, where a read
     // reaches `String.prototype`.
@@ -6659,7 +6677,10 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       const property = shape.Properties.find((candidate) => candidate.key === key);
       if (property) {
         const read = inferredPropertyType(property);
-        return property.optional ? joinTypes(read, undefinedType) : read;
+        const result = property.optional ? joinTypes(read, undefinedType) : read;
+        const members = literalMemberReadAnchors.get(shape);
+        return members ? selectedMemberType(result, members.get(key) ?? false)
+          : selectedMemberType(retainIndependentResultContract(result), true);
       }
       return shape.IndexSignatures.find((signature) => keyAdmittedBy(key, signature.Key))?.Value ?? null;
     };
@@ -6668,7 +6689,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         ?? collectionMemberType(arm, key) ?? propertyType(structureOf(arm))
         ?? (typeof key === 'string' ? vectorAccessorType(arm, key) ?? VectorMaskMethodSignature(arm, key) : null));
       if (types.every((type) => type !== null)) {
-        return CanonicalizeType({ Kind: 'union', Members: types as TypeRecord[] });
+        return joinMemberReads(types);
       }
       // An undeclared key on every arm remains an ordinary dynamic read.
       //
@@ -18885,6 +18906,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       if (Members.some((member, index) => member !== type.Members[index])) result = { ...type, Members };
     }
     seen.set(type, result);
+    if (selectedMemberAnchors.has(type)) selectedMemberAnchors.set(result, selectedMemberAnchors.get(type)!);
     return result;
   };
   const staticType = (node: ParseNode): Known => withPatternScope(node, () => {
@@ -19613,7 +19635,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (!asCallee) pendingStoredApplications.set(specialization, Signatures.length === 1 ? pendingApplications : []);
         if (pending) return null;
         const result = { ...base, Signatures };
-        if (publishedCallableResults.has(base)) publishedCallableResults.add(result);
+        if (independentResultContracts.has(base)) independentResultContracts.add(result);
         return result;
       }
       case 'ObjectLiteral':
@@ -19647,11 +19669,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         let anchored = false;
         const members: TypeRecord[] = [];
+        const prefix: LiteralArrayContribution[] = [];
+        let tail: LiteralArrayContribution[] | undefined;
         for (const el of elements) {
           if (!el || typeof el !== 'object') {
             continue;
           }
           let t: Known;
+          let elementAnchor = false;
+          let positions: readonly TypeRecord[] | undefined;
           if (el.type === 'Elision') {
             t = makePrimitive('undefined');
           } else if (el.type === 'SpreadElement') {
@@ -19668,19 +19694,24 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const completion = CreateTypeDiagnostic('rt-iterable-required', node, diagnosticPhase, 'a value of $1 is not iterable', Value(displayType(spread as TypeRecord))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
-            t = StaticIterationContribution(spread, structureOf).element;
+            const contribution = StaticIterationContribution(spread, structureOf);
+            t = contribution.element;
+            positions = contribution.positions;
+            if (!positions) tail ??= [];
             // Storage alone does not constrain a replaceable iterator. Retain
             // provenance only when that protocol supplies a known contribution.
             if (t && t.Kind !== 'any') {
-              anchored ||= derivesFromDeclaration(el.AssignmentExpression, spread);
+              elementAnchor = derivesFromDeclaration(el.AssignmentExpression, spread);
             }
           } else {
             t = staticType(el);
-            anchored ||= derivesFromDeclaration(el, t);
+            elementAnchor = derivesFromDeclaration(el, t);
           }
           if (!t || t.Kind === 'any') {
             return null;
           }
+          anchored ||= elementAnchor;
+          for (const type of positions ?? [t]) (tail ?? prefix).push({ type, anchored: elementAnchor });
           const widened = widen(t);
           if (!members.some((m) => SameType(m, widened))) {
             members.push(widened);
@@ -19691,6 +19722,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
         const element = members.length === 1 ? members[0]! : CanonicalizeType({ Kind: 'union', Members: members });
         const result: TypeRecord = { Kind: 'array', Element: element, Extent: 'dynamic' };
+        literalArrayReadAnchors.set(result, { prefix, tail });
         if (anchored) literalContractAnchors.add(result);
         return result;
       }
@@ -20205,7 +20237,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (declaredOrPublished && bindings.size > 0) {
                 const result = substituteFreeTypeParameters(declaredOrPublished, bindings, only.TypeParameters?.map((parameter) => parameter.Declaration));
                 return only.Return || only.InferredReturn && !baselineGeneratorSignatures.has(only)
-                  ? retainPublishedCallableResult(result) : result;
+                  ? retainIndependentResultContract(result) : result;
               }
             }
           }
@@ -20267,7 +20299,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 }
               }
             }
-            return retainPublishedCallableResult(only.Return ?? only.InferredReturn ?? null);
+            return retainIndependentResultContract(only.Return ?? only.InferredReturn ?? null);
           }
           if (inferenceDepth > 0) {
             // Seed a recursive reference only before its first answer. A
@@ -20353,6 +20385,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       case 'MemberExpression': {
         const namespaceClass = namespaceClassOrigin(node);
         if (namespaceClass && !namespaceClass.bounded) return selectedConstructorObject(namespaceClass);
+        // A namespace selects the exporting binding; its object spelling is
+        // not a new independent annotation for an inferred literal contract.
+        const exported = importedNamespaceMember(node);
+        if (exported?.BindingName instanceof JSStringValue && 'ECMAScriptCode' in exported.Module) {
+          const type = moduleExportedTypes.get(exported.Module.ECMAScriptCode as object)?.get(exported.BindingName.stringValue());
+          if (type) return type;
+        }
         const capacity = capacityContract(node);
         if (capacity) return capacity;
         if (checkMemberReceiver(node)) return neverType;
@@ -20413,8 +20452,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const keys = memberKeys(m);
             if (keys?.length) {
               const reads = keys.map((candidate) => memberReadType(base, candidate));
-              return reads.every((read) => read !== null)
-                ? CanonicalizeType({ Kind: 'union', Members: reads as TypeRecord[] }) : null;
+              return joinMemberReads(reads);
             }
           }
         }
@@ -20562,9 +20600,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
                 receiverNode = (receiverNode as unknown as { Expression?: ParseNode }).Expression;
               }
               if (name === 'length' && receiverNode?.type === 'ArrayLiteral') {
-                return makePrimitive('number') as Known;
+                return selectedMemberType(makePrimitive('number'), false);
               }
-              return indexTypeRecord();
+              return literalArrayLengthType(receiver, indexTypeRecord());
             }
             const sig = ArrayMethodSignature(name, receiver.Element, receiver);
             if (sig) {
@@ -20815,7 +20853,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               const completion = CreateTypeDiagnostic('rt-index-signature', node, diagnosticPhase, '$1 is not an index of $2', Value(String(index)), Value(displayType(receiver))) as ThrowCompletion;
               errors.push(completion.Value as ObjectValue);
             }
-            return receiver.Element;
+            const keys = index === null ? memberKeys(m) : undefined;
+            if (keys?.length && keys.every((key) => typeof key === 'string' && /^(0|[1-9][0-9]*)$/.test(key))) {
+              return joinMemberReads(keys.map((key) => literalArrayReadType(receiver, BigInt(key as string), receiver.Element)));
+            }
+            return literalArrayReadType(receiver, index, receiver.Element);
           }
           // A TUPLE states its positions as exactly as a fixed extent states its
           // length, so the same judgment applies. A tuple WITH A REST has no
@@ -21867,7 +21909,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (!a || !b) {
           return null;
         }
-        return joinTypes(a, b);
+        return retainContributionAlternatives(joinTypes(a, b), [a, b]);
       }
       default:
         return null; // ~any~
@@ -23005,6 +23047,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         : wantedMember ? declaredAnchor(wantedMember) : derivesFromDeclaration(prop.AssignmentExpression, memberType) });
     }
     const result = { Kind: 'object', Properties, IndexSignatures: [] } as unknown as TypeRecord;
+    literalMemberReadAnchors.set(result, new Map([...memberAnchors].map(([key, member]) => [key, member.read])));
     if ([...memberAnchors.values()].some((member) => member.read || member.write)) literalContractAnchors.add(result);
     return result;
   };
@@ -28774,6 +28817,64 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // under different contexts. A private approximation never creates an anchor.
   const literalContractAnchors = new WeakSet<object>();
 
+  /** Keep the selected value's evidence separate from equal structural types. */
+  const selectedMemberType = (type: Known, anchored: boolean): Known => {
+    if (!type) return null;
+    const result = { ...type };
+    selectedMemberAnchors.set(result, anchored);
+    const members = literalMemberReadAnchors.get(type);
+    if (members) literalMemberReadAnchors.set(result, members);
+    const array = literalArrayReadAnchors.get(type);
+    if (array) literalArrayReadAnchors.set(result, array);
+    const alternatives = contributionAlternatives.get(type);
+    if (alternatives) contributionAlternatives.set(result, alternatives);
+    if (literalContractAnchors.has(type)) literalContractAnchors.add(result);
+    if (independentResultContracts.has(type)) independentResultContracts.add(result);
+    return result;
+  };
+
+  const retainContributionAlternatives = (type: TypeRecord, alternatives: readonly TypeRecord[]): TypeRecord => {
+    // Structural canonicalization may select one of two equal shapes. Their
+    // member evidence is still distinct, including at the next nested read.
+    const contributing = alternatives.filter((arm) => arm.Kind !== 'union' || arm.Members.length !== 0);
+    if (!contributing.length) return type;
+    const result = { ...type };
+    contributionAlternatives.set(result, contributing);
+    if (contributing.some((arm) => literalContractAnchors.has(arm))) literalContractAnchors.add(result);
+    if (contributing.some((arm) => independentResultContracts.has(arm))) independentResultContracts.add(result);
+    return result;
+  };
+
+  const joinMemberReads = (reads: readonly Known[]): Known => {
+    if (reads.some((read) => !read)) return null;
+    // An impossible recursive arm contributes no value, not an unknown read.
+    const types = (reads as TypeRecord[]).filter((read) => read.Kind !== 'union' || read.Members.length !== 0);
+    if (!types.length) return neverType;
+    const type = CanonicalizeType({ Kind: 'union', Members: types });
+    const result = retainContributionAlternatives(type, types);
+    return selectedMemberType(result, types.some((read) => selectedMemberAnchors.get(read) ?? read.Kind !== 'any'));
+  };
+
+  const literalArrayReadType = (receiver: TypeRecord, index: number | bigint | null, type: Known): Known => {
+    const alternatives = contributionAlternatives.get(receiver);
+    if (alternatives) return joinMemberReads(alternatives.map((arm) => literalArrayReadType(arm, index, type)));
+    const array = literalArrayReadAnchors.get(receiver);
+    if (!type) return null;
+    if (!array) return selectedMemberType(retainIndependentResultContract(type), true);
+    const position = index === null ? undefined : Number(index);
+    const sources = position === undefined ? [...array.prefix, ...array.tail ?? []]
+      : Number.isInteger(position) && position >= 0 ? position < array.prefix.length
+        ? [array.prefix[position]!] : array.tail ?? [] : [];
+    const result = sources.length ? retainContributionAlternatives(type, sources.map((source) => source.type)) : type;
+    return selectedMemberType(result, sources.some((source) => source.anchored));
+  };
+
+  const literalArrayLengthType = (receiver: TypeRecord, type: TypeRecord): Known => {
+    const alternatives = contributionAlternatives.get(receiver);
+    if (alternatives) return joinMemberReads(alternatives.map((arm) => literalArrayLengthType(arm, type)));
+    return selectedMemberType(type, !literalArrayReadAnchors.has(receiver));
+  };
+
   /**
    * Whether a TYPE has exactly one value: a ~literal~, or the ~primitive~
    * `null` or `undefined` (#sec-null-and-undefined-types gives those two
@@ -28787,7 +28888,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /** A declaration name does not itself annotate its callable contract. */
   const namedCallableProvenance = (type: Known): boolean | undefined => {
-    if (type && publishedCallableResults.has(type)) return true;
+    if (type && independentResultContracts.has(type)) return true;
     if (type?.Kind !== 'function' || !type.Signatures.length
         || !type.Signatures.every((signature) => declaredCallableResults.has(signature))) return undefined;
     const known = (position: Known): boolean => !!position && position.Kind !== 'any';
@@ -28824,6 +28925,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
    */
   const derivesFromDeclaration = (expr: ParseNode | null | undefined, t: { Kind?: string, Name?: string } | null | undefined): boolean => {
     expr = expr ? patternExpression(expr) : expr;
+    if (expr?.type === 'MemberExpression' && t && selectedMemberAnchors.has(t)) return selectedMemberAnchors.get(t)!;
     if (expr?.type === 'IdentifierReference') {
       for (let i = frames.length - 1; i >= 0; i -= 1) {
         const anchor = inferenceBindingAnchors.get(frames[i])?.get(expr.name);
@@ -30889,6 +30991,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             ?? (expr as { ArrowParameters?: readonly ParseNode[] }).ArrowParameters ?? [])
             .some((p) => !!(p as { TypeAnnotation?: unknown }).TypeAnnotation);
       case 'MemberExpression':
+        if (selectedMemberAnchors.has(t)) return selectedMemberAnchors.get(t)!;
         if (importedNamespaceMember(expr)) {
           const anchored = namedCallableProvenance(t);
           if (anchored !== undefined) return anchored;

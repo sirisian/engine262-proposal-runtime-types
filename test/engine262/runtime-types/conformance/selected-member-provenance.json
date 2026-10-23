@@ -1,0 +1,1400 @@
+{
+  "description": "Independent requirements for selected-member contribution provenance; unrelated members and control inputs do not annotate the selected value.",
+  "cases": [
+    {
+      "name": "literal-dot",
+      "modules": {
+        "main": "function make(){return ({x:\"s\"}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "literal-bracket",
+      "modules": {
+        "main": "function make(){return ({x:\"s\"})[\"x\"];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nested-literal",
+      "modules": {
+        "main": "function make(){return ({inner:{x:\"s\"}}).inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "unrelated-typed",
+      "modules": {
+        "main": "function make(){return ({seed:1:=number,x:\"s\"}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nested-unrelated",
+      "modules": {
+        "main": "function make(){return ({inner:{seed:1:=number,x:\"s\"}}).inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "overwritten",
+      "modules": {
+        "main": "function make(){return ({x:\"s\":=string,x:\"s\"}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "primitive-spread-replaces",
+      "modules": {
+        "main": "function make(){return ({0:\"s\":=string,...\"s\"})[0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "literal-method",
+      "modules": {
+        "main": "function make(){return ({m(){return \"s\";}}).m;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "setter-only",
+      "modules": {
+        "main": "function make(){return ({set x(value:string){}}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "getter-erased",
+      "modules": {
+        "main": "function make(){return ({get x():any{return \"s\";}}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "literal-array",
+      "modules": {
+        "main": "function make(){return [\"s\"][0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "array-unrelated",
+      "modules": {
+        "main": "function make(){return [\"s\", \"t\":=string][0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "array-length",
+      "modules": {
+        "main": "function make(){return [\"s\"].length;}const n:()=>void=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "array-nested-object",
+      "modules": {
+        "main": "function make(){return [{x:\"s\"}][0].x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed-member",
+      "modules": {
+        "main": "function make(){return ({x:\"s\":=string}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "declared-member",
+      "modules": {
+        "main": "function make(){return ({(x:string):\"s\"}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed-nested",
+      "modules": {
+        "main": "function make(){return ({inner:{x:\"s\":=string}}).inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed-method",
+      "modules": {
+        "main": "function make(){return ({m():string{return \"s\";}}).m;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed-getter",
+      "modules": {
+        "main": "function make(){return ({get x():string{return \"s\";}}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "inferred-getter",
+      "modules": {
+        "main": "function make(){return ({get x(){const s:string=\"s\";return s;}}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "replacement-typed",
+      "modules": {
+        "main": "function make(){return ({x:\"s\",x:\"s\":=string}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed-array-index",
+      "modules": {
+        "main": "function make(){return [\"s\":=string][0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "alias-const",
+      "modules": {
+        "main": "function make(){const box={seed:\"tag\":=string,x:\"s\"};return box.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "alias-typed-const",
+      "modules": {
+        "main": "function make(){const box={seed:\"tag\":=string,x:\"s\"};return box.seed;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "alias-let",
+      "modules": {
+        "main": "function make(){let box={seed:\"tag\":=string,x:\"s\"};return box.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "alias-typed-let",
+      "modules": {
+        "main": "function make(){let box={seed:\"tag\":=string,x:\"s\"};return box.seed;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "alias-chain",
+      "modules": {
+        "main": "function make(){const a={seed:\"tag\":=string,x:\"s\"};const box=a;return box.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "alias-typed-chain",
+      "modules": {
+        "main": "function make(){const a={seed:\"tag\":=string,x:\"s\"};const box=a;return box.seed;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "explicit-receiver",
+      "modules": {
+        "main": "function make(){const box:{x:string}={x:\"s\"};return box.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "explicit-nested-receiver",
+      "modules": {
+        "main": "function make(){const box:{inner:{x:string}}={inner:{x:\"s\"}};return box.inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "computed-key-only",
+      "modules": {
+        "main": "function make(){const key:\"x\"=\"x\";return ({x:\"s\"})[key];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "finite-literal-keys",
+      "modules": {
+        "main": "function make(){const key:\"x\"|\"y\"=Math.random()>0.5?\"x\":\"y\";return ({x:\"s\",y:\"t\"})[key];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "finite-mixed-keys",
+      "modules": {
+        "main": "function make(){const key:\"x\"|\"y\"=Math.random()>0.5?\"x\":\"y\";return ({x:\"s\":=string,y:\"t\"})[key];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "conditional-literal-receivers",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?{x:\"s\"}:{x:\"t\"}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "conditional-typed-right",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?{x:\"s\"}:{x:\"t\":=string}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "conditional-typed-left",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?{x:\"s\":=string}:{x:\"t\"}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "conditional-unrelated",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?{seed:1:=number,x:\"s\"}:{seed:2:=number,x:\"t\"}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "captured-inferred-literal",
+      "modules": {
+        "main": "const box={seed:1:=number,x:\"s\"};function make(){return box.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "captured-inferred-typed",
+      "modules": {
+        "main": "const box={seed:1:=number,x:\"s\"};function make(){return box.seed;}const n:string=make();"
+      },
+      "script": true,
+      "requirement": "",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "published-factory",
+      "modules": {
+        "main": "function producer(seed:number){return {x:\"s\"};}const box=producer(1);function make(){return box.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "published-nested-factory",
+      "modules": {
+        "main": "function producer(seed:number){return {inner:{x:\"s\"}};}const box=producer(1);function make(){return box.inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "private-factory",
+      "modules": {
+        "main": "function producer(){return {x:\"s\"};}function make(){const box=producer();return box.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "imported-inferred-literal",
+      "modules": {
+        "dep": "export const box={seed:1:=number,x:\"s\"};",
+        "main": "import {box} from \"dep\";function make(){return box.x;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "imported-published-factory",
+      "modules": {
+        "dep": "export function producer(seed:number){return {x:\"s\"};}",
+        "main": "import {producer} from \"dep\";function make(){return producer(1).x;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "annotated-singleton",
+      "modules": {
+        "main": "function make(){return ({(x:\"s\"):\"s\"}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "annotated-null",
+      "modules": {
+        "main": "function make(){return ({(x:null):null}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "annotated-undefined",
+      "modules": {
+        "main": "function make(){return ({(x:undefined):undefined}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "erased-member",
+      "modules": {
+        "main": "function make(){return ({(x:any):\"s\"}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "numeric-singleton",
+      "modules": {
+        "main": "function make(){return ({(x:1):1}).x;}const n:()=>void=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "conditional-nested-literal",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?{inner:{x:\"s\"}}:{inner:{x:\"t\"}}).inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "conditional-nested-typed-right",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?{inner:{x:\"s\"}}:{inner:{x:\"t\":=string}}).inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "conditional-nested-typed-left",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?{inner:{x:\"s\":=string}}:{inner:{x:\"t\"}}).inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "getter-replaced",
+      "modules": {
+        "main": "function make(){return ({get x():string{return \"s\";},x:\"s\"}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "getter-pair-erased",
+      "modules": {
+        "main": "function make(){return ({set x(value:string){},get x():any{return \"s\";}}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "getter-pair-typed",
+      "modules": {
+        "main": "function make(){return ({set x(value:string){},get x():string{return \"s\";}}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "nested-array-member",
+      "modules": {
+        "main": "function make(){return ({items:[\"s\"]}).items[0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "nested-array-typed-member",
+      "modules": {
+        "main": "function make(){return ({items:[\"s\":=string]}).items[0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "array-second-literal",
+      "modules": {
+        "main": "function make(){return [\"s\":=string,\"t\"][1];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "array-first-typed",
+      "modules": {
+        "main": "function make(){return [\"s\":=string,\"t\"][0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "array-string-index",
+      "modules": {
+        "main": "function make(){return [\"s\"][\"0\"];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "array-nested-typed-alternative",
+      "modules": {
+        "main": "function make(){return [{x:\"s\"},{x:\"t\":=string}][0].x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "array-nested-selected-typed",
+      "modules": {
+        "main": "function make(){return [{x:\"s\"},{x:\"t\":=string}][1].x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "array-dynamic-literal",
+      "modules": {
+        "main": "function make(){const index:number=Math.random()>0.5?0:1;return [\"s\",\"t\"][index];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "array-dynamic-mixed",
+      "modules": {
+        "main": "function make(){const index:number=Math.random()>0.5?0:1;return [\"s\",\"t\":=string][index];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "published-array",
+      "modules": {
+        "main": "function producer(seed:number){return [\"s\"];}const box=producer(1);function make(){return box[0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "published-array-nested",
+      "modules": {
+        "main": "function producer(seed:number){return [{x:\"s\"}];}const box=producer(1);function make(){return box[0].x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "getter-effects",
+      "modules": {
+        "main": "let reads=0;function make(){return ({get x():string{reads++;return \"s\";}}).x;}const s:string=make();if(reads!==1||s!==\"s\")throw new Error(\"effects\");"
+      },
+      "script": true,
+      "requirement": "",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "identity-preserved",
+      "modules": {
+        "main": "const value={x:\"s\"};function make(){return ({value}).value;}if(make()!==value)throw new Error(\"identity\");"
+      },
+      "script": true,
+      "requirement": "",
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-array-literal",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?[\"s\"]:[\"t\"])[0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "conditional-array-typed-right",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?[\"s\"]:[\"t\":=string])[0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "conditional-array-typed-left",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?[\"s\":=string]:[\"t\"])[0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "conditional-array-length",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?[\"s\"]:[\"t\"]).length;}const n:()=>void=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed-spread-prefix",
+      "modules": {
+        "main": "function make(){return [...Composite.<[string]>([\"s\"]),\"t\"][0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "typed-spread-literal-suffix",
+      "modules": {
+        "main": "function make(){return [...Composite.<[string]>([\"s\"]),\"t\"][1];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "typed-spread-after-literal",
+      "modules": {
+        "main": "function make(){return [\"s\",...Composite.<[string]>([\"t\"])][0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "array-hole",
+      "modules": {
+        "main": "function make(){return [,\"s\":=string][0];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "symbol-member",
+      "modules": {
+        "main": "function make(){return ({[Symbol.iterator]:\"s\"})[Symbol.iterator];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "symbol-typed-member",
+      "modules": {
+        "main": "function make(){return ({[Symbol.iterator]:\"s\":=string})[Symbol.iterator];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "namespace-inferred-literal",
+      "modules": {
+        "dep": "export const box={seed:1:=number,x:\"s\"};",
+        "main": "import * as ns from \"dep\";function make(){return ns.box.x;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "dep",
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "namespace-published-object",
+      "modules": {
+        "dep": "function producer(seed:number){return {x:\"s\"};}export const box=producer(1);",
+        "main": "import * as ns from \"dep\";function make(){return ns.box.x;}const n:number=make();"
+      },
+      "script": false,
+      "requirement": "",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "generic-published-object",
+      "modules": {
+        "main": "function producer<T:type>(seed:T){return {inner:{x:\"s\"}};}const box=producer(1);function make(){return box.inner.x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "finite-array-unrelated",
+      "modules": {
+        "main": "function make(){const key:0|1=Math.random()>0.5?0:1;return [\"s\",\"t\",\"u\":=string][key];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "finite-array-selected",
+      "modules": {
+        "main": "function make(){const key:0|1=Math.random()>0.5?0:1;return [\"s\",\"t\":=string,\"u\"][key];}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "conditional-partially-declared-key",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?{x:\"s\"}:{y:\"t\"}).x;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "Retaining origins must preserve the ordinary missing-member error on a union.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_UNDECLARED_MEMBER",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "conditional-entirely-absent-key",
+      "modules": {
+        "main": "function make(){return (Math.random()>0.5?{x:\"s\"}:{y:\"t\"}).missing;}const n:number=make();"
+      },
+      "script": true,
+      "requirement": "The selected value retains its own declaration evidence; unrelated members and the key do not annotate it.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "preserve-array-member-union",
+      "modules": {
+        "main": "function make(seed:number){return [{x:\"s\"},{x:1}][0].x;}const s:string=make(1);"
+      },
+      "script": true,
+      "requirement": "Position provenance must not narrow the existing uniform element member domain from string|number to string.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    },
+    {
+      "name": "preserve-aliased-array-member-union",
+      "modules": {
+        "main": "function make(seed:number){const values=[{x:\"s\"},{x:1}];return values[0].x;}const s:string=make(1);"
+      },
+      "script": true,
+      "requirement": "An inferred alias retains the existing uniform element type independently of selected-position provenance.",
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT",
+          "phase": "static"
+        }
+      }
+    }
+  ]
+}
