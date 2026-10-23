@@ -3638,6 +3638,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
 
   /** Drop the narrowing of every name a loop can reassign, before its body is walked. */
   const widenForLoop = (node: ParseNode): void => {
+    if (flowWrites(node).size || containsCall(node, true) || aggregateReadMayInvoke(node)) invalidateAggregateValues();
     const assigned = new Set<string>();
     assignedNamesIn(node, assigned, (place, name) => {
       // A nested callable is not executed by visiting its declaration.
@@ -4152,6 +4153,132 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   // block-local `x` must never replace a fact about an outer `x` at a join.
   const metadataFlowInputs = new WeakMap<TypeRecord, readonly NarrowingInput[]>();
   type FlowFacts = Map<Frame, Map<string, TypeRecord>>;
+  // Private descriptions of mutable aggregates are value facts, not admitted
+  // storage contracts. Aliases share an origin, while each flow edge retains
+  // its own description. A missing/invalidated description means unknown.
+  type AggregateOrigin = { initial: TypeRecord };
+  const aggregateOrigins = new WeakMap<TypeRecord, AggregateOrigin>();
+  const aggregateDataKeys = new WeakMap<TypeRecord, ReadonlySet<string | SymbolValue>>();
+  let aggregateValues = new Map<AggregateOrigin, Known>();
+  const aggregateValuesOf = new WeakMap<FlowFacts, Map<AggregateOrigin, Known>>();
+  const aggregateValue = (type: Known, snapshot = false, seen = new Set<AggregateOrigin>()): Known => {
+    if (!type) return null;
+    const origin = aggregateOrigins.get(type);
+    if (!origin) return type;
+    if (seen.has(origin)) return null;
+    seen = new Set(seen).add(origin);
+    type = aggregateValues.get(origin) ?? null;
+    if (!type) return null;
+    const described = new Map<TypeRecord, TypeRecord>();
+    const describe = (current: TypeRecord): TypeRecord => {
+      const cached = described.get(current);
+      if (cached) return cached;
+      let result = current;
+      if (current.Kind === 'object') {
+        const Properties = current.Properties.map((property) => ({ ...property,
+          type: aggregateValue(property.type, snapshot, seen) ?? anyTypeRecord }));
+        if (Properties.some((property, index) => property.type !== current.Properties[index].type)) result = { ...current, Properties };
+      } else if (current.Kind === 'union') result = { ...current, Members: current.Members.map(describe) };
+      if (result !== current || snapshot) {
+        result = { ...result };
+        copyAggregateEvidence(current, result);
+      }
+      described.set(current, result);
+      const alternatives = contributionAlternatives.get(current);
+      if (alternatives) contributionAlternatives.set(result, alternatives.map(describe));
+      return result;
+    };
+    const result = describe(type);
+    if (!snapshot) aggregateOrigins.set(result, origin);
+    return result;
+  };
+  const copyAggregateEvidence = (source: TypeRecord, target: TypeRecord): void => {
+    if (aggregateDataKeys.has(source)) aggregateDataKeys.set(target, aggregateDataKeys.get(source)!);
+    const members = literalMemberReadAnchors.get(source);
+    if (members) literalMemberReadAnchors.set(target, members);
+    const array = literalArrayReadAnchors.get(source);
+    if (array) literalArrayReadAnchors.set(target, array);
+    if (selectedMemberAnchors.has(source)) selectedMemberAnchors.set(target, selectedMemberAnchors.get(source)!);
+    if (valueContributionEvidence.has(source)) valueContributionEvidence.set(target, valueContributionEvidence.get(source)!);
+    if (literalContractAnchors.has(source)) literalContractAnchors.add(target);
+    if (contributionAlternatives.has(source)) contributionAlternatives.set(target, contributionAlternatives.get(source)!);
+  };
+  const privateAggregate = (type: Known): Known => {
+    if (!type || aggregateOrigins.has(type)) return type;
+    if (!literalMemberReadAnchors.has(type) && !literalArrayReadAnchors.has(type)) return type;
+    const result: TypeRecord = type.Kind === 'object' ? { ...type, Properties: type.Properties.map((property) => ({ ...property,
+      type: privateAggregate(property.type ?? null) ?? property.type })) } : { ...type };
+    copyAggregateEvidence(type, result);
+    const origin = { initial: result };
+    aggregateOrigins.set(result, origin);
+    aggregateValues.set(origin, result);
+    return result;
+  };
+  const invalidateAggregateValues = (): void => {
+    if (![...aggregateValues.values()].some(Boolean)) return;
+    for (const origin of aggregateValues.keys()) aggregateValues.set(origin, null);
+    typeRevision += 1;
+  };
+  const aggregateStore = (target: ParseNode, source: Known, captured: Known): boolean => {
+    if (target.type !== 'MemberExpression') return false;
+    const receiver = aggregateValue(captured);
+    const origin = receiver && aggregateOrigins.get(receiver);
+    if (!origin || !receiver || !source) return false;
+    const keys = memberKeys(target);
+    const key = keys?.length === 1 ? keys[0] : null;
+    if (receiver.Kind !== 'object' || key === null) return false;
+    const property = receiver.Properties.find((entry) => entry.key === key);
+    // Only an established own data descriptor can transfer a value without
+    // invoking a setter/prototype hook. Unknown destinations invalidate below.
+    if (!property || !aggregateDataKeys.get(receiver)?.has(key)) return false;
+    const result = { ...receiver, Properties: receiver.Properties.map((entry) => entry === property
+      ? { ...entry, type: privateAggregate(widen(source))! } : entry) };
+    copyAggregateEvidence(receiver, result);
+    const anchors = new Map(literalMemberReadAnchors.get(receiver));
+    anchors.set(key, valueContributionEvidence.get(source)?.anchored ?? selectedMemberAnchors.get(source) ?? false);
+    literalMemberReadAnchors.set(result, anchors);
+    if ([...anchors.values()].some(Boolean)) literalContractAnchors.add(result);
+    else literalContractAnchors.delete(result);
+    aggregateValues.set(origin, result);
+    typeRevision += 1;
+    return true;
+  };
+  const aggregateReadMayInvoke = (node: unknown): boolean => {
+    if (Array.isArray(node)) return node.some(aggregateReadMayInvoke);
+    if (!node || typeof node !== 'object' || !('type' in node)) return false;
+    const expression = node as ParseNode;
+    if (functionBoundary(expression)) return false;
+    if (expression.type === 'MemberExpression') {
+      const receiver = staticType(expression.MemberExpression);
+      const key = expression.IdentifierName?.name ?? (expression.Expression ? stableStringKey(expression.Expression) : null);
+      if (!receiver || key === null || !aggregateDataKeys.get(receiver)?.has(key)) return true;
+    }
+    return Object.entries(expression).some(([key, value]) => !['parent', 'location', 'strict', 'sourceText', 'TypeAnnotation'].includes(key)
+      && aggregateReadMayInvoke(value));
+  };
+  const transferAggregateEffects = (expression: ParseNode): void => {
+    if (!aggregateValues.size) return;
+    const node = unparenthesized(expression);
+    if (functionBoundary(node) || node.type === 'ClassExpression' || node.type === 'ClassDeclaration') return;
+    if (node.type === 'CommaOperator') {
+      node.ExpressionList.forEach(transferAggregateEffects);
+      return;
+    }
+    if (node.type === 'AssignmentExpression' && node.AssignmentOperator === '=') {
+      const target = patternExpression(node.LeftHandSideExpression)!;
+      const receiver = target.type === 'MemberExpression' ? staticType(target.MemberExpression) : null;
+      if (target.type === 'MemberExpression' && target.Expression) transferAggregateEffects(target.Expression);
+      const source = expressionContributionType(node.AssignmentExpression, staticType(node.AssignmentExpression));
+      transferAggregateEffects(node.AssignmentExpression);
+      if (target.type === 'IdentifierReference') return;
+      if (!aggregateStore(target, source, receiver)) invalidateAggregateValues();
+      return;
+    }
+    if (flowWrites(node).size || containsCall(node, true) || aggregateReadMayInvoke(node)
+      || node.type === 'UnaryExpression' && node.operator === 'delete') {
+      invalidateAggregateValues();
+    }
+  };
   // A lexical reference retains an edge to the binding cell, including when
   // that cell is itself a rebindable reference. Keep locations separate from
   // value facts: an ordinary store changes values, not these edges.
@@ -4358,6 +4485,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
   const captureFlow = (): FlowFacts => {
     const result: FlowFacts = new Map();
+    aggregateValuesOf.set(result, new Map(aggregateValues));
     referenceOriginsOf.set(result, copyReferenceOrigins(referenceOrigins));
     frames.forEach((frame, index) => {
       for (const name of frame.narrowed ?? []) {
@@ -4378,6 +4506,9 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   };
   const restoreFlow = (facts: FlowFacts = new Map()): void => {
     const current = captureFlow();
+    const aggregates = aggregateValuesOf.get(facts) ?? new Map();
+    if (aggregateValues.size !== aggregates.size || [...aggregateValues].some(([origin, type]) => aggregates.get(origin) !== type)) typeRevision += 1;
+    aggregateValues = new Map(aggregates);
     const locationsChanged = !sameReferenceOrigins(referenceOrigins, referenceOriginsOf.get(facts) ?? new Map());
     referenceOrigins = copyReferenceOrigins(referenceOriginsOf.get(facts) ?? new Map());
     flowNeedsReplay = incompleteFlows.has(facts);
@@ -4417,6 +4548,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     const live = incoming.filter((facts): facts is FlowFacts => facts !== undefined);
     if (!live.length) return undefined;
     const joined: FlowFacts = new Map();
+    const aggregates = new Map<AggregateOrigin, Known>();
+    for (const edge of live) for (const origin of aggregateValuesOf.get(edge)?.keys() ?? []) {
+      if (aggregates.has(origin)) continue;
+      const types = live.map((entry) => aggregateValuesOf.get(entry)?.get(origin) ?? null);
+      aggregates.set(origin, types.every((type) => type === types[0]) ? types[0] : joinMemberReads(types));
+    }
+    aggregateValuesOf.set(joined, aggregates);
     referenceOriginsOf.set(joined, joinReferenceOrigins(live));
     // Different unfinished stores require the incoming-edge transfer as well
     // as a completed source contract. Do not join their placeholders as any.
@@ -18924,7 +19062,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return result;
   };
   const staticType = (node: ParseNode): Known => withPatternScope(node, () => {
-    const type = withPartialStructure(inferStaticType(node));
+    const type = aggregateValue(withPartialStructure(inferStaticType(node)));
     const value = node.type === 'CallExpression' ? callValueType(type) : type;
     if (value?.Kind !== 'literal' && value?.Kind !== 'union') return value;
     return isNumericConstantExpression(node) ? value : fixedNumericDomain(value);
@@ -19024,7 +19162,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     switch (node.type) {
       case 'CommaOperator': {
         const result = node.ExpressionList.at(-1);
-        return result ? staticType(result) : null;
+        const saved = new Map(aggregateValues);
+        try {
+          node.ExpressionList.slice(0, -1).forEach(transferAggregateEffects);
+          return result ? aggregateValue(staticType(result), true) : null;
+        } finally {
+          aggregateValues = saved;
+        }
       }
       case 'OptionalExpression': {
         const view = optionalChainView(node, false);
@@ -23076,6 +23220,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
     const result = { Kind: 'object', Properties, IndexSignatures: [] } as unknown as TypeRecord;
     literalMemberReadAnchors.set(result, new Map([...memberAnchors].map(([key, member]) => [key, member.read])));
+    aggregateDataKeys.set(result, new Set([...memberAnchors].filter(([, member]) => !member.accessor).map(([key]) => key)));
     if ([...memberAnchors.values()].some((member) => member.read || member.write)) literalContractAnchors.add(result);
     return result;
   };
@@ -25482,6 +25627,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     }
   };
   const invalidateCapturedAliases = (): void => {
+    invalidateAggregateValues();
     invalidateCapturedReferenceOrigins();
     for (const [owner, entries] of captureFlow()) {
       for (const key of entries.keys()) {
@@ -28864,6 +29010,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
   const selectedMemberType = (type: Known, anchored: boolean): Known => {
     if (!type) return null;
     const result = { ...type };
+    if (aggregateOrigins.has(type)) aggregateOrigins.set(result, aggregateOrigins.get(type)!);
+    if (aggregateDataKeys.has(type)) aggregateDataKeys.set(result, aggregateDataKeys.get(type)!);
     selectedMemberAnchors.set(result, anchored);
     const members = literalMemberReadAnchors.get(type);
     if (members) literalMemberReadAnchors.set(result, members);
@@ -28922,6 +29070,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     if (!types.length) return neverType;
     const type = CanonicalizeType({ Kind: 'union', Members: types });
     const result = retainContributionAlternatives(type, types);
+    const aggregate = aggregateOrigins.get(types[0]);
+    if (aggregate && types.every((read) => aggregateOrigins.get(read) === aggregate)) aggregateOrigins.set(result, aggregate);
     return selectedMemberType(result, types.some((read) => selectedMemberAnchors.get(read) ?? read.Kind !== 'any'));
   };
 
@@ -29000,6 +29150,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       && t && valueContributionEvidence.has(t)) return valueContributionEvidence.get(t)!.anchored;
     if (expr?.type === 'MemberExpression' && t && selectedMemberAnchors.has(t)) return selectedMemberAnchors.get(t)!;
     if (expr?.type === 'IdentifierReference') {
+      if (t && aggregateOrigins.has(t as TypeRecord)) return literalContractAnchors.has(t);
       for (let i = frames.length - 1; i >= 0; i -= 1) {
         const anchor = inferenceBindingAnchors.get(frames[i])?.get(expr.name);
         if (anchor !== undefined) return anchor;
@@ -29382,6 +29533,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             return;
           }
         }
+        transferAggregateEffects(node);
         previewFlowEffects(node);
         if (containsPropertyRead(node)) invalidateCapturedReads();
         // Unsupported transfers establish no new domain. Their stores still
@@ -29588,6 +29740,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         if (n.type === 'TryStatement') {
           // Exceptional entry may follow any effect in the protected block.
           // Do not transfer the last visited branch's facts to a different one.
+          transferAggregateEffects(n);
           previewFlowEffects(n);
           const entry = captureFlow();
           const normal = [runFlow(entry, () => collect(n.Block))];
@@ -29767,7 +29920,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               if (prepared?.contribution && !flowNeedsReplay) prepared.contribution.flow = captureFlow();
               const contract = prepared ? preparedBindingType(bindingFrame, bname) : kind === 'const' ? withCaptureContracts(() =>
                 constInitializerParticipates(init) ? staticType(init) : null) : null;
-              declare(bname, initType ? widen(initType) : null, bindingFrame);
+              declare(bname, initType ? contract ? widen(initType) : privateAggregate(widen(initType)) : null, bindingFrame);
               recordInferenceAnchor(bname, anchored, bindingFrame);
               recordInferenceCapture(bname, contract, !!contract && contract.Kind !== 'any' && anchored, bindingFrame);
             } else {
@@ -29784,7 +29937,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             const contributions = (transparent = false) => patternContributions(bound.BindingPattern!, {
               type: bound.TypeAnnotation ? resolveType(bound.TypeAnnotation.Type) : staticType(bound.Initializer!),
               expression: bound.Initializer!, annotated: !!bound.TypeAnnotation,
-            }, transparent);
+            }, transparent, transparent);
             const selected = contributions(true);
             const depth = inferenceDepth;
             let captured: ReturnType<typeof patternContributions>;
@@ -29873,7 +30026,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
               // still the answer to "which return produced this member".
               const origin = anchorDescription(expr) ?? (expr.type === 'StringLiteral' || expr.type === 'NumericLiteral' ? 'a literal' : null);
               if (origin) {
-                (anchorage.origins ??= []).push({ type: widen(t) as TypeRecord, from: origin });
+                (anchorage.origins ??= []).push({ type: widen(aggregateValue(t, true)!) as TypeRecord, from: origin });
               }
             }
             // #sec-never-type: `never` is the identity of union, so a `never`
@@ -29885,7 +30038,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             if (t.Kind === 'union' && (t as { Members: readonly TypeRecord[] }).Members.length === 0) {
               return;
             }
-            contributions.push(wanted && t.Kind === 'literal' && literalFitsNumericType(t, wanted) ? wanted : widen(t));
+            contributions.push(wanted && t.Kind === 'literal' && literalFitsNumericType(t, wanted) ? wanted : widen(aggregateValue(t, true)!));
           });
           return;
         }
@@ -31637,10 +31790,12 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
     return { ...source, type };
   };
 
-  // This is a contribution query, not a binding walk: no key/default is
-  // visited for effects or diagnostics here. The ordinary walk still checks
-  // every written expression and performs all receiving-boundary judgments.
-  const patternContributions = (pattern: PatternNode, incoming: PatternSource, transparent = false): Map<PatternNode, PatternSource> => {
+  // This query models key/default transfers without walking them for checking
+  // or executing source. The ordinary walk still checks every expression and
+  // performs all receiving-boundary judgments. Only the contribution collector
+  // exports the modelled aggregate state to its following source position.
+  const patternContributions = (pattern: PatternNode, incoming: PatternSource, transparent = false, transfer = false): Map<PatternNode, PatternSource> => {
+    const entry = new Map(aggregateValues);
     const bindings = new Map<PatternNode, PatternSource>();
     const visit = (node: PatternNode, input: PatternSource): void => {
       let source = describedPatternSource(input);
@@ -31654,6 +31809,7 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
       else if (node.Initializer && source.type && source.type.Kind !== 'any') {
         const present = NarrowFrom(source.type, undefinedType);
         if (!AreDisjoint(source.type, undefinedType)) {
+          const skipped = present === empty ? undefined : captureFlow();
           const fallback = expressionContributionType(node.Initializer, staticType(node.Initializer));
           const origins = projectedContributionOrigins(source.type, (type) => NarrowFrom(type, undefinedType));
           if (fallback) origins.push(...projectedContributionOrigins(fallback, (type) => type));
@@ -31666,7 +31822,13 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
             });
             source = { type: result };
           } else source = { type: null };
+          transferAggregateEffects(node.Initializer);
+          if (skipped) restoreFlow(joinFlow([skipped, captureFlow()]));
         }
+      } else if (node.Initializer && (!source.type || source.type.Kind === 'any')) {
+        const skipped = captureFlow();
+        transferAggregateEffects(node.Initializer);
+        restoreFlow(joinFlow([skipped, captureFlow()]));
       }
       if (node.BindingIdentifier) {
         bindings.set(node, source);
@@ -31686,6 +31848,8 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         for (const property of node.BindingPropertyList ?? []) {
           const key = property.BindingIdentifier?.name ?? patternKey(property.PropertyName, false);
           const expression = property.PropertyName?.type === 'PropertyName' ? property.PropertyName.ComputedPropertyName : undefined;
+          if (expression) transferAggregateEffects(expression);
+          source = { ...source, type: aggregateValue(source.type) };
           const keys = key === null ? expression ? memberKeys({ Expression: expression }) : undefined : [key];
           if (key === null) knownExclusions = false;
           else consumed.add(key);
@@ -31696,6 +31860,11 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
           const read = reads?.length && reads.every((item) => item !== null)
             ? reads.length === 1 ? reads[0]! : joinMemberReads(reads) : null;
           const type = read ?? (contribution.type ? selectedMemberType(contribution.type, false) : null);
+          // A missing/inherited or accessor property can run arbitrary code
+          // before its default and before the next extraction. A structural
+          // absence is not a proof about the live prototype chain.
+          if (source.type && aggregateOrigins.has(source.type)
+            && (key === null || !aggregateDataKeys.get(source.type)?.has(key))) invalidateAggregateValues();
           visit(property.BindingElement ?? property, { ...contribution, type, annotated: source.annotated });
         }
         if (node.BindingRestProperty) {
@@ -31752,11 +31921,15 @@ function CheckStatementList(statementList: readonly ParseNode[] | null, root: Pa
         }
       }
     };
-    pushBlock(() => {
-      recordBindingKinds(pattern as ParseNode, false);
-      for (const name of frames.at(-1)!.bindingKinds.keys()) declare(name, null);
-      visit(pattern, incoming);
-    });
+    try {
+      pushBlock(() => {
+        recordBindingKinds(pattern as ParseNode, false);
+        for (const name of frames.at(-1)!.bindingKinds.keys()) declare(name, null);
+        visit(pattern, incoming);
+      });
+    } finally {
+      if (!transfer) aggregateValues = entry;
+    }
     return bindings;
   };
 

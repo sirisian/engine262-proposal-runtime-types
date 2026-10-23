@@ -1,0 +1,1132 @@
+{
+  "description": "Independent aggregate-write contribution requirements; distinguish source-position facts, aliases and admitted contracts.",
+  "cases": [
+    {
+      "name": "direct-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};box.x=1;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const {a=(box.x=1),x}=box;return x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "write-through-alias",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=box;alias.x=1;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "read-through-alias",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const alias=box;box.x=1;return alias.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-write",
+      "modules": {
+        "main": "function make(seed:number){const box={inner:{x:\"s\"}};box.inner.x=1;return box.inner.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-alias",
+      "modules": {
+        "main": "function make(seed:number){const box={inner:{x:\"s\"}};const inner=box.inner;inner.x=1;return box.inner.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "call-mutates",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};function change(o:any){o.x=1;}change(box);return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "closure-mutates",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};function change(){box.x=1;}change();return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "delete-member",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};delete box.x;return box.x;}const n:undefined=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "update-member",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"1\"};box.x++;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "compound-member",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"1\"};box.x*=2;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const k=\"x\";box[k]=1;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unknown-key",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};let k=\"x\";box[k]=1;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "comma-return",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return (box.x=1,box.x);}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-write",
+      "modules": {
+        "main": "function make(seed:number){const box=[\"s\"];box[0]=1;return box[0];}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-call",
+      "modules": {
+        "main": "function make(seed:number){const box=[\"s\"];box.fill(1);return box[0];}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "branch-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};if(seed===0)box.x=1;else box.x=2;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "branch-uncertain",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};if(seed===0)box.x=1;return box.x;}const n:number|string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "no-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "scalar-snapshot",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const value=box.x;box.x=1;return value;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "sibling-preserved",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\",y:\"s\"};box.y=1;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "before-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};if(seed===0)return box.x;box.x=1;return box.x;}const n:string|number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "late-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};return box.x;box.x=1;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "wrong-new-type",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};box.x=1;return box.x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "default-write-result",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const {a=(box.x=1),x}=box;return x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "skipped-default",
+      "modules": {
+        "main": "function make(seed:number){const box={a:0,x:\"s\"};const {a=(box.x=1),x}=box;return x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "default-scalar-snapshot",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const {x,a=(box.x=1)}=box;return x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "default-following-read",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const {a=(box.x=1)}=box;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "default-call",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};function change(){box.x=1;}const {a=change(),x}=box;return x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "computed-key-effect",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const {[ (box.x=1,\"x\") ]:x}=box;return x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-mutates",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const o={get y(){box.x=1;return 0;}};o.y;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "getter-in-default",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const o={get y(){box.x=1;return 0;}};const {a=o.y,x}=box;return x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unknown-call-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};function change(o:any){o.x=1;}change(box);return box.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "erased-read",
+      "modules": {
+        "main": "function make(seed:number){const box:any={x:\"s\"};box.x=1;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "declared-read",
+      "modules": {
+        "main": "function make(seed:number){const box:{x:string}={x:\"s\"};function change(o:any){o.x=1;}change(box);return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "inferred-contract",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\":=string};function change(o:any){o.x=1;}change(box);return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "unassigned-let",
+      "modules": {
+        "main": "function make(seed:number){let box={x:\"s\"};box.x=1;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "let-with-typed-sibling",
+      "modules": {
+        "main": "function make(seed:number){let box={seed:1:=number,x:\"s\"};box.x=1;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "separate-object",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const other={x:\"s\"};other.x=1;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "shadowed-object",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};{const box={x:\"s\"};box.x=1;}return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "scalar-after-call",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const value=box.x;function change(o:any){o.x=1;}change(box);return value;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "nested-extraction",
+      "modules": {
+        "main": "function make(seed:number){const box={inner:{x:\"s\"}};const {inner}=box;inner.x=1;return box.inner.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-scalar-extraction",
+      "modules": {
+        "main": "function make(seed:number){const box={inner:{x:\"s\"}};const {inner:{x}}=box;box.inner.x=1;return x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "replace-nested",
+      "modules": {
+        "main": "function make(seed:number){const box={inner:{x:\"s\"}};const inner=box.inner;box.inner={x:1};return inner.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "replace-nested-read",
+      "modules": {
+        "main": "function make(seed:number){const box={inner:{x:\"s\"}};box.inner={x:1};return box.inner.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "alias-in-container",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const holder={box};holder.box.x=1;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "returned-shape",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};box.x=1;return box;}const result:{x:number}=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "returned-nested-shape",
+      "modules": {
+        "main": "function make(seed:number){const box={inner:{x:\"s\"}};box.inner.x=1;return box;}const result:{inner:{x:number}}=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-call",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};if(seed===0){function change(o:any){o.x=1;}change(box);}return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "loop-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};for(let i=0;i<1;i++)box.x=1;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "do-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};do{box.x=1;}while(false);return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "try-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};try{box.x=1;}finally{}return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "finally-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};try{}finally{box.x=1;}return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "switch-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};switch(seed){case 0:box.x=1;break;default:box.x=2;}return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "branch-no-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};if(seed===0){}else{}return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "branch-mixed-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};if(seed===0)box.x=1;return box.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "return-after-break",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};outer:{box.x=1;break outer;}return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "store-to-setter",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const dest={set x(v){box.x=1;}};dest.x=1;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-delete",
+      "modules": {
+        "main": "function make(seed:number){const box=[\"s\"];delete box[0];return box[0];}const n:undefined=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "array-length",
+      "modules": {
+        "main": "function make(seed:number){const box=[\"s\"];box.length=0;return box[0];}const n:undefined=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "value-initializer-store",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};const unused=(box.x=1);return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "unknown-key-store-wrong",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};let key=\"x\";box[key]=1;return box.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "and-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};seed===0&&(box.x=1);return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "conditional-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};seed===0?(box.x=1):0;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "logical-assignment-write",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};box.x&&=1;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "known-default-write",
+      "modules": {
+        "main": "function make(seed:number){const box={a:undefined,x:\"s\"};const {a=(box.x=1),x}=box;return x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "known-default-new-type",
+      "modules": {
+        "main": "function make(seed:number){const box={a:undefined,x:\"s\"};const {a=(box.x=1),x}=box;return x;}const n:string=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "getter-default-order",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};Object.defineProperty(Object.prototype,\"a\",{get(){box.x=1;return 0;},configurable:true});const {a,x}=box;delete Object.prototype.a;return x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "captured-store-target",
+      "modules": {
+        "main": "function make(seed:number){const box={inner:{x:\"s\"}};const inner=box.inner;box.inner.x=(box.inner={x:true},1);return inner.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "replacement-kept",
+      "modules": {
+        "main": "function make(seed:number){const box={inner:{x:\"s\"}};box.inner.x=(box.inner={x:true},1);return box.inner.x;}const n:boolean=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "write-anchor",
+      "modules": {
+        "main": "function make(){const box={x:\"s\"};box.x=1:=number;return box.x;}const n:boolean=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "write-aggregate-anchor",
+      "modules": {
+        "main": "function make(){const box={x:\"s\"};box.x=1:=number;return box;}const n:boolean=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "plain-write-no-anchor",
+      "modules": {
+        "main": "function make(){const box={x:\"s\"};box.x=1;return box.x;}const n:boolean=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "written-aggregate-no-anchor",
+      "modules": {
+        "main": "function make(){const box={x:\"s\"};box.x=1;return box;}const n:boolean=make();"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [
+          "main"
+        ],
+        "errorClass": "TypeError"
+      }
+    },
+    {
+      "name": "copy-after-store",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};box.x=1;const value=box.x;box.x=true;return value;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "known-key-symbol",
+      "modules": {
+        "main": "const key=Symbol(\"key\");function make(seed:number){const box={[key]:\"s\"};box[key]=1;return box[key];}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-unknown-effect",
+      "modules": {
+        "main": "function make(seed:number){const box={inner:{x:\"s\"}};const inner=box.inner;function change(o:any){o.x=1;}change(inner);return box.inner.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "separate-key-mutation",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\",y:\"s\"};const alias=box;alias.y=1;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "nested-function-not-called",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};function unused(){box.x=1;}return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "scalar-local-store",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};let v=0;v=1;return box.x;}const n:number=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "rejected",
+        "bodyEntries": [],
+        "errorClass": "StaticTypeError",
+        "diagnostic": {
+          "code": "RT_RETURN_CONTRACT"
+        }
+      }
+    },
+    {
+      "name": "nested-after-joined-write",
+      "modules": {
+        "main": "function make(seed:number){const box={a:0,inner:{x:\"s\"}};if(seed===0)box.a=1;else box.a=2;box.inner.x=1;return box;}const n:{a:number,inner:{x:number}}=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-branch-write",
+      "modules": {
+        "main": "function make(seed:number){const box={inner:{x:\"s\"}};if(seed===0)box.inner.x=1;else box.inner.x=2;return box;}const n:{inner:{x:number}}=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    },
+    {
+      "name": "nested-private-cycle",
+      "modules": {
+        "main": "function make(seed:number){const box={x:\"s\"};box.x=box;return box;}const n:any=make(0);"
+      },
+      "script": true,
+      "expected": {
+        "status": "fulfilled",
+        "bodyEntries": [
+          "main"
+        ]
+      }
+    }
+  ]
+}
